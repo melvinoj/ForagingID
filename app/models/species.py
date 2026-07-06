@@ -125,6 +125,22 @@ class Species(Base):
     gbif_taxon_id: Mapped[Optional[str]] = mapped_column(String(50), index=True)
     inaturalist_taxon_id: Mapped[Optional[str]] = mapped_column(String(50))
 
+    # GBIF full-lineage metadata (migration 0045). Descriptive only — NEVER read
+    # by identification, confidence scoring, auto-approve routing, or edibility.
+    # Denormalised rank ladder; stores whatever kingdom GBIF returns (Plantae or
+    # Fungi), not a hardcoded plant ladder. kingdom/family/genus already exist
+    # above and are reused (human-curated values never clobbered by GBIF).
+    # DB column names are class_/order_ (trailing underscore) to avoid the SQL
+    # reserved words CLASS/ORDER. The canonical GBIF key is gbif_usage_key
+    # (defined below) — no separate gbif_taxon_key column.
+    phylum: Mapped[Optional[str]] = mapped_column(String(100))
+    class_: Mapped[Optional[str]] = mapped_column("class_", String(100))
+    order_: Mapped[Optional[str]] = mapped_column("order_", String(100))
+    gbif_match_type: Mapped[Optional[str]] = mapped_column(
+        String(20)
+    )  # EXACT | FUZZY | HIGHERRANK | NONE
+    gbif_match_confidence: Mapped[Optional[int]] = mapped_column(Integer)
+
     # ITIS name validation (additive — never auto-renames approved species)
     itis_tsn: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, index=True)
     itis_accepted_name: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)

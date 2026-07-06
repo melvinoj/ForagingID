@@ -1,13 +1,13 @@
 """
 API Dashboard service — standardised status + key management for every external
 API integration (iNaturalist, PlantNet, Mushroom Observer, PFAF, OpenRouteService,
-Google Drive, Anthropic).
+DeepSeek, Anthropic).
 
 Provides:
   - API_REGISTRY: metadata + step-by-step "how to get a token" instructions
   - test_all(): concurrent live status check for every API (green / amber / red)
   - decode_jwt_expiry(): iNaturalist JWT expiry detection (cause #1)
-  - set_api_key(): safe upsert into .env (or DB for Google Drive) + live config update
+  - set_api_key(): safe upsert into .env (or DB for DeepSeek) + live config update
 
 Status semantics:
   green   — configured and a live probe succeeded
@@ -118,22 +118,6 @@ API_REGISTRY = [
             "Sign up at https://openrouteservice.org/dev/#/signup",
             "In the dashboard, request a token on the free 'standard' plan.",
             "Copy the token and paste it above, then click Save. Used for Walk routes.",
-        ],
-    },
-    {
-        "id": "gdrive",
-        "name": "Google Drive",
-        "env_key": None,
-        "db_key": "gdrive_access_token",
-        "needs_key": True,
-        "token_url": "https://developers.google.com/oauthplayground/",
-        "how_to": [
-            "Drive uses an OAuth2 Bearer token with scope 'drive.file'.",
-            "Open https://developers.google.com/oauthplayground/",
-            "In Step 1, enter scope: https://www.googleapis.com/auth/drive.file",
-            "Authorise, then in Step 2 click 'Exchange authorization code for tokens'.",
-            "Copy the 'Access token' value and paste it above, then click Save.",
-            "Note: Google access tokens are short-lived (~1h) — refresh when Drive sync fails.",
         ],
     },
     {
@@ -352,25 +336,6 @@ async def _probe_itis(client: httpx.AsyncClient) -> dict:
     return {"state": "unreachable", "error": f"HTTP {r.status_code}"}
 
 
-async def _probe_gdrive(client: httpx.AsyncClient) -> dict:
-    # Token is stored in the DB settings table, not .env.
-    from app.services.settings_service import get_setting
-    token = (get_setting("gdrive_access_token") or "").strip()
-    if not token:
-        return {"state": "not_configured", "error": "No access token saved"}
-    r = await client.get(
-        "https://www.googleapis.com/drive/v3/about",
-        params={"fields": "user"},
-        headers={"Authorization": f"Bearer {token}"},
-    )
-    if r.status_code == 200:
-        return {"state": "live", "error": None}
-    if r.status_code in (401, 403):
-        # Google access tokens are short-lived (~1h).
-        return {"state": "expired", "error": f"{r.status_code} — token expired or invalid"}
-    return {"state": "unreachable", "error": f"Unexpected HTTP {r.status_code}"}
-
-
 async def _probe_deepseek(client: httpx.AsyncClient) -> dict:
     from app.services.settings_service import get_setting
     key = (get_setting("deepseek_api_key") or "").strip()
@@ -394,7 +359,6 @@ _PROBES = {
     "anthropic": _probe_anthropic,
     "openai": _probe_openai,
     "ors": _probe_ors,
-    "gdrive": _probe_gdrive,
     "thunderforest": _probe_thunderforest,
     "mushroom_observer": _probe_mushroom_observer,
     "pfaf": _probe_pfaf,
@@ -482,7 +446,7 @@ async def set_api_key(api_id: str, key: str, db) -> dict:
     """
     Save an API key/token to the correct destination and apply it live.
     .env-backed APIs update the .env file + the in-memory settings object.
-    Google Drive (DB-backed) routes through the existing settings table.
+    DeepSeek (DB-backed) routes through the existing settings table.
     """
     api = _REGISTRY_BY_ID.get(api_id)
     if not api:
@@ -494,7 +458,7 @@ async def set_api_key(api_id: str, key: str, db) -> dict:
         raise ValueError("Empty key")
 
     if api.get("db_key"):
-        # DB-stored secret (Google Drive) — reuse the settings service.
+        # DB-stored secret (e.g. DeepSeek) — reuse the settings service.
         from app.services.settings_service import save_setting
         await save_setting(api["db_key"], key, db)
         return {"id": api_id, "saved": True, "destination": "db"}

@@ -1,5 +1,5 @@
 """
-dev.py — Developer tools: changelog, snapshots, session management, Drive sync.
+dev.py — Developer tools: changelog, snapshots, session management.
 
 Admin-only. These endpoints are not exposed in guest mode (the frontend
 hides the UI controls via data-guest-hide; the backend does not add extra
@@ -10,12 +10,10 @@ Endpoints:
   GET  /api/dev/current-state    — ## Current State block only
   PUT  /api/dev/current-state    — rewrite ## Current State
   POST /api/dev/log              — append structured entry to ## History
-  POST /api/dev/snapshot         — create timestamped snapshot (git + DB) + Drive sync
+  POST /api/dev/snapshot         — create timestamped snapshot (git + DB)
   GET  /api/dev/snapshots        — list all snapshots
   POST /api/dev/restore          — restore to a snapshot (destructive)
   POST /api/dev/end-session      — update state + snapshot + history entry
-  POST /api/dev/gdrive-sync      — manually sync CHANGELOG.md to Google Drive
-                                     (also fires automatically on every snapshot)
   POST /api/dev/backup-external  — copy the latest DB snapshot to /Volumes/DIGIERA
                                      (also fires automatically, best-effort, on End Session)
   GET  /api/dev/backup-external-status — last external-backup timestamp/error
@@ -34,7 +32,6 @@ from typing import List, Optional
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
-from app.integrations.gdrive import GDriveError, sync_changelog as _gdrive_sync
 from app.services.changelog_service import (
     append_history_entry,
     get_current_state,
@@ -48,18 +45,8 @@ log = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/dev", tags=["dev"])
 
 # ---------------------------------------------------------------------------
-# GDrive sync state — tracks last success/failure across requests.
-# In-memory only; resets on server restart (intentional — a restart usually
-# means a token change or re-config, so stale timestamps would be misleading).
-# ---------------------------------------------------------------------------
-_gdrive_status: dict = {
-    "last_sync_at":    None,   # ISO timestamp of last successful sync
-    "last_error":      None,   # Error message from last failed sync attempt
-}
-
-# ---------------------------------------------------------------------------
-# External-drive backup state — same in-memory/reset-on-restart pattern as
-# _gdrive_status above.
+# External-drive backup state — tracks last success/failure across requests.
+# In-memory only; resets on server restart.
 # ---------------------------------------------------------------------------
 _backup_status: dict = {
     "last_backup_at": None,   # ISO timestamp of last successful backup
@@ -327,28 +314,7 @@ async def create_snapshot(body: SnapshotRequest = None):  # type: ignore[assignm
     except Exception as exc:
         git_error = str(exc)
 
-    # 6. Sync CHANGELOG.md to Google Drive (best-effort — never fails the snapshot)
-    gdrive_result: Optional[dict] = None
-    gdrive_error:  Optional[str]  = None
-    try:
-        token = get_setting("gdrive_access_token")
-        if token:
-            gdrive_result = await _gdrive_sync(token)
-            log.info("gdrive: snapshot sync complete — %s", gdrive_result.get("action"))
-            _gdrive_status["last_sync_at"] = datetime.utcnow().isoformat() + "Z"
-            _gdrive_status["last_error"]   = None
-        else:
-            log.debug("gdrive: no token configured, skipping Drive sync")
-    except GDriveError as exc:
-        gdrive_error = str(exc)
-        _gdrive_status["last_error"] = str(exc)
-        log.warning("gdrive: sync failed (snapshot) — %s", exc)
-    except Exception as exc:
-        gdrive_error = f"Unexpected error: {exc}"
-        _gdrive_status["last_error"] = gdrive_error
-        log.exception("gdrive: unexpected error during snapshot sync")
-
-    # 7. Prune old snapshots per retention policy
+    # 6. Prune old snapshots per retention policy
     pruned = _prune_snapshots()
 
     return {
@@ -358,8 +324,6 @@ async def create_snapshot(body: SnapshotRequest = None):  # type: ignore[assignm
         "db_snapshot":     str(db_snap),
         "commit_hash":     commit_hash,
         "git_error":       git_error,
-        "gdrive":          gdrive_result,
-        "gdrive_error":    gdrive_error,
         "snapshots_pruned": pruned,
     }
 
@@ -819,62 +783,6 @@ async def backup_external():
         }
     _backup_status["last_error"] = result["error"]
     raise HTTPException(status_code=400, detail=result["error"])
-
-
-# ---------------------------------------------------------------------------
-# Google Drive — manual sync + connection test
-# ---------------------------------------------------------------------------
-
-@router.get("/gdrive-status")
-async def gdrive_status():
-    """
-    Return the last Google Drive sync result (in-memory, resets on restart).
-    Used by settings.html to show the last-synced timestamp and amber warning.
-    """
-    return {
-        "last_sync_at": _gdrive_status["last_sync_at"],
-        "last_error":   _gdrive_status["last_error"],
-        "has_token":    bool(get_setting("gdrive_access_token")),
-    }
-
-
-@router.post("/gdrive-sync")
-async def gdrive_sync():
-    """
-    Manually sync CHANGELOG.md to Google Drive.
-
-    Uses the 'gdrive_access_token' setting. Returns a result dict that the
-    Settings page Drive card uses to show success/error feedback.
-    """
-    try:
-        token = get_setting("gdrive_access_token")
-    except KeyError:
-        token = ""
-
-    if not token:
-        raise HTTPException(
-            status_code=400,
-            detail="No Google Drive token configured — add it in Settings → Google Drive",
-        )
-
-    try:
-        result = await _gdrive_sync(token)
-        _gdrive_status["last_sync_at"] = datetime.utcnow().isoformat() + "Z"
-        _gdrive_status["last_error"]   = None
-        return {
-            "ok":     True,
-            "action": result.get("action"),
-            "file_id":   result.get("file_id"),
-            "folder_id": result.get("folder_id"),
-        }
-    except GDriveError as exc:
-        _gdrive_status["last_error"] = str(exc)
-        raise HTTPException(status_code=502, detail=str(exc))
-    except Exception as exc:
-        err = f"Unexpected error: {exc}"
-        _gdrive_status["last_error"] = err
-        log.exception("gdrive: unexpected error on manual sync")
-        raise HTTPException(status_code=500, detail=err)
 
 
 # ---------------------------------------------------------------------------

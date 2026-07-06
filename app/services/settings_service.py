@@ -247,21 +247,6 @@ def _build_registry() -> List[Dict]:
         },
         # ── Cloud Sync ────────────────────────────────────────────────────
         {
-            "key": "gdrive_access_token",
-            "default": "",
-            "type": "str",
-            "label": "Google Drive access token",
-            "description": (
-                "OAuth2 Bearer token used to sync CHANGELOG.md to Google Drive. "
-                "Required scope: https://www.googleapis.com/auth/drive.file. "
-                "Obtain from the Google OAuth playground or your project credentials."
-            ),
-            "group": "Cloud Sync",
-            # hidden=True: excluded from the generic settings renderer in settings.html;
-            # managed instead by the dedicated Google Drive card.
-            "hidden": True,
-        },
-        {
             "key": "obsidian_vault_path",
             "default": "/Users/melvinjarman/Documents/Obsidian",
             "type": "str",

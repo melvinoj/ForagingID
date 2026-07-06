@@ -208,54 +208,6 @@
       white-space: pre-wrap; word-break: break-word;
     }
 
-    /* ── Google Drive card ───────────────────────────────────────────── */
-    #gdrive-group {
-      background: #344440; border: 1px solid #4a5e5a; border-radius: 12px;
-      overflow: hidden; margin-bottom: 20px;
-    }
-    .gdrive-header {
-      background: #2f3d3a; padding: 10px 16px;
-      border-bottom: 1px solid #3a5e3a;
-      display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap;
-    }
-    .gdrive-header-left { display: flex; align-items: center; gap: 8px; }
-    .gdrive-title {
-      font-size: 0.82rem; font-weight: 700; text-transform: uppercase;
-      letter-spacing: 0.06em; color: #6abf7a;
-    }
-    .gdrive-body { padding: 16px; display: flex; flex-direction: column; gap: 12px; }
-    .gdrive-desc { font-size: 0.76rem; color: #8aaa88; line-height: 1.5; }
-    .gdrive-token-row {
-      display: flex; gap: 8px; flex-wrap: wrap; align-items: center;
-    }
-    .gdrive-token-input {
-      flex: 1; min-width: 200px;
-      padding: 7px 10px; font-size: 0.8rem;
-      border: 1px solid #c8e6ca; border-radius: 6px;
-      font-family: monospace; color: #333;
-    }
-    .gdrive-token-input:focus { outline: none; border-color: #6abf7a; }
-    .btn-gdrive {
-      padding: 7px 14px; font-size: 0.8rem; font-weight: 600;
-      border: none; border-radius: 7px; cursor: pointer; white-space: nowrap;
-      transition: background 0.15s;
-    }
-    .btn-gdrive.save    { background: #1a6b2a; color: white; }
-    .btn-gdrive.save:hover { background: #155221; }
-    .btn-gdrive.sync    { background: #344440; color: #6abf7a; border: 1px solid #4a7a54; }
-    .btn-gdrive.sync:hover { background: #3d524e; }
-    .btn-gdrive:disabled { opacity: 0.5; cursor: default; }
-    .gdrive-status {
-      font-size: 0.76rem; color: #8aaa88;
-      display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
-    }
-    .gdrive-status.ok  { color: #16a34a; }
-    .gdrive-status.err { color: #c0392b; }
-    .gdrive-hint {
-      font-size: 0.72rem; color: #8aaa88; line-height: 1.5;
-    }
-    .gdrive-hint a { color: #6abf7a; }
-
     /* ── Field mode section ────────────────────────────────────────────── */
     .fm-toggle { position: relative; display: inline-flex; align-items: center; cursor: pointer; }
     .fm-toggle input { opacity: 0; width: 0; height: 0; position: absolute; }
@@ -286,7 +238,7 @@
     }
 
     /* All collapsible body containers — smooth max-height transition */
-    .api-dash-body, .ds-body, .sharing-body, .snap-body, .gdrive-body, .sec-body {
+    .api-dash-body, .ds-body, .sharing-body, .snap-body, .sec-body {
       overflow: hidden;
       transition: max-height 0.28s ease;
       max-height: 3000px;
@@ -297,16 +249,14 @@
     #data-sources.collapsed    .ds-body,
     #sharing-group.collapsed   .sharing-body,
     #snapshot-group.collapsed  .snap-body,
-    #gdrive-group.collapsed    .gdrive-body,
     .settings-group.collapsed  .sec-body { max-height: 0; }
 
-    /* Caret rotation for .sec-caret (snap, gdrive, field-mode, offline, bg-processes, dynamic) */
+    /* Caret rotation for .sec-caret (snap, field-mode, offline, bg-processes, dynamic) */
     #snapshot-group.collapsed  .sec-caret,
-    #gdrive-group.collapsed    .sec-caret,
     .settings-group.collapsed  .sec-caret { transform: rotate(-90deg); }
 
     /* Make every section header feel interactive */
-    .snap-header[onclick], .gdrive-header[onclick],
+    .snap-header[onclick],
     .group-header[onclick] { cursor: pointer; }
 
     /* ── Mobile ──────────────────────────────────────────────────────── */
@@ -737,63 +687,6 @@
           </button>
           <span id="backup-external-status" style="font-size:0.78rem;color:#666"></span>
         </div>
-      </div>
-
-    </div>
-  </div>
-
-  <!-- ── Google Drive sync card ─────────────────────────────────────────── -->
-  <div id="gdrive-group" data-guest-hide>
-    <div class="gdrive-header" onclick="_secToggle('gdrive-group')">
-      <div class="gdrive-header-left">
-        <span style="font-size:1rem">📁</span>
-        <span class="gdrive-title">Google Drive Sync</span>
-        <span id="gdrive-sync-warning" title=""
-              style="display:none;margin-left:8px;padding:2px 8px;border-radius:10px;
-                     background:#fef3c7;color:#92400e;font-size:0.72rem;font-weight:600">
-          ⚠ Sync failed
-        </span>
-      </div>
-      <div style="display:flex;align-items:center;gap:8px">
-        <span id="gdrive-header-status" style="font-size:0.72rem;color:#6b7280"></span>
-        <span class="sec-caret">▾</span>
-      </div>
-    </div>
-    <div class="gdrive-body">
-      <div class="gdrive-desc">
-        Automatically syncs <strong>CHANGELOG.md</strong> to
-        <strong>ForagingID/CHANGELOG.md</strong> in your Google Drive whenever
-        a snapshot is created or a session ends. Paste your OAuth2 Bearer token
-        below to enable sync.
-      </div>
-
-      <!-- Token input -->
-      <div>
-        <div style="font-size:0.78rem;font-weight:600;color:#374151;margin-bottom:6px">
-          Google Drive access token
-        </div>
-        <div class="gdrive-token-row">
-          <input type="password" id="gdrive-token-input" class="gdrive-token-input"
-                 placeholder="Paste OAuth2 Bearer token here…"
-                 autocomplete="off" spellcheck="false">
-          <button class="btn-gdrive" id="btn-gdrive-reveal"
-                  onclick="gdriveToggleReveal()" title="Show / hide token">👁</button>
-          <button class="btn-gdrive save" id="btn-gdrive-save"
-                  onclick="gdriveSaveToken()">Save token</button>
-        </div>
-        <div class="gdrive-hint" style="margin-top:6px">
-          Needs scope <code>https://www.googleapis.com/auth/drive.file</code>.
-          Get a token from the
-          <a href="https://developers.google.com/oauthplayground" target="_blank" rel="noopener">
-            Google OAuth Playground</a>.
-        </div>
-      </div>
-
-      <!-- Actions -->
-      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
-        <button class="btn-gdrive sync" id="btn-gdrive-sync"
-                onclick="gdriveSyncNow()">☁ Sync now</button>
-        <span id="gdrive-sync-status" class="gdrive-status"></span>
       </div>
 
     </div>
@@ -1318,7 +1211,6 @@ loadSharingStatus();
 loadLanUrl();
 _loadGuestMode();
 loadSnapshots();
-loadGdriveStatus();
 loadBackupExternalStatus();
 loadCacheStatus();
 loadBgProcesses();
@@ -1685,128 +1577,6 @@ async function runDraftBackfill() {
     if (btn) { btn.disabled = false; btn.textContent = '✦ Backfill missing AI drafts'; }
   }
 }
-
-// ---------------------------------------------------------------------------
-// Google Drive
-// ---------------------------------------------------------------------------
-
-async function loadGdriveStatus() {
-  // Fetch last-sync state and update the GDrive header with timestamp + amber warning.
-  try {
-    const r = await fetch('/api/dev/gdrive-status');
-    if (!r.ok) return;
-    const d = await r.json();
-    const hdr     = document.getElementById('gdrive-header-status');
-    const warning = document.getElementById('gdrive-sync-warning');
-
-    if (d.last_error) {
-      // Amber warning — non-blocking indicator of last sync failure
-      if (warning) {
-        warning.style.display = 'inline';
-        warning.title = 'Last error: ' + d.last_error;
-      }
-      if (hdr && !d.last_sync_at) {
-        hdr.textContent = 'Never synced';
-        hdr.style.color = '#92400e';
-      }
-    } else if (warning) {
-      warning.style.display = 'none';
-    }
-
-    if (d.last_sync_at && hdr) {
-      // Format ISO timestamp as a human-friendly relative time
-      const dt  = new Date(d.last_sync_at);
-      const now = new Date();
-      const diffMin = Math.round((now - dt) / 60000);
-      let label;
-      if      (diffMin < 1)    label = 'just now';
-      else if (diffMin < 60)   label = diffMin + ' min ago';
-      else if (diffMin < 1440) label = Math.round(diffMin / 60) + ' hr ago';
-      else                     label = dt.toLocaleDateString();
-      hdr.textContent = 'Last synced: ' + label;
-      hdr.style.color = d.last_error ? '#92400e' : '#6b7280';
-    }
-  } catch (_) {}
-}
-
-async function gdriveLoadToken() {
-  // Load saved token from the settings API and populate the (masked) input
-  try {
-    const r = await fetch('/api/settings');
-    if (!r.ok) return;
-    const d = await r.json();
-    const entry = (d.settings || []).find(function(s) { return s.key === 'gdrive_access_token'; });
-    const inp = document.getElementById('gdrive-token-input');
-    if (entry && entry.current_value && inp) {
-      inp.value = entry.current_value;
-      // Show a gentle indicator that a token is already saved
-      const hdr = document.getElementById('gdrive-header-status');
-      if (hdr) { hdr.textContent = '✓ Token saved'; hdr.style.color = '#16a34a'; }
-    }
-  } catch (_) {}
-}
-
-function gdriveToggleReveal() {
-  const inp = document.getElementById('gdrive-token-input');
-  if (!inp) return;
-  inp.type = inp.type === 'password' ? 'text' : 'password';
-}
-
-async function gdriveSaveToken() {
-  const inp  = document.getElementById('gdrive-token-input');
-  const btn  = document.getElementById('btn-gdrive-save');
-  const hdr  = document.getElementById('gdrive-header-status');
-  const token = inp ? inp.value.trim() : '';
-
-  if (!token) {
-    _showToast('Paste a token first', true);
-    return;
-  }
-
-  if (btn) { btn.disabled = true; btn.textContent = '⏳ Saving…'; }
-  try {
-    const r = await fetch('/api/settings/gdrive_access_token', {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ value: token }),
-    });
-    const d = await r.json();
-    if (!r.ok) throw new Error(d.detail || 'HTTP ' + r.status);
-    if (hdr) { hdr.textContent = '✓ Token saved'; hdr.style.color = '#16a34a'; }
-    _showToast('✓ Drive token saved');
-  } catch (e) {
-    _showToast('✗ Save failed: ' + e.message, true);
-    if (hdr) { hdr.textContent = '✗ ' + e.message; hdr.style.color = '#c0392b'; }
-  } finally {
-    if (btn) { btn.disabled = false; btn.textContent = 'Save token'; }
-  }
-}
-
-async function gdriveSyncNow() {
-  const btn    = document.getElementById('btn-gdrive-sync');
-  const status = document.getElementById('gdrive-sync-status');
-  if (btn) { btn.disabled = true; btn.textContent = '⏳ Syncing…'; }
-  if (status) { status.textContent = ''; status.className = 'gdrive-status'; }
-
-  try {
-    const r = await fetch('/api/dev/gdrive-sync', { method: 'POST' });
-    const d = await r.json();
-    if (!r.ok) throw new Error(d.detail || 'HTTP ' + r.status);
-    const msg = '✓ Synced to Drive — ' + (d.action || 'ok');
-    if (status) { status.textContent = msg; status.className = 'gdrive-status ok'; }
-    _showToast(msg);
-    await loadGdriveStatus(); // refresh last-synced timestamp in header
-  } catch (e) {
-    const msg = '✗ ' + e.message;
-    if (status) { status.textContent = msg; status.className = 'gdrive-status err'; }
-    _showToast('✗ Drive sync failed: ' + e.message, true);
-    await loadGdriveStatus(); // update amber indicator after failure
-  } finally {
-    if (btn) { btn.disabled = false; btn.textContent = '☁ Sync now'; }
-  }
-}
-
-gdriveLoadToken();
 
 // ---------------------------------------------------------------------------
 // External drive backup
@@ -2522,7 +2292,7 @@ async function cancelBgProcess(processId, btn) {
 (function _initSecCollapseState() {
   var ids = [
     'api-dashboard', 'data-sources', 'sharing-group',
-    'snapshot-group', 'gdrive-group',
+    'snapshot-group',
     'field-mode-group', 'offline-cache-group', 'bg-processes-group'
   ];
   ids.forEach(function (id) {

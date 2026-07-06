@@ -43,6 +43,10 @@ Still open:
 
 ## History
 
+### 2026-07-06 10:34
+**Snapshot** — Pre-write: change encounter export destination from Obsidian vault to local exports/
+DB: `snapshots/db_20260706_103431.sqlite`
+
 ### 2026-07-06 10:16
 **Snapshot** — Pre-write: remove GDrive integration (superseded by External Backup)
 DB: `snapshots/db_20260706_101623.sqlite`

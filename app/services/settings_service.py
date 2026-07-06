@@ -245,20 +245,6 @@ def _build_registry() -> List[Dict]:
             "min": 1,
             "max": 500,
         },
-        # ── Cloud Sync ────────────────────────────────────────────────────
-        {
-            "key": "obsidian_vault_path",
-            "default": "/Users/melvinjarman/Documents/Obsidian",
-            "type": "str",
-            "label": "Obsidian vault path",
-            "description": (
-                "Absolute path to your Obsidian vault. "
-                "When End Session runs, writes Current State.md (overwrite) and appends to Decisions Log.md. "
-                "Leave blank to skip Obsidian sync."
-            ),
-            "group": "Cloud Sync",
-            "hidden": True,
-        },
         # ── Pre-filter ────────────────────────────────────────────────────
         {
             "key": "prefilter_green_threshold",

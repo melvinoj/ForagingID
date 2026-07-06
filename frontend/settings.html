@@ -637,18 +637,6 @@
         </div>
         <textarea class="end-session-state" id="end-session-state"
           placeholder="Describe the current project state: what was built, what's pending, known issues…"></textarea>
-        <div style="margin-top:10px">
-          <label style="font-size:0.78rem;font-weight:600;color:#374151;display:block;margin-bottom:4px">
-            Obsidian vault path <span style="font-weight:400;color:#6b7280">(optional — leave blank to skip)</span>
-          </label>
-          <div style="display:flex;gap:6px">
-            <input type="text" id="obsidian-vault-path" class="setting-input"
-              placeholder="/Users/melvinjarman/Documents/Obsidian"
-              style="flex:1;min-width:0;box-sizing:border-box">
-            <button class="btn-snap" onclick="saveObsidianPath()" style="white-space:nowrap;flex:0 0 auto">Save path</button>
-          </div>
-          <span id="obsidian-path-status" style="font-size:0.72rem;color:#666"></span>
-        </div>
         <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-top:10px">
           <button class="btn-snap danger" id="btn-end-session" onclick="endSession()">
             📋 End session &amp; snapshot
@@ -1424,36 +1412,6 @@ async function endSession() {
     _showToast('✗ End session failed: ' + e.message, true);
     if (statusEl) { statusEl.textContent = '✗ ' + e.message; statusEl.style.color = '#c0392b'; }
     if (btn) { btn.disabled = false; btn.textContent = '📋 End session & snapshot'; }
-  }
-}
-
-// Obsidian vault path — load on page open, save via PUT /api/settings/obsidian_vault_path
-(async function _loadObsidianPath() {
-  try {
-    const r = await fetch('/api/settings');
-    if (!r.ok) return;
-    const d = await r.json();
-    const entry = (d.settings || []).find(s => s.key === 'obsidian_vault_path');
-    const el = document.getElementById('obsidian-vault-path');
-    if (el && entry) el.value = entry.current_value || '';
-  } catch (_) {}
-})();
-
-async function saveObsidianPath() {
-  const el       = document.getElementById('obsidian-vault-path');
-  const statusEl = document.getElementById('obsidian-path-status');
-  if (!el) return;
-  try {
-    const r = await fetch('/api/settings/obsidian_vault_path', {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ value: el.value.trim() }),
-    });
-    if (!r.ok) throw new Error('HTTP ' + r.status);
-    if (statusEl) { statusEl.textContent = '✓ Saved'; statusEl.style.color = '#16a34a'; }
-    setTimeout(() => { if (statusEl) statusEl.textContent = ''; }, 2500);
-  } catch (e) {
-    if (statusEl) { statusEl.textContent = '✗ ' + e.message; statusEl.style.color = '#c0392b'; }
   }
 }
 

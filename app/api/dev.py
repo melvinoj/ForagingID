@@ -571,6 +571,7 @@ async def end_session(body: EndSessionRequest):
     6. Push to origin/main — best-effort, non-fatal on failure
     7. Back up latest snapshot to external drive — best-effort, non-fatal,
        silently skipped if /Volumes/DIGIERA isn't mounted
+    8. Export encounters created since the previous snapshot to exports/encounters/
     """
     summary   = body.session_summary or "Session ended"
     ts_human  = datetime.now().strftime("%Y-%m-%d %H:%M")
@@ -647,27 +648,7 @@ async def end_session(body: EndSessionRequest):
         _backup_status["last_error"] = str(exc)
         log.warning("end_session: external backup error — %s", exc)
 
-    # 6. Obsidian vault sync — additive, never blocks on failure
-    try:
-        vault_path_str = get_setting("obsidian_vault_path")
-        if vault_path_str:
-            vault = Path(str(vault_path_str)).expanduser()
-            vault.mkdir(parents=True, exist_ok=True)
-            date_str = datetime.now().strftime("%Y-%m-%d")
-            # Current State.md — overwrite with date header + current state text
-            (vault / "Current State.md").write_text(
-                f"# {date_str}\n\n{body.current_state}\n", encoding="utf-8"
-            )
-            # Decisions Log.md — append one line, never overwrite
-            one_liner = (body.session_summary or summary).split("\n")[0][:200]
-            decisions_log = vault / "Decisions Log.md"
-            with decisions_log.open("a", encoding="utf-8") as fh:
-                fh.write(f"- {date_str} — {one_liner}\n")
-            log.info("obsidian_sync: wrote to %s", vault)
-    except Exception as exc:
-        log.warning("obsidian_sync: skipped — %s", exc)
-
-    # 7. Export encounters created since the previous snapshot (exports/encounters/)
+    # 8. Export encounters created since the previous snapshot (exports/encounters/)
     encounter_export: dict = {}
     try:
         # Find the most recent snapshot timestamp from git log (before this session's

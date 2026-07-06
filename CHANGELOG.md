@@ -1,25 +1,8 @@
 ## Current State
 
-Current State — 06 July 2026
-Review-status integrity fix (2 sessions): Fix-6 rescue block in database.py was silently reverting manually-rejected observations to needs_review on every server start (missing reviewed_at IS NULL guard) — fixed; 28 wrongly-reverted observations restored with full observation_edits audit trail. Same bug class found at 3 more sites (scan.py:1040, scan.py:1176, scan.py:1266/1288, identify.py:305) — consolidated into one shared is_terminal_review_status() / TERMINAL_REVIEW_STATUSES helper in app/models/observation.py, applied everywhere. All verified via code inspection + read-back regression check (no live retry run — rejected observations' photo files are already deleted, out of scope to risk).
-Blank/empty review-queue card — investigated, not a data bug: matched to a specific observation (#21499) with fully valid data that rendered normally on reload. Consistent with known DB-lock contention (same class as obs #8391's raw traceback in routing_reason) — transient rendering artifact, not a persistent hole. No fix applied; closing this as diagnosed, not open.
-Hypericum maculatum/perforatum — second investigation, same conclusion as 03 July audit: no systemic AI confusion across genus. New findings: maculatum species card's sole evidence (obs #21659) is a weak (49%, single-source, API-disagreeing) call that reached "approved" via bulk-approve, not genuine dual-API agreement — pending Melvin's manual stem-test check of that one photo. Obs #21554's original AI evidence was lost to a "database is locked" write failure, never retried — unrecoverable, same P1/P2 concurrency gap already on file. Melvin's recollection of a prior manual maculatum correction not found in observation_edits — either misremembered (likely referring to #21659 itself) or happened via one of the undocumented status-change paths just fixed above; not resolvable further, not worth more query time.
-GDrive — scope error fixed (drive.file full URL required in Playground's "Input your own scopes" field, not the checkbox list); new token saved, shows green. Not yet confirmed: the UnicodeEncodeError on em-dash (likely CHANGELOG content hitting an ascii-only encode somewhere in the sync path) was never tested against a real sync — do one real End Session and confirm it lands in Drive before treating this as closed.
-Still open (unchanged or carried):
+## Current State
 
-CLAUDE.md stale Alembic migration head (0021→0044) — trivial, flagged twice now, do next session
-routing_reason column stores raw SQLAlchemy error tracebacks on lock-contention failures (found via obs #8391 during Fix-6 work) — not yet queued as a task
-observations table has no ownership column — Phase 14 headline blocker
-4 host-based is_guest_request() reads misreport guest status over LAN (read-only exposure, writes correctly blocked)
-2 SQLite-only code spots (database.py INSERT OR IGNORE, startup PRAGMAs) need engine-conditional handling pre-Postgres
-Species 412 (Thelypteris limbosperma) wrong-source risk — pending #3b scope
-Audit findings #3b (text-substitution detection) and #5 (card-level approval design) — not started
-Enrichment gap: 9 unapproved AI drafts, 6 never-scanned species, 79 no-PFAF species
-iNaturalist API token expired — identification currently PlantNet-only
-Apiaceae lookalike-warning content pass (16/17 species empty) — Melvin-authored only, pre-October
-Juniper species card — doesn't exist, blocks Carbonnade recipe tagging
-Wild Thyme candidate consolidation (165 vs 142) — non-blocking decision
-3 deferred Friture Sauvage recipe tags (Beet & Salad Burnet, Wildflower Glass Batter, Carbonnade) — Melvin handling
+Test run to confirm End Session works after Obsidian removal — no functional change intended, will restore real Current State next session.
 
 ## Current State — 03 July 2026
 
@@ -42,6 +25,13 @@ Still open:
 - Enrichment gap remediation — 9 AI drafts pending approval, 6 species never scanned, 79 no-PFAF species need alt-source decision
 
 ## History
+
+### 2026-07-06 12:06
+**Snapshot** — End of session — Test: confirm End Session runs cleanly after removing Obsidian vault sync
+DB: `snapshots/db_20260706_120629.sqlite`
+
+### 2026-07-06 12:06
+**Session ended** — Test: confirm End Session runs cleanly after removing Obsidian vault sync
 
 ### 2026-07-06 12:02
 **Snapshot** — Pre-write: remove Obsidian vault sync integration (Current State.md/Decisions Log.md)
@@ -5720,4 +5710,3 @@ DB: `snapshots/db_20260528_234754.sqlite`
 - `scan.html`: slider + Re-check queue button
 
 **Files:** `app/services/settings_service.py`, `app/models/observation.py`, `app/api/scan.py`, `app/services/identification.py`, `frontend/scan.html`
-

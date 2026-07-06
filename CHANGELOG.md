@@ -43,6 +43,10 @@ Still open:
 
 ## History
 
+### 2026-07-06 10:16
+**Snapshot** — Pre-write: remove GDrive integration (superseded by External Backup)
+DB: `snapshots/db_20260706_101623.sqlite`
+
 ### 2026-07-06 09:28
 **Snapshot** — Pre-write: gitignore cleanup + untrack bak/backup DBs and confirmed_plants photos
 DB: `snapshots/db_20260706_092810.sqlite`

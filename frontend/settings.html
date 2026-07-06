@@ -723,6 +723,22 @@
         </div>
       </div>
 
+      <!-- Back up to external drive -->
+      <div class="end-session-row" data-guest-hide style="margin-top:0;border-top:1px solid #e5e7eb;padding-top:14px">
+        <div class="end-session-title">💽 Back up to External</div>
+        <div class="end-session-desc">
+          Copies the most recent snapshot (never the live database directly) to
+          <code>/Volumes/DIGIERA/ForagingID_Backup/</code>. Also runs automatically,
+          best-effort, whenever a session ends — silently skipped if the drive isn't connected.
+        </div>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+          <button class="btn-snap" id="btn-backup-external" onclick="backupExternalNow()">
+            💽 Back up to External
+          </button>
+          <span id="backup-external-status" style="font-size:0.78rem;color:#666"></span>
+        </div>
+      </div>
+
     </div>
   </div>
 
@@ -1303,6 +1319,7 @@ loadLanUrl();
 _loadGuestMode();
 loadSnapshots();
 loadGdriveStatus();
+loadBackupExternalStatus();
 loadCacheStatus();
 loadBgProcesses();
 synSrcLoad();
@@ -1790,6 +1807,59 @@ async function gdriveSyncNow() {
 }
 
 gdriveLoadToken();
+
+// ---------------------------------------------------------------------------
+// External drive backup
+// ---------------------------------------------------------------------------
+
+async function loadBackupExternalStatus() {
+  try {
+    const r = await fetch('/api/dev/backup-external-status');
+    if (!r.ok) return;
+    const d = await r.json();
+    const status = document.getElementById('backup-external-status');
+    if (!status) return;
+
+    if (d.last_backup_at) {
+      const dt  = new Date(d.last_backup_at);
+      const now = new Date();
+      const diffMin = Math.round((now - dt) / 60000);
+      let label;
+      if      (diffMin < 1)    label = 'just now';
+      else if (diffMin < 60)   label = diffMin + ' min ago';
+      else if (diffMin < 1440) label = Math.round(diffMin / 60) + ' hr ago';
+      else                     label = dt.toLocaleDateString();
+      status.textContent = 'Last backup: ' + label;
+      status.style.color = '#666';
+    } else {
+      status.textContent = d.drive_mounted ? 'No backup yet' : 'Drive not connected';
+      status.style.color = '#999';
+    }
+  } catch (_) {}
+}
+
+async function backupExternalNow() {
+  const btn    = document.getElementById('btn-backup-external');
+  const status = document.getElementById('backup-external-status');
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Backing up…'; }
+  if (status) { status.textContent = ''; status.style.color = '#666'; }
+
+  try {
+    const r = await fetch('/api/dev/backup-external', { method: 'POST' });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.detail || 'HTTP ' + r.status);
+    const msg = '✓ Backed up ' + d.file + ' to External';
+    if (status) { status.textContent = msg; status.style.color = '#16a34a'; }
+    _showToast(msg);
+  } catch (e) {
+    const msg = '✗ ' + e.message;
+    if (status) { status.textContent = msg; status.style.color = '#c0392b'; }
+    _showToast('✗ Backup failed: ' + e.message, true);
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = '💽 Back up to External'; }
+    await loadBackupExternalStatus();
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Sharing

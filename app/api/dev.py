@@ -16,9 +16,13 @@ Endpoints:
   POST /api/dev/end-session      — update state + snapshot + history entry
   POST /api/dev/gdrive-sync      — manually sync CHANGELOG.md to Google Drive
                                      (also fires automatically on every snapshot)
+  POST /api/dev/backup-external  — copy the latest DB snapshot to /Volumes/DIGIERA
+                                     (also fires automatically, best-effort, on End Session)
+  GET  /api/dev/backup-external-status — last external-backup timestamp/error
 """
 
 import asyncio
+import hashlib
 import logging
 import re
 import shutil
@@ -53,9 +57,22 @@ _gdrive_status: dict = {
     "last_error":      None,   # Error message from last failed sync attempt
 }
 
+# ---------------------------------------------------------------------------
+# External-drive backup state — same in-memory/reset-on-restart pattern as
+# _gdrive_status above.
+# ---------------------------------------------------------------------------
+_backup_status: dict = {
+    "last_backup_at": None,   # ISO timestamp of last successful backup
+    "last_error":     None,   # Error message from last failed *manual* attempt
+                              # (silent skips from End Session do not set this)
+}
+
 PROJECT_ROOT  = Path(__file__).parent.parent.parent
 DB_PATH       = PROJECT_ROOT / "data" / "foragingid.db"
 SNAPSHOTS_DIR = PROJECT_ROOT / "snapshots"
+
+EXTERNAL_DRIVE      = Path("/Volumes/DIGIERA")
+EXTERNAL_BACKUP_DIR = EXTERNAL_DRIVE / "ForagingID_Backup"
 
 # Retention: keep all snapshots < 7 days, one per day for 7–28 days, delete older.
 _RETENTION_FULL_DAYS = 7
@@ -87,6 +104,81 @@ def _prune_snapshots() -> int:
                 f.unlink(missing_ok=True)
                 deleted += 1
     return deleted
+
+
+def _sha256(path: Path) -> str:
+    h = hashlib.sha256()
+    with path.open("rb") as fh:
+        for chunk in iter(lambda: fh.read(1024 * 1024), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def _latest_snapshot_file() -> Optional[Path]:
+    """Most recently modified db_*.sqlite* file in SNAPSHOTS_DIR, or None."""
+    if not SNAPSHOTS_DIR.exists():
+        return None
+    files = [f for f in SNAPSHOTS_DIR.glob("db_*.sqlite*") if f.is_file()]
+    if not files:
+        return None
+    return max(files, key=lambda f: f.stat().st_mtime)
+
+
+def _backup_to_external() -> dict:
+    """
+    Copy the most recent DB snapshot to the external drive, if mounted.
+
+    Never copies the live data/foragingid.db directly — snapshot-only, for
+    write-consistency (matches the existing restore trust model: only a
+    file that was written atomically at a point in time is trustworthy to
+    copy around, not a file that may be mid-write).
+
+    Returns a result dict; never raises. Callers decide how to log/report
+    based on the "skipped" flag (drive not mounted — expected, not an error)
+    vs "ok": False with a real error.
+    """
+    if not EXTERNAL_DRIVE.is_mount():
+        return {"ok": False, "skipped": True, "error": "External drive not connected"}
+
+    latest = _latest_snapshot_file()
+    if latest is None:
+        return {
+            "ok": False, "skipped": False,
+            "error": "No snapshot file found in snapshots/ — create one first",
+        }
+
+    try:
+        EXTERNAL_BACKUP_DIR.mkdir(parents=True, exist_ok=True)
+        dest = EXTERNAL_BACKUP_DIR / latest.name
+        # Plain chunked read/write — NOT shutil.copyfile/copy2. On macOS,
+        # shutil's fast path shells out to the native copyfile(3) syscall,
+        # which tries to preserve xattrs/resource forks (leaves a stray
+        # ._<name> AppleDouble sidecar) and intermittently raises
+        # "Operation not permitted" (EPERM) against this ExFAT-formatted
+        # drive. A manual byte copy has no such OS-level fast path to fail.
+        with latest.open("rb") as src_fh, dest.open("wb") as dest_fh:
+            for chunk in iter(lambda: src_fh.read(4 * 1024 * 1024), b""):
+                dest_fh.write(chunk)
+
+        # Verify — checksum compare (file is a few hundred MB at most; sha256
+        # over local disk is fast, and this is stronger than a size compare).
+        src_hash  = _sha256(latest)
+        dest_hash = _sha256(dest)
+        if src_hash != dest_hash:
+            return {
+                "ok": False, "skipped": False,
+                "error": f"Copy verification failed — checksum mismatch for {latest.name}",
+            }
+
+        return {
+            "ok": True, "skipped": False,
+            "file": latest.name,
+            "dest_path": str(dest),
+            "size_bytes": dest.stat().st_size,
+            "checksum": dest_hash,
+        }
+    except Exception as exc:
+        return {"ok": False, "skipped": False, "error": str(exc)}
 
 
 # ---------------------------------------------------------------------------
@@ -513,6 +605,8 @@ async def end_session(body: EndSessionRequest):
     4. Append session-end entry to ## History in CHANGELOG.md
     5. Create a full snapshot (DB copy + local git commit)
     6. Push to origin/main — best-effort, non-fatal on failure
+    7. Back up latest snapshot to external drive — best-effort, non-fatal,
+       silently skipped if /Volumes/DIGIERA isn't mounted
     """
     summary   = body.session_summary or "Session ended"
     ts_human  = datetime.now().strftime("%Y-%m-%d %H:%M")
@@ -567,6 +661,27 @@ async def end_session(body: EndSessionRequest):
     except Exception as exc:
         push_result = {"attempted": True, "ok": False, "error": str(exc)}
         log.warning("end_session: git push error — %s", exc)
+
+    # 5c. Back up latest snapshot to external drive — best-effort, never
+    # blocks End Session. Drive-not-mounted is the expected common case
+    # (laptop not docked) and is skipped silently, not logged as a warning.
+    backup_result: dict = {"attempted": False}
+    try:
+        backup_result = _backup_to_external()
+        backup_result["attempted"] = True
+        if backup_result.get("ok"):
+            _backup_status["last_backup_at"] = datetime.utcnow().isoformat() + "Z"
+            _backup_status["last_error"] = None
+            log.info("end_session: external backup complete — %s", backup_result.get("file"))
+        elif backup_result.get("skipped"):
+            log.debug("end_session: external drive not connected, skipping backup")
+        else:
+            _backup_status["last_error"] = backup_result.get("error")
+            log.warning("end_session: external backup failed — %s", backup_result.get("error"))
+    except Exception as exc:
+        backup_result = {"attempted": True, "ok": False, "error": str(exc)}
+        _backup_status["last_error"] = str(exc)
+        log.warning("end_session: external backup error — %s", exc)
 
     # 6. Obsidian vault sync — additive, never blocks on failure
     try:
@@ -623,6 +738,7 @@ async def end_session(body: EndSessionRequest):
         "docs_updated":          docs_updated,
         "snapshot":              snap,
         "git_push":              push_result,
+        "external_backup":       backup_result,
         "encounter_export":      encounter_export,
     }
 
@@ -663,6 +779,46 @@ async def git_push():
         raise
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"git push error: {exc}")
+
+
+# ---------------------------------------------------------------------------
+# External-drive backup — manual trigger + status
+# (end-session also runs this automatically, best-effort, see end_session())
+# ---------------------------------------------------------------------------
+
+@router.get("/backup-external-status")
+async def backup_external_status():
+    """Return the last external-backup result (in-memory, resets on restart)."""
+    return {
+        "last_backup_at": _backup_status["last_backup_at"],
+        "last_error":     _backup_status["last_error"],
+        "drive_mounted":  EXTERNAL_DRIVE.is_mount(),
+    }
+
+
+@router.post("/backup-external")
+async def backup_external():
+    """
+    Manually copy the latest DB snapshot to /Volumes/DIGIERA/ForagingID_Backup/.
+
+    Unlike the automatic End Session step, a manual click always surfaces a
+    clear error (including "drive not connected") rather than skipping
+    silently — the whole point of clicking the button is to know whether it
+    worked.
+    """
+    result = _backup_to_external()
+    if result.get("ok"):
+        _backup_status["last_backup_at"] = datetime.utcnow().isoformat() + "Z"
+        _backup_status["last_error"] = None
+        return {
+            "ok": True,
+            "file": result["file"],
+            "dest_path": result["dest_path"],
+            "size_bytes": result["size_bytes"],
+            "timestamp": _backup_status["last_backup_at"],
+        }
+    _backup_status["last_error"] = result["error"]
+    raise HTTPException(status_code=400, detail=result["error"])
 
 
 # ---------------------------------------------------------------------------

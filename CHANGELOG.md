@@ -1,23 +1,11 @@
 ## Current State
 
-Current State — 06 July 2026 (addendum, evening)
-Second Opinion apostrophe-escape bug fixed (review.html:2131-2134) — added the missing .replace(/'/g, "\\'") to match the Retry ID panel's existing pattern. Root cause: any common name with an apostrophe (every UK Hypericum name — "St John's Wort" etc.) broke the onclick's JS string, so the button silently did nothing (no error, no compile). Verified live via full click-through chain, not just code inspection. Snapshot db_20260706_121352.sqlite / commit f1768da9.
-This closes out today's full session: GDrive removed, Obsidian removed (encounter export relocated to exports/encounters/, Current State/Decisions Log sync retired), External Backup feature added, git push automation fixed + 5-week origin/main drift closed + 23.8 GiB repo history reset, Alembic head fixed, iNaturalist token refreshed, Hypericum ID accuracy note added to 3 species cards, Second Opinion bug fixed.
-Still open (unchanged from last addendum unless noted):
-
-routing_reason/bare-except pattern in scan.py — historical pollution closed, but underlying raw-traceback-into-processing_logs pattern still active (last hit 2026-06-27)
-observations table ownership column — Phase 14 blocker
-4 host-based is_guest_request() reads — LAN guest-detection false positive
-2 SQLite-only code spots pre-Postgres
-Species 412 wrong-source risk
-Audit findings #3b, #5
-Enrichment gap (9 drafts, 6 never-scanned, 79 no-PFAF)
-Apiaceae lookalike content pass (16/17 species, Melvin-authored, pre-October)
-Juniper species card (blocks Carbonnade recipe tag)
-Wild Thyme candidate consolidation (165 vs 142)
-3 deferred Friture Sauvage recipe tags
-Hypericum maculatum's sole card evidence (obs #21659, 49% single-source) — pending manual stem-test check
-Hypericum #21834/#21805 — Melvin correcting manually in UI
+Current State
+Planning-only session. No code written, no DB writes, no commits from this thread. ForagingID sits where the last End Session left it — fixlist items outstanding (observations ownership gap, Apiaceae safety pass, Alembic-head CLAUDE.md doc fix, iNat token expiry, and the remaining Phase 13 review items).
+New task scoped and prompt-ready, not yet run: taxonomic data layer (Unit A). Full GBIF lineage per species, backfilled and hooked into new-species enrichment, metadata-only — walled off from identification, confidence, auto-approve routing, and edibility. Four-step Code prompt authored (schema diagnostic → additive Alembic migration → GBIF backfill with match-type gating → _enrich_new_species_card() hook). Decisions locked: denormalized rank columns + gbif_taxon_key on species; store GBIF's actual mixed-kingdom lineage (Plantae + Fungi, not a hardcoded plant ladder); EXACT matches write cleanly, FUZZY/HIGHERRANK/NONE park to a manual-review list, existing human-curated family/genus never clobbered. Stop-and-confirm gate set after Step 2.
+Unit B (taxonomic graph visualisation) deliberately parked until Unit A lands and the FUZZY list is eyeballed — sits in the Phase 13+ reference/glossary layer, not October-critical.
+Session summary
+Scoped a taxonomic data layer for ForagingID: GBIF full-lineage backfill per species plus pipeline enrichment hook, metadata-only and safety-walled from all identification/edibility logic. Authored the four-step Code prompt (diagnostic → migration → gated backfill → pipeline hook). Split viz (Unit B) out as parked Phase 13+ work. No build this session.
 
 ## Current State — 03 July 2026
 
@@ -40,6 +28,13 @@ Still open:
 - Enrichment gap remediation — 9 AI drafts pending approval, 6 species never scanned, 79 no-PFAF species need alt-source decision
 
 ## History
+
+### 2026-07-06 17:29
+**Snapshot** — End of session — Session ended from Settings page
+DB: `snapshots/db_20260706_172916.sqlite`
+
+### 2026-07-06 17:29
+**Session ended** — Session ended from Settings page
 
 ### 2026-07-06 12:18
 **Snapshot** — End of session — Session ended from Settings page

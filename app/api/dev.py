@@ -667,7 +667,7 @@ async def end_session(body: EndSessionRequest):
     except Exception as exc:
         log.warning("obsidian_sync: skipped — %s", exc)
 
-    # 7. Export encounters created since the previous snapshot to Obsidian
+    # 7. Export encounters created since the previous snapshot (exports/encounters/)
     encounter_export: dict = {}
     try:
         # Find the most recent snapshot timestamp from git log (before this session's
@@ -873,7 +873,7 @@ def _build_encounter_note(enc, species_name: Optional[str], common_name: Optiona
 
 async def _export_encounters_to_obsidian(since: Optional[datetime] = None) -> dict:
     """
-    Write encounter records to ~/Documents/Obsidian/ForagingID/foraging/ as
+    Write encounter records to exports/encounters/ (project-local) as
     dated markdown notes.  Append-only — existing files are never overwritten.
 
     since: if provided, only encounters with encounter_date >= since are exported.
@@ -887,8 +887,8 @@ async def _export_encounters_to_obsidian(since: Optional[datetime] = None) -> di
     from app.models.encounter import Encounter
     from app.models.species import Species
 
-    obsidian_dir = Path.home() / "Documents" / "Obsidian" / "ForagingID" / "foraging"
-    obsidian_dir.mkdir(parents=True, exist_ok=True)
+    export_dir = PROJECT_ROOT / "exports" / "encounters"
+    export_dir.mkdir(parents=True, exist_ok=True)
 
     async with AsyncSessionLocal() as session:
         q = (
@@ -917,10 +917,10 @@ async def _export_encounters_to_obsidian(since: Optional[datetime] = None) -> di
         date_str = enc.encounter_date.strftime("%Y-%m-%d") if enc.encounter_date else "unknown-date"
         file_slug = _slug(sci_name) if sci_name else "observation"
 
-        dest = obsidian_dir / f"{date_str}_{file_slug}.md"
+        dest = export_dir / f"{date_str}_{file_slug}.md"
         if dest.exists():
             # Deduplicate same-date same-species with encounter id suffix
-            dest = obsidian_dir / f"{date_str}_{file_slug}_{enc.id}.md"
+            dest = export_dir / f"{date_str}_{file_slug}_{enc.id}.md"
             if dest.exists():
                 skipped += 1
                 continue
@@ -932,15 +932,14 @@ async def _export_encounters_to_obsidian(since: Optional[datetime] = None) -> di
         written += 1
 
     return {"total": total, "written": written, "skipped": skipped,
-            "output_dir": str(obsidian_dir)}
+            "output_dir": str(export_dir)}
 
 
 @router.post("/export-encounters-to-obsidian")
 async def export_encounters_to_obsidian():
     """
-    One-time export: write all encounters to
-    ~/Documents/Obsidian/ForagingID/foraging/ as dated markdown notes.
-    Append-only — existing files are skipped.
+    One-time export: write all encounters to exports/encounters/ (project-local)
+    as dated markdown notes. Append-only — existing files are skipped.
     """
     result = await _export_encounters_to_obsidian(since=None)
     return {"ok": True, **result}

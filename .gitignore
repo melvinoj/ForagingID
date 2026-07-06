@@ -36,6 +36,9 @@ data/checkpoint_*.json
 # Upload staging directory
 uploads/
 
+# Locally-generated export output (encounter markdown notes, etc.)
+exports/
+
 # DB snapshots (binary blobs — project-relative, pruned by rolling retention)
 snapshots/
 

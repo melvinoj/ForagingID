@@ -43,6 +43,10 @@ Still open:
 
 ## History
 
+### 2026-07-06 12:02
+**Snapshot** — Pre-write: remove Obsidian vault sync integration (Current State.md/Decisions Log.md)
+DB: `snapshots/db_20260706_120246.sqlite`
+
 ### 2026-07-06 10:34
 **Snapshot** — Pre-write: change encounter export destination from Obsidian vault to local exports/
 DB: `snapshots/db_20260706_103431.sqlite`

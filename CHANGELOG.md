@@ -1,8 +1,31 @@
 ## Current State
 
-## Current State
+Current State — 06 July 2026 (evening)
+GDrive integration removed entirely — after diagnosing the em-dash/ASCII header-encoding bug (root cause: a corrupted token, not CHANGELOG content) and hitting a separate live 400 error, decided to drop it rather than keep chasing it. Backend endpoints, settings entry, API dashboard probe, and Settings UI card all removed; app/integrations/gdrive.py left in place but unimported (per instruction — low value to delete a working file for zero benefit).
+Obsidian integration removed — two separate features had been conflated under one "Obsidian vault path" setting: (1) encounter markdown export (moved earlier this session to project-local exports/encounters/, no longer Obsidian-dependent), (2) Current State.md/Decisions Log.md sync in end_session() step 6 (removed now that Obsidian is being retired — Current State already lives in CHANGELOG.md). Verified via a real End Session run: git push + external backup + encounter export all still succeed cleanly with the Obsidian step gone.
+"Back up to External" feature added (Settings card + POST /api/dev/backup-external, wired into End Session as a non-fatal step) — copies the latest DB snapshot to /Volumes/DIGIERA/ForagingID_Backup/. Found and fixed two real bugs during verification, not anticipated from the spec: shutil.copy2 fails on ExFAT (metadata/flags unsupported), and even shutil.copyfile hits macOS's native copyfile(3) fast-path xattr issue on overwrite — fixed with a manual chunked read/write that bypasses both.
+git push automation added to End Session (previously commit-only, never pushed — root cause of a 5-week origin/main drift found and fixed this session) — best-effort, non-fatal on failure, result surfaced in the End Session response.
+Repo history reset (confirmed by Melvin) — .git had grown to 5.1 GiB (18.8 GiB of committed DB snapshots + 3.5 GiB of confirmed_plants photos tracked despite matching .gitignore rules added after the fact). Closed the tracking gaps first (fixed a genuinely broken confirmed_plants/logs/ negation pattern, added missing data/*.bak_* patterns, git rm --cached ~1,326 files), then replaced all of GitHub's history with one clean orphan commit. Local and origin/main now match exactly; a real test push after the reset took ~1.3s.
+Second Opinion "select to apply" silent-failure diagnosed for Hypericum × desetangsii — NOT caused by the × character (confirmed empirically in a live browser test; GBIF's own canonicalName strips × anyway). Real cause: review.html's onclick builds a JS arg from common_name via _resc() only, missing the .replace(/'/g, "\'") apostrophe-escape that the near-identical Retry ID panel already has. Any common name with an apostrophe (true of every Hypericum species in the DB — "St John's Wort" etc.) produces invalid JS ("missing ) after argument list"), so the onclick never compiles into a function — clicking does nothing, no console error. Pattern-wide risk given how many UK common names have apostrophes. Diagnosed only, not fixed yet.
+routing_reason traceback pollution investigated — 19 observations (2026-05-27 to 05-30) got raw SQLAlchemy OperationalError text via a one-time migration backfill (0005_data_trust_columns) that copied stale processing_log messages verbatim; historical only for routing_reason itself (frozen since the backfill ran). But the underlying bare-except pattern in scan.py that logs raw exception text into processing_logs.message is still active — most recent hit was 2026-06-27, so this is not purely historical. Not fixed yet.
+ID accuracy note (perforatum vs maculatum vs tetrapterum distinguishing features: stem cross-section, leaf glands, petal dots, sepal shape, habitat, the Hypericum × desetangsii hybrid) written to all three species cards' identification_notes (culinary_info.id_notes), changed_by='human', confirmed appended not overwritten via read-back.
+CLAUDE.md stale Alembic migration head fixed (0021 → 0044).
+iNaturalist token refreshed — no longer expired, API Health Scan shows all APIs healthy.
+Still open (unchanged or carried):
 
-Test run to confirm End Session works after Obsidian removal — no functional change intended, will restore real Current State next session.
+Second Opinion apostrophe-escape bug (review.html:2132) — diagnosed this session, not fixed; fix is a one-line addition matching the existing Retry ID panel pattern
+routing_reason bare-except pattern in scan.py still active (most recent hit 2026-06-27) — logs raw tracebacks into processing_logs.message on DB-lock contention
+observations table has no ownership column — Phase 14 headline blocker
+4 host-based is_guest_request() reads misreport guest status over LAN (read-only exposure, writes correctly blocked)
+2 SQLite-only code spots (database.py INSERT OR IGNORE, startup PRAGMAs) need engine-conditional handling pre-Postgres
+Species 412 (Thelypteris limbosperma) wrong-source risk — pending #3b scope
+Audit findings #3b (text-substitution detection) and #5 (card-level approval design) — not started
+Enrichment gap: 9 unapproved AI drafts, 6 never-scanned species, 79 no-PFAF species
+Apiaceae lookalike-warning content pass (16/17 species empty) — Melvin-authored only, pre-October
+Juniper species card — doesn't exist, blocks Carbonnade recipe tagging
+Wild Thyme candidate consolidation (165 vs 142) — non-blocking decision
+3 deferred Friture Sauvage recipe tags (Beet & Salad Burnet, Wildflower Glass Batter, Carbonnade) — Melvin handling
+Hypericum maculatum's sole card evidence (obs #21659, 49% single-source) — pending Melvin's manual stem-test check
 
 ## Current State — 03 July 2026
 
@@ -25,6 +48,10 @@ Still open:
 - Enrichment gap remediation — 9 AI drafts pending approval, 6 species never scanned, 79 no-PFAF species need alt-source decision
 
 ## History
+
+### 2026-07-06 12:13
+**Snapshot** — Pre-write: fix Second Opinion apostrophe-escape bug in onclick (review.html:2132)
+DB: `snapshots/db_20260706_121352.sqlite`
 
 ### 2026-07-06 12:06
 **Snapshot** — End of session — Test: confirm End Session runs cleanly after removing Obsidian vault sync

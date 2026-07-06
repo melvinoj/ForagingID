@@ -5708,3 +5708,4 @@ DB: `snapshots/db_20260528_234754.sqlite`
 - `scan.html`: slider + Re-check queue button
 
 **Files:** `app/services/settings_service.py`, `app/models/observation.py`, `app/api/scan.py`, `app/services/identification.py`, `frontend/scan.html`
+

@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <link rel="manifest" href="/static/manifest.json">
+  <meta name="theme-color" content="#2d5a1b">
+  <link rel="apple-touch-icon" href="/static/icons/icon-192.png">
+  <link rel="icon" type="image/svg+xml" href="/static/icons/dandelion-icon.svg">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ForagingID</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { min-height: 100%; }
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      background: #2a3330;
+      color: #d8e4d8; min-height: 100dvh;
+      display: flex; align-items: center; justify-content: center;
+      padding: 32px 20px;
+    }
+
+    .wrap { width: 100%; max-width: 640px; }
+
+    /* ── Welcome view ─────────────────────────────────────────────────── */
+    #welcome { text-align: center; }
+    .logo { font-size: 2.4rem; font-weight: 700; color: #a8d890; letter-spacing: -0.01em; }
+    .logo .leaf { font-size: 2.2rem; }
+    .tagline {
+      font-size: 1.08rem; line-height: 1.7; color: #b8ccb8;
+      margin: 22px auto 0; max-width: 560px;
+      font-family: Georgia, 'Times New Roman', serif;
+    }
+    .cta-row {
+      margin-top: 34px; display: flex; gap: 14px; justify-content: center; flex-wrap: wrap;
+    }
+    .btn {
+      display: inline-block; font-size: 0.95rem; font-weight: 600;
+      padding: 13px 26px; border-radius: 10px; cursor: pointer;
+      text-decoration: none; border: none; transition: background 0.15s, transform 0.05s;
+    }
+    .btn:active { transform: translateY(1px); }
+    .btn-primary { background: #2d5016; color: #fff; }
+    .btn-primary:hover { background: #3a6018; }
+    .btn-ghost { background: rgba(255,255,255,0.7); color: #2d5016; border: 1px solid #b8d48a; }
+    .btn-ghost:hover { background: #fff; }
+
+    .footer { margin-top: 42px; font-size: 0.74rem; color: #7a9e80; }
+
+    /* ── Read-only "Learn more" view ──────────────────────────────────── */
+    #learn { display: none; }
+    #learn .back {
+      background: none; border: none; color: #a8d890; font-size: 0.9rem;
+      font-weight: 600; cursor: pointer; padding: 6px 0; margin-bottom: 8px;
+    }
+    #learn .back:hover { text-decoration: underline; }
+    #learn h1 { font-size: 1.6rem; color: #a8d890; margin-bottom: 18px; }
+    .prose {
+      background: rgba(255,255,255,0.82); border: 1px solid #d0dbb8;
+      border-radius: 14px; padding: 26px 26px 28px;
+    }
+    .prose p {
+      font-family: Georgia, 'Times New Roman', serif;
+      font-size: 1.02rem; line-height: 1.75; color: #2a3a1a; margin-bottom: 1.05em;
+    }
+    .prose p:last-child { margin-bottom: 0; }
+
+    @media (max-width: 480px) {
+      .logo { font-size: 1.9rem; }
+      .tagline { font-size: 1rem; }
+      #learn h1 { font-size: 1.35rem; }
+      .prose { padding: 20px; }
+      .btn { width: 100%; }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+
+    <!-- ── Welcome ──────────────────────────────────────────────────── -->
+    <div id="welcome">
+      <div class="logo"><span class="leaf">🌿</span> ForagingID</div>
+      <p class="tagline" id="tagline">Loading…</p>
+      <div class="cta-row">
+        <a class="btn btn-primary" href="/map">Explore the map →</a>
+        <button class="btn btn-ghost" id="learn-btn">Learn more</button>
+      </div>
+      <div class="footer">A tool for learning your land · built by Melvin Jarman</div>
+    </div>
+
+    <!-- ── Learn more (read-only full description) ──────────────────── -->
+    <div id="learn">
+      <button class="back" id="back-btn">← Back</button>
+      <h1>About ForagingID</h1>
+      <div class="prose" id="prose"></div>
+    </div>
+
+  </div>
+
+<script>
+const tagline = document.getElementById('tagline');
+const prose   = document.getElementById('prose');
+const welcome = document.getElementById('welcome');
+const learn   = document.getElementById('learn');
+
+function renderProse(text) {
+  prose.innerHTML = '';
+  (text || '').split(/\n\s*\n/).forEach(function (para) {
+    const t = para.trim();
+    if (!t) return;
+    const p = document.createElement('p');
+    p.textContent = t;          // textContent — no HTML injection
+    prose.appendChild(p);
+  });
+}
+
+async function load() {
+  try {
+    const r = await fetch('/api/about');
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const d = await r.json();
+    tagline.textContent = d.snappy_summary || '';
+    renderProse(d.full_description || '');
+  } catch (e) {
+    tagline.textContent = 'Welcome to ForagingID.';
+  }
+}
+
+document.getElementById('learn-btn').addEventListener('click', function () {
+  welcome.style.display = 'none';
+  learn.style.display = 'block';
+  window.scrollTo(0, 0);
+});
+document.getElementById('back-btn').addEventListener('click', function () {
+  learn.style.display = 'none';
+  welcome.style.display = 'block';
+  window.scrollTo(0, 0);
+});
+
+load();
+</script>
+<script src="/static/js/pwa.js"></script>
+</body>
+</html>

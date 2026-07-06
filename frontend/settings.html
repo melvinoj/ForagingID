@@ -1,0 +1,2492 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <link rel="manifest" href="/static/manifest.json">
+  <meta name="theme-color" content="#2d5a1b">
+  <link rel="apple-touch-icon" href="/static/icons/icon-192.png">
+  <link rel="icon" type="image/svg+xml" href="/static/icons/dandelion-icon.svg">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+  <title>ForagingID — Settings</title>
+  <link rel="stylesheet" href="/static/css/tokens.css">
+  <link rel="stylesheet" href="/static/css/site-header.css">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: system-ui, sans-serif; background: #2a3330; color: #d8e4d8; min-height: 100dvh; }
+
+    /* ── Layout ──────────────────────────────────────────────────────── */
+    #main { max-width: 760px; margin: 0 auto; padding: 20px 16px 60px; }
+
+    /* ── Page title bar ──────────────────────────────────────────────── */
+    .page-title {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 20px; flex-wrap: wrap; gap: 8px;
+    }
+    .page-title h2 { font-size: 1.15rem; font-weight: 700; color: #8ab87a; }
+    .page-subtitle { font-size: 0.78rem; color: #7a9a7a; margin-top: 2px; }
+    #load-status { font-size: 0.8rem; color: #888; }
+
+    /* ── Group card ──────────────────────────────────────────────────── */
+    .settings-group {
+      background: #344440; border: 1px solid #4a5e5a; border-radius: 12px;
+      overflow: hidden; margin-bottom: 20px;
+    }
+    .group-header {
+      background: #2f3d3a; padding: 10px 16px;
+      border-bottom: 1px solid #4a5e5a;
+      display: flex; align-items: center; gap: 8px;
+    }
+    .group-title { font-size: 0.82rem; font-weight: 700; text-transform: uppercase;
+      letter-spacing: 0.06em; color: #9aaa88; }
+    .group-count { font-size: 0.72rem; background: #3d524e; color: #9aaa88;
+      padding: 1px 6px; border-radius: 10px; font-weight: 600; }
+
+    /* ── Setting row ─────────────────────────────────────────────────── */
+    .setting-row {
+      padding: 14px 16px; border-bottom: 1px solid #3a4e4a;
+      display: grid; grid-template-columns: 1fr auto; gap: 12px; align-items: start;
+    }
+    .setting-row:last-child { border-bottom: none; }
+    .setting-row.overridden { background: #3a4e40; }
+
+    .setting-label { font-size: 0.85rem; font-weight: 600; color: #d8e4d8; margin-bottom: 2px; }
+    .setting-desc  { font-size: 0.75rem; color: #8aaa88; line-height: 1.4; }
+    .setting-meta  { font-size: 0.72rem; color: #7a9288; margin-top: 3px; }
+    .override-badge {
+      display: inline-block; font-size: 0.65rem; font-weight: 700;
+      background: #fef3c7; color: #92400e; padding: 1px 5px; border-radius: 4px;
+      margin-left: 6px; vertical-align: middle;
+    }
+
+    .setting-control { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; min-width: 160px; }
+
+    /* inputs */
+    .setting-input {
+      width: 100%; padding: 5px 8px; border: 1px solid #ccc; border-radius: 6px;
+      font-size: 0.82rem; background: #2f3d3a; color: #d8e4d8;
+      transition: border-color 0.15s;
+    }
+    .setting-input:focus { outline: none; border-color: #2d5016; }
+    .setting-input.dirty { border-color: #f59e0b; background: #fffbeb; color: #7a5c00; }
+    .setting-input.saved { border-color: #16a34a; background: #f0fdf4; color: #166534; }
+    .setting-input.error { border-color: #ef4444; background: #fef2f2; color: #991b1b; }
+
+    select.setting-input { cursor: pointer; }
+
+    /* action row under input */
+    .setting-actions { display: flex; gap: 6px; align-items: center; width: 100%; justify-content: flex-end; }
+    .btn-save {
+      font-size: 0.72rem; font-weight: 600; padding: 3px 10px;
+      background: #2d5016; color: white; border: none; border-radius: 5px; cursor: pointer;
+    }
+    .btn-save:hover { background: #3a6018; }
+    .btn-save:disabled { background: #aaa; cursor: default; }
+    .btn-reset {
+      font-size: 0.72rem; color: #b8cca8; background: none; border: 1px solid #4a5e5a;
+      padding: 3px 8px; border-radius: 5px; cursor: pointer;
+    }
+    .btn-reset:hover { background: #3d524e; color: #d8e4d8; }
+    .btn-reset:disabled { opacity: 0.4; cursor: default; }
+    .field-msg { font-size: 0.7rem; min-height: 14px; }
+    .field-msg.ok    { color: #16a34a; }
+    .field-msg.err   { color: #ef4444; }
+    .field-msg.dirty { color: #d97706; }
+
+    /* ── Toast ───────────────────────────────────────────────────────── */
+    #toast {
+      position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+      background: #2d5016; color: white; padding: 8px 18px; border-radius: 8px;
+      font-size: 0.82rem; opacity: 0; transition: opacity 0.2s; pointer-events: none;
+      z-index: 9999; white-space: nowrap;
+    }
+    #toast.show { opacity: 1; }
+    #toast.err  { background: #c0392b; }
+
+    /* ── Snapshot / Dev tools ────────────────────────────────────────── */
+    #snapshot-group {
+      background: #344440; border: 1px solid #4a5e5a; border-radius: 12px;
+      overflow: hidden; margin-bottom: 20px;
+    }
+    .snap-header {
+      background: #2f3d3a; padding: 10px 16px;
+      border-bottom: 1px solid #4a5e5a;
+      display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap;
+    }
+    .snap-header-left { display: flex; align-items: center; gap: 8px; }
+    .snap-title { font-size: 0.82rem; font-weight: 700; text-transform: uppercase;
+      letter-spacing: 0.06em; color: #c4b5fd; }
+    .snap-body { padding: 16px; }
+    .snap-actions { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 16px; align-items: center; }
+    .btn-snap {
+      padding: 8px 18px; font-size: 0.82rem; font-weight: 600;
+      border: none; border-radius: 7px; cursor: pointer; transition: background 0.15s;
+    }
+    .btn-snap.primary { background: #5b21b6; color: white; }
+    .btn-snap.primary:hover { background: #4c1d95; }
+    .btn-snap.primary:disabled { background: #a78bfa; cursor: default; }
+    .btn-snap.danger  { background: #991b1b; color: white; }
+    .btn-snap.danger:hover  { background: #7f1d1d; }
+    .btn-snap.saved, .btn-snap.saved:disabled { background: #16a34a; color: white; cursor: default; opacity: 1; }
+    .btn-snap.secondary { background: #344440; color: #a78bfa; border: 1px solid #7c5bbf; }
+    .btn-snap.secondary:hover { background: #3d524e; }
+    .btn-snap.secondary:disabled { opacity: 0.5; cursor: default; }
+    #snap-status { font-size: 0.8rem; color: #8aaa88; }
+
+    /* End session */
+    .end-session-row {
+      padding-top: 14px; margin-top: 14px; border-top: 1px solid #4a5e5a;
+      display: flex; flex-direction: column; gap: 8px;
+    }
+    .end-session-title { font-size: 0.82rem; font-weight: 700; color: #d8e4d8; }
+    .end-session-desc  { font-size: 0.76rem; color: #8aaa88; line-height: 1.5; }
+    .end-session-state {
+      width: 100%; font-size: 0.78rem; padding: 7px 10px; min-height: 80px;
+      border: 1px solid #c4b5fd; border-radius: 6px; font-family: inherit;
+      resize: vertical; color: #333; margin-top: 4px;
+    }
+    .end-session-state:focus { outline: none; border-color: #7c3aed; }
+
+    /* Snapshot list */
+    .snap-list { margin-top: 10px; }
+    .snap-list-title {
+      font-size: 0.78rem; font-weight: 700; color: #b8cca8;
+      text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 8px;
+    }
+    .snap-item {
+      display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+      padding: 9px 12px; border: 1px solid #4a5e5a; border-radius: 8px;
+      margin-bottom: 6px; background: #344440;
+    }
+    .snap-item-info { flex: 1; min-width: 0; }
+    .snap-item-date { font-size: 0.78rem; font-weight: 600; color: #d8e4d8; }
+    .snap-item-desc { font-size: 0.73rem; color: #888; }
+    .snap-item-hash { font-size: 0.69rem; color: #a78bfa; font-family: monospace; }
+    .btn-restore {
+      padding: 4px 12px; font-size: 0.75rem; font-weight: 600;
+      border: 1px solid #5b21b6; border-radius: 5px;
+      background: #344440; color: #a78bfa; cursor: pointer; white-space: nowrap;
+    }
+    .btn-restore:hover { background: #3d524e; }
+    .snap-item-actions { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+    .btn-changelog {
+      padding: 4px 12px; font-size: 0.75rem; font-weight: 600;
+      border: 1px solid #d1c7e8; border-radius: 5px;
+      background: #344440; color: #b8a8e8; cursor: pointer; white-space: nowrap;
+    }
+    .btn-changelog:hover { background: #3d524e; border-color: #b9a8e0; color: #a78bfa; }
+    .snap-list-empty { font-size: 0.8rem; color: #aaa; padding: 8px 0; }
+    .snap-toggle {
+      margin-top: 6px; padding: 3px 0; font-size: 0.75rem; font-weight: 600;
+      background: none; border: none; color: #c4b5fd; cursor: pointer;
+    }
+    .snap-toggle:hover { text-decoration: underline; }
+    .cl-modal-overlay {
+      position: fixed; inset: 0; background: rgba(0,0,0,0.45);
+      display: flex; align-items: center; justify-content: center;
+      z-index: 10000; padding: 24px;
+    }
+    .cl-modal {
+      background: #344440; border-radius: 12px; width: min(820px, 100%);
+      max-height: 85vh; display: flex; flex-direction: column;
+      box-shadow: 0 12px 40px rgba(0,0,0,0.3); overflow: hidden;
+    }
+    .cl-modal-head {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 14px 18px; border-bottom: 1px solid #4a5e5a; flex-shrink: 0;
+    }
+    .cl-modal-title { font-size: 0.9rem; font-weight: 700; color: #d8e4d8; }
+    .cl-modal-commit { font-size: 0.72rem; font-weight: 600; color: #a78bfa; font-family: monospace; margin-left: 6px; }
+    .cl-modal-close {
+      background: none; border: none; font-size: 1.1rem; color: #8aaa88;
+      cursor: pointer; line-height: 1; padding: 4px 8px; border-radius: 6px;
+    }
+    .cl-modal-close:hover { background: #3d524e; color: #d8e4d8; }
+    .cl-modal-body {
+      margin: 0; padding: 16px 18px; overflow: auto; flex: 1;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 0.76rem; line-height: 1.5; color: #c8d8c0;
+      white-space: pre-wrap; word-break: break-word;
+    }
+
+    /* ── Google Drive card ───────────────────────────────────────────── */
+    #gdrive-group {
+      background: #344440; border: 1px solid #4a5e5a; border-radius: 12px;
+      overflow: hidden; margin-bottom: 20px;
+    }
+    .gdrive-header {
+      background: #2f3d3a; padding: 10px 16px;
+      border-bottom: 1px solid #3a5e3a;
+      display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap;
+    }
+    .gdrive-header-left { display: flex; align-items: center; gap: 8px; }
+    .gdrive-title {
+      font-size: 0.82rem; font-weight: 700; text-transform: uppercase;
+      letter-spacing: 0.06em; color: #6abf7a;
+    }
+    .gdrive-body { padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+    .gdrive-desc { font-size: 0.76rem; color: #8aaa88; line-height: 1.5; }
+    .gdrive-token-row {
+      display: flex; gap: 8px; flex-wrap: wrap; align-items: center;
+    }
+    .gdrive-token-input {
+      flex: 1; min-width: 200px;
+      padding: 7px 10px; font-size: 0.8rem;
+      border: 1px solid #c8e6ca; border-radius: 6px;
+      font-family: monospace; color: #333;
+    }
+    .gdrive-token-input:focus { outline: none; border-color: #6abf7a; }
+    .btn-gdrive {
+      padding: 7px 14px; font-size: 0.8rem; font-weight: 600;
+      border: none; border-radius: 7px; cursor: pointer; white-space: nowrap;
+      transition: background 0.15s;
+    }
+    .btn-gdrive.save    { background: #1a6b2a; color: white; }
+    .btn-gdrive.save:hover { background: #155221; }
+    .btn-gdrive.sync    { background: #344440; color: #6abf7a; border: 1px solid #4a7a54; }
+    .btn-gdrive.sync:hover { background: #3d524e; }
+    .btn-gdrive:disabled { opacity: 0.5; cursor: default; }
+    .gdrive-status {
+      font-size: 0.76rem; color: #8aaa88;
+      display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+    }
+    .gdrive-status.ok  { color: #16a34a; }
+    .gdrive-status.err { color: #c0392b; }
+    .gdrive-hint {
+      font-size: 0.72rem; color: #8aaa88; line-height: 1.5;
+    }
+    .gdrive-hint a { color: #6abf7a; }
+
+    /* ── Field mode section ────────────────────────────────────────────── */
+    .fm-toggle { position: relative; display: inline-flex; align-items: center; cursor: pointer; }
+    .fm-toggle input { opacity: 0; width: 0; height: 0; position: absolute; }
+    .fm-slider {
+      width: 42px; height: 24px; background: #ccc; border-radius: 12px;
+      transition: background 0.2s; display: inline-block; flex-shrink: 0; position: relative;
+    }
+    .fm-slider::after {
+      content: ''; position: absolute; top: 3px; left: 3px;
+      width: 18px; height: 18px; border-radius: 50%;
+      background: white; transition: transform 0.2s; box-shadow: 0 1px 3px rgba(0,0,0,.25);
+    }
+    .fm-toggle input:checked + .fm-slider { background: #2d5016; }
+    .fm-toggle input:checked + .fm-slider::after { transform: translateX(18px); }
+    .fm-thr-btn {
+      padding: 5px 14px; font-size: 0.8rem; border-radius: 6px;
+      border: 1px solid #4a7a40; background: #344440; color: #a8d890; cursor: pointer;
+      transition: background 0.15s;
+    }
+    .fm-thr-btn.active { background: #2d5016; border-color: #2d5016; color: white; }
+    .fm-thr-btn:hover:not(.active) { background: #3d524e; }
+
+    /* ── Unified section collapse ───────────────────────────────────── */
+    /* Chevron used by every section that doesn't have its own caret class */
+    .sec-caret {
+      margin-left: auto; font-size: 0.8rem; color: #889;
+      transition: transform .15s; flex-shrink: 0; user-select: none;
+    }
+
+    /* All collapsible body containers — smooth max-height transition */
+    .api-dash-body, .ds-body, .sharing-body, .snap-body, .gdrive-body, .sec-body {
+      overflow: hidden;
+      transition: max-height 0.28s ease;
+      max-height: 3000px;
+    }
+
+    /* Collapsed body states for all sections */
+    #api-dashboard.collapsed   .api-dash-body,
+    #data-sources.collapsed    .ds-body,
+    #sharing-group.collapsed   .sharing-body,
+    #snapshot-group.collapsed  .snap-body,
+    #gdrive-group.collapsed    .gdrive-body,
+    .settings-group.collapsed  .sec-body { max-height: 0; }
+
+    /* Caret rotation for .sec-caret (snap, gdrive, field-mode, offline, bg-processes, dynamic) */
+    #snapshot-group.collapsed  .sec-caret,
+    #gdrive-group.collapsed    .sec-caret,
+    .settings-group.collapsed  .sec-caret { transform: rotate(-90deg); }
+
+    /* Make every section header feel interactive */
+    .snap-header[onclick], .gdrive-header[onclick],
+    .group-header[onclick] { cursor: pointer; }
+
+    /* ── Mobile ──────────────────────────────────────────────────────── */
+    @media (max-width: 540px) {
+      .setting-row { grid-template-columns: 1fr; }
+      .setting-control { align-items: flex-start; }
+      .setting-actions { justify-content: flex-start; }
+      .setting-input { max-width: 100%; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- Nav chip + drawer injected by /static/js/site-header.js (Map Redesign P3-nav) -->
+
+<div id="main">
+  <div class="page-title">
+    <div>
+      <h2>⚙️ Settings</h2>
+      <div class="page-subtitle">
+        Changes take effect immediately — no restart needed.
+        Values shown in <em>italics</em> are the .env / code defaults.
+      </div>
+    </div>
+    <span id="load-status">Loading…</span>
+  </div>
+
+  <!-- ── API Dashboard ────────────────────────────────────────────────── -->
+  <style>
+    #api-dashboard .api-grid {
+      display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+      gap: 12px; padding: 16px;
+    }
+    .api-card {
+      border: 1px solid #4a5e5a; border-radius: 10px; background: #344440; padding: 14px;
+      display: flex; flex-direction: column; gap: 9px;
+    }
+    .api-card-head { display: flex; align-items: center; gap: 8px; }
+    .api-dot { width: 11px; height: 11px; border-radius: 50%; background: #ccc; flex: 0 0 auto; }
+    .api-dot.green { background: #2e9e4f; box-shadow: 0 0 0 3px rgba(46,158,79,.18); }
+    .api-dot.amber { background: #e0a020; box-shadow: 0 0 0 3px rgba(224,160,32,.18); }
+    .api-dot.red   { background: #d23b3b; box-shadow: 0 0 0 3px rgba(210,59,59,.18); }
+    .api-dot.na    { background: #9aa6b2; }
+    .api-name { font-weight: 700; font-size: 0.92rem; color: #d8e4d8; flex: 1 1 auto; }
+    .api-status-label { font-size: 0.72rem; color: #8aaa88; text-transform: uppercase; letter-spacing: .04em; }
+    .api-test-btn {
+      border: 1px solid #4a5e5a; background: #344440; color: #a8d890; border-radius: 6px;
+      padding: 3px 9px; font-size: 0.72rem; cursor: pointer; font-weight: 600;
+    }
+    .api-test-btn:hover { background: #3d524e; }
+    .api-key-row { display: flex; gap: 6px; }
+    .api-key-row input {
+      flex: 1 1 auto; min-width: 0; padding: 7px 9px; border: 1px solid #cbd3bf;
+      border-radius: 6px; font-size: 0.8rem; font-family: monospace;
+    }
+    .api-key-row button {
+      border: none; border-radius: 6px; padding: 7px 12px; font-size: 0.8rem;
+      font-weight: 600; cursor: pointer; background: #2d5016; color: #fff; white-space: nowrap;
+    }
+    .api-key-row button:hover { background: #356019; }
+    .api-key-row .api-reveal { background: #eef2e6; color: #555; padding: 7px 10px; }
+    .api-meta { font-size: 0.72rem; color: #888; line-height: 1.5; }
+    .api-meta .api-err { color: #c0392b; }
+    .api-meta .api-warn { color: #b8860b; font-weight: 600; }
+    .api-howto-btn {
+      align-self: flex-start; background: none; border: 1px solid #4a5e5a; color: #a8c888;
+      border-radius: 6px; padding: 5px 10px; font-size: 0.76rem; cursor: pointer;
+    }
+    .api-howto-btn:hover { background: #3d524e; }
+    .api-howto {
+      display: none; background: #2a3a30; border: 1px solid #4a5e5a; border-radius: 8px;
+      padding: 11px 13px; font-size: 0.78rem; color: #e0ead8; line-height: 1.55;
+    }
+    .api-howto.open { display: block; }
+    .api-howto ol { margin: 0 0 0 18px; padding: 0; }
+    .api-howto li { margin: 4px 0; }
+    .api-howto a { color: #8ed46e; word-break: break-all; }
+    .api-howto .api-tokenlink {
+      display: inline-block; margin-top: 8px; font-weight: 600; color: #8ed46e;
+    }
+    .api-noKey { font-size: 0.76rem; color: #889; font-style: italic; }
+    /* P3 — API Dashboard collapsible */
+    #api-dashboard .api-dash-body { /* wrapper so we can hide just the body */ }
+    #api-dashboard.collapsed .api-dash-caret { transform: rotate(-90deg); }
+    .api-dash-caret { margin-left: 8px; font-size: 0.8rem; color: #889; transition: transform .15s; }
+  </style>
+  <div class="settings-group" id="api-dashboard" style="margin-bottom:20px">
+    <div class="group-header" onclick="toggleApiDashboard()" style="cursor:pointer">
+      <span style="font-size:1rem">🔌</span>
+      <span class="group-title">API Dashboard</span>
+      <span class="api-dash-caret">▾</span>
+    </div>
+    <div class="api-dash-body">
+      <div style="padding:10px 16px 0;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+        <button id="api-scan-btn" onclick="runHealthScan();event.stopPropagation()" style="padding:5px 14px;
+          border:1px solid #2d5016;border-radius:6px;background:#2d5016;color:white;
+          font-size:0.78rem;font-weight:600;cursor:pointer">🩺 API Health Scan</button>
+      </div>
+      <div id="api-banner" style="display:none;margin:8px 16px 0;padding:9px 13px;border-radius:8px;
+           font-size:0.82rem;font-weight:600"></div>
+      <div class="api-grid" id="api-grid">
+        <div style="color:#aaa;font-size:0.85rem;grid-column:1/-1;padding:8px">Loading APIs…</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Data Sources registry ────────────────────────────────────────── -->
+  <style>
+    #data-sources .ds-body { padding: 0 16px 16px; }
+    #data-sources .ds-intro { font-size: 0.8rem; color: #8aaa88; margin: 12px 0 14px; line-height: 1.5; }
+    .ds-table { width: 100%; border-collapse: collapse; font-size: 0.8rem; }
+    .ds-table th {
+      text-align: left; font-size: 0.68rem; text-transform: uppercase; letter-spacing: .04em;
+      color: #8aaa88; font-weight: 700; padding: 6px 8px; border-bottom: 1px solid #4a5e5a; white-space: nowrap;
+    }
+    .ds-table td { padding: 8px; border-bottom: 1px solid #3a4e4a; vertical-align: top; }
+    .ds-table tr:hover td { background: #3d524e; }
+    .ds-label { font-weight: 600; color: #d8e4d8; }
+    .ds-url { color: #7aab58; word-break: break-all; font-size: 0.74rem; text-decoration: none; }
+    .ds-url:hover { text-decoration: underline; }
+    .ds-chip {
+      display: inline-block; background: #eef3e3; color: #4a6a20; border: 1px solid #d6e2c0;
+      border-radius: 10px; padding: 1px 8px; font-size: 0.66rem; margin: 1px 2px 1px 0; white-space: nowrap;
+    }
+    .ds-dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; flex: 0 0 auto; }
+    .ds-dot.green { background: #2e9e4f; box-shadow: 0 0 0 3px rgba(46,158,79,.18); }
+    .ds-dot.amber { background: #e0a020; box-shadow: 0 0 0 3px rgba(224,160,32,.18); }
+    .ds-dot.red   { background: #d23b3b; box-shadow: 0 0 0 3px rgba(210,59,59,.18); }
+    .ds-test-cell { display: flex; align-items: center; gap: 6px; }
+    .ds-test-cell .ds-when { font-size: 0.66rem; color: #999; white-space: nowrap; }
+    .ds-status-toggle {
+      border: 1px solid #4a5e5a; background: #344440; border-radius: 20px; padding: 2px 10px;
+      font-size: 0.68rem; cursor: pointer; font-weight: 600;
+    }
+    .ds-status-toggle.active { background: #e7f3e2; border-color: #9fc77e; color: #2e6b2e; }
+    .ds-status-toggle.paused { background: #f3eee2; border-color: #d8c79a; color: #8a6d1e; }
+    .ds-btn {
+      border: 1px solid #4a5e5a; background: #344440; color: #a8d890; border-radius: 6px;
+      padding: 3px 9px; font-size: 0.7rem; cursor: pointer; font-weight: 600; white-space: nowrap;
+    }
+    .ds-btn:hover { background: #3d524e; }
+    .ds-btn.danger { color: #b33; border-color: #e0b4b4; }
+    .ds-btn.danger:hover { background: #fbeeee; }
+    .ds-btn:disabled { opacity: .5; cursor: default; }
+    .ds-addform {
+      margin-top: 16px; border: 1px solid #4a5e5a; border-radius: 10px; background: #2d3d38; padding: 14px;
+    }
+    .ds-addform h4 { font-size: 0.84rem; color: #d8e4d8; margin: 0 0 10px; }
+    .ds-addform .ds-row { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
+    .ds-addform .ds-field { display: flex; flex-direction: column; gap: 3px; flex: 1 1 200px; min-width: 160px; }
+    .ds-addform label { font-size: 0.7rem; color: #889; text-transform: uppercase; letter-spacing: .03em; font-weight: 700; }
+    .ds-addform input[type=text], .ds-addform select, .ds-addform textarea {
+      padding: 7px 9px; border: 1px solid #4a5e5a; border-radius: 6px; font-size: 0.82rem; font-family: inherit; width: 100%;
+      background: #2f3d3a; color: #d8e4d8;
+    }
+    .ds-addform textarea { resize: vertical; min-height: 44px; }
+    .ds-types { display: flex; flex-wrap: wrap; gap: 4px 12px; }
+    .ds-types label {
+      display: inline-flex; align-items: center; gap: 4px; font-size: 0.74rem; text-transform: none;
+      letter-spacing: 0; font-weight: 500; color: #b8cca8; cursor: pointer;
+    }
+    .ds-types input { width: auto; }
+    .ds-add-btn {
+      background: #2d5016; color: #fff; border: none; border-radius: 6px; padding: 8px 16px;
+      font-size: 0.82rem; font-weight: 600; cursor: pointer;
+    }
+    .ds-add-btn:hover { background: #356019; }
+    .ds-add-btn:disabled { opacity: .55; cursor: default; }
+    .ds-add-msg { font-size: 0.76rem; margin-left: 10px; }
+    .ds-caret { margin-left: auto; font-size: 0.8rem; color: #889; transition: transform .15s; }
+    #data-sources.collapsed .ds-caret { transform: rotate(-90deg); }
+  </style>
+  <div class="settings-group" id="data-sources" style="margin-bottom:20px">
+    <div class="group-header" onclick="toggleDataSources()" style="cursor:pointer">
+      <span style="font-size:1rem">📚</span>
+      <span class="group-title">Data Sources</span>
+      <span class="ds-caret" id="ds-caret">▾</span>
+    </div>
+    <div class="ds-body" id="ds-body">
+      <p class="ds-intro">
+        Registry of external foraging references and their reachability. This is a
+        catalogue only — no content is fetched or scraped here. Use <strong>Test</strong>
+        to check a source is reachable.
+      </p>
+      <div style="overflow-x:auto">
+        <table class="ds-table" id="ds-table">
+          <thead>
+            <tr>
+              <th>Source</th><th>Data types</th><th>Scope</th><th>Region</th>
+              <th>Status</th><th>Last tested</th><th></th>
+            </tr>
+          </thead>
+          <tbody id="ds-tbody">
+            <tr><td colspan="7" style="color:#aaa;padding:14px">Loading sources…</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Add source form -->
+      <div class="ds-addform">
+        <h4>➕ Add a data source</h4>
+        <div class="ds-row">
+          <div class="ds-field"><label for="ds-new-label">Label</label>
+            <input type="text" id="ds-new-label" placeholder="e.g. Forager Chef"></div>
+          <div class="ds-field" style="flex:2 1 280px"><label for="ds-new-url">URL</label>
+            <input type="text" id="ds-new-url" placeholder="e.g. foragerchef.com"></div>
+        </div>
+        <div class="ds-row">
+          <div class="ds-field"><label>Data types</label>
+            <div class="ds-types" id="ds-new-types">
+              <label><input type="checkbox" value="culinary"> culinary</label>
+              <label><input type="checkbox" value="id_notes"> id_notes</label>
+              <label><input type="checkbox" value="medicinal"> medicinal</label>
+              <label><input type="checkbox" value="phenology"> phenology</label>
+              <label><input type="checkbox" value="folklore"> folklore</label>
+            </div>
+          </div>
+        </div>
+        <div class="ds-row">
+          <div class="ds-field"><label for="ds-new-scope">Species scope</label>
+            <select id="ds-new-scope">
+              <option value="both">both</option>
+              <option value="plants">plants</option>
+              <option value="fungi">fungi</option>
+            </select></div>
+          <div class="ds-field"><label for="ds-new-region">Region</label>
+            <select id="ds-new-region">
+              <option value="Global">Global</option>
+              <option value="UK">UK</option>
+              <option value="Europe">Europe</option>
+              <option value="US">US</option>
+            </select></div>
+        </div>
+        <div class="ds-row">
+          <div class="ds-field" style="flex:1 1 100%"><label for="ds-new-notes">Notes</label>
+            <textarea id="ds-new-notes" placeholder="Optional"></textarea></div>
+        </div>
+        <div style="display:flex;align-items:center">
+          <button class="ds-add-btn" id="ds-add-btn" onclick="addDataSource()">Add + Test</button>
+          <span class="ds-add-msg" id="ds-add-msg"></span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Sharing section ──────────────────────────────────────────────── -->
+  <style>
+    /* P3 — Share with Guests collapsible */
+    #sharing-group.collapsed .sharing-caret { transform: rotate(-90deg); }
+    .sharing-caret { margin-left: auto; font-size: 0.8rem; color: #889; transition: transform .15s; }
+  </style>
+  <div class="settings-group" id="sharing-group" style="margin-bottom:20px">
+    <div class="group-header" onclick="toggleSharing()" style="cursor:pointer">
+      <span style="font-size:1rem">🌐</span>
+      <span class="group-title">Share with Guests</span>
+      <span class="sharing-caret">▾</span>
+    </div>
+    <div class="sharing-body" style="padding:16px">
+      <p style="font-size:0.82rem;color:#555;margin-bottom:14px;line-height:1.5">
+        Generate a read-only shareable link via ngrok. Guests can view the map,
+        species pages, and plan walks — no editing or access to admin pages.
+      </p>
+
+      <!-- Status row -->
+      <div id="sharing-status-row" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:14px">
+        <span id="sharing-indicator"
+          style="display:inline-flex;align-items:center;gap:6px;font-size:0.82rem;color:#888">
+          <span id="sharing-dot" style="width:8px;height:8px;border-radius:50%;background:#ccc;display:inline-block"></span>
+          <span id="sharing-text">Not sharing</span>
+        </span>
+        <button id="sharing-start-btn" onclick="startSharing()"
+          style="padding:6px 16px;background:#2d5016;color:white;border:none;border-radius:6px;
+                 font-size:0.82rem;cursor:pointer;font-weight:600">
+          📡 Start sharing
+        </button>
+        <button id="sharing-stop-btn" onclick="stopSharing()" style="display:none;
+          padding:6px 16px;background:#991b1b;color:white;border:none;border-radius:6px;
+          font-size:0.82rem;cursor:pointer;font-weight:600">
+          ✕ Stop sharing
+        </button>
+      </div>
+
+      <!-- Link + QR (shown when active) -->
+      <div id="sharing-link-panel" style="display:none">
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:12px">
+          <input id="sharing-url-input" type="text" readonly
+            style="flex:1;min-width:200px;padding:6px 10px;border:1px solid #c5d9a0;
+                   border-radius:6px;font-size:0.82rem;background:#f8faf4;color:#2d5016;
+                   font-weight:600">
+          <button onclick="copyShareLink()"
+            style="padding:6px 12px;background:#f0f4e8;border:1px solid #c5d9a0;
+                   border-radius:6px;font-size:0.8rem;cursor:pointer;color:#2d5016">
+            📋 Copy
+          </button>
+        </div>
+        <div id="sharing-qr" style="text-align:center;margin-top:8px"></div>
+        <p style="font-size:0.72rem;color:#999;margin-top:10px;line-height:1.4">
+          Share this link with guests. They can view the map and species data but cannot
+          scan, review, edit, or access settings.
+        </p>
+      </div>
+
+      <!-- Workshop guest mode toggle -->
+      <div style="margin-top:14px;padding:10px 12px;background:#f8faf4;border:1px solid #ddebc8;border-radius:8px">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:12px">
+          <div>
+            <div style="font-size:0.82rem;font-weight:600;color:#2d5016">Workshop guest mode</div>
+            <div style="font-size:0.75rem;color:#667;margin-top:2px;line-height:1.4">
+              Off: your phone records over ngrok as curator (no restrictions).<br>
+              On: turn on only during workshops — participants get read-only access.
+            </div>
+          </div>
+          <label class="fm-toggle" style="flex-shrink:0">
+            <input type="checkbox" id="guest-mode-cb" onchange="_saveGuestMode(this.checked)">
+            <span class="fm-slider"></span>
+          </label>
+        </div>
+        <div id="guest-mode-status" style="font-size:0.72rem;margin-top:6px;color:#888"></div>
+      </div>
+
+      <!-- Local network section — always visible -->
+      <div style="margin-top:18px;padding-top:14px;border-top:1px solid #e8f0d8">
+        <p style="font-size:0.82rem;font-weight:600;color:#2d5016;margin:0 0 8px">
+          🏠 Local network
+        </p>
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+          <input id="lan-url-input" type="text" readonly
+            style="flex:1;min-width:200px;padding:6px 10px;border:1px solid #c5d9a0;
+                   border-radius:6px;font-size:0.82rem;background:#f8faf4;color:#2d5016;
+                   font-weight:600"
+            placeholder="Detecting…">
+          <button onclick="copyLanUrl()"
+            style="padding:6px 12px;background:#f0f4e8;border:1px solid #c5d9a0;
+                   border-radius:6px;font-size:0.8rem;cursor:pointer;color:#2d5016">
+            📋 Copy
+          </button>
+          <button id="btn-refresh-lan" onclick="loadLanUrl()" title="Re-detect LAN IP"
+            style="padding:6px 10px;background:#f0f4e8;border:1px solid #c5d9a0;
+                   border-radius:6px;font-size:0.8rem;cursor:pointer;color:#2d5016">
+            🔄
+          </button>
+        </div>
+        <p style="font-size:0.72rem;color:#999;margin-top:8px;line-height:1.4">
+          Full access. Works when your device is on the same network or hotspot.
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Snapshot / Session tools (admin only) ───────────────────────── -->
+  <div id="snapshot-group" data-guest-hide>
+    <div class="snap-header" onclick="_secToggle('snapshot-group')">
+      <div class="snap-header-left">
+        <span style="font-size:1rem">💾</span>
+        <span class="snap-title">Snapshots &amp; Session</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px">
+        <span id="snap-status"></span>
+        <span class="sec-caret">▾</span>
+      </div>
+    </div>
+    <div class="snap-body">
+
+      <!-- Snapshot list -->
+      <div class="snap-list">
+        <div class="snap-list-title">Saved snapshots</div>
+        <div id="snap-list-content">
+          <div class="snap-list-empty">Loading…</div>
+        </div>
+      </div>
+
+      <!-- End session -->
+      <div class="end-session-row" data-guest-hide>
+        <div class="end-session-title">📋 End session</div>
+        <div class="end-session-desc">
+          Update the project's Current State summary, create a snapshot, and close this session cleanly.
+          The Current State will be read automatically at the start of the next Claude Code session.
+        </div>
+        <textarea class="end-session-state" id="end-session-state"
+          placeholder="Describe the current project state: what was built, what's pending, known issues…"></textarea>
+        <div style="margin-top:10px">
+          <label style="font-size:0.78rem;font-weight:600;color:#374151;display:block;margin-bottom:4px">
+            Obsidian vault path <span style="font-weight:400;color:#6b7280">(optional — leave blank to skip)</span>
+          </label>
+          <div style="display:flex;gap:6px">
+            <input type="text" id="obsidian-vault-path" class="setting-input"
+              placeholder="/Users/melvinjarman/Documents/Obsidian"
+              style="flex:1;min-width:0;box-sizing:border-box">
+            <button class="btn-snap" onclick="saveObsidianPath()" style="white-space:nowrap;flex:0 0 auto">Save path</button>
+          </div>
+          <span id="obsidian-path-status" style="font-size:0.72rem;color:#666"></span>
+        </div>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-top:10px">
+          <button class="btn-snap danger" id="btn-end-session" onclick="endSession()">
+            📋 End session &amp; snapshot
+          </button>
+          <span id="end-session-status" style="font-size:0.78rem;color:#666"></span>
+        </div>
+      </div>
+
+      <!-- AI draft backfill -->
+      <div class="end-session-row" data-guest-hide style="margin-top:0;border-top:1px solid #e5e7eb;padding-top:14px">
+        <div class="end-session-title">✦ AI Drafts — Backfill missing</div>
+        <div class="end-session-desc">
+          Generates AI drafts (taste notes, medicinal notes, recipe) for all confirmed-edibility
+          species that are missing at least one draft field. Fills gaps only — never overwrites
+          existing drafts. Progress visible in the job queue on the Scan page.
+        </div>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+          <button class="btn-snap" id="btn-draft-backfill" onclick="runDraftBackfill()">
+            ✦ Backfill missing AI drafts
+          </button>
+          <span id="draft-backfill-status" style="font-size:0.78rem;color:#666"></span>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ── Google Drive sync card ─────────────────────────────────────────── -->
+  <div id="gdrive-group" data-guest-hide>
+    <div class="gdrive-header" onclick="_secToggle('gdrive-group')">
+      <div class="gdrive-header-left">
+        <span style="font-size:1rem">📁</span>
+        <span class="gdrive-title">Google Drive Sync</span>
+        <span id="gdrive-sync-warning" title=""
+              style="display:none;margin-left:8px;padding:2px 8px;border-radius:10px;
+                     background:#fef3c7;color:#92400e;font-size:0.72rem;font-weight:600">
+          ⚠ Sync failed
+        </span>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px">
+        <span id="gdrive-header-status" style="font-size:0.72rem;color:#6b7280"></span>
+        <span class="sec-caret">▾</span>
+      </div>
+    </div>
+    <div class="gdrive-body">
+      <div class="gdrive-desc">
+        Automatically syncs <strong>CHANGELOG.md</strong> to
+        <strong>ForagingID/CHANGELOG.md</strong> in your Google Drive whenever
+        a snapshot is created or a session ends. Paste your OAuth2 Bearer token
+        below to enable sync.
+      </div>
+
+      <!-- Token input -->
+      <div>
+        <div style="font-size:0.78rem;font-weight:600;color:#374151;margin-bottom:6px">
+          Google Drive access token
+        </div>
+        <div class="gdrive-token-row">
+          <input type="password" id="gdrive-token-input" class="gdrive-token-input"
+                 placeholder="Paste OAuth2 Bearer token here…"
+                 autocomplete="off" spellcheck="false">
+          <button class="btn-gdrive" id="btn-gdrive-reveal"
+                  onclick="gdriveToggleReveal()" title="Show / hide token">👁</button>
+          <button class="btn-gdrive save" id="btn-gdrive-save"
+                  onclick="gdriveSaveToken()">Save token</button>
+        </div>
+        <div class="gdrive-hint" style="margin-top:6px">
+          Needs scope <code>https://www.googleapis.com/auth/drive.file</code>.
+          Get a token from the
+          <a href="https://developers.google.com/oauthplayground" target="_blank" rel="noopener">
+            Google OAuth Playground</a>.
+        </div>
+      </div>
+
+      <!-- Actions -->
+      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+        <button class="btn-gdrive sync" id="btn-gdrive-sync"
+                onclick="gdriveSyncNow()">☁ Sync now</button>
+        <span id="gdrive-sync-status" class="gdrive-status"></span>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ── Field mode (localStorage settings — no server round-trip) ──────── -->
+  <div class="settings-group" id="field-mode-group" style="margin-bottom:20px">
+    <div class="group-header" onclick="_secToggle('field-mode-group')">
+      <span style="font-size:1rem">🥾</span>
+      <span class="group-title">Field mode</span>
+      <span class="sec-caret">▾</span>
+    </div>
+    <div class="sec-body" style="padding:16px">
+      <p style="font-size:0.82rem;color:#555;margin-bottom:14px;line-height:1.5">
+        When a walk route is active, Field mode watches your GPS position and shows
+        an in-app alert when you are within range of a walk stop.
+        These settings are saved locally in your browser.
+      </p>
+
+      <!-- Toggle row -->
+      <div style="display:flex;align-items:center;justify-content:space-between;padding-bottom:16px;border-bottom:1px solid #f0f0f0;margin-bottom:16px">
+        <div>
+          <div class="setting-label">Enable field mode</div>
+          <div class="setting-desc">Start GPS watch when a walk route is active</div>
+        </div>
+        <label class="fm-toggle">
+          <input type="checkbox" id="fm-enabled-cb" onchange="_saveFmEnabled(this.checked)">
+          <span class="fm-slider"></span>
+        </label>
+      </div>
+
+      <!-- Threshold row -->
+      <div>
+        <div class="setting-label" style="margin-bottom:4px">Proximity threshold</div>
+        <div class="setting-desc" style="margin-bottom:10px">Alert fires when you are within this distance of a walk stop</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap" id="fm-threshold-btns">
+          <button class="fm-thr-btn" data-v="10"  onclick="_saveFmThreshold(10)">10 m</button>
+          <button class="fm-thr-btn" data-v="20"  onclick="_saveFmThreshold(20)">20 m</button>
+          <button class="fm-thr-btn" data-v="30"  onclick="_saveFmThreshold(30)">30 m</button>
+          <button class="fm-thr-btn" data-v="50"  onclick="_saveFmThreshold(50)">50 m</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Offline cache management ─────────────────────────────────────── -->
+  <div class="settings-group" id="offline-cache-group" style="margin-bottom:20px">
+    <div class="group-header" onclick="_secToggle('offline-cache-group')">
+      <span style="font-size:1rem">📱</span>
+      <span class="group-title">Offline cache</span>
+      <span class="sec-caret">▾</span>
+    </div>
+    <div class="sec-body" style="padding:16px">
+      <p style="font-size:0.82rem;color:#555;margin-bottom:14px;line-height:1.5">
+        Map tiles cache automatically as you browse and expire after 30 days.
+        Species profiles are pre-cached for all confirmed species and refresh every 7 days.
+      </p>
+      <div id="cache-status-rows" style="margin-bottom:14px;font-size:0.82rem;border:1px solid #e8eed8;border-radius:7px;overflow:hidden">
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:9px 12px;border-bottom:1px solid #f0f0f0">
+          <span style="color:#555">Species profiles</span>
+          <span id="cache-species-status" style="color:#888;font-variant-numeric:tabular-nums">Loading…</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:9px 12px;border-bottom:1px solid #f0f0f0">
+          <span style="color:#555">Map tiles</span>
+          <span id="cache-tiles-status" style="color:#888">Auto-managed · 30-day expiry</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:9px 12px">
+          <span style="color:#555">Storage used</span>
+          <span id="cache-storage-status" style="color:#888">…</span>
+        </div>
+      </div>
+      <button id="btn-refresh-cache" onclick="refreshOfflineCache()"
+        style="padding:7px 16px;border:1px solid #c5d9a0;border-radius:6px;
+               background:#f0f4e8;color:#2d5016;font-size:0.82rem;font-weight:600;
+               cursor:pointer;font-family:inherit">
+        ↻ Refresh species cache
+      </button>
+      <span id="cache-refresh-msg" style="font-size:0.78rem;color:#666;margin-left:10px"></span>
+    </div>
+  </div>
+
+  <!-- ── Synthesis Sources ─────────────────────────────────────────────── -->
+  <div class="settings-group" id="synthesis-sources-group" style="margin-bottom:20px" data-guest-hide>
+    <div class="group-header" onclick="_secToggle('synthesis-sources-group')">
+      <span style="font-size:1rem">🔬</span>
+      <span class="group-title">Synthesis Sources</span>
+      <span class="sec-caret">▾</span>
+    </div>
+    <div class="sec-body" style="padding:16px">
+      <p style="font-size:0.82rem;color:#555;margin:0 0 14px;line-height:1.5">
+        These sites are read by the AI when generating medicinal notes for species with sparse source data.
+        Content is never stored — it is read at generation time only.
+      </p>
+
+      <!-- Current list -->
+      <div id="syn-src-list" style="margin-bottom:16px;border:1px solid #e8eed8;border-radius:7px;overflow:hidden;font-size:0.82rem">
+        <div style="color:#888;padding:10px 12px">Loading…</div>
+      </div>
+
+      <!-- Add form -->
+      <details id="syn-src-add-details" style="margin-bottom:8px">
+        <summary style="font-size:0.82rem;font-weight:600;color:#2d5016;cursor:pointer;user-select:none;padding:4px 0">
+          + Add synthesis source
+        </summary>
+        <div style="margin-top:10px;display:flex;flex-direction:column;gap:8px;max-width:480px">
+          <div style="display:flex;flex-direction:column;gap:3px">
+            <label style="font-size:0.78rem;color:#555;font-weight:600">Label</label>
+            <input id="syn-src-label" type="text" placeholder="e.g. Plants for a Future"
+              style="padding:6px 8px;border:1px solid #c5d9a0;border-radius:5px;font-size:0.82rem;font-family:inherit;width:100%;box-sizing:border-box">
+          </div>
+          <div style="display:flex;flex-direction:column;gap:3px">
+            <label style="font-size:0.78rem;color:#555;font-weight:600">Domain</label>
+            <input id="syn-src-domain" type="text" placeholder="e.g. pfaf.org"
+              style="padding:6px 8px;border:1px solid #c5d9a0;border-radius:5px;font-size:0.82rem;font-family:inherit;width:100%;box-sizing:border-box">
+          </div>
+          <div style="display:flex;flex-direction:column;gap:3px">
+            <label style="font-size:0.78rem;color:#555;font-weight:600">Search URL <span style="font-weight:400;color:#888">(must include <code>{query}</code>)</span></label>
+            <input id="syn-src-url" type="text" placeholder="e.g. https://pfaf.org/user/Search.aspx?query={query}"
+              style="padding:6px 8px;border:1px solid #c5d9a0;border-radius:5px;font-size:0.82rem;font-family:inherit;width:100%;box-sizing:border-box">
+          </div>
+          <div style="display:flex;flex-direction:column;gap:3px">
+            <label style="font-size:0.78rem;color:#555;font-weight:600">Note <span style="font-weight:400;color:#888">(optional)</span></label>
+            <input id="syn-src-note" type="text" placeholder="Brief description of this source"
+              style="padding:6px 8px;border:1px solid #c5d9a0;border-radius:5px;font-size:0.82rem;font-family:inherit;width:100%;box-sizing:border-box">
+          </div>
+          <div style="display:flex;gap:8px;align-items:center">
+            <button onclick="synSrcAdd()"
+              style="padding:6px 16px;border:1px solid #c5d9a0;border-radius:6px;background:#f0f4e8;
+                     color:#2d5016;font-size:0.82rem;font-weight:600;cursor:pointer;font-family:inherit">
+              Add source
+            </button>
+            <span id="syn-src-add-msg" style="font-size:0.78rem;color:#666"></span>
+          </div>
+        </div>
+      </details>
+    </div>
+  </div>
+
+  <!-- Background Processes diagnostic strip -->
+  <div class="settings-group" id="bg-processes-group" style="margin-bottom:20px">
+    <div class="group-header" onclick="_secToggle('bg-processes-group')">
+      <span style="font-size:1rem">⚙️</span>
+      <span class="group-title">Background Processes</span>
+      <span class="sec-caret">▾</span>
+    </div>
+    <div class="sec-body" style="padding:12px 16px;font-size:0.82rem" id="bg-processes-body">
+      <span style="color:#888">Loading…</span>
+    </div>
+  </div>
+
+  <div id="settings-container"></div>
+</div>
+
+<div id="toast"></div>
+
+<div id="changelog-modal" class="cl-modal-overlay" style="display:none" onclick="closeChangelogModal(event)">
+  <div class="cl-modal" onclick="event.stopPropagation()">
+    <div class="cl-modal-head">
+      <div class="cl-modal-title">📄 CHANGELOG.md <span id="cl-modal-commit" class="cl-modal-commit"></span></div>
+      <button class="cl-modal-close" onclick="closeChangelogModal()" aria-label="Close">✕</button>
+    </div>
+    <pre id="cl-modal-body" class="cl-modal-body">Loading…</pre>
+  </div>
+</div>
+
+<script>
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+function _esc(s) {
+  if (s == null) return '';
+  return String(s)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+function _showToast(msg, isErr) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = isErr ? 'err show' : 'show';
+  clearTimeout(t._tid);
+  t._tid = setTimeout(function() { t.className = ''; }, 2800);
+}
+
+// ---------------------------------------------------------------------------
+// Group order + icon
+// ---------------------------------------------------------------------------
+const _GROUP_ORDER = ['Identification', 'Pipelines', 'Scanning', 'AI', 'Enrichment', 'Processing', 'Pre-filter', 'Sharing'];
+const _GROUP_ICON  = {
+  'Identification': '🔍',
+  'Pipelines':      '🔄',
+  'Scanning':       '📁',
+  'AI':             '🤖',
+  'Enrichment':     '🌱',
+  'Processing':     '⚙️',
+  'Pre-filter':     '🧹',
+  'Sharing':        '👁',
+};
+
+// ---------------------------------------------------------------------------
+// Render
+// ---------------------------------------------------------------------------
+function _buildControl(s) {
+  const key = s.key;
+  const val = s.current_value != null ? s.current_value : s.default_value;
+
+  if (s.choices && s.choices.length) {
+    let opts = s.choices.map(function(c) {
+      const sel = String(val) === String(c) ? ' selected' : '';
+      return '<option value="' + _esc(c) + '"' + sel + '>' + _esc(c) + '</option>';
+    }).join('');
+    return '<select class="setting-input" id="inp-' + key + '">' + opts + '</select>';
+  }
+
+  if (s.type === 'bool') {
+    const chk = val ? ' checked' : '';
+    return '<input type="checkbox" id="inp-' + key + '"' + chk + ' style="width:18px;height:18px;cursor:pointer">';
+  }
+
+  const inputType = (s.type === 'float' || s.type === 'int') ? 'number' : 'text';
+  const step = s.type === 'float' ? ' step="0.01"' : '';
+  const minAttr = (s.min != null) ? ' min="' + s.min + '"' : '';
+  const maxAttr = (s.max != null) ? ' max="' + s.max + '"' : '';
+  return '<input type="' + inputType + '" class="setting-input" id="inp-' + key + '" value="' + _esc(val) + '"' + step + minAttr + maxAttr + '>';
+}
+
+function _renderSettings(settings) {
+  // Group them — skip entries flagged hidden (managed by dedicated UI cards)
+  const groups = {};
+  settings.forEach(function(s) {
+    if (s.hidden) return;
+    const g = s.group || 'Other';
+    if (!groups[g]) groups[g] = [];
+    groups[g].push(s);
+  });
+
+  // Sort groups by _GROUP_ORDER, unknown groups at end
+  const groupKeys = Object.keys(groups).sort(function(a, b) {
+    const ai = _GROUP_ORDER.indexOf(a);
+    const bi = _GROUP_ORDER.indexOf(b);
+    if (ai === -1 && bi === -1) return a.localeCompare(b);
+    if (ai === -1) return 1;
+    if (bi === -1) return -1;
+    return ai - bi;
+  });
+
+  let html = '';
+  groupKeys.forEach(function(g) {
+    const items = groups[g];
+    const icon = _GROUP_ICON[g] || '•';
+    const gId = 'group-' + _esc(g.toLowerCase().replace(/\s+/g, '-'));
+    html += '<div class="settings-group" id="' + gId + '">';
+    html += '<div class="group-header" onclick="_secToggle(\'' + gId + '\')">';
+    html += '<span class="group-title">' + icon + ' ' + _esc(g) + '</span>';
+    html += '<span class="group-count">' + items.length + '</span>';
+    html += '<span class="sec-caret">▾</span>';
+    html += '</div>';
+    html += '<div class="sec-body">';
+
+    items.forEach(function(s) {
+      const overrideClass = s.overridden ? ' overridden' : '';
+      const badge = s.overridden ? '<span class="override-badge">custom</span>' : '';
+      const defaultHint = s.type === 'float'
+        ? String(parseFloat(s.default_value).toFixed(2))
+        : String(s.default_value);
+
+      html += '<div class="setting-row' + overrideClass + '" id="row-' + _esc(s.key) + '">';
+      // Left: label + description
+      html += '<div>';
+      html += '<div class="setting-label">' + _esc(s.label) + badge + '</div>';
+      html += '<div class="setting-desc">' + _esc(s.description) + '</div>';
+      html += '<div class="setting-meta">Default: <em>' + _esc(defaultHint) + '</em></div>';
+      html += '</div>';
+      // Right: control + actions
+      html += '<div class="setting-control">';
+      html += _buildControl(s);
+      if (s.key === 'anthropic_model') {
+        html += '<div class="haiku-warning" id="haiku-warning" style="display:none;margin-top:6px;padding:6px 10px;'
+             +  'background:#fff3cd;border:1px solid #e0c200;border-radius:6px;color:#856404;font-size:12px;line-height:1.4">'
+             +  'Haiku recommended for classification only — recipe and medicinal drafts will be lower quality. '
+             +  'Use Sonnet or Opus for voice-matched content.</div>';
+      }
+      html += '<div class="setting-actions">';
+      html += "<button class=\"btn-save\" id=\"save-" + _esc(s.key) + "\" onclick='saveSetting(" + JSON.stringify(s.key) + ", " + JSON.stringify(s.type) + ")'>Save</button>";
+      html += "<button class=\"btn-reset\" id=\"reset-" + _esc(s.key) + "\" onclick='resetSetting(" + JSON.stringify(s.key) + ")'" + (!s.overridden ? ' disabled' : '') + " title=\"Reset to default\">↩</button>";
+      html += '</div>';
+      html += '<div class="field-msg" id="msg-' + _esc(s.key) + '"></div>';
+      html += '</div>';
+      html += '</div>'; // .setting-row
+    });
+
+    html += '</div>'; // .sec-body
+    html += '</div>'; // .settings-group
+  });
+
+  document.getElementById('settings-container').innerHTML = html;
+  _restoreDynSecState();
+
+  // Inject a static quota note into the Identification group (after dynamic rows)
+  var idGroup = document.getElementById('group-identification');
+  if (idGroup) {
+    var noteRow = document.createElement('div');
+    noteRow.className = 'setting-row';
+    noteRow.style.cssText = 'background:#2d3d38;border-top:1px solid #3a5e3a;';
+    noteRow.innerHTML =
+      '<div>' +
+        '<div class="setting-label">📷 Reference photos — PlantNet quota</div>' +
+        '<div class="setting-desc">' +
+          '<em>Show reference photos</em> in the Second Opinion panel sends an additional PlantNet ' +
+          'API request with <code>include-related-images=true</code>. On the free tier (~500 req/day) ' +
+          'use sparingly — each Second Opinion call with photos toggled on counts as two requests. ' +
+          'Remaining daily quota is shown in the panel after each call.' +
+        '</div>' +
+      '</div>';
+    idGroup.appendChild(noteRow);
+  }
+
+  // Wire up "dirty" state on inputs
+  settings.forEach(function(s) {
+    const inp = document.getElementById('inp-' + s.key);
+    if (!inp) return;
+    const originalVal = String(s.current_value != null ? s.current_value : s.default_value);
+
+    function _markDirty() {
+      const cur = inp.type === 'checkbox' ? String(inp.checked) : inp.value;
+      const dirty = cur !== originalVal;
+      inp.classList.toggle('dirty', dirty);
+      const msg = document.getElementById('msg-' + s.key);
+      if (msg) {
+        if (dirty) { msg.textContent = 'Unsaved change'; msg.className = 'field-msg dirty'; }
+        else        { msg.textContent = ''; msg.className = 'field-msg'; }
+      }
+    }
+    inp.addEventListener('input', _markDirty);
+    inp.addEventListener('change', _markDirty);
+
+    if (s.key === 'anthropic_model') {
+      const warn = document.getElementById('haiku-warning');
+      function _toggleHaikuWarning() {
+        if (warn) warn.style.display = /haiku/i.test(inp.value) ? 'block' : 'none';
+      }
+      inp.addEventListener('change', _toggleHaikuWarning);
+      _toggleHaikuWarning();
+    }
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Load settings from API
+// ---------------------------------------------------------------------------
+async function loadSettings() {
+  const statusEl = document.getElementById('load-status');
+  try {
+    const r = await fetch('/api/settings');
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const d = await r.json();
+    _renderSettings(d.settings || []);
+    const overrideCount = (d.settings || []).filter(function(s) { return s.overridden; }).length;
+    statusEl.textContent = overrideCount
+      ? overrideCount + ' custom override' + (overrideCount !== 1 ? 's' : '') + ' active'
+      : 'All defaults';
+  } catch (e) {
+    statusEl.textContent = '❌ Failed to load';
+    document.getElementById('settings-container').innerHTML =
+      '<div style="color:#c0392b;padding:20px">Error loading settings: ' + _esc(e.message) + '</div>';
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Save a setting
+// ---------------------------------------------------------------------------
+async function saveSetting(key, type) {
+  const inp = document.getElementById('inp-' + key);
+  const btn = document.getElementById('save-' + key);
+  const msg = document.getElementById('msg-' + key);
+  if (!inp || !btn) return;
+
+  let value = inp.type === 'checkbox' ? inp.checked : inp.value.trim();
+  if (type === 'float') value = parseFloat(value);
+  else if (type === 'int') value = parseInt(value, 10);
+
+  if (isNaN(value) && (type === 'float' || type === 'int')) {
+    inp.classList.add('error');
+    if (msg) { msg.textContent = 'Must be a number'; msg.className = 'field-msg err'; }
+    return;
+  }
+
+  btn.disabled = true;
+  if (msg) { msg.textContent = 'Saving…'; msg.className = 'field-msg'; }
+
+  try {
+    const r = await fetch('/api/settings/' + encodeURIComponent(key), {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ value: value }),
+    });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.detail || 'HTTP ' + r.status);
+
+    inp.classList.remove('dirty', 'error');
+    inp.classList.add('saved');
+    setTimeout(function() { inp.classList.remove('saved'); }, 1500);
+
+    // Enable reset button, mark row as overridden
+    const resetBtn = document.getElementById('reset-' + key);
+    if (resetBtn) resetBtn.disabled = false;
+    const row = document.getElementById('row-' + key);
+    if (row) row.classList.add('overridden');
+    const label = row && row.querySelector('.setting-label');
+    if (label && !label.querySelector('.override-badge')) {
+      label.insertAdjacentHTML('beforeend', '<span class="override-badge">custom</span>');
+    }
+
+    if (msg) { msg.textContent = '✓ Saved'; msg.className = 'field-msg ok'; }
+    _showToast('✓ ' + key + ' saved');
+    _updateLoadStatus();
+  } catch (e) {
+    inp.classList.add('error');
+    if (msg) { msg.textContent = '✗ ' + (e.message || 'Save failed'); msg.className = 'field-msg err'; }
+    _showToast('✗ ' + (e.message || 'Save failed'), true);
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Reset a setting to default
+// ---------------------------------------------------------------------------
+async function resetSetting(key) {
+  const inp   = document.getElementById('inp-' + key);
+  const btn   = document.getElementById('reset-' + key);
+  const msg   = document.getElementById('msg-' + key);
+  if (!inp || !btn) return;
+
+  btn.disabled = true;
+  if (msg) { msg.textContent = 'Resetting…'; msg.className = 'field-msg'; }
+
+  try {
+    const r = await fetch('/api/settings/' + encodeURIComponent(key), { method: 'DELETE' });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.detail || 'HTTP ' + r.status);
+
+    // Update input to show default
+    if (inp.type === 'checkbox') {
+      inp.checked = !!d.value;
+    } else if (inp.tagName === 'SELECT') {
+      inp.value = String(d.value);
+    } else {
+      inp.value = String(d.value);
+    }
+
+    inp.classList.remove('dirty', 'error', 'saved');
+    btn.disabled = true;
+    const row = document.getElementById('row-' + key);
+    if (row) {
+      row.classList.remove('overridden');
+      const badge = row.querySelector('.override-badge');
+      if (badge) badge.remove();
+    }
+
+    if (msg) { msg.textContent = '↩ Reset to default'; msg.className = 'field-msg ok'; }
+    setTimeout(function() {
+      if (msg) { msg.textContent = ''; msg.className = 'field-msg'; }
+    }, 2000);
+    _showToast('↩ ' + key + ' reset to default');
+    _updateLoadStatus();
+  } catch (e) {
+    if (msg) { msg.textContent = '✗ ' + (e.message || 'Reset failed'); msg.className = 'field-msg err'; }
+    _showToast('✗ ' + (e.message || 'Reset failed'), true);
+    btn.disabled = false;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Update the top-right override count
+// ---------------------------------------------------------------------------
+function _updateLoadStatus() {
+  const overrides = document.querySelectorAll('.setting-row.overridden').length;
+  const el = document.getElementById('load-status');
+  if (el) {
+    el.textContent = overrides
+      ? overrides + ' custom override' + (overrides !== 1 ? 's' : '') + ' active'
+      : 'All defaults';
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Field mode — localStorage settings
+// ---------------------------------------------------------------------------
+(function () {
+  var FM_KEY  = 'foragingid_field_mode';
+  var THR_KEY = 'foragingid_prox_threshold';
+  var cb      = document.getElementById('fm-enabled-cb');
+  var btnRow  = document.getElementById('fm-threshold-btns');
+
+  if (cb)     cb.checked = localStorage.getItem(FM_KEY) !== 'false';
+  var curThr = parseInt(localStorage.getItem(THR_KEY) || '20', 10);
+  if (btnRow) btnRow.querySelectorAll('.fm-thr-btn').forEach(function (btn) {
+    if (parseInt(btn.dataset.v, 10) === curThr) btn.classList.add('active');
+  });
+})();
+
+window._saveFmEnabled = function (val) {
+  localStorage.setItem('foragingid_field_mode', val ? 'true' : 'false');
+  _showToast(val ? 'Field mode enabled' : 'Field mode disabled');
+};
+
+window._saveFmThreshold = function (v) {
+  localStorage.setItem('foragingid_prox_threshold', String(v));
+  var btnRow = document.getElementById('fm-threshold-btns');
+  if (btnRow) btnRow.querySelectorAll('.fm-thr-btn').forEach(function (btn) {
+    btn.classList.toggle('active', parseInt(btn.dataset.v, 10) === v);
+  });
+  _showToast('Threshold set to ' + v + ' m');
+};
+
+// ---------------------------------------------------------------------------
+// Boot
+// ---------------------------------------------------------------------------
+loadSettings();
+loadSharingStatus();
+loadLanUrl();
+_loadGuestMode();
+loadSnapshots();
+loadGdriveStatus();
+loadCacheStatus();
+loadBgProcesses();
+synSrcLoad();
+
+// ---------------------------------------------------------------------------
+// Snapshots
+// ---------------------------------------------------------------------------
+
+async function loadSnapshots() {
+  const listEl = document.getElementById('snap-list-content');
+  if (!listEl) return;
+  try {
+    const r = await fetch('/api/dev/snapshots');
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const d = await r.json();
+    const snaps = d.snapshots || [];
+    if (!snaps.length) {
+      listEl.innerHTML = '<div class="snap-list-empty">No snapshots yet — press Save snapshot to create one.</div>';
+      return;
+    }
+    function renderItem(s) {
+      const date = s.date ? s.date.slice(0, 16).replace('T', ' ') : '—';
+      const hash = s.commit_hash ? (' · git: ' + s.commit_hash) : '';
+      const dbBadge = s.has_db ? '' : ' <span style="color:#f59e0b;font-size:0.7rem">no DB</span>';
+      const commit = s.full_hash || s.commit_hash || '';
+      const changelogBtn = commit
+        ? '  <button class="btn-changelog" onclick="viewSnapshotChangelog(\'' + _esc(commit) + '\')">📄 View Changelog</button>'
+        : '';
+      return [
+        '<div class="snap-item">',
+        '  <div class="snap-item-info">',
+        '    <div class="snap-item-date">' + _esc(date) + dbBadge + '</div>',
+        '    <div class="snap-item-desc">' + _esc(s.description) + '</div>',
+        '    <div class="snap-item-hash">' + _esc(hash) + '</div>',
+        '  </div>',
+        '  <div class="snap-item-actions">',
+        changelogBtn,
+        '    <button class="btn-restore" onclick="restoreSnapshot(' + JSON.stringify(s) + ')">↩ Restore</button>',
+        '  </div>',
+        '</div>',
+      ].join('');
+    }
+
+    const recent = renderItem(snaps[0]);
+    const rest = snaps.slice(1).map(renderItem).join('');
+    let html = recent;
+    if (snaps.length > 1) {
+      html += '<div id="snap-list-rest" style="display:none">' + rest + '</div>'
+        + '<button type="button" id="snap-toggle" class="snap-toggle" onclick="toggleSnapshotList()">'
+        + 'Show all (' + snaps.length + ')</button>';
+    }
+    listEl.innerHTML = html;
+  } catch (e) {
+    if (listEl) listEl.innerHTML = '<div class="snap-list-empty" style="color:#c0392b">Error loading snapshots: ' + _esc(e.message) + '</div>';
+  }
+}
+
+function toggleSnapshotList() {
+  const rest = document.getElementById('snap-list-rest');
+  const btn  = document.getElementById('snap-toggle');
+  if (!rest || !btn) return;
+  const expanded = rest.style.display !== 'none';
+  if (expanded) {
+    rest.style.display = 'none';
+    btn.textContent = 'Show all (' + (rest.children.length + 1) + ')';
+  } else {
+    rest.style.display = '';
+    btn.textContent = 'Show less';
+  }
+}
+
+async function viewSnapshotChangelog(commit) {
+  const modal  = document.getElementById('changelog-modal');
+  const bodyEl = document.getElementById('cl-modal-body');
+  const cmtEl  = document.getElementById('cl-modal-commit');
+  if (!modal || !bodyEl) return;
+  if (cmtEl) cmtEl.textContent = commit ? '@ ' + String(commit).slice(0, 8) : '';
+  bodyEl.textContent = 'Loading…';
+  modal.style.display = 'flex';
+  try {
+    const r = await fetch('/api/dev/snapshot-changelog?commit=' + encodeURIComponent(commit));
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.detail || 'HTTP ' + r.status);
+    bodyEl.textContent = d.changelog || '(empty changelog)';
+    bodyEl.scrollTop = 0;
+  } catch (e) {
+    bodyEl.textContent = '✗ Could not load changelog: ' + e.message;
+  }
+}
+
+function closeChangelogModal(event) {
+  if (event && event.target && event.target.id !== 'changelog-modal') return;
+  const modal = document.getElementById('changelog-modal');
+  if (modal) modal.style.display = 'none';
+}
+
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Escape') closeChangelogModal();
+});
+
+async function saveSnapshot() {
+  const btn    = document.getElementById('btn-save-snap');
+  const status = document.getElementById('snap-status');
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Saving…'; }
+  if (status) status.textContent = '';
+  try {
+    const r = await fetch('/api/dev/snapshot', { method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ description: 'Manual save from Settings' }),
+    });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.detail || 'HTTP ' + r.status);
+    const msg = '✓ Snapshot saved' + (d.commit_hash ? ' — git ' + d.commit_hash : '');
+    if (status) { status.textContent = msg; status.style.color = '#16a34a'; }
+    _showToast(msg);
+    await loadSnapshots();
+  } catch (e) {
+    _showToast('✗ Snapshot failed: ' + e.message, true);
+    if (status) { status.textContent = '✗ ' + e.message; status.style.color = '#c0392b'; }
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = '💾 Save snapshot'; }
+  }
+}
+
+async function restoreSnapshot(snap) {
+  // Build confirmation message
+  const lines = [
+    'Restore to this snapshot?',
+    '',
+    'Snapshot: ' + snap.description,
+    snap.has_db ? 'DB will be replaced with: ' + (snap.db_path || 'snapshot DB') : '⚠ No DB snapshot — code only',
+    snap.commit_hash ? 'Code will be restored to git ' + snap.commit_hash : '⚠ No git commit — DB only',
+    '',
+    '⚠ This is destructive. Your current DB and code will be overwritten.',
+    'Restart the server after restoring.',
+  ];
+  if (!confirm(lines.join('\n'))) return;
+
+  const btn = document.querySelector('[onclick*="restoreSnapshot"]');
+  if (btn) { btn.disabled = true; btn.textContent = '⏳…'; }
+
+  try {
+    const r = await fetch('/api/dev/restore', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        commit_hash: snap.full_hash || snap.commit_hash || null,
+        db_path:     snap.db_path || null,
+      }),
+    });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.detail || 'HTTP ' + r.status);
+    _showToast('✓ Restored — restart the server to apply changes');
+    alert('Restore complete.\n\n' + d.note + '\n\nRestart the server now.');
+  } catch (e) {
+    _showToast('✗ Restore failed: ' + e.message, true);
+    if (btn) { btn.disabled = false; btn.textContent = '↩ Restore'; }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// End session
+// ---------------------------------------------------------------------------
+
+async function endSession() {
+  const stateEl  = document.getElementById('end-session-state');
+  const btn      = document.getElementById('btn-end-session');
+  const statusEl = document.getElementById('end-session-status');
+
+  const state = stateEl ? stateEl.value.trim() : '';
+  if (!state) {
+    _showToast('Add a current state description first', true);
+    if (stateEl) stateEl.focus();
+    return;
+  }
+
+  if (!confirm('End session?\n\nThis will:\n• Update ## Current State in CHANGELOG.md\n• Create a git commit + DB snapshot\n• Append a session-end entry to ## History\n\nContinue?')) return;
+
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Saving…'; }
+  if (statusEl) statusEl.textContent = '';
+
+  const body = {
+    current_state:   state,
+    session_summary: 'Session ended from Settings page',
+  };
+
+  try {
+    const r = await fetch('/api/dev/end-session', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.detail || 'HTTP ' + r.status);
+
+    const hash = d.snapshot && d.snapshot.commit_hash ? ' — git ' + d.snapshot.commit_hash : '';
+    if (btn) {
+      btn.disabled = true;
+      btn.classList.remove('danger');
+      btn.classList.add('saved');
+      btn.textContent = '✓ Session saved';
+    }
+    if (statusEl) {
+      statusEl.innerHTML = '✓ Committed locally' + _esc(hash);
+      statusEl.style.color = '#16a34a';
+    }
+    _showToast('✓ Session saved' + hash);
+    await loadSnapshots();
+  } catch (e) {
+    _showToast('✗ End session failed: ' + e.message, true);
+    if (statusEl) { statusEl.textContent = '✗ ' + e.message; statusEl.style.color = '#c0392b'; }
+    if (btn) { btn.disabled = false; btn.textContent = '📋 End session & snapshot'; }
+  }
+}
+
+// Obsidian vault path — load on page open, save via PUT /api/settings/obsidian_vault_path
+(async function _loadObsidianPath() {
+  try {
+    const r = await fetch('/api/settings');
+    if (!r.ok) return;
+    const d = await r.json();
+    const entry = (d.settings || []).find(s => s.key === 'obsidian_vault_path');
+    const el = document.getElementById('obsidian-vault-path');
+    if (el && entry) el.value = entry.current_value || '';
+  } catch (_) {}
+})();
+
+async function saveObsidianPath() {
+  const el       = document.getElementById('obsidian-vault-path');
+  const statusEl = document.getElementById('obsidian-path-status');
+  if (!el) return;
+  try {
+    const r = await fetch('/api/settings/obsidian_vault_path', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ value: el.value.trim() }),
+    });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    if (statusEl) { statusEl.textContent = '✓ Saved'; statusEl.style.color = '#16a34a'; }
+    setTimeout(() => { if (statusEl) statusEl.textContent = ''; }, 2500);
+  } catch (e) {
+    if (statusEl) { statusEl.textContent = '✗ ' + e.message; statusEl.style.color = '#c0392b'; }
+  }
+}
+
+// ── Synthesis Sources ─────────────────────────────────────────────────────────
+
+async function synSrcLoad() {
+  const el = document.getElementById('syn-src-list');
+  if (!el) return;
+  try {
+    const r = await fetch('/api/settings/synthesis-sources');
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const { sources } = await r.json();
+    if (!sources || sources.length === 0) {
+      el.innerHTML = '<div style="padding:10px 12px;color:#888;font-size:0.82rem">No synthesis sources configured.</div>';
+      return;
+    }
+    el.innerHTML = sources.map((s, i) => `
+      <div style="display:flex;align-items:center;justify-content:space-between;
+                  padding:9px 12px;${i < sources.length - 1 ? 'border-bottom:1px solid #f0f0f0' : ''}">
+        <div>
+          <span style="font-weight:600;color:#2d5016">${_esc(s.label)}</span>
+          <span style="color:#888;margin-left:6px;font-size:0.78rem">${_esc(s.domain)}</span>
+          ${s.note ? `<div style="font-size:0.76rem;color:#777;margin-top:2px">${_esc(s.note)}</div>` : ''}
+          <div style="font-size:0.76rem;color:#999;margin-top:1px;font-family:monospace">${_esc(s.search_url)}</div>
+        </div>
+        <button onclick="synSrcRemove(${JSON.stringify(s.domain)})"
+          style="padding:3px 10px;border:1px solid #fca5a5;border-radius:5px;background:#fef2f2;
+                 color:#b91c1c;font-size:0.76rem;font-weight:600;cursor:pointer;font-family:inherit;
+                 flex-shrink:0;margin-left:12px">
+          Remove
+        </button>
+      </div>
+    `).join('');
+  } catch (err) {
+    el.innerHTML = `<div style="padding:10px 12px;color:#b91c1c;font-size:0.82rem">Failed to load: ${_esc(String(err))}</div>`;
+  }
+}
+
+async function synSrcAdd() {
+  const label  = (document.getElementById('syn-src-label')  || {}).value || '';
+  const domain = (document.getElementById('syn-src-domain') || {}).value || '';
+  const url    = (document.getElementById('syn-src-url')    || {}).value || '';
+  const note   = (document.getElementById('syn-src-note')   || {}).value || '';
+  const msgEl  = document.getElementById('syn-src-add-msg');
+
+  if (!label.trim() || !domain.trim() || !url.trim()) {
+    if (msgEl) { msgEl.textContent = 'Label, domain, and search URL are required.'; msgEl.style.color = '#b91c1c'; }
+    return;
+  }
+  if (!url.includes('{query}')) {
+    if (msgEl) { msgEl.textContent = 'Search URL must contain {query}.'; msgEl.style.color = '#b91c1c'; }
+    return;
+  }
+  try {
+    const r = await fetch('/api/settings/synthesis-sources', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ label: label.trim(), domain: domain.trim().toLowerCase(), search_url: url.trim(), note: note.trim() }),
+    });
+    const data = await r.json();
+    if (!r.ok) {
+      if (msgEl) { msgEl.textContent = data.detail || 'Error saving.'; msgEl.style.color = '#b91c1c'; }
+      return;
+    }
+    // Clear form
+    ['syn-src-label','syn-src-domain','syn-src-url','syn-src-note'].forEach(id => {
+      const el = document.getElementById(id); if (el) el.value = '';
+    });
+    const details = document.getElementById('syn-src-add-details');
+    if (details) details.open = false;
+    if (msgEl) { msgEl.textContent = ''; }
+    _showToast(`Added: ${label}`);
+    synSrcLoad();
+  } catch (err) {
+    if (msgEl) { msgEl.textContent = 'Network error.'; msgEl.style.color = '#b91c1c'; }
+  }
+}
+
+async function synSrcRemove(domain) {
+  if (!confirm(`Remove synthesis source "${domain}"?`)) return;
+  try {
+    const r = await fetch('/api/settings/synthesis-sources/' + encodeURIComponent(domain), { method: 'DELETE' });
+    if (!r.ok) {
+      const data = await r.json();
+      _showToast(data.detail || 'Remove failed', true);
+      return;
+    }
+    _showToast(`Removed: ${domain}`);
+    synSrcLoad();
+  } catch (err) {
+    _showToast('Network error', true);
+  }
+}
+
+// ── AI draft backfill ─────────────────────────────────────────────────────────
+
+async function runDraftBackfill() {
+  const btn      = document.getElementById('btn-draft-backfill');
+  const statusEl = document.getElementById('draft-backfill-status');
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Starting…'; }
+  if (statusEl) { statusEl.textContent = ''; statusEl.style.color = '#666'; }
+
+  try {
+    const r = await fetch('/api/drafts/backfill', { method: 'POST' });
+    const d = await r.json().catch(() => ({}));
+
+    if (r.status === 409) {
+      if (statusEl) { statusEl.textContent = 'Already running — check job queue on Scan page.'; statusEl.style.color = '#92400e'; }
+      return;
+    }
+    if (!r.ok) throw new Error(d.detail || 'HTTP ' + r.status);
+
+    if (d.status === 'nothing_to_do') {
+      if (statusEl) { statusEl.textContent = 'Nothing to backfill — all eligible species already have drafts.'; statusEl.style.color = '#166534'; }
+    } else {
+      if (statusEl) { statusEl.textContent = '✓ Queued ' + d.count + ' species — progress in job queue on Scan page.'; statusEl.style.color = '#166534'; }
+    }
+  } catch (e) {
+    if (statusEl) { statusEl.textContent = 'Error: ' + e.message; statusEl.style.color = '#c0392b'; }
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = '✦ Backfill missing AI drafts'; }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Google Drive
+// ---------------------------------------------------------------------------
+
+async function loadGdriveStatus() {
+  // Fetch last-sync state and update the GDrive header with timestamp + amber warning.
+  try {
+    const r = await fetch('/api/dev/gdrive-status');
+    if (!r.ok) return;
+    const d = await r.json();
+    const hdr     = document.getElementById('gdrive-header-status');
+    const warning = document.getElementById('gdrive-sync-warning');
+
+    if (d.last_error) {
+      // Amber warning — non-blocking indicator of last sync failure
+      if (warning) {
+        warning.style.display = 'inline';
+        warning.title = 'Last error: ' + d.last_error;
+      }
+      if (hdr && !d.last_sync_at) {
+        hdr.textContent = 'Never synced';
+        hdr.style.color = '#92400e';
+      }
+    } else if (warning) {
+      warning.style.display = 'none';
+    }
+
+    if (d.last_sync_at && hdr) {
+      // Format ISO timestamp as a human-friendly relative time
+      const dt  = new Date(d.last_sync_at);
+      const now = new Date();
+      const diffMin = Math.round((now - dt) / 60000);
+      let label;
+      if      (diffMin < 1)    label = 'just now';
+      else if (diffMin < 60)   label = diffMin + ' min ago';
+      else if (diffMin < 1440) label = Math.round(diffMin / 60) + ' hr ago';
+      else                     label = dt.toLocaleDateString();
+      hdr.textContent = 'Last synced: ' + label;
+      hdr.style.color = d.last_error ? '#92400e' : '#6b7280';
+    }
+  } catch (_) {}
+}
+
+async function gdriveLoadToken() {
+  // Load saved token from the settings API and populate the (masked) input
+  try {
+    const r = await fetch('/api/settings');
+    if (!r.ok) return;
+    const d = await r.json();
+    const entry = (d.settings || []).find(function(s) { return s.key === 'gdrive_access_token'; });
+    const inp = document.getElementById('gdrive-token-input');
+    if (entry && entry.current_value && inp) {
+      inp.value = entry.current_value;
+      // Show a gentle indicator that a token is already saved
+      const hdr = document.getElementById('gdrive-header-status');
+      if (hdr) { hdr.textContent = '✓ Token saved'; hdr.style.color = '#16a34a'; }
+    }
+  } catch (_) {}
+}
+
+function gdriveToggleReveal() {
+  const inp = document.getElementById('gdrive-token-input');
+  if (!inp) return;
+  inp.type = inp.type === 'password' ? 'text' : 'password';
+}
+
+async function gdriveSaveToken() {
+  const inp  = document.getElementById('gdrive-token-input');
+  const btn  = document.getElementById('btn-gdrive-save');
+  const hdr  = document.getElementById('gdrive-header-status');
+  const token = inp ? inp.value.trim() : '';
+
+  if (!token) {
+    _showToast('Paste a token first', true);
+    return;
+  }
+
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Saving…'; }
+  try {
+    const r = await fetch('/api/settings/gdrive_access_token', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ value: token }),
+    });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.detail || 'HTTP ' + r.status);
+    if (hdr) { hdr.textContent = '✓ Token saved'; hdr.style.color = '#16a34a'; }
+    _showToast('✓ Drive token saved');
+  } catch (e) {
+    _showToast('✗ Save failed: ' + e.message, true);
+    if (hdr) { hdr.textContent = '✗ ' + e.message; hdr.style.color = '#c0392b'; }
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = 'Save token'; }
+  }
+}
+
+async function gdriveSyncNow() {
+  const btn    = document.getElementById('btn-gdrive-sync');
+  const status = document.getElementById('gdrive-sync-status');
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Syncing…'; }
+  if (status) { status.textContent = ''; status.className = 'gdrive-status'; }
+
+  try {
+    const r = await fetch('/api/dev/gdrive-sync', { method: 'POST' });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.detail || 'HTTP ' + r.status);
+    const msg = '✓ Synced to Drive — ' + (d.action || 'ok');
+    if (status) { status.textContent = msg; status.className = 'gdrive-status ok'; }
+    _showToast(msg);
+    await loadGdriveStatus(); // refresh last-synced timestamp in header
+  } catch (e) {
+    const msg = '✗ ' + e.message;
+    if (status) { status.textContent = msg; status.className = 'gdrive-status err'; }
+    _showToast('✗ Drive sync failed: ' + e.message, true);
+    await loadGdriveStatus(); // update amber indicator after failure
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = '☁ Sync now'; }
+  }
+}
+
+gdriveLoadToken();
+
+// ---------------------------------------------------------------------------
+// Sharing
+// ---------------------------------------------------------------------------
+async function loadSharingStatus() {
+  try {
+    const r = await fetch('/api/sharing/status');
+    if (!r.ok) return;
+    const d = await r.json();
+    _updateSharingUI(d);
+  } catch (_) {}
+}
+
+function _updateSharingUI(d) {
+  const dot    = document.getElementById('sharing-dot');
+  const text   = document.getElementById('sharing-text');
+  const startBtn = document.getElementById('sharing-start-btn');
+  const stopBtn  = document.getElementById('sharing-stop-btn');
+  const panel  = document.getElementById('sharing-link-panel');
+  const input  = document.getElementById('sharing-url-input');
+
+  if (d.active && d.url) {
+    if (dot)   { dot.style.background = '#22c55e'; }
+    if (text)  { text.textContent = 'Sharing active'; text.style.color = '#166534'; }
+    if (startBtn) startBtn.style.display = 'none';
+    if (stopBtn)  stopBtn.style.display  = '';
+    if (panel)  panel.style.display = '';
+    if (input)  input.value = d.url;
+    _loadQR(d.url);
+  } else {
+    if (dot)   { dot.style.background = '#ccc'; }
+    if (text)  { text.textContent = 'Not sharing'; text.style.color = '#888'; }
+    if (startBtn) startBtn.style.display = '';
+    if (stopBtn)  stopBtn.style.display  = 'none';
+    if (panel)  panel.style.display = 'none';
+  }
+}
+
+async function startSharing() {
+  const btn = document.getElementById('sharing-start-btn');
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Starting…'; }
+  try {
+    const r = await fetch('/api/sharing/start', { method: 'POST' });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.detail || 'HTTP ' + r.status);
+    _updateSharingUI({ active: true, url: d.url });
+    _showToast('✓ Sharing started — link is live');
+  } catch (e) {
+    _showToast('✗ ' + (e.message || 'Failed to start sharing'), true);
+    if (btn) { btn.disabled = false; btn.textContent = '📡 Start sharing'; }
+  }
+}
+
+async function stopSharing() {
+  const btn = document.getElementById('sharing-stop-btn');
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Stopping…'; }
+  try {
+    await fetch('/api/sharing/stop', { method: 'POST' });
+    _updateSharingUI({ active: false, url: null });
+    _showToast('Sharing stopped');
+  } catch (e) {
+    _showToast('✗ ' + (e.message || 'Failed to stop'), true);
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+
+async function _loadQR(url) {
+  const qrEl = document.getElementById('sharing-qr');
+  if (!qrEl) return;
+  qrEl.innerHTML = '<div style="color:#aaa;font-size:0.78rem">Loading QR…</div>';
+  try {
+    const r = await fetch('/api/connections/qr?url=' + encodeURIComponent(url));
+    if (!r.ok) throw new Error('QR failed');
+    const d = await r.json();
+    qrEl.innerHTML = '<img src="' + d.data_url + '" alt="QR code" '
+      + 'style="max-width:180px;border-radius:8px;border:1px solid #e0e8d0">';
+  } catch (_) {
+    qrEl.innerHTML = '<div style="color:#aaa;font-size:0.75rem">QR unavailable</div>';
+  }
+}
+
+function copyShareLink() {
+  const input = document.getElementById('sharing-url-input');
+  if (!input) return;
+  navigator.clipboard.writeText(input.value)
+    .then(function() { _showToast('✓ Link copied to clipboard'); })
+    .catch(function() {
+      input.select();
+      document.execCommand('copy');
+      _showToast('✓ Link copied');
+    });
+}
+
+// ---------------------------------------------------------------------------
+// LAN URL
+// ---------------------------------------------------------------------------
+async function loadLanUrl() {
+  // Called on page load and by the 🔄 refresh button — always fetches fresh IP.
+  const btn   = document.getElementById('btn-refresh-lan');
+  const input = document.getElementById('lan-url-input');
+  if (btn) { btn.disabled = true; btn.textContent = '⏳'; }
+  if (input) input.value = 'Detecting…';
+  try {
+    const r = await fetch('/api/sharing/lan-url');
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const d = await r.json();
+    if (input) input.value = d.url || 'Unavailable';
+  } catch (_) {
+    if (input) input.value = 'Unavailable';
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = '🔄'; }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Workshop guest mode toggle
+// ---------------------------------------------------------------------------
+async function _loadGuestMode() {
+  const cb     = document.getElementById('guest-mode-cb');
+  const status = document.getElementById('guest-mode-status');
+  try {
+    const r = await fetch('/api/settings');
+    if (!r.ok) return;
+    const d = await r.json();
+    const entry = (d.settings || []).find(function(s) { return s.key === 'guest_mode_enabled'; });
+    const enabled = entry ? (entry.current_value === true || entry.current_value === 'true' || entry.current_value === '1') : false;
+    if (cb) cb.checked = enabled;
+    if (status) status.textContent = enabled ? '● Guest mode ON — workshop participants get read-only access' : '● Guest mode OFF — ngrok connects as curator';
+    if (status) status.style.color = enabled ? '#92400e' : '#166534';
+  } catch (_) {
+    if (status) { status.textContent = 'Could not load setting'; status.style.color = '#c0392b'; }
+  }
+}
+
+async function _saveGuestMode(enabled) {
+  const status = document.getElementById('guest-mode-status');
+  if (status) { status.textContent = 'Saving…'; status.style.color = '#888'; }
+  try {
+    const r = await fetch('/api/settings/guest_mode_enabled', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ value: String(enabled) }),
+    });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    if (status) status.textContent = enabled ? '● Guest mode ON — workshop participants get read-only access' : '● Guest mode OFF — ngrok connects as curator';
+    if (status) status.style.color = enabled ? '#92400e' : '#166534';
+  } catch (e) {
+    if (status) { status.textContent = 'Error: ' + e.message; status.style.color = '#c0392b'; }
+  }
+}
+
+function copyLanUrl() {
+  const input = document.getElementById('lan-url-input');
+  if (!input || !input.value || input.value === 'Unavailable' || input.value === 'Detecting…') return;
+  navigator.clipboard.writeText(input.value)
+    .then(function() { _showToast('✓ LAN URL copied to clipboard'); })
+    .catch(function() {
+      input.select();
+      document.execCommand('copy');
+      _showToast('✓ LAN URL copied');
+    });
+}
+
+// ── API Dashboard ────────────────────────────────────────────────────────────
+const API_STATE_LABEL = {
+  live: 'Live', expired: 'Expired', invalid: 'Invalid',
+  unreachable: 'Unreachable', not_configured: 'Not configured', testing: 'Testing…',
+};
+let _apiMeta = [];          // metadata rows (render base)
+let _apiResults = {};       // id -> latest live result
+
+function _relTime(unixSec) {
+  if (!unixSec) return '';
+  const diff = Math.round(Date.now() / 1000) - unixSec;
+  if (diff < 60) return 'just now';
+  if (diff < 3600) return Math.floor(diff / 60) + 'm ago';
+  return Math.floor(diff / 3600) + 'h ago';
+}
+function _fmtDuration(sec) {
+  if (sec == null) return '';
+  const neg = sec < 0; sec = Math.abs(sec);
+  const h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60);
+  const s = h ? `${h}h ${m}m` : `${m}m`;
+  return neg ? `${s} ago` : `in ${s}`;
+}
+
+// Render the cards from metadata only (instant — no probing).
+async function loadApiDashboard(autoScan = true) {
+  const grid = document.getElementById('api-grid');
+  if (!grid) return;
+  try {
+    const r = await fetch('/api/settings/api-meta');
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    _apiMeta = (await r.json()).apis || [];
+  } catch (e) {
+    grid.innerHTML = '<div style="color:#c0392b;font-size:0.85rem;grid-column:1/-1;padding:8px">Could not load APIs: ' + _esc(e.message) + '</div>';
+    return;
+  }
+  grid.innerHTML = _apiMeta.map(renderApiCard).join('');
+  if (autoScan) runHealthScan(true);   // silent on page load
+}
+
+// Card shell — status area has stable ids so live results can patch in place
+// (so the paste box / how-to panel state survive a re-test).
+function renderApiCard(a) {
+  const keyRow = a.needs_key
+    ? `<div class="api-key-row">
+         <input type="password" id="apikey-${a.id}" placeholder="${a.has_key ? '•••• saved — paste to replace' : 'Paste token / key here…'}"
+                autocomplete="off" spellcheck="false">
+         <button class="api-reveal" onclick="apiReveal('${a.id}')" title="Show/hide">👁</button>
+         <button onclick="saveApiKey('${a.id}')">Save</button>
+       </div>`
+    : `<div class="api-noKey">No token required — reachability only.</div>`;
+
+  const tokenLink = a.token_url
+    ? `<a class="api-tokenlink" href="${_esc(a.token_url)}" target="_blank" rel="noopener">Open token page ↗</a>`
+    : '';
+  const inatHint = a.id === 'inaturalist'
+    ? `<div style="margin-top:6px;font-weight:600;color:#2d5016">Log in, copy the token, paste above.</div>` : '';
+  const howto = `<ol>${(a.how_to || []).map(s => `<li>${_esc(s).replace(/(https?:\/\/[^\s]+)/g, '<a href="$1" target="_blank" rel="noopener">$1</a>')}</li>`).join('')}</ol>${tokenLink}${inatHint}`;
+
+  return `<div class="api-card">
+    <div class="api-card-head">
+      <span class="api-dot na" id="api-dot-${a.id}"></span>
+      <span class="api-name">${_esc(a.name)}</span>
+      <span class="api-status-label" id="api-state-${a.id}">—</span>
+      <button class="api-test-btn" onclick="scanApi('${a.id}')" title="Re-test this API">Test</button>
+    </div>
+    <div id="api-info-${a.id}"></div>
+    ${keyRow}
+    <button class="api-howto-btn" onclick="toggleHowTo('${a.id}')">How to get this token ▾</button>
+    <div class="api-howto" id="howto-${a.id}">${howto}</div>
+  </div>`;
+}
+
+// Set a card to "testing" pending state.
+function _setCardTesting(id) {
+  const dot = document.getElementById('api-dot-' + id);
+  const lbl = document.getElementById('api-state-' + id);
+  if (dot) dot.className = 'api-dot na';
+  if (lbl) lbl.textContent = API_STATE_LABEL.testing;
+}
+
+// Patch a card's status area in place with a live result.
+function applyApiResult(a) {
+  _apiResults[a.id] = a;
+  const dot = document.getElementById('api-dot-' + a.id);
+  const lbl = document.getElementById('api-state-' + a.id);
+  const info = document.getElementById('api-info-' + a.id);
+  if (dot) dot.className = 'api-dot ' + (a.color || 'na');
+  if (lbl) lbl.textContent = (API_STATE_LABEL[a.state] || a.state) +
+    (a.response_ms != null ? ` · ${a.response_ms}ms` : '');
+  if (!info) return;
+
+  let expiry = '';
+  if (a.id === 'inaturalist' && a.expires_in_seconds != null) {
+    if (a.expires_in_seconds <= 0)
+      expiry = `<div class="api-meta"><span class="api-err">Token expired ${_fmtDuration(a.expires_in_seconds)}</span></div>`;
+    else if (a.expiring_soon)
+      expiry = `<div class="api-meta"><span class="api-warn">⚠ Token expires ${_fmtDuration(a.expires_in_seconds)} — refresh soon</span></div>`;
+    else
+      expiry = `<div class="api-meta">Token valid — expires ${_fmtDuration(a.expires_in_seconds)}</div>`;
+  }
+  const err = a.error
+    ? `<div class="api-meta"><span class="${a.color === 'red' ? 'api-err' : 'api-warn'}">${_esc(a.error)}</span></div>` : '';
+  info.innerHTML = expiry + err +
+    `<div class="api-meta">Last tested ${_relTime(a.tested_at)}</div>`;
+}
+
+// Test a single API and patch its card (per-card Test button + streaming unit).
+async function scanApi(id) {
+  _setCardTesting(id);
+  try {
+    const r = await fetch('/api/settings/api-status/' + encodeURIComponent(id));
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    applyApiResult(await r.json());
+  } catch (e) {
+    applyApiResult({ id, state: 'unreachable', color: 'amber', error: e.message, tested_at: Math.round(Date.now() / 1000) });
+  }
+}
+
+// Run all probes concurrently, updating each card as its result arrives
+// (does NOT wait for the slowest before showing the fast ones).
+async function runHealthScan(silent = false) {
+  if (!_apiMeta.length) return;
+  const btn = document.getElementById('api-scan-btn');
+  const banner = document.getElementById('api-banner');
+  if (banner) banner.style.display = 'none';
+  if (btn && !silent) { btn.disabled = true; btn.textContent = '⏳ Scanning…'; }
+  _apiResults = {};
+  _apiMeta.forEach(a => _setCardTesting(a.id));
+
+  await Promise.all(_apiMeta.map(a =>
+    fetch('/api/settings/api-status/' + encodeURIComponent(a.id))
+      .then(r => r.json())
+      .then(applyApiResult)                       // patch as soon as each resolves
+      .catch(() => applyApiResult({ id: a.id, state: 'unreachable', color: 'amber',
+                                    error: 'Scan failed', tested_at: Math.round(Date.now() / 1000) }))
+  ));
+
+  if (btn) { btn.disabled = false; btn.textContent = '🩺 API Health Scan'; }
+  showHealthBanner();
+}
+
+function showHealthBanner() {
+  const banner = document.getElementById('api-banner');
+  if (!banner) return;
+  const results = _apiMeta.map(a => _apiResults[a.id]).filter(Boolean);
+  const total = _apiMeta.length;
+  const healthy = results.filter(r => r.healthy).length;
+  const byState = {};
+  results.filter(r => !r.healthy).forEach(r => { byState[r.state] = (byState[r.state] || 0) + 1; });
+  const parts = Object.entries(byState).map(([s, n]) => `${n} ${API_STATE_LABEL[s].toLowerCase()}`);
+  const allGood = healthy === total;
+  banner.style.background = allGood ? '#eaf6e4' : '#fdf4e3';
+  banner.style.color = allGood ? '#2d5016' : '#92600e';
+  banner.style.border = `1px solid ${allGood ? '#bfe0a8' : '#f0d9a8'}`;
+  banner.textContent = `${healthy} of ${total} APIs healthy` + (parts.length ? ' · ' + parts.join(' · ') : '');
+  banner.style.display = 'block';
+}
+
+function apiReveal(id) {
+  const inp = document.getElementById('apikey-' + id);
+  if (inp) inp.type = inp.type === 'password' ? 'text' : 'password';
+}
+function toggleHowTo(id) {
+  const el = document.getElementById('howto-' + id);
+  if (el) el.classList.toggle('open');
+}
+async function saveApiKey(id) {
+  const inp = document.getElementById('apikey-' + id);
+  const key = inp ? inp.value.trim() : '';
+  if (!key) { _showToast('Paste a key first', true); return; }
+  try {
+    const r = await fetch('/api/settings/api-key', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ api: id, key }),
+    });
+    if (!r.ok) {
+      const d = await r.json().catch(() => ({}));
+      throw new Error(d.detail || ('HTTP ' + r.status));
+    }
+    if (inp) inp.value = '';
+    _showToast('✓ Key saved — re-testing');
+    scanApi(id);            // re-test just this card
+  } catch (e) {
+    _showToast('Save failed: ' + e.message, true);
+  }
+}
+
+loadApiDashboard();
+
+// ---------------------------------------------------------------------------
+// Data Sources registry
+// ---------------------------------------------------------------------------
+const DS_DOT = { ok: 'green', untested: 'amber', unreachable: 'red' };
+
+// ---------------------------------------------------------------------------
+// Section collapse — unified toggle + localStorage persistence
+// ---------------------------------------------------------------------------
+
+function _secToggle(id) {
+  var el = document.getElementById(id);
+  if (!el) return;
+  el.classList.toggle('collapsed');
+  var collapsed = el.classList.contains('collapsed');
+  try { localStorage.setItem('fid-sec-' + id, collapsed ? '1' : '0'); } catch (_) {}
+}
+
+function toggleDataSources()  { _secToggle('data-sources'); }
+function toggleApiDashboard() { _secToggle('api-dashboard'); }
+function toggleSharing()      { _secToggle('sharing-group'); }
+
+async function loadDataSources() {
+  const tbody = document.getElementById('ds-tbody');
+  try {
+    const r = await fetch('/api/data-sources');
+    const d = await r.json();
+    const rows = d.data_sources || [];
+    if (!rows.length) {
+      tbody.innerHTML = '<tr><td colspan="7" style="color:#aaa;padding:14px">No sources yet — add one below.</td></tr>';
+      return;
+    }
+    tbody.innerHTML = rows.map(_dsRow).join('');
+  } catch (e) {
+    tbody.innerHTML = `<tr><td colspan="7" style="color:#c0392b;padding:14px">Failed to load: ${_esc(e.message)}</td></tr>`;
+  }
+}
+
+function _dsRow(s) {
+  const dot = DS_DOT[s.last_test_status] || 'amber';
+  const chips = (s.data_types || []).map(t => `<span class="ds-chip">${_esc(t)}</span>`).join('') || '—';
+  const when = s.last_tested ? new Date(s.last_tested).toLocaleString('en-GB') : 'never';
+  const isActive = s.status === 'active';
+  return `<tr id="ds-tr-${s.id}">
+    <td>
+      <div class="ds-label">${_esc(s.label)}</div>
+      <a class="ds-url" href="${_esc(s.url)}" target="_blank" rel="noopener">${_esc(s.url)}</a>
+      ${s.notes ? `<div style="font-size:0.68rem;color:#999;margin-top:2px">${_esc(s.notes)}</div>` : ''}
+    </td>
+    <td>${chips}</td>
+    <td>${_esc(s.species_scope || '—')}</td>
+    <td>${_esc(s.region || '—')}</td>
+    <td>
+      <button class="ds-status-toggle ${isActive ? 'active' : 'paused'}"
+              onclick="toggleDsStatus(${s.id}, '${isActive ? 'paused' : 'active'}', this)">
+        ${isActive ? '● active' : '⏸ paused'}
+      </button>
+    </td>
+    <td>
+      <div class="ds-test-cell">
+        <span class="ds-dot ${dot}" id="ds-dot-${s.id}" title="${_esc(s.last_test_status)}"></span>
+        <span class="ds-when" id="ds-when-${s.id}">${_esc(when)}</span>
+      </div>
+    </td>
+    <td style="white-space:nowrap">
+      <button class="ds-btn" id="ds-test-${s.id}" onclick="testDsSource(${s.id})">Test</button>
+      <button class="ds-btn danger" onclick="deleteDsSource(${s.id}, '${_esc(s.label).replace(/'/g, "\\'")}')">Delete</button>
+    </td>
+  </tr>`;
+}
+
+async function testDsSource(id) {
+  const btn = document.getElementById(`ds-test-${id}`);
+  const dot = document.getElementById(`ds-dot-${id}`);
+  const when = document.getElementById(`ds-when-${id}`);
+  if (btn) { btn.disabled = true; btn.textContent = '…'; }
+  try {
+    const r = await fetch(`/api/data-sources/${id}/test`, { method: 'POST' });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.detail || `HTTP ${r.status}`);
+    if (dot)  dot.className = `ds-dot ${DS_DOT[d.last_test_status] || 'amber'}`;
+    if (dot)  dot.title = d.last_test_status + (d.detail ? ` — ${d.detail}` : '');
+    if (when) when.textContent = new Date(d.last_tested).toLocaleString('en-GB');
+    _showToast(d.last_test_status === 'ok'
+      ? '✓ Reachable' : `✗ Unreachable${d.detail ? ': ' + d.detail : ''}`,
+      d.last_test_status !== 'ok');
+    return d.last_test_status;
+  } catch (e) {
+    _showToast(`Test failed: ${e.message}`, true);
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = 'Test'; }
+  }
+}
+
+async function toggleDsStatus(id, newStatus, btn) {
+  if (btn) btn.disabled = true;
+  try {
+    const r = await fetch(`/api/data-sources/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: newStatus }),
+    });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.detail || `HTTP ${r.status}`);
+    loadDataSources();
+  } catch (e) {
+    _showToast(`Could not update status: ${e.message}`, true);
+    if (btn) btn.disabled = false;
+  }
+}
+
+async function deleteDsSource(id, label) {
+  if (!confirm(`Remove "${label}" from the registry?`)) return;
+  try {
+    const r = await fetch(`/api/data-sources/${id}`, { method: 'DELETE' });
+    if (!r.ok) { const d = await r.json().catch(() => ({})); throw new Error(d.detail || `HTTP ${r.status}`); }
+    loadDataSources();
+  } catch (e) {
+    _showToast(`Delete failed: ${e.message}`, true);
+  }
+}
+
+async function addDataSource() {
+  const btn = document.getElementById('ds-add-btn');
+  const msg = document.getElementById('ds-add-msg');
+  const label = document.getElementById('ds-new-label').value.trim();
+  const url   = document.getElementById('ds-new-url').value.trim();
+  const types = Array.from(document.querySelectorAll('#ds-new-types input:checked')).map(c => c.value);
+  const scope = document.getElementById('ds-new-scope').value;
+  const region = document.getElementById('ds-new-region').value;
+  const notes = document.getElementById('ds-new-notes').value.trim();
+
+  msg.textContent = '';
+  if (!label || !url) { msg.style.color = '#c0392b'; msg.textContent = 'Label and URL are required.'; return; }
+
+  btn.disabled = true; btn.textContent = 'Adding…';
+  try {
+    const r = await fetch('/api/data-sources', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ label, url, data_types: types, species_scope: scope, region, notes: notes || null }),
+    });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.detail || `HTTP ${r.status}`);
+
+    // Reset form, reload the table, then immediately test the new row inline.
+    document.getElementById('ds-new-label').value = '';
+    document.getElementById('ds-new-url').value = '';
+    document.getElementById('ds-new-notes').value = '';
+    document.querySelectorAll('#ds-new-types input:checked').forEach(c => { c.checked = false; });
+    msg.style.color = '#2e7d32'; msg.textContent = '✓ Added — testing…';
+    await loadDataSources();
+    await testDsSource(d.id);
+    msg.textContent = '✓ Added';
+    setTimeout(() => { msg.textContent = ''; }, 2500);
+  } catch (e) {
+    msg.style.color = '#c0392b'; msg.textContent = `✗ ${e.message}`;
+  } finally {
+    btn.disabled = false; btn.textContent = 'Add + Test';
+  }
+}
+
+loadDataSources();
+
+// ---------------------------------------------------------------------------
+// Offline cache status (Task 4)
+// ---------------------------------------------------------------------------
+
+async function loadCacheStatus() {
+  const speciesEl = document.getElementById('cache-species-status');
+  const storageEl = document.getElementById('cache-storage-status');
+
+  // Species info comes from localStorage written by offline.js
+  if (speciesEl) {
+    const status = window.OfflineCache ? window.OfflineCache.getStatus() : null;
+    if (status && status.cachedAt) {
+      const daysAgo = Math.floor((Date.now() - new Date(status.cachedAt).getTime()) / 86400000);
+      const when    = daysAgo === 0 ? 'today'
+                    : daysAgo === 1 ? 'yesterday'
+                    : daysAgo + ' days ago';
+      speciesEl.textContent = (status.count || '?') + ' profiles · ' + when;
+      speciesEl.style.color = daysAgo >= 6 ? '#92400e' : '#166534';
+    } else {
+      speciesEl.textContent = 'Not cached yet';
+      speciesEl.style.color = '#888';
+    }
+  }
+
+  // Storage estimate
+  if (storageEl && navigator.storage && navigator.storage.estimate) {
+    try {
+      const est = await navigator.storage.estimate();
+      if (est.usage != null) {
+        const mb = (est.usage / (1024 * 1024)).toFixed(1);
+        storageEl.textContent = mb + ' MB used';
+      } else {
+        storageEl.textContent = 'Unavailable';
+      }
+    } catch (_) {
+      storageEl.textContent = 'Unavailable';
+    }
+  } else if (storageEl) {
+    storageEl.textContent = 'Unavailable';
+  }
+}
+
+async function refreshOfflineCache() {
+  const btn = document.getElementById('btn-refresh-cache');
+  const msg = document.getElementById('cache-refresh-msg');
+  if (btn) { btn.disabled = true; btn.textContent = '↻ Refreshing…'; }
+  if (msg) msg.textContent = '';
+
+  if (!window.OfflineCache) {
+    if (msg) msg.textContent = 'Offline module not loaded';
+    if (btn) { btn.disabled = false; btn.textContent = '↻ Refresh species cache'; }
+    return;
+  }
+
+  window.OfflineCache.onCacheRefresh = function (info) {
+    if (msg) msg.textContent = '✓ ' + info.count + ' profiles cached';
+    if (btn) { btn.disabled = false; btn.textContent = '↻ Refresh species cache'; }
+    loadCacheStatus();
+  };
+
+  try {
+    await window.OfflineCache.refresh();
+  } catch (e) {
+    if (msg) msg.textContent = 'Failed: ' + e.message;
+    if (btn) { btn.disabled = false; btn.textContent = '↻ Refresh species cache'; }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Background Processes diagnostic — read-only, single load on page open
+// ---------------------------------------------------------------------------
+
+const _BP_TYPE_LABEL = {
+  enrichment_run: 'Enrichment run',
+  scan_session:   'Scan session',
+  itis_backfill:  'ITIS backfill',
+};
+
+async function loadBgProcesses() {
+  const body = document.getElementById('bg-processes-body');
+  if (!body) return;
+  try {
+    const r = await fetch('/api/processes/active');
+    if (!r.ok) { body.innerHTML = '<span style="color:#c00">Error loading processes</span>'; return; }
+    const rows = await r.json();
+    if (!rows.length) {
+      body.innerHTML = '<span style="color:#888">No processes running.</span>';
+      return;
+    }
+    body.innerHTML = rows.map(function(p) {
+      const label  = _BP_TYPE_LABEL[p.process_type] || p.process_type;
+      const prog   = p.progress_total > 0 ? p.progress_current + ' of ' + p.progress_total : '—';
+      const hbAgo  = p.heartbeat_age_s != null
+        ? (p.heartbeat_age_s < 60
+            ? p.heartbeat_age_s + 's ago'
+            : Math.round(p.heartbeat_age_s / 60) + 'm ago')
+        : 'never';
+      if (p.is_stalled) {
+        return '<div style="padding:6px 0;border-bottom:1px solid #f0f0f0;display:flex;align-items:center;gap:10px;flex-wrap:wrap">'
+          + '<span style="font-weight:600;color:#92400e">' + label + '</span>'
+          + ' — ' + prog
+          + ' — <span style="color:#c00;font-weight:700">STALLED</span>'
+          + ' <span style="color:#888;font-size:0.78rem">(last heartbeat ' + hbAgo + ')</span>'
+          + ' <button onclick="cancelBgProcess(' + p.process_id + ', this)"'
+          + '   style="padding:2px 10px;border:1px solid #fca5a5;background:#fef2f2;color:#b91c1c;'
+          + '          border-radius:5px;font-size:0.75rem;cursor:pointer">Cancel</button>'
+          + '</div>';
+      }
+      return '<div style="padding:6px 0;border-bottom:1px solid #f0f0f0;color:#374151">'
+        + '<span style="font-weight:600">' + label + '</span>'
+        + ' — ' + prog
+        + ' — ' + p.status
+        + ' — <span style="color:#888;font-size:0.78rem">last heartbeat ' + hbAgo + '</span>'
+        + '</div>';
+    }).join('');
+  } catch (_) {
+    body.innerHTML = '<span style="color:#c00">Could not reach server.</span>';
+  }
+}
+
+async function cancelBgProcess(processId, btn) {
+  if (!confirm('Cancel this process? It will stop on its next iteration.')) return;
+  btn.disabled = true;
+  try {
+    const r = await fetch('/api/processes/' + processId + '/cancel', { method: 'POST' });
+    const d = await r.json();
+    if (d.ok) {
+      btn.closest('div').innerHTML = '<span style="color:#888">Cancelled.</span>';
+    } else {
+      btn.disabled = false;
+      alert('Cancel failed: ' + (d.detail || 'unknown'));
+    }
+  } catch (e) {
+    btn.disabled = false;
+    alert('Cancel failed: ' + e.message);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Restore section collapse state from localStorage on page load.
+// Sections are expanded by default (no entry = expanded).
+// ---------------------------------------------------------------------------
+(function _initSecCollapseState() {
+  var ids = [
+    'api-dashboard', 'data-sources', 'sharing-group',
+    'snapshot-group', 'gdrive-group',
+    'field-mode-group', 'offline-cache-group', 'bg-processes-group'
+  ];
+  ids.forEach(function (id) {
+    var el = document.getElementById(id);
+    if (!el) return;
+    var stored = localStorage.getItem('fid-sec-' + id);
+    if (stored === '1') {
+      el.classList.add('collapsed');
+    } else {
+      el.classList.remove('collapsed');
+    }
+  });
+  // Dynamic groups in #settings-container are populated after this IIFE runs;
+  // their state is restored inside populateSettings() via _restoreDynSecState().
+})();
+
+function _restoreDynSecState() {
+  var container = document.getElementById('settings-container');
+  if (!container) return;
+  container.querySelectorAll('.settings-group[id]').forEach(function (el) {
+    var stored = localStorage.getItem('fid-sec-' + el.id);
+    if (stored === '1') {
+      el.classList.add('collapsed');
+    } else {
+      el.classList.remove('collapsed');
+    }
+  });
+}
+</script>
+<script src="/static/js/pwa.js"></script>
+<script src="/static/js/offline.js"></script>
+<script src="/static/js/guest-mode.js"></script>
+<script src="/static/js/job-status-widget.js"></script>
+<script src="/static/js/seasonal-returns.js"></script>
+<script src="/static/js/site-header.js"></script>
+</body>
+</html>

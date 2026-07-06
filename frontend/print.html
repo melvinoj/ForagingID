@@ -1,0 +1,840 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ForagingID — Print</title>
+  <script src="/static/js/lists.js"></script>
+  <style>
+    /* ── Base ──────────────────────────────────────────────────────────────── */
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: Georgia, 'Times New Roman', serif; background: #fff; color: #111; }
+
+    /* ── Screen toolbar ────────────────────────────────────────────────────── */
+    #toolbar {
+      position: sticky; top: 0; z-index: 100;
+      display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+      padding: 10px 20px; background: #2d5016; color: #fff;
+    }
+    #toolbar h1 { font-size: 1rem; font-weight: 600; flex: 1 1 auto; }
+    #toolbar button {
+      padding: 6px 16px; border: none; border-radius: 6px; cursor: pointer;
+      font-size: 0.88rem; font-weight: 600;
+    }
+    #back-btn { background: transparent; color: #cde6a8; border: 1px solid #4a7a25; }
+    #back-btn:hover { background: rgba(255,255,255,0.1); }
+    #pdf-btn { background: #fff; color: #2d5016; }
+    #pdf-btn:hover { background: #e8f5dc; }
+    #pdf-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+    #pdf-error { font-size: 0.8rem; color: #ffb3b3; margin-left: 4px; }
+    .style-btn-wrap { display: inline-flex; border: 1px solid #4a7a25; border-radius: 6px; overflow: hidden; }
+    .style-btn-wrap button {
+      border: none; background: transparent; color: #cde6a8; padding: 5px 12px;
+      font-size: 0.82rem; cursor: pointer; font-weight: 500;
+    }
+    .style-btn-wrap button.active { background: rgba(255,255,255,0.18); color: #fff; }
+    .step-group { display: flex; flex-direction: column; gap: 3px; }
+    .step-label { font-size: 0.6rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: rgba(255,255,255,0.45); white-space: nowrap; }
+
+    /* ── Loading / error states ────────────────────────────────────────────── */
+    #loading { padding: 40px; text-align: center; font-size: 1.1rem; color: #666; }
+    #empty   { padding: 40px; text-align: center; color: #888; }
+
+    /* ── Content area ──────────────────────────────────────────────────────── */
+    #content {
+      width: 100%;
+      max-width: 100%;
+      box-sizing: border-box;
+      padding: 14mm 14mm 14mm 14mm;
+    }
+
+    /* ── Field Guide layout ────────────────────────────────────────────────── */
+    #content.mode-field { column-count: 2; column-gap: 12mm; }
+
+    .fg-entry {
+      break-inside: avoid; -webkit-column-break-inside: avoid;
+      padding: 4mm 0; border-bottom: 1px solid #ddd; overflow: hidden;
+    }
+    .fg-sci     { font-weight: 700; font-size: 0.92rem; color: #1c1c1c; }
+    .fg-common  { font-size: 0.8rem; color: #555; }
+    .fg-row     { margin-top: 3px; display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+    .fg-pill    { display: inline-block; font-size: 0.7rem; padding: 1px 6px; border-radius: 10px; font-weight: 600; }
+    .pill-safe  { background: #e6f4d7; color: #2d5016; }
+    .pill-cond  { background: #fef3c7; color: #7a4f00; }
+    .pill-toxic    { background: #dc2626; color: #fff; font-weight: 600; }
+    .pill-inedible { background: #fef3c7; color: #854d0e; }
+    .pill-unk      { background: #f0f0f0; color: #555; }
+    .fg-season  { font-size: 0.7rem; color: #444; letter-spacing: 0.04em; }
+    .fg-season strong { color: #2d5016; }
+    .fg-season .off   { color: #bbb; }
+    .fg-id-primary { margin-top: 3px; font-size: 0.75rem; color: #333; line-height: 1.4; }
+    .fg-lookalike  { margin-top: 3px; font-size: 0.72rem; color: #7a2000; line-height: 1.3; }
+    .fg-note       { margin-top: 2px; font-size: 0.72rem; color: #555; font-style: italic; }
+    .fg-recipe span.rt { font-size: 0.72rem; color: #2d5016; font-style: italic; }
+    .fg-photo { float: right; width: 18mm; height: 18mm; object-fit: cover;
+                margin: 0 0 3px 4px; border-radius: 2px; }
+    .fg-cover { column-span: all; -webkit-column-span: all;
+                padding: 8mm 0 6mm; border-bottom: 2px solid #2d5016; margin-bottom: 4mm; }
+    .fg-cover-title { font-size: 1.5rem; font-weight: 700; color: #1c1c1c; }
+    .fg-cover-meta  { font-size: 0.85rem; color: #555; margin-top: 4px; }
+    .fg-cover-intro { font-size: 0.82rem; color: #333; margin-top: 6px; line-height: 1.5; }
+
+    /* ── Map snapshot ──────────────────────────────────────────────────────── */
+    .print-map-snap {
+      column-span: all; -webkit-column-span: all;
+      margin: 0 0 6mm; break-inside: avoid;
+    }
+    .print-map-snap img { width: 100%; display: block; border: 1px solid #c8d8a0; border-radius: 4px; }
+    .print-map-snap-grid { display: grid; grid-template-columns: repeat(3, 1fr); border: 1px solid #c8d8a0; border-radius: 4px; overflow: hidden; line-height: 0; }
+    .print-map-snap-grid img { width: 100%; display: block; }
+    .print-map-snap-caption { font-size: 0.72rem; color: #888; text-align: center; margin-top: 3px; }
+
+    /* ── Workshop / Herbalist layout ───────────────────────────────────────── */
+    #content.mode-workshop { column-count: 1; }
+
+    .ws-page {
+      padding: 10mm 0; min-height: 230mm;
+      break-after: page; page-break-after: always;
+      border-bottom: 1px solid #ddd;
+    }
+    .ws-page:last-child { break-after: auto; page-break-after: auto; border: none; }
+    .ws-head     { display: flex; justify-content: space-between; align-items: flex-start; gap: 8mm; margin-bottom: 5mm; }
+    .ws-sci      { font-size: 1.4rem; font-weight: 700; color: #1c1c1c; }
+    .ws-common   { font-size: 0.95rem; color: #555; margin-top: 2px; }
+    .ws-photo    { width: 46mm; height: 46mm; object-fit: cover; border-radius: 3px; flex-shrink: 0; }
+    .ws-banner-photo { width: 100%; max-height: 220px; object-fit: cover; display: block; border-radius: 3px; margin-bottom: 5mm; }
+    .ws-section-h { font-size: 0.78rem; font-weight: 700; text-transform: uppercase;
+                    letter-spacing: .08em; color: #2d5016; margin: 5mm 0 2mm; border-bottom: 0.4pt solid #2d5016; }
+    .ws-safety   { background: #fffbf0; border: 0.5pt solid #e6c87a; padding: 3mm; border-radius: 2px; margin-bottom: 4mm; }
+    .ws-safety-h { font-size: 0.75rem; font-weight: 700; color: #7a4f00; margin-bottom: 2mm; }
+    .ws-edib     { margin-bottom: 2mm; }
+    .ws-safety p { font-size: 0.78rem; color: #4a3000; margin-bottom: 2px; line-height: 1.4; }
+    .ws-recipe p, .ws-forage p { font-size: 0.82rem; line-height: 1.5; margin-bottom: 3px; }
+    .ws-recipe h3, .ws-forage h3 { font-size: 0.85rem; font-weight: 700; margin: 4px 0 2px; }
+    .ws-fl      { font-weight: 700; }
+    .ws-rule    { border-bottom: 0.4pt solid #ccc; margin: 4mm 0; }
+    .ws-mynotes { margin-top: 6mm; }
+    .ws-credit  { font-size: 0.7rem; color: #aaa; margin-top: 4mm; text-align: right; }
+    .ws-cover   { display: flex; align-items: center; justify-content: center;
+                  min-height: 200mm; break-after: page; page-break-after: always; }
+    .ws-cover-inner  { text-align: center; }
+    .ws-cover-title  { font-size: 2rem; font-weight: 700; color: #1c1c1c; }
+    .ws-cover-meta   { font-size: 0.95rem; color: #555; margin-top: 6px; }
+    .ws-cover-intro  { font-size: 0.85rem; color: #333; margin-top: 10px; line-height: 1.6; }
+    .ws-cover-credit { font-size: 0.8rem; color: #888; margin-top: 20px; }
+
+    /* ── Seasonal Returns preview ── */
+    .sr-section { column-span: all; -webkit-column-span: all; padding: 8mm 0 5mm; border-bottom: 1.5px solid #2d5016; margin-bottom: 6mm; }
+    .sr-title { font-size: 0.82rem; font-weight: 700; text-transform: uppercase; letter-spacing: .1em; color: #2d5016; border-bottom: 1px solid #2d5016; padding-bottom: 4px; margin-bottom: 8px; }
+    .sr-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 5px 12px; }
+    #content.mode-workshop .sr-grid { grid-template-columns: 1fr; }
+    .sr-entry { border-bottom: 1px solid #eee; padding: 4px 0; }
+    .sr-common { font-weight: 700; font-size: 0.9rem; color: #1c1c1c; }
+    .sr-sci    { font-style: italic; font-size: 0.76rem; color: #555; }
+    .sr-row    { margin-top: 2px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+    .sr-badge  { font-size: 0.65rem; padding: 1px 6px; border-radius: 8px; font-weight: 600; }
+    .sr-badge-now  { background: #e6f4d7; color: #2d5016; }
+    .sr-badge-soon { background: #fef3c7; color: #7a4f00; }
+    .sr-meta   { font-size: 0.72rem; color: #555; }
+    .sr-reason { font-size: 0.72rem; color: #666; font-style: italic; margin-top: 2px; }
+
+    /* ── Border images (screen — visible so user can preview) ──────────────── */
+    .print-border { position: fixed; pointer-events: none; z-index: 50; }
+
+    /* Field Guide: corners — transforms applied by JS, not CSS */
+    .border-corner { width: 180px; height: 180px; object-fit: contain; position: fixed; }
+    .border-tl { top: 48px; left: 0; }
+    .border-tr { top: 48px; right: 0; }
+    .border-bl { bottom: 0; left: 0; }
+    .border-br { bottom: 0; right: 0; }
+
+    /* Side border screen preview — body pseudo-elements, no divs needed */
+    .side-border-base {
+      content: '';
+      position: fixed;
+      top: 48px; bottom: 0;
+      width: 160px;
+      background-repeat: repeat-y;
+      background-size: 160px auto;
+      background-position: left top;
+      pointer-events: none;
+      z-index: 50;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+    }
+
+    /* Herbalist screen borders */
+    body[data-border-style="herbalist"]::before {
+      content: '';
+      position: fixed; top: 48px; bottom: 0; left: 0; width: 160px;
+      background: url('/static/print/botanical-side-border-serrated.%20leaves.png') repeat-y left top / 160px auto;
+      pointer-events: none; z-index: 50;
+      -webkit-print-color-adjust: exact; print-color-adjust: exact;
+    }
+    body[data-border-style="herbalist"]::after {
+      content: '';
+      position: fixed; top: 48px; bottom: 0; right: 0; width: 160px;
+      background: url('/static/print/botanical-side-border-serrated.%20leaves.png') repeat-y left top / 160px auto;
+      transform: scaleX(-1);
+      pointer-events: none; z-index: 50;
+      -webkit-print-color-adjust: exact; print-color-adjust: exact;
+    }
+
+    /* Goethean screen borders */
+    body[data-border-style="goethean"]::before {
+      content: '';
+      position: fixed; top: 48px; bottom: 0; left: 0; width: 160px;
+      background: url('/static/print/watercolour-oakleaf-right.png') no-repeat left top / cover;
+      height: 100vh;
+      pointer-events: none; z-index: 50;
+      -webkit-print-color-adjust: exact; print-color-adjust: exact;
+    }
+    body[data-border-style="goethean"]::after {
+      content: '';
+      position: fixed; top: 48px; bottom: 0; right: 0; width: 160px;
+      background: url('/static/print/watercolour-oakleaf-left.png') no-repeat left top / cover;
+      height: 100vh;
+      pointer-events: none; z-index: 50;
+      -webkit-print-color-adjust: exact; print-color-adjust: exact;
+    }
+
+    /* ── @media print ──────────────────────────────────────────────────────── */
+    @media print {
+      @page { size: A4; margin: 8mm; }
+
+      #toolbar { display: none !important; }
+
+      #content {
+        max-width: none;
+        margin: 0;
+        padding: 20mm 0 20mm 0;
+      }
+      #content.mode-field { column-count: 2; column-gap: 12mm; column-rule: none; }
+
+      .ws-page { border: none; }
+
+      /* Corners */
+      .print-border { position: fixed; }
+      .border-corner { width: 180px; height: 180px; }
+      .border-tl { top: 0; left: 0; }
+      .border-tr { top: 0; right: 0; }
+      .border-bl { bottom: 0; left: 0; }
+      .border-br { bottom: 0; right: 0; }
+
+      /* Side borders in print — pseudo-elements top anchored to page edge */
+      body[data-border-style="herbalist"]::before,
+      body[data-border-style="herbalist"]::after,
+      body[data-border-style="goethean"]::before,
+      body[data-border-style="goethean"]::after {
+        top: 0;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+      }
+
+      /* Hide corners unless botanical */
+      body:not([data-border-style="botanical"]) .border-corner {
+        display: none !important;
+        visibility: hidden !important;
+      }
+
+      /* Force image printing */
+      .print-border {
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+      }
+    }
+  </style>
+</head>
+<body>
+
+<div id="toolbar">
+  <h1><img src="/static/icons/dandelion-icon.svg" alt="ForagingID" style="height:28px;vertical-align:middle;margin-right:8px;filter:brightness(0) invert(1)"> ForagingID — Print Preview</h1>
+  <button id="back-btn" onclick="window.location.href='/lists'">← Booklets</button>
+  <div class="step-group">
+    <div class="step-label">Step 4 — Design</div>
+    <div class="style-btn-wrap" id="style-toggle">
+      <button data-pstyle="botanical" onclick="setPrintStyle('botanical')">Botanical</button>
+      <button data-pstyle="herbalist" onclick="setPrintStyle('herbalist')">Herbalist</button>
+      <button data-pstyle="goethean"  onclick="setPrintStyle('goethean')">Goethean</button>
+    </div>
+  </div>
+  <div class="step-group">
+    <div class="step-label">Step 5</div>
+    <button id="pdf-btn" onclick="downloadPdf()">⬇ Download PDF</button>
+    <span id="pdf-error" style="display:none"></span>
+  </div>
+</div>
+
+<div id="loading">Loading species data…</div>
+<div id="empty"  style="display:none">No species in the current list. <a href="/lists">Go back to Booklets.</a></div>
+<div id="content" style="display:none"></div>
+
+<!-- Border images — shown/hidden by JS based on active style -->
+<!-- Field Guide corners -->
+<img id="b-tl" class="print-border border-corner border-tl" style="display:none"
+     src="/static/print/botanical%20corner%20flowing%20light.png" alt="">
+<img id="b-tr" class="print-border border-corner border-tr" style="display:none"
+     src="/static/print/botanical%20corner%20flowing%20light.png" alt="">
+<img id="b-bl" class="print-border border-corner border-bl" style="display:none"
+     src="/static/print/botanical%20corner%20flowing%20bold.png" alt="">
+<img id="b-br" class="print-border border-corner border-br" style="display:none"
+     src="/static/print/botanical%20corner%20flowing%20bold.png" alt="">
+<!-- Side borders handled by body::before / body::after pseudo-elements in CSS -->
+
+<script>
+// ── Helpers ────────────────────────────────────────────────────────────────
+function _esc(s) {
+  return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const NOW_MONTH = new Date().getMonth() + 1;
+const COVER_KEY    = 'foragingid_list_cover';
+const STYLE_KEY    = 'foragingid_list_style';
+const MAP_SNAP_KEY = 'foragingid_list_map_snapshot';
+
+function _loadMapSnap() {
+  try { return JSON.parse(localStorage.getItem(MAP_SNAP_KEY)); } catch (_) { return null; }
+}
+
+function _mapSnapHtml(snap) {
+  if (!snap) return '';
+  const d = snap.date ? new Date(snap.date).toLocaleDateString('en-GB', { day:'numeric', month:'short', year:'numeric' }) : '';
+  const caption = d ? `Selected from map — ${d}` : 'Selected from map';
+  let imgHtml;
+  if (Array.isArray(snap.tiles) && snap.tiles.length) {
+    const cols = snap.cols || 3;
+    const rows = snap.tiles.length / cols;
+    const projected = [];
+    if (Array.isArray(snap.rawPins) && snap.snapZoom != null && snap.minTx != null) {
+      const z = snap.snapZoom, n = 1 << z;
+      for (const [plat, plng] of snap.rawPins) {
+        const fx = ((plng + 180) / 360 * n - snap.minTx) / cols;
+        const pry = Math.log(Math.tan(plat * Math.PI / 180) + 1 / Math.cos(plat * Math.PI / 180));
+        const fy = ((1 - pry / Math.PI) / 2 * n - snap.minTy) / rows;
+        if (fx > 0.01 && fx < 0.99 && fy > 0.01 && fy < 0.99)
+          projected.push([Math.round(fx * 1000) / 10, Math.round(fy * 1000) / 10]);
+      }
+    }
+    const svgPins = projected.map(([x, y]) =>
+      `<circle cx="${x}%" cy="${y}%" r="5" fill="#2d5016" fill-opacity="0.85" stroke="#fff" stroke-width="2"/>`
+    ).join('');
+    const svg = svgPins ? `<svg style="position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none" xmlns="http://www.w3.org/2000/svg">${svgPins}</svg>` : '';
+    const grid = `<div style="display:grid;grid-template-columns:repeat(${cols},1fr);line-height:0;overflow:hidden">${snap.tiles.map(u => `<img src="${u}" style="width:100%;display:block">`).join('')}</div>`;
+    imgHtml = `<div style="position:relative">${grid}${svg}</div>`;
+  } else if (snap.data) {
+    imgHtml = `<img src="${snap.data}" alt="Map selection snapshot">`;
+  } else {
+    return '';
+  }
+  return `<div class="print-map-snap">${imgHtml}<div class="print-map-snap-caption">${caption}</div></div>`;
+}
+
+function edClass(s) {
+  if (!s) return 'pill-unk';
+  if (/^edible$|forage/i.test(s) || (/edible/i.test(s) && !/inedible/i.test(s))) return 'pill-safe';
+  if (/conditional|caution/i.test(s)) return 'pill-cond';
+  if (/inedible/i.test(s)) return 'pill-inedible';
+  if (/toxic|poison/i.test(s)) return 'pill-toxic';
+  return 'pill-unk';
+}
+function edLabel(s) { return s || 'Unknown'; }
+
+function seasonMonths(sp) {
+  const set = new Set();
+  const ph = sp.phenology || {};
+  ['flower','fruit','leaf'].forEach(k => (ph[k] || []).forEach(m => set.add(m)));
+  (sp.flower_months || []).forEach?.(m => set.add(m));
+  return set;
+}
+
+function _seasonText(sp) {
+  const sm = seasonMonths(sp);
+  if (!sm.size) return '<span class="off">season unknown</span>';
+  return [...Array(12).keys()].map(i => {
+    const m = i + 1;
+    return sm.has(m)
+      ? `<strong>${MONTHS[m-1][0]}</strong>`
+      : `<span class="off">${MONTHS[m-1][0]}</span>`;
+  }).join(' ');
+}
+
+function _mdLite(text) {
+  if (!text) return '';
+  return String(text).replace(/\r/g,'').split(/\n{2,}/).map(b => {
+    b = b.trim();
+    if (!b) return '';
+    const h = b.match(/^#{1,6}\s+(.*)$/);
+    if (h) return '<h3>' + _esc(h[1]) + '</h3>';
+    return '<p>' + _esc(b).replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>').replace(/\n/g,'<br>') + '</p>';
+  }).join('');
+}
+
+function _loadCover() {
+  try { return JSON.parse(localStorage.getItem(COVER_KEY)) || {}; } catch (_) { return {}; }
+}
+
+
+// ── Style selector ─────────────────────────────────────────────────────────
+function setPrintStyle(s) {
+  try { localStorage.setItem(STYLE_KEY, s); } catch (_) {}
+  if (window._pdfData) window._pdfData.style = s;
+  applyBorders(s);
+  applyContentPadding(s);
+  document.body.style.background = (s === 'goethean' || s === 'herbalist') ? '#fdfbf6' : '';
+  document.querySelectorAll('#style-toggle button').forEach(b =>
+    b.classList.toggle('active', b.dataset.pstyle === s));
+}
+
+// ── Border visibility ───────────────────────────────────────────────────────
+// Transforms are set here in JS — CSS classes carry position only, no transforms.
+const BORDER_TRANSFORMS = {
+  'b-tl': '',
+  'b-tr': 'scaleX(-1)',
+  'b-bl': 'rotate(0deg)',
+  'b-br': 'rotate(270deg)',
+};
+
+function applyBorders(style) {
+  // Side borders handled entirely by CSS body::before / body::after.
+  // Just set the data attribute — CSS does the rest, in both screen and print.
+  document.body.setAttribute('data-border-style', style);
+
+  // Corners: show only for botanical, apply transforms
+  Object.entries(BORDER_TRANSFORMS).forEach(([id, tr]) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.style.transform = tr;
+    el.style.display = (style === 'botanical') ? '' : 'none';
+  });
+}
+
+// ── Content padding to clear side borders ──────────────────────────────────
+function applyContentPadding(style) {
+  const content = document.getElementById('content');
+  if (!content) return;
+  if (style === 'botanical') {
+    // 180px corners + 20px breathing room
+    content.style.paddingLeft  = '200px';
+    content.style.paddingRight = '200px';
+  } else if (style === 'herbalist') {
+    // 160px strip + 20mm (~76px) buffer
+    content.style.paddingLeft  = '236px';
+    content.style.paddingRight = '236px';
+  } else if (style === 'goethean') {
+    // 160px strip + 20mm (~76px) buffer
+    content.style.paddingLeft  = '236px';
+    content.style.paddingRight = '236px';
+  } else {
+    content.style.paddingLeft  = '';
+    content.style.paddingRight = '';
+  }
+}
+
+// ── Field entry HTML ────────────────────────────────────────────────────────
+function _fieldEntry(name, prof, baseByName, photos, showPhotos, ct) {
+  const base   = baseByName[name] || {};
+  const sp     = (prof && prof.species)  || base;
+  const cul    = (prof && prof.culinary) || {};
+  const common = (sp.common_names && sp.common_names[0]) || (base.common_names && base.common_names[0]) || '';
+  const edib   = sp.edibility_status;
+  const recipes = (prof && prof.recipes) || [];
+  const key     = recipes.find(r => r.is_preferred) || recipes[0];
+
+  const idNote    = (cul.id_notes || '').replace(/\[[^\]]*\]\s*/g,'').trim();
+  const lookalike = (cul.look_alike_warnings || '').trim();
+  const partsBits = [];
+  if (ct.culinary && cul.edible_parts)  partsBits.push(cul.edible_parts);
+  if (ct.culinary && cul.harvest_stage) partsBits.push(cul.harvest_stage);
+  const partsText = partsBits.join(' · ');
+
+  const file = photos[name] || ((prof && prof.observations && prof.observations.thumbnails || [])[0] || {}).thumbnail?.split('/').pop();
+  const photoHtml = (showPhotos && file)
+    ? `<img class="fg-photo" src="/thumbnails/${_esc(file)}" onerror="this.style.display='none'">` : '';
+
+  return `<div class="fg-entry">
+    ${photoHtml}
+    <div class="fg-sci">${_esc(name)}</div>
+    ${common     ? `<div class="fg-common">${_esc(common)}</div>` : ''}
+    <div class="fg-row">
+      <span class="fg-pill ${edClass(edib)}">${_esc(edLabel(edib))}</span>
+      ${ct.season ? `<span class="fg-season">${_seasonText(sp)}</span>` : ''}
+    </div>
+    ${ct.id_notes && idNote    ? `<div class="fg-id-primary">${_esc(idNote.slice(0,200))}${idNote.length>200?'…':''}</div>` : ''}
+    ${ct.id_notes && lookalike ? `<div class="fg-lookalike">⚠ ${_esc(lookalike.slice(0,130))}${lookalike.length>130?'…':''}</div>` : ''}
+    ${partsText  ? `<div class="fg-note">${_esc(partsText)}</div>` : ''}
+    ${ct.recipes && key ? `<div class="fg-recipe"><div class="rt">${_esc(key.title)}</div>${_mdLite(key.body)}</div>` : ''}
+  </div>`;
+}
+
+// ── Workshop page HTML ──────────────────────────────────────────────────────
+function _workshopPage(name, prof, baseByName, photos, showPhotos, withFieldBlock = false, ct = {}) {
+  const base   = baseByName[name] || {};
+  const sp     = (prof && prof.species)  || base;
+  const cul    = (prof && prof.culinary) || {};
+  const common = (sp.common_names && sp.common_names[0]) || (base.common_names && base.common_names[0]) || '';
+  const edib   = sp.edibility_status;
+  const recipes = (prof && prof.recipes) || [];
+  const key     = recipes.find(r => r.is_preferred) || recipes[0];
+
+  // Full-width banner photo: prefer observation thumbnail, fall back to list photo
+  const thumbUrl = ((prof && prof.observations && prof.observations.thumbnails || [])[0] || {}).thumbnail
+    || (photos[name] ? '/thumbnails/' + photos[name] : null);
+  const bannerHtml = (showPhotos && thumbUrl)
+    ? `<img class="ws-banner-photo" src="${_esc(thumbUrl)}" onerror="this.style.display='none'" alt="">` : '';
+
+  // Safety section — only rendered when id_notes toggle is on
+  let safetyHtml = '';
+  if (ct.id_notes !== false) {
+    const warnings = [];
+    if (cul.look_alike_warnings)  warnings.push('Look-alikes: ' + cul.look_alike_warnings);
+    if (cul.preparation_warnings) warnings.push('Preparation: ' + cul.preparation_warnings);
+    const hasWarnings = warnings.length > 0;
+    const safetyBody = hasWarnings
+      ? warnings.map(w => `<p>${_esc(w)}</p>`).join('')
+      : edib === 'caution'
+        ? '<p style="color:#92400e">⚠ Marked caution — specific reason not yet documented. Exercise care and verify before consuming.</p>'
+        : '<p>No specific look-alike warnings on record — always confirm identification before eating.</p>';
+    safetyHtml = `<div class="ws-safety">
+      <div class="ws-safety-h">⚠ Safety &amp; edibility</div>
+      <div class="ws-edib"><span class="fg-pill ${edClass(edib)}">${_esc(edLabel(edib))}</span></div>
+      ${safetyBody}
+    </div>`;
+  }
+
+  const recipeHtml = (ct.recipes && key)
+    ? `<div class="ws-section-h">Recipe</div><div class="ws-recipe">${_mdLite(key.body)}</div>` : '';
+
+  const medBits = [cul.medicinal_notes, cul.medicinal_folklore,
+    cul.traditional_uses ? '<span class="ws-fl">Traditional uses —</span> ' + _esc(cul.traditional_uses) : '']
+    .filter(Boolean);
+  const medicinalHtml = (ct.herbal && medBits.length)
+    ? `<div class="ws-section-h">Medicinal preparations</div><div class="ws-forage">${medBits.map(b=>`<p>${b}</p>`).join('')}</div>` : '';
+
+  const forageBits = [];
+  const idn = (cul.id_notes || '').replace(/\[[^\]]*\]\s*/g,'').trim();
+  if (ct.id_notes && idn)               forageBits.push(idn);
+  if (ct.culinary && cul.edible_parts)  forageBits.push('<span class="ws-fl">Edible parts —</span> ' + _esc(cul.edible_parts));
+  if (ct.culinary && cul.harvest_stage) forageBits.push('<span class="ws-fl">Harvest —</span> ' + _esc(cul.harvest_stage));
+  const forageHtml = (ct.foraging && forageBits.length && !withFieldBlock)
+    ? `<div class="ws-section-h">Foraging notes</div><div class="ws-forage">${forageBits.map(b=>`<p>${b}</p>`).join('')}</div>` : '';
+
+  let fieldBlockHtml = '';
+  if (withFieldBlock) {
+    const fgBits = [];
+    if (ct.id_notes && idn) fgBits.push(`<p>${_esc(idn.slice(0,220))}${idn.length>220?'…':''}</p>`);
+    const look = (cul.look_alike_warnings || '').trim();
+    if (ct.id_notes && look) fgBits.push(`<p class="ws-fl">⚠ ${_esc(look.slice(0,160))}${look.length>160?'…':''}</p>`);
+    const parts = [ct.culinary && cul.edible_parts, ct.culinary && cul.harvest_stage].filter(Boolean).join(' · ');
+    if (parts) fgBits.push(`<p class="ws-fl">Edible parts — ${_esc(parts)}</p>`);
+    if (fgBits.length) fieldBlockHtml = `<div class="ws-section-h">Field ID notes</div><div class="ws-forage">${fgBits.join('')}</div>`;
+  }
+
+  const myNotes = `<div class="ws-mynotes">
+    <div class="ws-section-h">My notes</div>
+    ${'<div class="ws-rule"></div>'.repeat(5)}
+  </div>`;
+
+  return `<div class="ws-page">
+    ${bannerHtml}
+    <div class="ws-head">
+      <div class="ws-titles">
+        <div class="ws-sci">${_esc(name)}</div>
+        ${common ? `<div class="ws-common">${_esc(common)}</div>` : ''}
+      </div>
+      <div class="ws-edib"><span class="fg-pill ${edClass(edib)}">${_esc(edLabel(edib))}</span></div>
+    </div>
+    ${safetyHtml}
+    ${fieldBlockHtml}${recipeHtml}${medicinalHtml}${forageHtml}${myNotes}
+    <div class="ws-credit">Melvin Jarman</div>
+  </div>`;
+}
+
+// ── Cover pages ─────────────────────────────────────────────────────────────
+function _coverField(c) {
+  if (!c.event && !c.date && !c.location && !c.intro) return '';
+  const meta = [c.date, c.location].filter(Boolean).join(' · ');
+  return `<div class="fg-cover">
+    ${c.event ? `<div class="fg-cover-title">${_esc(c.event)}</div>` : ''}
+    ${meta    ? `<div class="fg-cover-meta">${_esc(meta)}</div>` : ''}
+    ${c.intro ? `<div class="fg-cover-intro">${_esc(c.intro)}</div>` : ''}
+  </div>`;
+}
+
+function _coverWorkshop(c) {
+  if (!c.event && !c.date && !c.location && !c.intro) return '';
+  const meta = [c.date, c.location].filter(Boolean).join(' · ');
+  return `<div class="ws-page ws-cover">
+    <div class="ws-cover-inner">
+      ${c.event ? `<div class="ws-cover-title">${_esc(c.event)}</div>` : ''}
+      ${meta    ? `<div class="ws-cover-meta">${_esc(meta)}</div>` : ''}
+      ${c.intro ? `<div class="ws-cover-intro">${_esc(c.intro)}</div>` : ''}
+      <div class="ws-cover-credit">Melvin Jarman</div>
+    </div>
+  </div>`;
+}
+
+// ── Seasonal Returns HTML ───────────────────────────────────────────────────
+function _seasonalReturnsHtml(items) {
+  if (!items || !items.length) return '';
+  const rows = items.map(it => {
+    const date = it.last_seen
+      ? new Date(it.last_seen.replace(' ', 'T'))
+          .toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
+      : '';
+    const loc  = it.last_seen_place || '';
+    const meta = [date, loc].filter(Boolean).join(' · ');
+    const badge = it.timing === 'now'
+      ? `<span class="sr-badge sr-badge-now">in season</span>`
+      : `<span class="sr-badge sr-badge-soon">coming soon</span>`;
+    return `<div class="sr-entry">
+      ${it.common_name ? `<div class="sr-common">${_esc(it.common_name)}</div>` : ''}
+      <div class="sr-sci">${_esc(it.scientific_name)}</div>
+      <div class="sr-row">${badge}${meta ? `<span class="sr-meta">${_esc(meta)}</span>` : ''}</div>
+      ${it.reason ? `<div class="sr-reason">${_esc(it.reason)}</div>` : ''}
+    </div>`;
+  }).join('');
+  return `<div class="sr-section"><div class="sr-title">Seasonal Returns</div><div class="sr-grid">${rows}</div></div>`;
+}
+
+// ── Print window generator ──────────────────────────────────────────────────
+// Opens a fresh self-contained window with borders hardcoded as static HTML.
+// Bypasses Chrome's print-cache problem entirely — no JS, no data attributes,
+// no CSS switching in the new window. window.onload fires print immediately.
+function openPrintWindow() {
+  const style   = document.body.getAttribute('data-border-style') || 'botanical';
+  const content = document.getElementById('content');
+  if (!content) return;
+
+  const base       = window.location.origin;
+  const contentHTML = content.innerHTML;
+  const contentCls  = content.className;
+  const padL        = content.style.paddingLeft  || '14mm';
+  const padR        = content.style.paddingRight || '14mm';
+
+  // Side strip helper — tiles N <img> tags in a clipping fixed container.
+  // Uses real <img> tags so they always print regardless of Background Graphics setting.
+  function sideStrip(src, side, mirror) {
+    const tiles = Array(5).fill(`<img src="${src}" style="width:160px;height:auto;display:block;">`).join('');
+    const flip  = mirror ? 'transform:scaleX(-1);' : '';
+    return `<div style="position:fixed;top:0;${side}:0;width:160px;overflow:hidden;height:100%;z-index:50;${flip}">${tiles}</div>`;
+  }
+
+  // Build border HTML — all <img> tags, hardcoded for the active style only.
+  let borderHTML = '';
+  if (style === 'botanical') {
+    const ci = (src,pos,tr) => `<img src="${base}/${src}" style="position:fixed;${pos};width:180px;height:180px;object-fit:contain;z-index:50;${tr}">`;
+    borderHTML =
+      ci('static/print/botanical%20corner%20flowing%20light.png', 'top:0;left:0',   '') +
+      ci('static/print/botanical%20corner%20flowing%20light.png', 'top:0;right:0',  'transform:scaleX(-1);') +
+      ci('static/print/botanical%20corner%20flowing%20bold.png',  'bottom:0;left:0','transform:rotate(0deg);') +
+      ci('static/print/botanical%20corner%20flowing%20bold.png',  'bottom:0;right:0','transform:rotate(270deg);');
+  } else if (style === 'herbalist') {
+    const src = `${base}/static/print/botanical-side-border-serrated.%20leaves.png`;
+    borderHTML = sideStrip(src, 'left', false) + sideStrip(src, 'right', true);
+  } else if (style === 'goethean') {
+    borderHTML =
+      sideStrip(`${base}/static/print/watercolour-oakleaf-right.png`, 'left',  false) +
+      sideStrip(`${base}/static/print/watercolour-oakleaf-left.png`,  'right', false);
+  }
+
+  const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <base href="${base}/">
+  <title>ForagingID — Print</title>
+  <style>
+    *{box-sizing:border-box;margin:0;padding:0;}
+    body{font-family:Georgia,'Times New Roman',serif;background:#fff;color:#111;}
+    #content{width:100%;padding:20mm ${padR} 20mm ${padL};}
+    #content.mode-field{column-count:2;column-gap:12mm;column-rule:none;}
+    #content.mode-workshop{column-count:1;}
+    .fg-entry{break-inside:avoid;-webkit-column-break-inside:avoid;padding:4mm 0;border-bottom:1px solid #ddd;overflow:hidden;}
+    .fg-sci{font-weight:700;font-size:0.92rem;color:#1c1c1c;}
+    .fg-common{font-size:0.8rem;color:#555;}
+    .fg-row{margin-top:3px;display:flex;gap:6px;flex-wrap:wrap;align-items:center;}
+    .fg-pill{display:inline-block;font-size:0.7rem;padding:1px 6px;border-radius:10px;font-weight:600;}
+    .pill-safe{background:#e6f4d7;color:#2d5016;}
+    .pill-cond{background:#fef3c7;color:#7a4f00;}
+    .pill-toxic{background:#dc2626;color:#fff;font-weight:600;}
+    .pill-unk{background:#f0f0f0;color:#555;}
+    .fg-season{font-size:0.7rem;color:#444;}
+    .fg-season strong{color:#2d5016;}
+    .fg-season .off{color:#bbb;}
+    .fg-id-primary{margin-top:3px;font-size:0.75rem;color:#333;line-height:1.4;}
+    .fg-lookalike{margin-top:3px;font-size:0.72rem;color:#7a2000;line-height:1.3;}
+    .fg-note{margin-top:2px;font-size:0.72rem;color:#555;font-style:italic;}
+    .fg-recipe span.rt{font-size:0.72rem;color:#2d5016;font-style:italic;}
+    .fg-photo{float:right;width:18mm;height:18mm;object-fit:cover;margin:0 0 3px 4px;border-radius:2px;}
+    .fg-cover{column-span:all;-webkit-column-span:all;padding:8mm 0 6mm;border-bottom:2px solid #2d5016;margin-bottom:4mm;}
+    .fg-cover-title{font-size:1.5rem;font-weight:700;}
+    .fg-cover-meta{font-size:0.85rem;color:#555;margin-top:4px;}
+    .fg-cover-intro{font-size:0.82rem;color:#333;margin-top:6px;line-height:1.5;}
+    .print-map-snap{column-span:all;-webkit-column-span:all;margin:0 0 6mm;break-inside:avoid;}
+    .print-map-snap img{width:100%;display:block;border:1px solid #c8d8a0;border-radius:4px;}
+    .print-map-snap-grid{display:grid;grid-template-columns:repeat(3,1fr);border:1px solid #c8d8a0;border-radius:4px;overflow:hidden;line-height:0;}
+    .print-map-snap-grid img{width:100%;display:block;}
+    .print-map-snap-caption{font-size:0.72rem;color:#888;text-align:center;margin-top:3px;}
+    .ws-page{padding:10mm 0;min-height:230mm;break-after:page;page-break-after:always;border-bottom:1px solid #ddd;}
+    .ws-page:last-child{break-after:auto;page-break-after:auto;border:none;}
+    .ws-head{display:flex;justify-content:space-between;align-items:flex-start;gap:8mm;margin-bottom:5mm;}
+    .ws-sci{font-size:1.4rem;font-weight:700;}
+    .ws-common{font-size:0.95rem;color:#555;margin-top:2px;}
+    .ws-photo{width:46mm;height:46mm;object-fit:cover;border-radius:3px;flex-shrink:0;}
+    .ws-banner-photo{width:100%;max-height:220px;object-fit:cover;display:block;border-radius:3px;margin-bottom:5mm;}
+    .ws-section-h{font-size:0.78rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#2d5016;margin:5mm 0 2mm;border-bottom:0.4pt solid #2d5016;}
+    .ws-safety{background:#fffbf0;border:0.5pt solid #e6c87a;padding:3mm;border-radius:2px;margin-bottom:4mm;}
+    .ws-safety-h{font-size:0.75rem;font-weight:700;color:#7a4f00;margin-bottom:2mm;}
+    .ws-edib{margin-bottom:2mm;}
+    .ws-safety p,.ws-recipe p,.ws-forage p{font-size:0.78rem;line-height:1.5;margin-bottom:3px;}
+    .ws-fl{font-weight:700;}
+    .ws-rule{border-bottom:0.4pt solid #ccc;margin:4mm 0;}
+    .ws-mynotes{margin-top:6mm;}
+    .ws-credit{font-size:0.7rem;color:#aaa;margin-top:4mm;text-align:right;}
+    .sr-section{column-span:all;-webkit-column-span:all;padding:8mm 0 5mm;border-bottom:1.5px solid #2d5016;margin-bottom:6mm;}
+    .sr-title{font-size:0.82rem;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:#2d5016;border-bottom:1px solid #2d5016;padding-bottom:4px;margin-bottom:8px;}
+    .sr-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:5px 12px;}
+    #content.mode-workshop .sr-grid{grid-template-columns:1fr;}
+    .sr-entry{border-bottom:1px solid #eee;padding:4px 0;}
+    .sr-common{font-weight:700;font-size:0.9rem;color:#1c1c1c;}
+    .sr-sci{font-style:italic;font-size:0.76rem;color:#555;}
+    .sr-row{margin-top:2px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;}
+    .sr-badge{font-size:0.65rem;padding:1px 6px;border-radius:8px;font-weight:600;}
+    .sr-badge-now{background:#e6f4d7;color:#2d5016;}
+    .sr-badge-soon{background:#fef3c7;color:#7a4f00;}
+    .sr-meta{font-size:0.72rem;color:#555;}
+    .sr-reason{font-size:0.72rem;color:#666;font-style:italic;margin-top:2px;}
+    @media print{
+      @page{size:A4;margin:8mm;}
+      #content.mode-field{column-count:2;column-gap:12mm;column-rule:none;}
+      .ws-page{border:none;}
+    }
+  </style>
+</head>
+<body>
+${borderHTML}
+<div id="content" class="${contentCls}">${contentHTML}</div>
+<script>
+  window.onload = function() {
+    window.print();
+    window.onafterprint = function() { window.close(); };
+  };
+<\/script>
+</body>
+</html>`;
+
+  const win = window.open('', '_blank', 'width=900,height=700');
+  win.document.open();
+  win.document.write(html);
+  win.document.close();
+}
+
+// ── Main ────────────────────────────────────────────────────────────────────
+(async function main() {
+  const list  = ForagingList.load();
+  const style = (() => { try { return localStorage.getItem(STYLE_KEY) || 'botanical'; } catch(_){ return 'botanical'; } })();
+  const ctRaw = (() => { try { return JSON.parse(localStorage.getItem('foragingid_content_toggles') || '{}'); } catch(_){ return {}; } })();
+  const ct    = Object.assign({ id_notes:true, foraging:true, culinary:true, recipes:true, season:true, herbal:true, photos:true, map:true }, ctRaw);
+  const names = list.species;
+  const cover = _loadCover();
+  const photos = list.photos || {};
+  const seasonalReturns = (() => { try { return JSON.parse(localStorage.getItem('foragingid_sr_data') || '[]'); } catch(_){ return []; } })();
+
+  document.querySelectorAll('#style-toggle button').forEach(b =>
+    b.classList.toggle('active', b.dataset.pstyle === style));
+
+  if (!names.length) {
+    document.getElementById('loading').style.display = 'none';
+    document.getElementById('empty').style.display   = '';
+    return;
+  }
+
+  const baseByName = {};
+  try {
+    const base = await (await fetch('/api/species/')).json();
+    base.forEach(s => { baseByName[s.scientific_name] = s; });
+  } catch(_) {}
+
+  const profiles = {};
+  await Promise.all(names.map(async name => {
+    try {
+      profiles[name] = await (await fetch('/api/species/' + encodeURIComponent(name) + '/profile')).json();
+    } catch(_) { profiles[name] = null; }
+  }));
+
+  const modes      = Array.isArray(list.modes) && list.modes.length ? list.modes : [list.mode || 'field'];
+  const hasWorkshop  = modes.includes('workshop') || modes.includes('workshops');
+  const hasField     = modes.includes('field');
+  const showPhotos   = ct.photos !== false;
+  const primaryMode  = modes[0] || 'field';
+  const pdfLayout    = primaryMode === 'workshops' ? 'workshop' : primaryMode === 'workshop' ? 'recipe_booklet' : 'field_guide';
+
+  const coverHtml = hasWorkshop ? _coverWorkshop(cover) : _coverField(cover);
+  const snap      = _loadMapSnap();
+  const snapHtml  = ct.map ? _mapSnapHtml(snap) : '';
+  const bodyHtml  = names.map(name => {
+    if (!hasWorkshop) return _fieldEntry(name, profiles[name], baseByName, photos, showPhotos, ct);
+    return _workshopPage(name, profiles[name], baseByName, photos, showPhotos, hasField, ct);
+  }).join('');
+
+  const content = document.getElementById('content');
+  content.className = hasWorkshop ? 'mode-workshop' : 'mode-field';
+  content.innerHTML = coverHtml + snapHtml + _seasonalReturnsHtml(seasonalReturns) + bodyHtml;
+  content.style.display = '';
+  document.getElementById('loading').style.display = 'none';
+
+  setPrintStyle(style);
+
+  window._pdfData = { names, profiles, baseByName, style, ct, cover, layout: pdfLayout, seasonalReturns };
+})();
+
+// ── PDF download ────────────────────────────────────────────────────────────
+async function downloadPdf() {
+  const btn = document.getElementById('pdf-btn');
+  const err = document.getElementById('pdf-error');
+  err.style.display = 'none';
+  btn.disabled = true;
+  btn.textContent = '⏳ Generating…';
+  try {
+    const d = window._pdfData;
+    if (!d) throw new Error('List not loaded yet — wait for the preview to finish rendering.');
+
+    const payload = {
+      style:   d.style,
+      layout:  d.layout,
+      cover:   d.cover,
+      toggles: d.ct,
+      margins: 'normal',
+      species: d.names.map(name => ({ scientific_name: name, profile: d.profiles[name] || null })),
+      base_species: Object.values(d.baseByName),
+      seasonal_returns: d.seasonalReturns || [],
+    };
+
+    const res = await fetch('/api/lists/pdf', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({ detail: res.statusText }));
+      throw new Error(body.detail || res.statusText);
+    }
+    const blob = await res.blob();
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href     = url;
+    a.download = 'foragingid-list.pdf';
+    a.click();
+    URL.revokeObjectURL(url);
+  } catch (e) {
+    err.textContent = 'PDF failed: ' + e.message;
+    err.style.display = '';
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '⬇ Download PDF';
+  }
+}
+</script>
+</body>
+</html>

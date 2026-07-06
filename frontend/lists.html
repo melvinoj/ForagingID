@@ -1,0 +1,2723 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <link rel="manifest" href="/static/manifest.json">
+  <meta name="theme-color" content="#2d5a1b">
+  <link rel="apple-touch-icon" href="/static/icons/icon-192.png">
+  <link rel="icon" type="image/svg+xml" href="/static/icons/dandelion-icon.svg">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ForagingID — Booklets</title>
+  <link rel="stylesheet" href="/static/css/tokens.css">
+  <link rel="stylesheet" href="/static/css/site-header.css">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: system-ui, sans-serif; background: #1e2b28; color: #d8e4d8; }
+
+    /* ── Page shell ───────────────────────────────────────────────────────── */
+    #list-page { max-width: 960px; margin: 0 auto; padding: 10px 16px 120px; }
+
+    /* ── Species summary dropdown ─────────────────────────────────────────── */
+    #species-summary {
+      border: 1px solid #3a4e4a; border-radius: 10px; overflow: hidden;
+      margin-bottom: 10px; background: #344440;
+    }
+    #species-summary-header {
+      display: flex; align-items: center; gap: 10px;
+      padding: 10px 14px; cursor: pointer; user-select: none;
+    }
+    #species-summary-header:hover { background: #3d524e; }
+    #species-count-label { font-size: 0.88rem; font-weight: 600; color: #a8d890; flex: 1; }
+    #species-chevron { font-size: 0.8rem; color: #6a8a6a; transition: transform 0.15s; }
+    #species-chevron.open { transform: rotate(180deg); }
+    #species-list-expanded { border-top: 1px solid #3a4e4a; }
+    .sp-compact-row {
+      display: flex; align-items: center; gap: 8px; padding: 6px 14px;
+      border-bottom: 1px solid #2f3d3a;
+    }
+    .sp-compact-row:last-child { border-bottom: none; }
+    .sp-compact-row:hover { background: #3d524e; }
+    .sp-compact-sci { flex: 1; font-style: italic; font-size: 0.83rem; color: #d8e4d8; }
+    .sp-compact-common { font-size: 0.73rem; color: #6a8a6a; min-width: 0; }
+    .sp-compact-rm {
+      background: none; border: none; color: #667; cursor: pointer;
+      font-size: 1.1rem; padding: 0 4px; line-height: 1; flex-shrink: 0;
+    }
+    .sp-compact-rm:hover { color: #c0392b; }
+    .sp-add-row {
+      display: flex; gap: 6px; padding: 8px 14px; background: #2f3d3a;
+    }
+    .sp-add-btn {
+      flex: 1; padding: 6px 10px; border: 1px solid #3a4e4a;
+      background: #344440; color: #a8d890; border-radius: 6px;
+      font-size: 0.78rem; cursor: pointer;
+    }
+    .sp-add-btn:hover { background: #3d524e; }
+
+    /* ── Preview wrap ─────────────────────────────────────────────────────── */
+    #preview-wrap { position: relative; }
+    #print-area {
+      background: #fff; border: 1px solid #e0e5d8; border-radius: 4px;
+      box-shadow: 0 1px 6px rgba(0,0,0,.07); padding: 26px 30px;
+    }
+
+    /* ── Empty state ──────────────────────────────────────────────────────── */
+    #empty-state {
+      text-align: center; padding: 48px 20px; color: #888;
+      border: 1px dashed #4a5e5a; border-radius: 12px; background: #344440;
+    }
+    #empty-state .big { font-size: 2rem; margin-bottom: 10px; }
+    #empty-state p { font-size: 0.95rem; max-width: 380px; margin: 0 auto; }
+
+    /* ── Reach-back buttons ───────────────────────────────────────────────── */
+    .reach-back { display: flex; gap: 10px; flex-wrap: wrap; margin: 0 0 18px; }
+    .reach-btn {
+      flex: 1 1 200px; padding: 12px 14px; border: 1px solid #2d5016;
+      background: #344440; color: #a8d890; border-radius: 10px; font-size: 0.9rem;
+      cursor: pointer; font-weight: 600; transition: background .15s;
+    }
+    .reach-btn:hover { background: #3d524e; }
+    .reach-btn .ico { margin-right: 6px; }
+
+    /* ── Map snapshot block (screen) ────────────────────────────────────── */
+    #map-snapshot-wrap {
+      display: none; margin: 0 0 18px;
+    }
+    .map-snap-grid {
+      display: grid; grid-template-columns: repeat(3, 1fr);
+      border-radius: 8px; overflow: hidden;
+      border: 1px solid #d0dbb8; line-height: 0;
+    }
+    .map-snap-grid img { width: 100%; display: block; }
+    #map-snapshot-wrap img {
+      width: 100%; border-radius: 8px; border: 1px solid #d0dbb8; display: block;
+    }
+    .map-snap-caption {
+      font-size: 0.78rem; color: #888; margin-top: 5px; text-align: center;
+    }
+    @media print { #map-snapshot-wrap { display: none !important; } }
+
+    /* ── Map snapshot block (print preview) ─────────────────────────────── */
+    .print-map-snap {
+      column-span: all; -webkit-column-span: all;
+      margin: 0 0 6mm; break-inside: avoid;
+    }
+    .print-map-snap img { width: 100%; display: block; border: 1px solid #c8d8a0; border-radius: 4px; }
+    .print-map-snap-grid {
+      display: grid; grid-template-columns: repeat(3, 1fr);
+      border: 1px solid #c8d8a0; border-radius: 4px; overflow: hidden; line-height: 0;
+    }
+    .print-map-snap-grid img { width: 100%; display: block; }
+    .print-map-snap-caption { font-size: 0.72rem; color: #888; text-align: center; margin-top: 3px; }
+
+    /* ── Species cards ────────────────────────────────────────────────────── */
+    #card-list { display: flex; flex-direction: column; gap: 10px; }
+    .lc-card {
+      background: #344440; border: 1px solid #4a5e5a; border-radius: 12px;
+      overflow: hidden; transition: box-shadow .15s;
+    }
+    .lc-card:hover { box-shadow: 0 2px 10px rgba(0,0,0,.06); }
+    .lc-head {
+      display: flex; align-items: center; gap: 12px; padding: 12px 14px; cursor: pointer;
+    }
+    .lc-thumb {
+      width: 56px; height: 56px; border-radius: 8px; object-fit: cover;
+      background: #2f3d3a; flex: 0 0 auto;
+    }
+    .lc-thumb.placeholder {
+      display: flex; align-items: center; justify-content: center; font-size: 1.5rem; color: #b6c0a6;
+    }
+    .lc-main { flex: 1 1 auto; min-width: 0; }
+    .lc-sci { font-style: italic; font-weight: 600; color: #2d5016; font-size: 0.98rem; }
+    .lc-common { font-size: 0.82rem; color: #666; }
+    .lc-meta { margin-top: 5px; display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+    .lc-remove {
+      flex: 0 0 auto; border: none; background: none; color: #b33; font-size: 1.3rem;
+      cursor: pointer; line-height: 1; padding: 4px 6px; border-radius: 6px;
+    }
+    .lc-remove:hover { background: #fbeaea; }
+
+    /* badges */
+    .ed-pill { font-size: 0.7rem; padding: 2px 8px; border-radius: 10px; font-weight: 600; }
+    .ed-edible   { background: #d1e7dd; color: #0f5132; }
+    .ed-caution  { background: #fff3cd; color: #856404; }
+    .ed-toxic    { background: #dc2626; color: #fff; font-weight: 600; }
+    .ed-inedible { background: #fef3c7; color: #854d0e; }
+    .ed-unknown  { background: #e9ecef; color: #495057; }
+    .season-pill { font-size: 0.7rem; padding: 2px 8px; border-radius: 10px; }
+    .season-in   { background: #e7f5d8; color: #3a6b12; }
+    .season-out  { background: #f1f1f1; color: #999; }
+    .recipe-pill { font-size: 0.7rem; padding: 2px 8px; border-radius: 10px; background: #efe7f7; color: #5b21b6; }
+
+    /* expanded detail */
+    .lc-detail { display: none; padding: 0 14px 14px 14px; border-top: 1px solid #eef0ea; }
+    .lc-card.expanded .lc-detail { display: block; }
+    .lc-detail .row { font-size: 0.82rem; color: #444; margin-top: 8px; }
+    .lc-detail .row .lbl { color: #889; font-weight: 600; margin-right: 6px; }
+    .lc-detail .recipe-snip {
+      margin-top: 10px; background: #344440; border: 1px solid #4a5e5a;
+      border-radius: 8px; padding: 10px 12px; font-size: 0.84rem; color: #443;
+    }
+    .lc-detail .recipe-snip .rtitle { font-weight: 700; color: #5a3; margin-bottom: 4px; }
+    .lc-detail .full-link { display: inline-block; margin-top: 10px; font-size: 0.82rem; color: #2d5016; }
+
+    /* ── Enrichment summary table (C3) ───────────────────────────────────────── */
+    .enrich-table { margin: 10px 0 12px; border: 1px solid #e3e8da; border-radius: 8px; overflow: hidden; }
+    .enrich-row {
+      display: flex; align-items: center; gap: 8px; padding: 7px 12px;
+      border-bottom: 1px solid #3a4e4a; background: #2f3d3a;
+    }
+    .enrich-row:last-child { border-bottom: none; }
+    .enrich-cat { flex: 1; font-size: 0.82rem; color: #333; }
+    .enrich-status { font-size: 0.84rem; font-weight: 700; min-width: 18px; text-align: center; }
+    .enrich-status.filled { color: #2a7b2a; }
+    .enrich-status.empty  { color: #ccc; letter-spacing: .02em; }
+    .enrich-include {
+      display: inline-flex; align-items: center; gap: 4px;
+      font-size: 0.76rem; color: #777; cursor: pointer; white-space: nowrap; user-select: none;
+    }
+    .enrich-include input[type=checkbox] { cursor: pointer; accent-color: #2d5016; }
+    .enrich-edit-btn {
+      background: none; border: 1px solid #c5cdb8; color: #667; border-radius: 6px;
+      padding: 3px 9px; font-size: 0.74rem; cursor: pointer; white-space: nowrap;
+      transition: background .12s, border-color .12s;
+    }
+    .enrich-edit-btn:hover { background: #eef3e6; border-color: #2d5016; color: #2d5016; }
+    /* Inline editor — appears below the row when Edit is clicked */
+    .enrich-editor {
+      padding: 10px 12px 12px; background: #344440;
+      border-top: 1px solid #e3e8da;
+    }
+    .enrich-ta {
+      width: 100%; min-height: 88px; border: 1px solid #c5cdb8; border-radius: 6px;
+      padding: 8px 10px; font-size: 0.84rem; font-family: inherit; resize: vertical;
+      background: #2f3d3a; color: #d8e4d8; line-height: 1.5;
+    }
+    .enrich-ta:focus { outline: none; border-color: #2d5016; box-shadow: 0 0 0 2px rgba(45,80,22,.12); }
+    .enrich-editor-actions { display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
+    .enrich-save-btn {
+      background: #2d5016; color: #fff; border: none; border-radius: 7px;
+      padding: 7px 16px; font-size: 0.82rem; font-weight: 600; cursor: pointer;
+    }
+    .enrich-save-btn:hover:not(:disabled) { background: #3a6b1c; }
+    .enrich-save-btn:disabled { opacity: .55; cursor: not-allowed; }
+    .enrich-cancel-btn {
+      background: none; border: 1px solid #ccc; color: #888; border-radius: 7px;
+      padding: 7px 12px; font-size: 0.82rem; cursor: pointer;
+    }
+    .enrich-cancel-btn:hover { border-color: #b33; color: #b33; }
+
+    /* ── Bottom toolbar ───────────────────────────────────────────────────── */
+    #toolbar {
+      position: fixed; bottom: 0; left: 0; right: 0;
+      background: #2d5016; color: #fff;
+      border-top: 1px solid rgba(0,0,0,0.2);
+      box-shadow: 0 -2px 10px rgba(0,0,0,.15);
+      display: flex; align-items: stretch; flex-wrap: wrap;
+      z-index: 50;
+    }
+    .step-group {
+      display: flex; flex-direction: column; padding: 6px 12px;
+      border-right: 1px solid rgba(255,255,255,0.12);
+      flex: 0 0 auto;
+    }
+    .step-group:last-child { border-right: none; }
+    .step-label {
+      font-size: 0.6rem; font-weight: 700; text-transform: uppercase;
+      letter-spacing: 0.1em; color: rgba(255,255,255,0.42);
+      margin-bottom: 5px; white-space: nowrap;
+    }
+    .step-controls { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
+    /* Segmented button wrap (layout + design toggles) */
+    .style-btn-wrap { display: inline-flex; border: 1px solid rgba(255,255,255,0.2); border-radius: 5px; overflow: hidden; }
+    .style-btn-wrap button {
+      border: none; background: rgba(255,255,255,0.08); color: #cde6a8;
+      padding: 4px 10px; font-size: 0.78rem; cursor: pointer; font-weight: 600;
+    }
+    .style-btn-wrap button:hover { background: rgba(255,255,255,0.2); color: #fff; }
+    .style-btn-wrap button.active { background: rgba(255,255,255,0.24); color: #fff; }
+    /* Content toggle buttons */
+    .tb-btn {
+      padding: 4px 10px; border: none; border-radius: 5px; cursor: pointer;
+      font-size: 0.78rem; font-weight: 600;
+      background: rgba(255,255,255,0.12); color: #cde6a8;
+    }
+    .tb-btn:hover { background: rgba(255,255,255,0.22); color: #fff; }
+    .tb-btn.active { background: rgba(255,255,255,0.24); color: #fff; outline: 1px solid rgba(255,255,255,0.3); }
+    /* Step 4 action buttons */
+    .tb-btn-action {
+      background: #fff; color: #2d5016;
+      padding: 4px 12px; border: none; border-radius: 5px; cursor: pointer;
+      font-size: 0.8rem; font-weight: 700;
+    }
+    .tb-btn-action:hover { background: #e8f5dc; }
+    .tb-btn-danger {
+      background: rgba(255,255,255,0.08); color: #ffb3b3;
+      padding: 4px 12px; border: 1px solid rgba(255,100,100,0.3); border-radius: 5px; cursor: pointer;
+      font-size: 0.78rem; font-weight: 600;
+    }
+    .tb-btn-danger:hover { background: rgba(255,100,100,0.2); color: #fff; }
+    /* Cover + session buttons keep their IDs for JS toggling */
+    #cover-btn, #session-tab-btn {
+      padding: 4px 10px; border: none; border-radius: 5px; cursor: pointer;
+      font-size: 0.78rem; font-weight: 600;
+      background: rgba(255,255,255,0.12); color: #cde6a8;
+    }
+    #cover-btn:hover, #session-tab-btn:hover { background: rgba(255,255,255,0.22); color: #fff; }
+    #cover-btn.active, #session-tab-btn.active { background: rgba(255,255,255,0.24); color: #fff; outline: 1px solid rgba(255,255,255,0.3); }
+
+    /* ── Cover page panel ─────────────────────────────────────────────────── */
+    #cover-panel {
+      position: fixed; bottom: 80px; left: 0; right: 0;
+      background: #2a3330; border-top: 2px solid #2d5016;
+      box-shadow: 0 -4px 24px rgba(0,0,0,.14);
+      z-index: 60; max-height: 62vh; overflow-y: auto;
+      padding: 14px 16px 22px;
+    }
+    .cp-header { display: flex; align-items: center; margin-bottom: 14px; }
+    .cp-header span { font-weight: 700; font-size: 0.97rem; color: #2d5016; flex: 1; }
+    .cp-close {
+      background: none; border: none; font-size: 1.2rem; cursor: pointer; color: #888;
+      padding: 2px 6px; border-radius: 5px;
+    }
+    .cp-close:hover { background: #3d524e; color: #d8e4d8; }
+    .cp-row { margin-bottom: 11px; }
+    .cp-lbl {
+      display: block; font-size: 0.72rem; font-weight: 700; color: #667;
+      text-transform: uppercase; letter-spacing: .05em; margin-bottom: 4px;
+    }
+    .cp-input, .cp-ta {
+      width: 100%; border: 1px solid #4a5e5a; border-radius: 7px;
+      padding: 8px 10px; font-size: 0.9rem; font-family: inherit; color: #d8e4d8;
+      background: #2f3d3a;
+    }
+    .cp-ta { resize: vertical; min-height: 84px; line-height: 1.5; }
+    .cp-input:focus, .cp-ta:focus { outline: none; border-color: #2d5016; box-shadow: 0 0 0 2px rgba(45,80,22,.1); }
+    .cp-actions { margin-top: 14px; display: flex; gap: 10px; flex-wrap: wrap; }
+    .cp-clear-btn {
+      background: none; border: 1px solid #c0392b; color: #c0392b;
+      border-radius: 7px; padding: 7px 14px; font-size: 0.82rem; cursor: pointer;
+    }
+    .cp-clear-btn:hover { background: #fdf0f0; }
+
+    /* ── Print preview (screen) ───────────────────────────────────────────── */
+    #preview-wrap { margin-top: 28px; position: relative; }
+    #preview-wrap .preview-label {
+      font-size: 0.74rem; text-transform: uppercase; letter-spacing: .06em;
+      color: #8a9678; margin-bottom: 8px;
+    }
+    #print-area {
+      background: #fff; border: 1px solid #e0e5d8; border-radius: 4px;
+      box-shadow: 0 1px 6px rgba(0,0,0,.07); padding: 26px 30px;
+    }
+
+    /* ── Field Guide — ID-focused entry extras ──────────────────────────────── */
+    .fg-photo {
+      float: right; width: 54px; height: 54px; object-fit: cover;
+      border-radius: 4px; margin: 0 0 4px 8px; background: #eef0ea;
+    }
+    .fg-id-primary {
+      font-size: 0.78rem; color: #2a2a2a; margin-top: 4px; line-height: 1.45;
+    }
+    .fg-lookalike {
+      font-size: 0.69rem; color: #7a4a00; margin-top: 3px; line-height: 1.4;
+    }
+    .mode-stub {
+      padding: 28px 20px; text-align: center; color: #8a9678;
+      font-size: 0.92rem; font-style: italic;
+      border: 1px dashed #4a5e5a; border-radius: 8px; background: #344440;
+    }
+
+    /* ── Field Guide cover header ────────────────────────────────────────────── */
+    .fg-cover {
+      column-span: all; -webkit-column-span: all;
+      padding: 10px 0 14px; border-bottom: 2px solid #2d5016; margin-bottom: 10px;
+    }
+    .fg-cover-title { font-weight: 700; font-size: 1.15rem; color: #1c1c1c; }
+    .fg-cover-meta  { font-size: 0.82rem; color: #667; margin-top: 3px; }
+    .fg-cover-intro { font-size: 0.83rem; color: #444; margin-top: 8px; line-height: 1.55; }
+
+    /* ── Seasonal returns preview block ─────────────────────────────────────── */
+    .sr-section {
+      column-span: all; -webkit-column-span: all;
+      padding: 10px 0 8px; border-bottom: 1.5px solid #2d5016; margin-bottom: 10px;
+    }
+    .sr-title {
+      font-size: 0.8rem; font-weight: 700; text-transform: uppercase;
+      letter-spacing: .1em; color: #2d5016;
+      border-bottom: 1px solid #2d5016; padding-bottom: 4px; margin-bottom: 8px;
+    }
+    .sr-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 5px 12px; }
+    .mode-workshop .sr-grid { grid-template-columns: 1fr; }
+    .sr-entry { border-bottom: 1px solid #eee; padding: 4px 0; }
+    .sr-common { font-weight: 700; font-size: 0.88rem; color: #1c1c1c; }
+    .sr-sci    { font-style: italic; font-size: 0.74rem; color: #555; }
+    .sr-row    { margin-top: 2px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+    .sr-badge  { font-size: 0.65rem; padding: 1px 6px; border-radius: 8px; font-weight: 600; }
+    .sr-badge-now  { background: #e6f4d7; color: #2d5016; }
+    .sr-badge-soon { background: #fef3c7; color: #7a4f00; }
+    .sr-meta   { font-size: 0.7rem; color: #555; }
+    .sr-reason { font-size: 0.7rem; color: #666; font-style: italic; margin-top: 2px; }
+
+    /* ── Recipe Booklet cover page (Peín aesthetic) ─────────────────────────── */
+    .ws-cover {
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      min-height: 420px; text-align: center;
+    }
+    .ws-cover-inner { max-width: 460px; width: 100%; padding: 0 10px; }
+    .ws-cover-title {
+      font-family: Georgia, 'Times New Roman', serif;
+      font-size: 2.4rem; font-style: italic; color: #1a1a1a; line-height: 1.2; margin-bottom: 18px;
+    }
+    .ws-cover-meta {
+      font-size: 0.98rem; color: #667; letter-spacing: .07em;
+      margin-bottom: 28px; font-variant: small-caps; text-transform: lowercase;
+    }
+    .ws-cover-intro {
+      font-size: 1.04rem; line-height: 1.65; color: #3a3a3a; margin-bottom: 36px;
+    }
+    .ws-cover-credit { font-style: italic; font-size: 0.9rem; color: #9a9a90; }
+
+    /* Field Guide — dense, functional, two columns */
+    #print-area.mode-field { column-count: 2; column-gap: 30px; }
+    .fg-entry {
+      break-inside: avoid; -webkit-column-break-inside: avoid;
+      padding: 8px 0 9px; border-bottom: 1px solid #eee;
+      font-family: system-ui, sans-serif;
+    }
+    .fg-entry .fg-sci { font-weight: 700; font-size: 0.92rem; color: #1c1c1c; }
+    .fg-entry .fg-common { font-size: 0.8rem; color: #555; }
+    .fg-entry .fg-row { margin-top: 3px; display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+    .fg-season { font-size: 0.68rem; color: #3a6b12; letter-spacing: .02em; }
+    .fg-season .off { color: #bbb; }
+    .fg-recipe { font-size: 0.76rem; color: #444; margin-top: 4px; }
+    .fg-recipe .rt { font-weight: 600; }
+    .fg-note { font-size: 0.72rem; color: #777; margin-top: 3px; font-style: italic; }
+    .fg-pill { font-size: 0.64rem; padding: 1px 7px; border-radius: 9px; font-weight: 600; }
+
+    /* Recipe Booklet — one A4 page per species, serif, generous (Peín aesthetic) */
+    #print-area.mode-workshop { column-count: 1; padding: 0; background: transparent; border: none; box-shadow: none; }
+    .ws-page {
+      background: #fff; border: 1px solid #e0e5d8; box-shadow: 0 1px 6px rgba(0,0,0,.07);
+      padding: 46px 52px 40px; margin-bottom: 24px; position: relative;
+      font-family: Georgia, 'Times New Roman', serif; color: #232020;
+      min-height: 380px;
+      break-inside: avoid; -webkit-column-break-inside: avoid;
+    }
+    .ws-head { display: flex; gap: 24px; align-items: flex-start; }
+    .ws-head .ws-titles { flex: 1 1 auto; }
+    .ws-sci { font-size: 2rem; font-style: italic; line-height: 1.1; color: #1a1a1a; }
+    .ws-common {
+      font-variant: small-caps; text-transform: lowercase; letter-spacing: .08em;
+      font-size: 1.05rem; color: #6a6a6a; margin-top: 6px;
+    }
+    .ws-photo {
+      width: 200px; height: 200px; object-fit: cover; flex: 0 0 auto;
+      border-radius: 2px; background: #f0f0ec;
+    }
+    .ws-safety {
+      margin: 26px 0 22px; border: 1.5px solid #b58b00; border-left-width: 6px;
+      background: #fdfaf0; padding: 14px 18px; border-radius: 2px;
+    }
+    .ws-safety .ws-safety-h {
+      font-family: system-ui, sans-serif; font-size: 0.72rem; font-weight: 700;
+      text-transform: uppercase; letter-spacing: .1em; color: #8a6d00; margin-bottom: 7px;
+    }
+    .ws-safety .ws-edib { font-size: 1.05rem; margin-bottom: 6px; }
+    .ws-safety p { font-size: 0.9rem; line-height: 1.5; margin: 4px 0; }
+    .ws-section-h {
+      font-family: system-ui, sans-serif; font-size: 0.74rem; font-weight: 700;
+      text-transform: uppercase; letter-spacing: .1em; color: #8a9678;
+      margin: 24px 0 8px;
+    }
+    .ws-recipe { font-size: 0.98rem; line-height: 1.6; }
+    .ws-recipe h3 { font-size: 1.15rem; margin: 14px 0 6px; color: #2d3a17; }
+    .ws-recipe p { margin: 8px 0; }
+    .ws-forage { font-size: 0.95rem; line-height: 1.55; color: #3a3a3a; }
+    .ws-forage .ws-fl { font-weight: 700; }
+    .ws-mynotes { margin-top: 26px; }
+    .ws-rule { border-bottom: 1px solid #c9c9c0; height: 26px; }
+    .ws-ruled-box {
+      border: 1px solid #c9c9c0; border-radius: 2px; height: 76px; margin-top: 4px;
+    }
+    .ws-credit {
+      position: absolute; bottom: 18px; right: 26px;
+      font-style: italic; font-size: 0.84rem; color: #9a9a90;
+    }
+    .preview-empty { color: #aaa; font-size: 0.85rem; padding: 12px; }
+
+    /* ── Print stylesheet ─────────────────────────────────────────────────── */
+    @media print {
+      @page { size: A4 portrait; margin: 14mm 16mm; }
+      body { background: #fff; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+      #site-nav-chip, #nav-drawer, #nav-drawer-scrim, #select-bar, #stats-bar, .filter-summary, .reach-back,
+      #empty-state, #toolbar, #list-page > h2, #card-list,
+      #preview-wrap .preview-label { display: none !important; }
+      #list-page { max-width: none; padding: 0; margin: 0; }
+      #preview-wrap { margin: 0; }
+      #print-area { border: none; box-shadow: none; padding: 0; border-radius: 0; }
+
+      /* ── Field Guide — two-column, compact ─────────────────────────────── */
+      #print-area.mode-field { column-count: 2; column-gap: 14mm; }
+      .fg-entry {
+        border-bottom: 1px solid #ddd; padding: 6pt 0 7pt;
+        break-inside: avoid; -webkit-column-break-inside: avoid;
+      }
+      .fg-entry .fg-sci    { font-size: 9pt; }
+      .fg-entry .fg-common { font-size: 8pt; }
+      .fg-entry .fg-recipe { font-size: 7.5pt; }
+      .fg-entry .fg-note   { font-size: 7pt; }
+      .fg-pill             { font-size: 6.5pt; }
+      .fg-photo { width: 14mm; height: 14mm; }
+      .fg-cover { column-span: all; -webkit-column-span: all; margin-bottom: 6mm; }
+      .fg-cover-title { font-size: 14pt; }
+      .fg-cover-meta  { font-size: 9pt; }
+      .fg-cover-intro { font-size: 8.5pt; }
+
+      /* ── Map snapshot — no spurious page break after the image ────────────── */
+      .print-map-snap {
+        break-after: avoid; page-break-after: avoid;
+        margin-bottom: 0;
+      }
+      /* Prevent first species block being pushed to a new page mid-way ──────── */
+      .print-map-snap + .fg-entry,
+      .print-map-snap + .ws-page {
+        break-before: avoid; page-break-before: avoid;
+      }
+
+      /* ── Recipe Booklet / Workshop — one page per stop ──────────────────── */
+      .ws-page {
+        border: none; box-shadow: none; margin: 0;
+        /* Preserve inner padding — it defines the Peín aesthetic */
+        padding: 10mm 12mm 8mm;
+        min-height: auto; break-after: page; page-break-after: always;
+      }
+      .ws-page:last-child { break-after: auto; page-break-after: auto; }
+      .ws-photo { width: 52mm; height: 52mm; }
+      .ws-sci    { font-size: 22pt; }
+      .ws-common { font-size: 11pt; }
+      .ws-cover  { min-height: 200mm; height: auto; padding: 14mm 0; }
+      .ws-cover-title { font-size: 26pt; }
+      .ws-cover-meta  { font-size: 10pt; }
+      .ws-cover-intro { font-size: 10.5pt; }
+      .ws-safety p, .ws-section p { font-size: 9.5pt; line-height: 1.5; }
+    }
+
+    /* ── Print style selector (cover panel only — main use moved to print page) */
+    .style-toggle { display: inline-flex; border: 1px solid #2d5016; border-radius: 8px; overflow: hidden; }
+    .style-toggle button {
+      border: none; background: #344440; color: #a8d890; padding: 7px 12px;
+      font-size: 0.82rem; cursor: pointer; white-space: nowrap;
+    }
+    .style-toggle button.active { background: #2d5016; color: #fff; }
+
+    /* ── Content toggle buttons ──────────────────────────────────────────── */
+    .content-toggle { display: inline-flex; flex-wrap: wrap; gap: 4px; }
+    .content-toggle button {
+      border: 1px solid #2d5016; background: #344440; color: #a8d890;
+      padding: 5px 10px; font-size: 0.78rem; cursor: pointer; border-radius: 6px;
+      white-space: nowrap;
+    }
+    .content-toggle button.active { background: #2d5016; color: #fff; }
+
+    /* ── Goethean style ──────────────────────────────────────────────────── */
+    #print-area[data-style="goethean"] { background: #fdfbf6; font-family: Georgia,'Times New Roman',serif; }
+    #print-area[data-style="goethean"] .fg-entry { font-family: Georgia,'Times New Roman',serif; }
+    #print-area[data-style="goethean"] .fg-sci   { font-style: italic; }
+    /* Goethean overlay — screen */
+    #goe-overlay { display: none; position: absolute; inset: 0; pointer-events: none; z-index: 10; }
+    #goe-overlay.active { display: block; }
+    .goe-strip { position: absolute; left: 0; width: 100%; height: 42px; }
+    .goe-strip.goe-header { top: 0; }
+    .goe-strip.goe-footer { bottom: 0; }
+    .goe-credit { display: none; }
+    /* Goethean overlay — print */
+    @media print {
+      #goe-overlay { display: none; position: fixed; inset: 0; }
+      #goe-overlay.active { display: block !important; }
+      .goe-strip { position: fixed; left: 0; width: 100%; height: 25mm; }
+      .goe-strip.goe-header { top: 0; }
+      .goe-strip.goe-footer { bottom: 0; }
+      .goe-credit {
+        display: block; position: fixed; bottom: 6mm; left: 0; right: 0;
+        text-align: center; font-family: Georgia,'Times New Roman',serif;
+        font-size: 7pt; color: rgba(58,90,40,0.45); letter-spacing: .07em;
+      }
+    }
+
+    /* ── Botanical style — screen ────────────────────────────────────────── */
+    #print-area[data-style="botanical"] { background: #fdfbf6; }
+    #print-area[data-style="botanical"] .fg-entry { font-family: Georgia,'Times New Roman',serif; }
+    #print-area[data-style="botanical"] .fg-sci   { font-style: italic; }
+
+    /* ── Botanical overlay — screen ──────────────────────────────────────── */
+    #bot-overlay { display: none; position: absolute; inset: 0; pointer-events: none; z-index: 10; }
+    #bot-overlay.active { display: block; }
+    .bot-corner { position: absolute; width: 70px; height: 70px; }
+    .bot-tl { top: 0; left: 0; }
+    .bot-tr { top: 0; right: 0; transform: scaleX(-1); }
+    .bot-bl { bottom: 0; left: 0; transform: scaleY(-1); }
+    .bot-br { bottom: 0; right: 0; transform: scale(-1,-1); }
+    .bot-border {
+      position: absolute; top: 8px; right: 8px; bottom: 8px; left: 8px;
+      border: 0.7px solid rgba(45,58,30,0.35);
+    }
+    .bot-credit-centre, .bot-pageno { display: none; }
+
+    /* ── Herbalist style ─────────────────────────────────────────────────── */
+    #print-area[data-style="herbalist"] { background: #fdfbf6; font-family: Georgia,'Times New Roman',serif; }
+    #print-area[data-style="herbalist"] .fg-entry { font-family: Georgia,'Times New Roman',serif; }
+    #print-area[data-style="herbalist"] .fg-sci   { font-style: italic; }
+    /* Herbalist overlay — screen */
+    #herb-overlay { display: none; position: absolute; inset: 0; pointer-events: none; z-index: 10; }
+    #herb-overlay.active { display: block; }
+    .herb-corner { position: absolute; width: 90px; height: 90px; }
+    .herb-corner.herb-tl { top: 0; left: 0; }
+    .herb-corner.herb-tr { top: 0; right: 0; transform: scaleX(-1); }
+    .herb-corner.herb-bl { bottom: 0; left: 0; transform: scaleY(-1); }
+    .herb-corner.herb-br { bottom: 0; right: 0; transform: scale(-1,-1); }
+    .herb-trail { position: absolute; width: 44px; height: 90px; top: 50%; transform: translateY(-50%); }
+    .herb-trail.herb-trail-l { left: 0; }
+    .herb-trail.herb-trail-r { right: 0; transform: translateY(-50%) scaleX(-1); }
+    .herb-credit-l, .herb-credit-r { display: none; }
+    /* Herbalist overlay — print */
+    @media print {
+      #herb-overlay { display: none; position: fixed; inset: 0; }
+      #herb-overlay.active { display: block !important; }
+      .herb-corner { position: fixed; width: 38mm; height: 38mm; }
+      .herb-corner.herb-tl { top: 0; left: 0; }
+      .herb-corner.herb-tr { top: 0; right: 0; transform: scaleX(-1); }
+      .herb-corner.herb-bl { bottom: 0; left: 0; transform: scaleY(-1); }
+      .herb-corner.herb-br { bottom: 0; right: 0; transform: scale(-1,-1); }
+      .herb-trail { position: fixed; width: 16mm; height: 80mm; top: 50%; transform: translateY(-50%); }
+      .herb-trail.herb-trail-l { left: 0; }
+      .herb-trail.herb-trail-r { right: 0; transform: translateY(-50%) scaleX(-1); }
+      .herb-credit-l {
+        display: block; position: fixed; bottom: 6mm; left: 14mm;
+        font-family: Georgia,'Times New Roman',serif;
+        font-size: 7.5pt; color: rgba(61,110,53,0.65); letter-spacing: .03em;
+      }
+      .herb-credit-r {
+        display: block; position: fixed; bottom: 6mm; right: 14mm;
+        font-family: Georgia,'Times New Roman',serif;
+        font-size: 7.5pt; color: rgba(61,110,53,0.65); letter-spacing: .03em;
+      }
+    }
+
+    /* ── Botanical overlay — print ───────────────────────────────────────── */
+    @media print {
+      /* position: fixed anchors the overlay to the physical page, not the
+         content-area parent — without this, fixed children measure from the
+         #preview-wrap origin (14 mm in from the paper edge) and bottom/right
+         offsets are relative to the full document height, not each page edge. */
+      #bot-overlay { display: none; position: fixed; inset: 0; }
+      #bot-overlay.active { display: block !important; }
+      .bot-corner { position: fixed; width: 28mm; height: 28mm; }
+      .bot-tl { top: 0; left: 0; }
+      .bot-tr { top: 0; right: 0; transform: scaleX(-1); }
+      .bot-bl { bottom: 0; left: 0; transform: scaleY(-1); }
+      .bot-br { bottom: 0; right: 0; transform: scale(-1,-1); }
+      .bot-border {
+        position: fixed; top: 12mm; left: 12mm; right: 12mm; bottom: 12mm;
+        border: 0.4pt solid rgba(45,58,30,0.6);
+      }
+      .bot-credit-centre {
+        display: block; position: fixed; bottom: 5mm; left: 0; right: 0;
+        text-align: center; font-family: Georgia,'Times New Roman',serif;
+        font-size: 7.5pt; color: rgba(45,58,30,0.6); letter-spacing: .05em;
+      }
+      .bot-pageno {
+        display: block; position: fixed; bottom: 5mm; right: 14mm;
+        font-family: Georgia,'Times New Roman',serif;
+        font-size: 7.5pt; color: rgba(45,58,30,0.6);
+      }
+      .bot-pageno::after { content: counter(page); }
+    }
+
+    /* ── Session panel ───────────────────────────────────────────────────── */
+    #session-panel {
+      position: fixed; bottom: 80px; left: 0; right: 0;
+      background: #2a3330; border-top: 2px solid #2d5016;
+      box-shadow: 0 -4px 24px rgba(0,0,0,.14);
+      z-index: 60; max-height: 70vh; overflow-y: auto;
+      padding: 14px 16px 22px;
+    }
+    .sp-header {
+      display: flex; align-items: center; gap: 10px; margin-bottom: 14px;
+    }
+    .sp-header h3 { font-size: 1rem; color: #2d5016; flex: 1; }
+    .sp-close {
+      background: none; border: none; font-size: 1.3rem; cursor: pointer;
+      color: #888; line-height: 1; padding: 2px 6px;
+    }
+    .sp-close:hover { color: #333; }
+    .sp-section { margin-bottom: 16px; }
+    .sp-section-label {
+      font-size: 0.72rem; font-weight: 700; text-transform: uppercase;
+      letter-spacing: 0.06em; color: #5a7a3a; margin-bottom: 8px;
+    }
+    .sp-row { display: flex; gap: 8px; align-items: flex-start; flex-wrap: wrap; margin-bottom: 8px; }
+    .sp-row label { font-size: 0.8rem; color: #555; display: flex; flex-direction: column; gap: 3px; flex: 1 1 160px; }
+    .sp-input {
+      padding: 6px 9px; border: 1px solid #c8d8a0; border-radius: 6px;
+      font-size: 0.84rem; font-family: inherit; background: #2f3d3a; color: #d8e4d8;
+    }
+    .sp-input:focus { outline: none; border-color: #2d5016; box-shadow: 0 0 0 2px rgba(45,80,22,.12); }
+    .sp-select { padding: 6px 9px; border: 1px solid #4a5e5a; border-radius: 6px; font-size: 0.84rem; background: #2f3d3a; color: #d8e4d8; }
+    .sp-ta {
+      width: 100%; min-height: 64px; padding: 6px 9px;
+      border: 1px solid #c8d8a0; border-radius: 6px; font-size: 0.84rem;
+      font-family: inherit; resize: vertical;
+    }
+    .sp-ta:focus { outline: none; border-color: #2d5016; box-shadow: 0 0 0 2px rgba(45,80,22,.12); }
+    .sp-btn {
+      background: #2d5016; color: #fff; border: none; border-radius: 6px;
+      padding: 7px 16px; font-size: 0.82rem; font-weight: 600; cursor: pointer;
+    }
+    .sp-btn:hover:not(:disabled) { background: #3a6b1c; }
+    .sp-btn:disabled { opacity: .55; cursor: not-allowed; }
+    .sp-btn-ghost {
+      background: none; border: 1px solid #c8d8a0; color: #2d5016; border-radius: 6px;
+      padding: 6px 12px; font-size: 0.82rem; cursor: pointer;
+    }
+    .sp-btn-ghost:hover { background: #3d524e; }
+    .sp-msg { font-size: 0.8rem; color: #555; margin-top: 6px; }
+    .sp-msg.ok  { color: #2d8016; }
+    .sp-msg.err { color: #c0392b; }
+    .sp-acc-row { display:flex; align-items:center; gap:6px; flex-wrap:wrap; padding:5px 0; border-bottom:1px solid rgba(255,255,255,.05); font-size:0.8rem; }
+    .sp-acc-row:last-child { border-bottom:none; }
+    .sp-acc-name { color:#d8e4d8; flex:1; min-width:80px; }
+    .sp-acc-badge { font-size:0.66rem; padding:1px 6px; border-radius:8px; white-space:nowrap; }
+    .sp-acc-badge.active  { background:#1a3a1a; color:#7ec850; }
+    .sp-acc-badge.expired { background:#3a2a14; color:#d4a030; }
+    .sp-acc-badge.revoked { background:#3a1a1a; color:#f08888; }
+    .sp-acc-expiry { font-size:0.72rem; color:#888; white-space:nowrap; }
+    .sp-access-caveat { font-size:0.72rem; color:#7a6a30; background:#2a2510; border:1px solid #4a3a1a; border-radius:4px; padding:4px 8px; margin-bottom:8px; }
+
+    /* Session selector row */
+    .sp-sess-row {
+      display: flex; gap: 8px; align-items: center; margin-bottom: 12px; flex-wrap: wrap;
+    }
+    #sp-session-select {
+      flex: 1; min-width: 180px; padding: 7px 10px;
+      border: 1px solid #4a5e5a; border-radius: 6px; font-size: 0.85rem; background: #2f3d3a; color: #d8e4d8;
+    }
+    .sp-session-badge {
+      font-size: 0.7rem; font-weight: 700; padding: 2px 8px; border-radius: 10px;
+      white-space: nowrap;
+    }
+    .sp-status-draft      { background: #f3f4f6; color: #374151; }
+    .sp-status-scheduled  { background: #dbeafe; color: #1e3a5f; }
+    .sp-status-completed  { background: #dcfce7; color: #166534; }
+    .sp-status-archived   { background: #fef9c3; color: #78350f; }
+
+    /* Species list inside panel */
+    #sp-species-list { margin-bottom: 10px; }
+    .sp-sp-row {
+      display: flex; align-items: center; gap: 8px; padding: 5px 6px;
+      border-bottom: 1px solid #f0f3e8; font-size: 0.83rem;
+    }
+    .sp-sp-row:hover { background: #3d524e; }
+    .sp-sp-name { flex: 1; font-style: italic; }
+    .sp-sp-common { font-size: 0.74rem; color: #777; }
+    .sp-sp-src {
+      font-size: 0.66rem; font-weight: 700; padding: 1px 6px;
+      border-radius: 8px; flex-shrink: 0;
+    }
+    .sp-sp-src-auto   { background: #e8f5d8; color: #2d5016; }
+    .sp-sp-src-manual { background: #ede9fe; color: #5b21b6; }
+    .sp-sp-rm {
+      background: none; border: none; color: #bbb; cursor: pointer;
+      font-size: 1rem; padding: 0 3px; flex-shrink: 0; line-height: 1;
+    }
+    .sp-sp-rm:hover { color: #c0392b; }
+
+    /* Species search add */
+    #sp-add-row { display: flex; gap: 6px; margin-top: 8px; }
+    #sp-add-input {
+      flex: 1; padding: 6px 9px; border: 1px solid #c8d8a0; border-radius: 6px;
+      font-size: 0.83rem; font-style: italic; font-family: inherit;
+    }
+    #sp-add-input:focus { outline: none; border-color: #2d5016; }
+    #sp-add-results {
+      margin-top: 4px; border: 1px solid #d0dbb8; border-radius: 6px;
+      background: #344440; max-height: 180px; overflow-y: auto; display: none;
+    }
+    .sp-lookup-item {
+      padding: 7px 10px; cursor: pointer; font-size: 0.82rem;
+      border-bottom: 1px solid #f0f3e8;
+    }
+    .sp-lookup-item:hover { background: #f0f5e8; }
+    .sp-lookup-sci { font-style: italic; font-weight: 600; }
+    .sp-lookup-common { font-size: 0.74rem; color: #777; }
+
+    /* Attendees */
+    #sp-att-list { margin-bottom: 8px; }
+    .sp-att-row {
+      display: flex; align-items: center; gap: 8px; padding: 4px 0;
+      border-bottom: 1px solid #f0f3e8; font-size: 0.83rem;
+    }
+    .sp-att-name { flex: 1; }
+    .sp-att-rm {
+      background: none; border: none; color: #bbb; cursor: pointer;
+      font-size: 1rem; padding: 0 3px; line-height: 1;
+    }
+    .sp-att-rm:hover { color: #c0392b; }
+
+    /* Stat strip */
+    .sp-stat-strip {
+      font-size: 0.78rem; color: #666; margin-bottom: 10px;
+      display: flex; gap: 12px; flex-wrap: wrap;
+    }
+    .sp-stat-strip span { white-space: nowrap; }
+
+  </style>
+</head>
+<body>
+
+<!-- Nav chip + drawer injected by /static/js/site-header.js (Map Redesign P3-nav) -->
+
+<div id="list-page">
+  <h2>Booklets</h2>
+  <div class="filter-summary" id="filter-summary"></div>
+
+  <div class="reach-back">
+    <button class="reach-btn" onclick="goSelect('map')"><span class="ico">🗺️</span>Select from map</button>
+    <button class="reach-btn" onclick="goSelect('species')"><span class="ico">🌿</span>Select from species list</button>
+  </div>
+
+  <div id="map-snapshot-wrap"></div>
+
+  <div id="empty-state">
+    <div class="big">🧺</div>
+    <p>No species selected yet. Use filters or select from the map or species list.</p>
+  </div>
+
+  <div id="species-summary" style="display:none">
+    <div id="species-summary-header" onclick="toggleSpeciesSummary()">
+      <span id="species-count-label"></span>
+      <span id="species-chevron">▾</span>
+    </div>
+    <div id="species-list-expanded" style="display:none">
+      <div id="species-compact-list"></div>
+      <div class="sp-add-row">
+        <button class="sp-add-btn" onclick="goSelect('map')">+ from map</button>
+        <button class="sp-add-btn" onclick="goSelect('species')">+ from species list</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="preview-wrap">
+    <div class="preview-label">Print preview — <span id="preview-mode-label">Field Guide</span></div>
+    <div id="print-area" class="mode-field"></div>
+    <div id="bot-overlay" aria-hidden="true"></div>
+    <div id="herb-overlay" aria-hidden="true"></div>
+    <div id="goe-overlay" aria-hidden="true"></div>
+  </div>
+</div>
+
+<!-- ── Session panel ─────────────────────────────────────────────────────── -->
+<div id="session-panel" style="display:none">
+  <div class="sp-header">
+    <h3>🧑‍🌾 Session / Foray</h3>
+    <button class="sp-close" onclick="closeSessionPanel()" title="Close">✕</button>
+  </div>
+
+  <!-- Session selector -->
+  <div class="sp-section">
+    <div class="sp-section-label">Active session</div>
+    <div class="sp-sess-row">
+      <select id="sp-session-select" onchange="onSessionSelectChange()">
+        <option value="">— New session —</option>
+      </select>
+      <button class="sp-btn-ghost" id="sp-delete-btn" onclick="deleteCurrentSession()" style="display:none;border-color:#fca5a5;color:#c0392b">Delete</button>
+    </div>
+  </div>
+
+  <!-- Session metadata form -->
+  <div class="sp-section" id="sp-meta-section">
+    <div class="sp-section-label" id="sp-form-label">New session</div>
+    <div class="sp-row">
+      <label>Session name
+        <input type="text" id="sp-name" class="sp-input" placeholder="e.g. Spring Foraging Walk 2026" style="width:100%">
+      </label>
+      <label>Date
+        <input type="date" id="sp-date" class="sp-input">
+      </label>
+    </div>
+    <div class="sp-row">
+      <label style="flex:2">Walk
+        <select id="sp-walk-select" class="sp-select" style="width:100%" onchange="onWalkSelectChange()">
+          <option value="">— No walk —</option>
+        </select>
+      </label>
+      <label style="flex:2">Location override
+        <input type="text" id="sp-location" class="sp-input" placeholder="Leave blank to use walk name" style="width:100%">
+      </label>
+      <label>Status
+        <select id="sp-status" class="sp-select">
+          <option value="draft">Draft</option>
+          <option value="scheduled">Scheduled</option>
+          <option value="completed">Completed</option>
+          <option value="archived">Archived</option>
+        </select>
+      </label>
+    </div>
+    <div class="sp-row" style="flex-direction:column;gap:4px">
+      <label style="width:100%">Facilitator notes
+        <textarea id="sp-notes" class="sp-ta" placeholder="Notes for the facilitator…" rows="2"></textarea>
+      </label>
+    </div>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+      <button class="sp-btn" id="sp-save-btn" onclick="saveSession()">Save session</button>
+      <button class="sp-btn-ghost" id="sp-populate-btn" onclick="autoPopulateSession()" style="display:none">♻ Re-populate from walk</button>
+      <span class="sp-msg" id="sp-save-msg"></span>
+    </div>
+  </div>
+
+  <!-- Species list (shown when a session is loaded) -->
+  <div class="sp-section" id="sp-species-section" style="display:none">
+    <div class="sp-section-label">Species <span id="sp-species-label" style="font-weight:400;text-transform:none;letter-spacing:0"></span></div>
+    <div class="sp-stat-strip" id="sp-stat-strip"></div>
+    <div id="sp-species-list"></div>
+    <div id="sp-add-row">
+      <input type="text" id="sp-add-input" placeholder="Add species by name…" autocomplete="off"
+             oninput="onSpAddInput()" onkeydown="if(event.key==='Escape')closeSpLookup()">
+      <div id="sp-add-results"></div>
+    </div>
+    <div class="sp-msg" id="sp-add-msg"></div>
+  </div>
+
+  <!-- Attendees (shown when a session is loaded) -->
+  <div class="sp-section" id="sp-att-section" style="display:none">
+    <div class="sp-section-label">Attendees</div>
+    <div id="sp-att-list"></div>
+    <div style="display:flex;gap:6px;margin-top:6px">
+      <input type="text" id="sp-att-input" class="sp-input" placeholder="Attendee name…" style="flex:1"
+             onkeydown="if(event.key==='Enter')addAttendee()">
+      <button class="sp-btn-ghost" onclick="addAttendee()">Add</button>
+    </div>
+    <div class="sp-msg" id="sp-att-msg"></div>
+  </div>
+
+  <!-- Participants & Access (shown when a session is loaded) -->
+  <div class="sp-section" id="sp-access-section" style="display:none">
+    <div class="sp-section-label">Participants &amp; Access</div>
+    <div class="sp-access-caveat">⚠ Copy links while on your public (ngrok) URL — the link embeds the server origin.</div>
+    <div id="sp-access-list"></div>
+    <div style="margin-top:10px">
+      <div style="font-size:0.72rem;color:#5a7a3a;margin-bottom:4px;font-weight:600;text-transform:uppercase;letter-spacing:0.04em">New participant</div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:flex-end">
+        <input type="text" id="sp-acc-name" class="sp-input" placeholder="Name…" style="flex:2;min-width:100px"
+               onkeydown="if(event.key==='Enter')addWorkshopParticipant()">
+        <input type="number" id="sp-acc-days" class="sp-input" value="7" min="1" max="90" title="Days until expiry" style="width:68px">
+        <button class="sp-btn-ghost" onclick="addWorkshopParticipant()">Add &amp; mint link</button>
+      </div>
+    </div>
+    <div style="margin-top:8px" id="sp-acc-existing-row">
+      <div style="font-size:0.72rem;color:#5a7a3a;margin-bottom:4px;font-weight:600;text-transform:uppercase;letter-spacing:0.04em">Existing participant <span style="font-weight:400;text-transform:none;letter-spacing:0;color:#666">— reuse to keep same user_id</span></div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
+        <select id="sp-acc-existing-select" class="sp-select" style="flex:2;min-width:140px"></select>
+        <input type="number" id="sp-acc-existing-days" class="sp-input" value="7" min="1" max="90" title="Days until expiry" style="width:68px">
+        <button class="sp-btn-ghost" onclick="addExistingParticipant()">Mint link</button>
+      </div>
+    </div>
+    <div class="sp-msg" id="sp-acc-msg" style="margin-top:6px"></div>
+    <div id="sp-acc-new-link" style="display:none;margin-top:8px;padding:8px 10px;background:#1a2a1a;border:1px solid #2d5016;border-radius:6px;font-size:0.8rem;color:#c8e6a0;word-break:break-all"></div>
+  </div>
+
+  <!-- Load into list button -->
+  <div id="sp-load-section" style="display:none;margin-top:4px">
+    <button class="sp-btn" onclick="loadSessionIntoList()" style="width:100%">
+      📋 Load session into list →
+    </button>
+    <div class="sp-msg" id="sp-load-msg" style="margin-top:6px"></div>
+  </div>
+</div>
+
+<!-- Cover page panel — shown above toolbar when editing cover fields -->
+<div id="cover-panel" style="display:none">
+  <div class="cp-header">
+    <span>📄 Cover page</span>
+    <button class="cp-close" onclick="toggleCoverPanel()" title="Close">✕</button>
+  </div>
+  <div class="cp-row">
+    <label class="cp-lbl">Event name</label>
+    <input type="text" id="cp-event" class="cp-input" placeholder="e.g. Spring Foraging Workshop" oninput="saveCoverLive()">
+  </div>
+  <div class="cp-row">
+    <label class="cp-lbl">Date</label>
+    <input type="date" id="cp-date" class="cp-input" oninput="saveCoverLive()">
+  </div>
+  <div class="cp-row">
+    <label class="cp-lbl">Location</label>
+    <input type="text" id="cp-location" class="cp-input" placeholder="e.g. Sheffield Botanical Gardens" oninput="saveCoverLive()">
+  </div>
+  <div class="cp-row">
+    <label class="cp-lbl">Introduction</label>
+    <textarea id="cp-intro" class="cp-ta" rows="4"
+      placeholder="An introductory paragraph for the handout…" oninput="saveCoverLive()"></textarea>
+  </div>
+  <div class="cp-actions">
+    <button class="cp-clear-btn" onclick="clearCoverFields()">Clear fields</button>
+    <button class="cp-clear-btn" onclick="clearCover()" style="opacity:0.65">Remove cover page</button>
+  </div>
+</div>
+
+<div id="toolbar">
+
+  <!-- Step 1: Format -->
+  <div class="step-group">
+    <div class="step-label">Step 1 — Format</div>
+    <div class="step-controls">
+      <div class="style-btn-wrap" id="mode-toggle">
+        <button data-mode="field"     onclick="setLayout('field')">Field Guide</button>
+        <button data-mode="workshop"  onclick="setLayout('workshop')">Recipe Booklet</button>
+        <button data-mode="workshops" onclick="setLayout('workshops')">Workshop</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Step 2: Content -->
+  <div class="step-group">
+    <div class="step-label">Step 2 — Content</div>
+    <div class="step-controls" id="content-toggle">
+      <button id="cover-btn" onclick="toggleCoverPanel()">📄 Cover</button>
+      <button class="tb-btn" data-ct="id_notes"  onclick="toggleContent('id_notes')">ID notes</button>
+      <button class="tb-btn" data-ct="foraging"  onclick="toggleContent('foraging')">Foraging</button>
+      <button class="tb-btn" data-ct="culinary"  onclick="toggleContent('culinary')">Culinary</button>
+      <button class="tb-btn" data-ct="recipes"   onclick="toggleContent('recipes')">Recipes</button>
+      <button class="tb-btn" data-ct="season"    onclick="toggleContent('season')">Season</button>
+      <button class="tb-btn" data-ct="herbal"    onclick="toggleContent('herbal')">Herbal</button>
+      <button class="tb-btn" data-ct="photos"    onclick="toggleContent('photos')">Photos</button>
+      <button class="tb-btn" data-ct="map"       onclick="toggleContent('map')">Map</button>
+      <button class="tb-btn" data-ct="my_notes"  onclick="toggleContent('my_notes')">My notes</button>
+      <label style="display:inline-flex;align-items:center;gap:5px;font-size:0.78rem;color:#cde6a8;white-space:nowrap;margin-left:4px">
+        🌿 Returns:
+        <select id="sr-limit-select"
+                style="font-size:0.78rem;padding:3px 5px;background:#344440;color:#d8e4d8;border:1px solid #4a5e5a;border-radius:5px;cursor:pointer"
+                onchange="onSrLimitChange()">
+          <option value="1">1</option>
+          <option value="5">5</option>
+          <option value="10" selected>10</option>
+          <option value="15">15</option>
+          <option value="20">20</option>
+          <option value="foray">Foray only</option>
+        </select>
+      </label>
+    </div>
+  </div>
+
+  <!-- Step 3: Print Preview -->
+  <div class="step-group">
+    <div class="step-label">Step 3 — Print Preview</div>
+    <div class="step-controls">
+      <button id="session-tab-btn" onclick="toggleSessionPanel()">🧑‍🌾 Session</button>
+      <button class="tb-btn-danger" onclick="clearList()">Clear</button>
+      <button class="tb-btn-action" id="print-tab-btn" onclick="openPrintTab()" title="Open print page">🖨 Print page →</button>
+    </div>
+  </div>
+
+</div>
+
+<script src="/static/js/lists.js"></script>
+<script>
+// ── Helpers ─────────────────────────────────────────────────────────────────
+function _esc(s) {
+  return String(s == null ? '' : s)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const NOW_MONTH = new Date().getMonth() + 1;   // 1–12
+
+function edClass(status) {
+  const s = (status || '').toLowerCase();
+  if (s === 'edible' || s === 'edible_cooked') return 'ed-edible';
+  if (s === 'caution' || s === 'conditional')  return 'ed-caution';
+  if (s === 'toxic')                            return 'ed-toxic';
+  if (s === 'inedible')                         return 'ed-inedible';
+  return 'ed-unknown';
+}
+function edLabel(status) {
+  const s = (status || '').toLowerCase();
+  if (!s || s === 'unknown') return 'edibility unknown';
+  return status;
+}
+
+// Months this species is "in season" now, derived from phenology + peak_season.
+function seasonMonths(sp) {
+  const set = new Set();
+  const ph = sp.phenology || {};
+  ['flower', 'fruit', 'leaf'].forEach(k => (ph[k] || []).forEach(m => set.add(m)));
+  (sp.flower_months || []).forEach?.(m => set.add(m));
+  return set;
+}
+
+// ── State ─────────────────────────────────────────────────────────────────
+let _baseSpecies = [];          // /api/species/ rows, keyed lookup below
+let _baseByName  = {};
+let _profileCache = {};         // name -> profile (lazy)
+
+// ── Filter summary (from URL params carried in from the map) ────────────────
+function renderFilterSummary() {
+  const p = new URLSearchParams(location.search);
+  const chips = [];
+  const sp = p.get('species');
+  if (sp) {
+    const n = sp.split(',').filter(Boolean).length;
+    chips.push(`${n} species`);
+  }
+  const mo = p.get('months');
+  if (mo) {
+    const names = mo.split(',').map(x => parseInt(x, 10)).filter(m => m >= 1 && m <= 12)
+      .sort((a, b) => a - b).map(m => MONTHS[m - 1]);
+    if (names.length) chips.push(names.join(', '));
+  }
+  if (p.get('workshop') === '1') chips.push('Workshop-suitable');
+  if (p.get('human') === '1')    chips.push('Human-verified');
+
+  const el = document.getElementById('filter-summary');
+  if (!chips.length) { el.textContent = 'Build a list to print as a field guide or workshop handout.'; return; }
+  el.innerHTML = chips.map(c => `<span class="chip">${_esc(c)}</span>`).join('');
+}
+
+// ── Auto-populate from URL filters (only when the list is empty) ────────────
+async function autoPopulateFromFilters() {
+  if (ForagingList.count() > 0) return;          // never clobber an in-progress list
+  const p = new URLSearchParams(location.search);
+  const spParam = p.get('species');
+  const months  = new Set((p.get('months') || '').split(',').map(x => parseInt(x, 10)).filter(Boolean));
+  const workshop = p.get('workshop') === '1';
+  const human    = p.get('human') === '1';
+
+  if (spParam) {
+    spParam.split(',').map(s => s.trim()).filter(Boolean).forEach(s => ForagingList.add(s));
+    return;
+  }
+  // No explicit species, but other filters present → derive species from the map data.
+  if (!months.size && !workshop && !human) return;
+  try {
+    const geo = await (await fetch('/api/map/geojson')).json();
+    const names = new Set();
+    (geo.features || []).forEach(f => {
+      const pr = f.properties || {};
+      if (!pr.species_primary) return;
+      if (workshop && !pr.workshop_suitable) return;
+      if (human && !pr.human_corrected) return;
+      if (months.size) {
+        const m = pr.taken_at ? new Date(pr.taken_at).getMonth() + 1 : null;
+        if (!m || !months.has(m)) return;
+      }
+      names.add(pr.species_primary);
+    });
+    names.forEach(n => ForagingList.add(n));
+  } catch (_) { /* non-fatal */ }
+}
+
+// ── Rendering ───────────────────────────────────────────────────────────────
+function toggleSpeciesSummary() {
+  const expanded = document.getElementById('species-list-expanded');
+  const chevron  = document.getElementById('species-chevron');
+  if (!expanded) return;
+  const open = expanded.style.display !== 'none';
+  expanded.style.display = open ? 'none' : '';
+  if (chevron) chevron.classList.toggle('open', !open);
+}
+
+function render() {
+  try { renderMapSnapshot(); } catch (_) {}
+  const list    = ForagingList.load();
+  const summary = document.getElementById('species-summary');
+  const compact = document.getElementById('species-compact-list');
+  const label   = document.getElementById('species-count-label');
+  const empty   = document.getElementById('empty-state');
+
+  if (!list.species.length) {
+    empty.style.display = '';
+    if (summary) summary.style.display = 'none';
+    renderPreview();
+    return;
+  }
+  empty.style.display = 'none';
+  if (summary) summary.style.display = '';
+
+  const n = list.species.length;
+  if (label) label.textContent = `${n} species selected`;
+
+  if (compact) {
+    compact.innerHTML = list.species.map(name => {
+      const base   = _baseByName[name] || {};
+      const common = (base.common_names && base.common_names[0]) || '';
+      return `<div class="sp-compact-row">
+        <span class="sp-compact-sci">${_esc(name)}</span>
+        ${common ? `<span class="sp-compact-common">${_esc(common)}</span>` : ''}
+        <button class="sp-compact-rm" title="Remove"
+                onclick="removeFromList('${_esc(name)}')">×</button>
+      </div>`;
+    }).join('');
+  }
+
+  refreshPreview();
+}
+
+async function enrichCard(name) {
+  const safe = name.replace(/[^a-zA-Z0-9]/g, '_');
+  let prof = _profileCache[name];
+  if (!prof) {
+    try {
+      prof = await (await fetch('/api/species/' + encodeURIComponent(name) + '/profile')).json();
+      _profileCache[name] = prof;
+    } catch (_) { return; }
+  }
+  const sp = prof.species || {};
+  const meta = document.getElementById('meta-' + safe);
+  if (meta) {
+    const sm = seasonMonths(sp);
+    const inSeason = sm.has(NOW_MONTH);
+    const seasonPill = sm.size
+      ? `<span class="season-pill ${inSeason ? 'season-in' : 'season-out'}">${inSeason ? '● in season now' : 'out of season'}</span>`
+      : `<span class="season-pill season-out">season unknown</span>`;
+    const rc = prof.recipe_count || 0;
+    const recipePill = rc ? `<span class="recipe-pill">${rc} recipe${rc !== 1 ? 's' : ''}</span>` : '';
+    meta.innerHTML =
+      `<span class="ed-pill ${edClass(sp.edibility_status)}">${_esc(edLabel(sp.edibility_status))}</span>`
+      + seasonPill + recipePill;
+  }
+  // Photo thumbnail — chosen photo, else first available.
+  const thumbs = (prof.observations && prof.observations.thumbnails) || [];
+  const chosen = ForagingList.getPhoto(name);
+  const file = chosen || (thumbs[0] && thumbs[0].thumbnail ? thumbs[0].thumbnail.split('/').pop() : null);
+  const thumbEl = document.getElementById('thumb-' + safe);
+  if (thumbEl && file) {
+    thumbEl.outerHTML = `<img class="lc-thumb" id="thumb-${safe}" src="/thumbnails/${_esc(file)}"
+      onerror="this.outerHTML='<div class=\\'lc-thumb placeholder\\' id=\\'thumb-${safe}\\'>🌿</div>'">`;
+    applyPhotoVisibility();
+  }
+}
+
+// ── C3 — Enrichment section preferences ────────────────────────────────────
+// Tracks which enrichment categories are included in the PDF per species.
+// Keys: recipes | medicinal | foraging | lookalikes | conditions | phenology
+// Initialised on first dropdown open; filled categories default to ON,
+// empty categories default to OFF. User can override either way.
+
+const SECTION_DEFS = [
+  ['recipes',    'Recipes'],
+  ['medicinal',  'Medicinal preparations'],
+  ['foraging',   'Foraging notes'],
+  ['lookalikes', 'Lookalike warnings'],
+  ['conditions', 'Edibility conditions'],
+  ['phenology',  'Phenology / season'],
+];
+
+// SECTION_FIELDS / SECTION_HINTS / _getFieldValue removed in 11a.2 — they only
+// fed the inline enrichment editor, which is gone. Editing now happens solely
+// in the enrichment review tab.
+
+let _sectionPrefs = {};  // scientific_name → { recipes: bool, medicinal: bool, … }
+
+function _isFilled(prof, key) {
+  const sp  = (prof && prof.species)  || {};
+  const cul = (prof && prof.culinary) || {};
+  switch (key) {
+    case 'recipes':    return (prof.recipe_count || 0) > 0 || ((prof.recipes || []).length > 0);
+    case 'medicinal':  return !!(cul.medicinal_notes || cul.medicinal_folklore || cul.traditional_uses);
+    case 'foraging':   return !!(cul.id_notes || cul.edible_parts || cul.harvest_stage);
+    case 'lookalikes': return !!(cul.look_alike_warnings || cul.preparation_warnings) || (prof.lookalike_count || 0) > 0;
+    case 'conditions': return (prof.condition_count || 0) > 0;
+    case 'phenology':  return !!(sp.phenology && sp.phenology.any_set);
+    default:           return false;
+  }
+}
+
+function _getSectionPrefs(name, prof) {
+  if (!_sectionPrefs[name]) {
+    const o = {};
+    SECTION_DEFS.forEach(([key]) => { o[key] = _isFilled(prof, key); });
+    _sectionPrefs[name] = o;
+  }
+  return _sectionPrefs[name];
+}
+
+// Called by the enrichment checkbox onchange handler.
+function toggleSection(name, key, checked) {
+  if (_sectionPrefs[name]) _sectionPrefs[name][key] = checked;
+  refreshPreview();
+}
+
+// ── C4 inline field editor removed in 11a.2 ─────────────────────────────────
+// Enrichment data is no longer editable from Lists. The enrichment review tab
+// (reached via the species card's "Send to review" button) is the single
+// canonical write path. This dropdown now displays fill status + PDF-include
+// toggles only.
+
+function toggleExpand(name) {
+  const safe = name.replace(/[^a-zA-Z0-9]/g, '_');
+  const card = document.getElementById('card-' + safe);
+  if (!card) return;
+  const open = card.classList.toggle('expanded');
+  if (!open) return;
+  const detail = document.getElementById('detail-' + safe);
+  const prof = _profileCache[name];
+  if (!prof) { detail.innerHTML = '<div class="row">Loading…</div>'; enrichCard(name).then(() => toggleExpandFill(name)); return; }
+  toggleExpandFill(name);
+}
+
+function toggleExpandFill(name) {
+  const safe = name.replace(/[^a-zA-Z0-9]/g, '_');
+  const detail = document.getElementById('detail-' + safe);
+  const prof = _profileCache[name];
+  if (!detail || !prof) return;
+  const sp = prof.species || {};
+
+  // Initialise section prefs on first open (auto-selects filled categories).
+  const prefs = _getSectionPrefs(name, prof);
+
+  // ── Enrichment summary table (C3) — display + PDF-include only ─────────
+  // Inline editing removed in 11a.2: canonical enrichment data is edited
+  // solely through the enrichment review tab (species card → Send to review).
+  const enrichRows = SECTION_DEFS.map(([key, label]) => {
+    const filled  = _isFilled(prof, key);
+    const checked = prefs[key] ? ' checked' : '';
+    const rowId = `er_${safe}_${key}`;
+    return `<div class="enrich-row" id="${rowId}">
+      <span class="enrich-cat">${label}</span>
+      <span class="enrich-status ${filled ? 'filled' : 'empty'}">${filled ? '✓' : '–'}</span>
+      <label class="enrich-include">
+        <input type="checkbox"${checked}
+               data-name="${_esc(name)}" data-key="${key}"
+               onchange="toggleSection(this.dataset.name, this.dataset.key, this.checked)">
+        Include in PDF
+      </label>
+    </div>`;
+  }).join('');
+  const enrichTable = `<div class="enrich-table">${enrichRows}</div>`;
+
+  // ── Existing detail rows (common name, family, season) ──────────────────
+  const rows = [];
+  if (sp.common_names && sp.common_names.length)
+    rows.push(`<div class="row"><span class="lbl">Common</span>${_esc(sp.common_names.join(', '))}</div>`);
+  if (sp.family) rows.push(`<div class="row"><span class="lbl">Family</span>${_esc(sp.family)}</div>`);
+  const sm = seasonMonths(sp);
+  if (sm.size) {
+    const mNames = [...sm].sort((a, b) => a - b).map(m => MONTHS[m - 1]);
+    rows.push(`<div class="row"><span class="lbl">Season</span>${_esc(mNames.join(', '))}</div>`);
+  }
+  const recipes = prof.recipes || [];
+  const key = recipes.find(r => r.is_preferred) || recipes[0];
+  let recipeHtml = '';
+  if (key) {
+    const snippet = (key.body || '').replace(/[#*]/g, '').trim().slice(0, 240);
+    recipeHtml = `<div class="recipe-snip"><div class="rtitle">${_esc(key.title)}</div>${_esc(snippet)}…</div>`;
+  }
+
+  detail.innerHTML = enrichTable + rows.join('') + recipeHtml
+    + `<a class="full-link" href="/species?s=${encodeURIComponent(name)}">View full species page →</a>`;
+}
+
+// ── List mutations ──────────────────────────────────────────────────────────
+function removeFromList(name) { ForagingList.remove(name); render(); }
+function clearList() {
+  if (!ForagingList.count()) return;
+  if (!confirm('Clear the whole list? This cannot be undone.')) return;
+  ForagingList.clear();
+  try { localStorage.removeItem(MAP_SNAP_KEY); } catch (_) {}
+  render();
+}
+
+// ── Print style ─────────────────────────────────────────────────────────────
+const STYLE_KEY   = 'foragingid_list_style';
+const CT_KEY      = 'foragingid_content_toggles';
+const CT_DEFAULTS = { id_notes: true, foraging: true, culinary: true, recipes: true, season: true, herbal: true, photos: true, map: true, my_notes: true };
+const SR_LIMIT_KEY = 'foragingid_sr_limit';
+const SR_DATA_KEY  = 'foragingid_sr_data';
+let _srData = [];
+
+function _loadContentToggles() {
+  try {
+    const raw = localStorage.getItem(CT_KEY);
+    if (raw) return Object.assign({}, CT_DEFAULTS, JSON.parse(raw));
+  } catch (_) {}
+  return Object.assign({}, CT_DEFAULTS);
+}
+function _saveContentToggles(ct) {
+  try { localStorage.setItem(CT_KEY, JSON.stringify(ct)); } catch (_) {}
+}
+
+function setLayout(mode) {
+  const o = ForagingList.load();
+  if (!Array.isArray(o.modes)) o.modes = ['field'];
+  o.modes = [mode];
+  ForagingList.save(o);
+  // Layout changes format only — toggles are the sole source of truth for content.
+  syncToolbar();
+  refreshPreview();
+}
+
+function toggleContent(key) {
+  const ct = _loadContentToggles();
+  ct[key] = !ct[key];
+  _saveContentToggles(ct);
+  syncToolbar();
+  refreshPreview();
+}
+const MAP_SNAP_KEY = 'foragingid_list_map_snapshot';
+
+function _loadMapSnap() {
+  try { return JSON.parse(localStorage.getItem(MAP_SNAP_KEY)); } catch (_) { return null; }
+}
+
+function renderMapSnapshot() {
+  const snap = _loadMapSnap();
+  const wrap = document.getElementById('map-snapshot-wrap');
+  if (!wrap) return;
+
+  const hasTiles = snap && Array.isArray(snap.tiles) && snap.tiles.length;
+  const hasData  = snap && snap.data;
+  if (!hasTiles && !hasData) { wrap.style.display = 'none'; return; }
+
+  const d = snap.date
+    ? new Date(snap.date).toLocaleDateString('en-GB', { day:'numeric', month:'short', year:'numeric' })
+    : '';
+  const caption = d ? `Selected from map — ${d}` : 'Selected from map';
+
+  const imgHtml = hasTiles
+    ? `<div class="map-snap-grid">${snap.tiles.map(u =>
+        `<img src="${u}" loading="lazy" onerror="this.style.visibility='hidden'">`
+      ).join('')}</div>`
+    : `<img src="${snap.data}" alt="Map snapshot" style="width:100%;display:block;border-radius:8px;border:1px solid #d0dbb8">`;
+
+  wrap.innerHTML = `${imgHtml}<div class="map-snap-caption">${_esc(caption)}</div>`;
+  wrap.style.display = '';
+}
+const _STYLE_OVERLAY = { botanical: 'bot-overlay', herbalist: 'herb-overlay', goethean: 'goe-overlay' };
+function _loadStyle() { try { return localStorage.getItem(STYLE_KEY) || 'botanical'; } catch (_) { return 'botanical'; } }
+
+function setPrintStyle(s) {
+  try { localStorage.setItem(STYLE_KEY, s); } catch (_) {}
+  const pa = document.getElementById('print-area');
+  if (pa) pa.dataset.style = s;
+  Object.entries(_STYLE_OVERLAY).forEach(([k, id]) => {
+    const ov = document.getElementById(id);
+    if (ov) ov.classList.toggle('active', k === s);
+  });
+  document.querySelectorAll('#tb-style-toggle button, #cp-style-toggle button').forEach(b =>
+    b.classList.toggle('active', b.dataset.pstyle === s));
+}
+
+/* ARCHIVED — see frontend/static/js/botanical-overlays-archive.js
+(function _initBotOverlay() {
+  const ov = document.getElementById('bot-overlay');
+  if (!ov) return;
+  const p = (sw, d) => `<path stroke-width="${sw}" d="${d}"/>`;
+  const paths = [
+    p(1.4, 'M 5,9 C 16,6 28,9 42,6 C 52,4 62,7 68,5'),
+    p(1.4, 'M 9,5 C 6,16 9,28 6,42 C 4,52 7,62 5,68'),
+    p(1.0, 'M 30,7 C 29,13 27,20 26,30'),
+    p(0.9, 'M 8,8 C 13,15 17,23 18,33'),
+    p(1.1, 'M 20,7 C 18,2 13,0 12,1 C 14,5 18,6 21,8'),
+    p(1.0, 'M 46,6 C 44,11 42,15 43,15 C 45,13 47,9 47,7'),
+    p(1.0, 'M 62,6 C 61,1 57,0 56,1 C 58,4 61,5 63,7'),
+    p(1.1, 'M 7,22 C 2,20 0,15 1,14 C 3,17 6,20 8,24'),
+    p(1.0, 'M 6,40 C 11,37 14,35 15,36 C 13,39 10,40 7,43'),
+    p(1.0, 'M 5,58 C 0,55 -1,50 0,49 C 2,53 5,56 6,60'),
+    p(0.9, 'M 27,20 C 32,18 35,16 36,17 C 33,20 29,21 28,22'),
+    p(0.9, 'M 14,20 C 10,17 8,14 9,13 C 11,16 13,19 15,22'),
+    p(0.8, 'M 68,5 C 70,3 73,3 74,5 C 73,7 70,7 68,5'),
+    p(0.8, 'M 5,68 C 3,70 3,73 5,74 C 7,73 7,70 5,68'),
+  ].join('');
+  const g = `<g stroke="#2d3a1e" fill="none" stroke-linecap="round">${paths}</g>`;
+  const svg = (cls) =>
+    `<svg class="bot-corner ${cls}" viewBox="0 0 90 90" overflow="visible" xmlns="http://www.w3.org/2000/svg">${g}</svg>`;
+  ov.innerHTML =
+    svg('bot-tl') + svg('bot-tr') + svg('bot-bl') + svg('bot-br') +
+    '<div class="bot-border"></div>' +
+    '<div class="bot-credit-centre">Melvin Jarman · Hofgut LEO</div>' +
+    '<span class="bot-pageno"></span>';
+})();
+
+(function _initHerbOverlay() {
+  const ov = document.getElementById('herb-overlay');
+  if (!ov) return;
+  const C = ['#3d6e35','#4a7c3f','#5a9a4a','#6ab055'];
+
+  function leaf(l, w) {
+    w = w !== undefined ? w : l * 0.22;
+    return `M 0,0 C ${(-w).toFixed(1)},${(-l*0.35).toFixed(1)} ${(-w*0.8).toFixed(1)},${(-l*0.7).toFixed(1)} 0,${-l} C ${(w*0.9).toFixed(1)},${(-l*0.7).toFixed(1)} ${(w*0.85).toFixed(1)},${(-l*0.35).toFixed(1)} ${(w*0.1).toFixed(1)},0 Z`;
+  }
+  function lf(x, y, angle, l, ci, op, w) {
+    return `<path d="${leaf(l,w)}" fill="${C[ci]}" opacity="${op}" transform="translate(${x},${y}) rotate(${angle})"/>`;
+  }
+  function stem(d) { return `<path d="${d}" stroke="#2a5022" stroke-width="0.85" fill="none" opacity="0.55" stroke-linecap="round"/>`; }
+
+  const cornerPaths =
+    stem('M 12,12 C 24,8 38,12 52,6') +
+    stem('M 10,14 C 8,26 10,42 6,58') +
+    stem('M 14,10 C 20,20 26,32 28,46') +
+    stem('M 36,8 C 34,18 32,28 30,36') +
+    lf(18,14,  30, 44, 0, 0.35) + lf(10,18, -20, 40, 2, 0.32) +
+    lf(22, 8,  60, 38, 1, 0.38) + lf( 8,22, -45, 36, 3, 0.30) +
+    lf(20,12,  15, 32, 2, 0.48) + lf(14,16, -10, 34, 0, 0.45) +
+    lf(30,10,  50, 30, 3, 0.50) + lf( 8,32, -55, 28, 1, 0.44) +
+    lf(38, 8,  25, 26, 2, 0.42) + lf(10,44, -35, 30, 0, 0.40) +
+    lf(16,14,   5, 22, 3, 0.55) + lf(24,10,  40, 20, 1, 0.52) +
+    lf(10,24, -25, 24, 2, 0.50) + lf(34,12,  65, 18, 0, 0.45) +
+    lf( 8,40, -60, 20, 3, 0.48);
+
+  const trailPaths =
+    stem('M 8,10 C 6,30 8,55 5,80') +
+    lf(10,15, -20, 22, 1, 0.28) + lf( 6,35, -40, 18, 3, 0.22) +
+    lf(12,55, -10, 20, 0, 0.25) + lf( 5,75, -50, 16, 2, 0.20) +
+    lf(14,95, -30, 14, 1, 0.18);
+
+  const mkSvg = (cls, vw, vh, content) =>
+    `<svg class="${cls}" viewBox="0 0 ${vw} ${vh}" overflow="visible" xmlns="http://www.w3.org/2000/svg">${content}</svg>`;
+
+  ov.innerHTML =
+    mkSvg('herb-corner herb-tl', 110, 110, cornerPaths) +
+    mkSvg('herb-corner herb-tr', 110, 110, cornerPaths) +
+    mkSvg('herb-corner herb-bl', 110, 110, cornerPaths) +
+    mkSvg('herb-corner herb-br', 110, 110, cornerPaths) +
+    mkSvg('herb-trail herb-trail-l', 50, 120, trailPaths) +
+    mkSvg('herb-trail herb-trail-r', 50, 120, trailPaths) +
+    '<div class="herb-credit-l">Melvin Jarman</div>' +
+    '<div class="herb-credit-r">Hofgut LEO</div>';
+})();
+
+(function _initGoeOverlay() {
+  const ov = document.getElementById('goe-overlay');
+  if (!ov) return;
+
+  // Same deterministic pseudo-random as the encounters.html dandelion visualiser.
+  function rnd(n) { var s = Math.sin(n*12.9898+78.233)*43758.5453; return s-Math.floor(s); }
+
+  // Metamorphosis sequence: [LOBES, span_mm, maxTooth_mm, complexity(0-1), seed]
+  // Progression: cotyledon → simple oval → weakly lobed → full runcinate → contracting bracts
+  const SEQ = [
+    [0,  5, 1.5, 0.00,  0],
+    [0,  7, 2.0, 0.00,  5],
+    [2,  9, 2.2, 0.22, 10],
+    [3, 11, 2.8, 0.34, 15],
+    [4, 13, 3.2, 0.46, 20],
+    [5, 15, 3.8, 0.57, 25],
+    [6, 17, 4.4, 0.66, 30],
+    [7, 18, 5.0, 0.75, 35],
+    [9, 20, 5.8, 0.86, 40],
+    [9, 22, 6.2, 0.96, 45],
+    [9, 20, 5.6, 0.88, 50],
+    [7, 17, 4.6, 0.68, 55],
+    [5, 13, 3.4, 0.43, 60],
+    [3, 10, 2.5, 0.23, 65],
+    [2,  7, 1.8, 0.09, 70],
+  ];
+
+  // Generate SVG path for one leaf form (pointing up from origin, base at (0,0)).
+  // Runcinate forms: generate horizontal path then rotate -90° via transform.
+  // Oval/cotyledon forms: generated directly vertical.
+  function makePath(LOBES, span, maxTooth, complexity, seed) {
+    if (LOBES === 0) {
+      const hw = maxTooth;
+      return `M 0,0 C ${(hw*0.85).toFixed(2)},${(-span*0.18).toFixed(2)} ${(hw*0.95).toFixed(2)},${(-span*0.55).toFixed(2)} 0,${-span} C ${(-hw*0.95).toFixed(2)},${(-span*0.55).toFixed(2)} ${(-hw*0.85).toFixed(2)},${(-span*0.18).toFixed(2)} 0,0 Z`;
+    }
+    const step = span / LOBES;
+    function lobe(t, sd) {
+      const jit  = (rnd(t*1.7+sd) - 0.5)*step*0.38;
+      const x    = (t/LOBES)*span + jit;
+      const grow = 0.30 + 0.70*(t/LOBES);
+      const irr  = 0.35 + 0.65*rnd(t*3.3+sd);
+      const env  = grow*irr;
+      const lean = step*(0.22 + 0.34*rnd(t*5.1+sd));
+      const sin  = (0.8 + rnd(t*2.2+sd)*2.8)*(maxTooth*0.18);
+      const amp  = env*complexity;
+      return { x, len: maxTooth*0.12 + amp*maxTooth*0.88, lean, sin };
+    }
+    const pts = ['M 0,0'];
+    for (let t = 1; t <= LOBES; t++) {
+      const u = lobe(t, seed);
+      pts.push(`L ${(u.x-step*0.52).toFixed(2)},${(-u.sin).toFixed(2)}`);
+      pts.push(`L ${(u.x-u.lean).toFixed(2)},${(-u.len).toFixed(2)}`);
+      pts.push(`L ${u.x.toFixed(2)},${(-u.sin*0.45).toFixed(2)}`);
+    }
+    pts.push(`L ${span},0`);
+    for (let b = LOBES; b >= 1; b--) {
+      const d = lobe(b, seed+50);
+      pts.push(`L ${d.x.toFixed(2)},${(d.sin*0.45).toFixed(2)}`);
+      pts.push(`L ${(d.x-d.lean).toFixed(2)},${d.len.toFixed(2)}`);
+      pts.push(`L ${(d.x-step*0.52).toFixed(2)},${d.sin.toFixed(2)}`);
+    }
+    pts.push('Z');
+    return pts.join(' ');
+  }
+
+  // Build SVG path content for one strip.
+  // flipVertical: footer leaves hang downward from a baseline at y=0.
+  function makeStrip(forms, opacity, seedAdd, flipVertical) {
+    const N = forms.length, margin = 7, totalW = 210, stripH = 25;
+    const spacing = (totalW - 2*margin) / (N-1);
+    let paths = '';
+    forms.forEach(([LOBES, span, maxTooth, complexity, baseSeed], i) => {
+      const cx = (margin + i*spacing).toFixed(2);
+      const tilt = (rnd(i*7.3+baseSeed) - 0.5)*6; // ±3° organic variation
+      const d = makePath(LOBES, span, maxTooth, complexity, baseSeed + seedAdd);
+      const isRunc = LOBES > 0;
+      const tr = isRunc
+        ? `translate(${cx},${stripH}) rotate(${(-90+tilt).toFixed(1)})`
+        : `translate(${cx},${stripH}) rotate(${tilt.toFixed(1)})`;
+      paths += `<path d="${d}" fill="#3a5a28" opacity="${opacity}" transform="${tr}"/>`;
+    });
+    // Baseline rule at y=stripH
+    paths += `<line x1="5" y1="${stripH}" x2="205" y2="${stripH}" stroke="#3a5a28" stroke-width="0.25" opacity="${(opacity*0.8).toFixed(2)}"/>`;
+    // Footer: wrap in vertical flip so leaves hang downward from y=0
+    return flipVertical
+      ? `<g transform="translate(0,${stripH}) scale(1,-1)">${paths}</g>`
+      : paths;
+  }
+
+  const mkSvg = (cls, content) =>
+    `<svg class="goe-strip ${cls}" viewBox="0 0 210 25" overflow="visible" xmlns="http://www.w3.org/2000/svg">${content}</svg>`;
+
+  ov.innerHTML =
+    mkSvg('goe-header', makeStrip(SEQ,                    0.55,   0, false)) +
+    mkSvg('goe-footer', makeStrip(SEQ.slice().reverse(),  0.35, 300, true))  +
+    '<div class="goe-credit">Melvin Jarman · Hofgut LEO</div>';
+})();
+*/
+
+// ── Toolbar ─────────────────────────────────────────────────────────────────
+function toggleMode(mode) {
+  const o = ForagingList.load();
+  if (!Array.isArray(o.modes)) o.modes = o.mode ? [o.mode] : ['field'];
+  const idx = o.modes.indexOf(mode);
+  if (idx >= 0) {
+    // Enforce minimum one mode — silently refuse to deactivate the last active mode
+    if (o.modes.length > 1) o.modes.splice(idx, 1);
+  } else {
+    o.modes.push(mode);
+  }
+  ForagingList.save(o);
+  syncToolbar();
+  refreshPreview();
+}
+function togglePhotos(on) {
+  ForagingList.setPref('showPhotos', !!on);
+  applyPhotoVisibility();
+  refreshPreview();
+}
+function applyPhotoVisibility() {
+  const show = _loadContentToggles().photos;
+  document.querySelectorAll('.lc-thumb').forEach(el => { el.style.display = show ? '' : 'none'; });
+}
+function syncToolbar() {
+  const list = ForagingList.load();
+  document.querySelectorAll('#mode-toggle button').forEach(b =>
+    b.classList.toggle('active', (list.modes || []).includes(b.dataset.mode)));
+  const ct = _loadContentToggles();
+  document.querySelectorAll('#content-toggle button[data-ct]').forEach(b =>
+    b.classList.toggle('active', ct[b.dataset.ct] !== false));
+  const s = _loadStyle();
+  document.querySelectorAll('#tb-style-toggle button, #cp-style-toggle button').forEach(b =>
+    b.classList.toggle('active', b.dataset.pstyle === s));
+  // Hide Map button when no map snapshot exists
+  const mapBtn = document.querySelector('#content-toggle button[data-ct="map"]');
+  if (mapBtn) mapBtn.style.display = _loadMapSnap() ? '' : 'none';
+}
+
+// ── C5 — Cover page ─────────────────────────────────────────────────────────
+const COVER_KEY = 'foragingid_list_cover';
+
+function _loadCover() {
+  try { return JSON.parse(localStorage.getItem(COVER_KEY)) || {}; }
+  catch (_) { return {}; }
+}
+function _saveCoverRaw(o) {
+  try { localStorage.setItem(COVER_KEY, JSON.stringify(o)); } catch (_) {}
+}
+
+function toggleCoverPanel() {
+  const panel = document.getElementById('cover-panel');
+  if (!panel) return;
+  const open = panel.style.display !== 'none';
+  if (open) { panel.style.display = 'none'; return; }
+  // Sync form with stored values before showing
+  const c = _loadCover();
+  const set = (id, v) => { const el = document.getElementById(id); if (el) el.value = v || ''; };
+  set('cp-event', c.event); set('cp-date', c.date);
+  set('cp-location', c.location);
+  const ta = document.getElementById('cp-intro');
+  if (ta) ta.value = c.intro || '';
+  panel.style.display = 'block';
+}
+
+// Called on every keystroke — saves to localStorage and updates the preview.
+function saveCoverLive() {
+  const get = id => { const el = document.getElementById(id); return el ? el.value : ''; };
+  _saveCoverRaw({
+    event:    get('cp-event').trim(),
+    date:     get('cp-date'),
+    location: get('cp-location').trim(),
+    intro:    get('cp-intro'),
+  });
+  _syncCoverBtn();
+  refreshPreview();
+}
+
+function clearCoverFields() {
+  ['cp-event', 'cp-date', 'cp-location', 'cp-intro'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.value = '';
+  });
+  try { localStorage.removeItem(COVER_KEY); } catch (_) {}
+  _syncCoverBtn();
+  refreshPreview();
+}
+
+function clearCover() {
+  try { localStorage.removeItem(COVER_KEY); } catch (_) {}
+  _syncCoverBtn();
+  document.getElementById('cover-panel').style.display = 'none';
+  refreshPreview();
+}
+
+function _syncCoverBtn() {
+  const c = _loadCover();
+  const btn = document.getElementById('cover-btn');
+  const has = c.event || c.date || c.location || c.intro;
+  if (btn) btn.classList.toggle('active', !!has);
+}
+
+// Map snapshot block — full-width, spans columns in field guide, sits above species content.
+function _snapProject(snap) {
+  if (!Array.isArray(snap.rawPins) || snap.snapZoom == null) return [];
+  const z = snap.snapZoom, n = 1 << z;
+  const cols = snap.cols || 3;
+  const rows = snap.tiles.length / cols;
+  const minTx = snap.minTx != null ? snap.minTx : 0;
+  const minTy = snap.minTy != null ? snap.minTy : 0;
+  const out = [];
+  for (const [lat, lng] of snap.rawPins) {
+    const tileX = (lng + 180) / 360 * n;
+    const ry    = Math.log(Math.tan(lat * Math.PI / 180) + 1 / Math.cos(lat * Math.PI / 180));
+    const tileY = (1 - ry / Math.PI) / 2 * n;
+    const fx = (tileX - minTx) / cols;
+    const fy = (tileY - minTy) / rows;
+    if (fx > 0.01 && fx < 0.99 && fy > 0.01 && fy < 0.99)
+      out.push([Math.round(fx * 1000) / 10, Math.round(fy * 1000) / 10]);
+  }
+  return out;
+}
+
+function _snapTileHtml(snap) {
+  const cols = snap.cols || 3;
+  const projected = _snapProject(snap);
+  const svgPins = projected.map(([x, y]) =>
+    `<circle cx="${x}%" cy="${y}%" r="5" fill="#2d5016" fill-opacity="0.85" stroke="#fff" stroke-width="2"/>`
+  ).join('');
+  const svg = svgPins
+    ? `<svg style="position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none" xmlns="http://www.w3.org/2000/svg">${svgPins}</svg>`
+    : '';
+  const grid = `<div style="display:grid;grid-template-columns:repeat(${cols},1fr);line-height:0;border:1px solid #d0dbb8;border-radius:8px;overflow:hidden">${snap.tiles.map(u => `<img src="${u}" style="width:100%;display:block">`).join('')}</div>`;
+  return `<div style="position:relative">${grid}${svg}</div>`;
+}
+
+function _mapSnapHtml(snap) {
+  if (!snap) return '';
+  const d = snap.date ? new Date(snap.date).toLocaleDateString('en-GB', { day:'numeric', month:'short', year:'numeric' }) : '';
+  const caption = d ? `Selected from map — ${d}` : 'Selected from map';
+  let imgHtml;
+  if (Array.isArray(snap.tiles) && snap.tiles.length) {
+    imgHtml = _snapTileHtml(snap);
+  } else if (snap.data) {
+    imgHtml = `<img src="${snap.data}" alt="Map selection snapshot">`;
+  } else {
+    return '';
+  }
+  return `<div class="print-map-snap">${imgHtml}<div class="map-snap-caption">${_esc(caption)}</div></div>`;
+}
+
+// Field Guide cover — single-column-spanning header block.
+function _coverPageField(c) {
+  if (!c.event && !c.date && !c.location && !c.intro) return '';
+  const meta = [c.date, c.location].filter(Boolean).join(' · ');
+  return `<div class="fg-cover">
+    ${c.event  ? `<div class="fg-cover-title">${_esc(c.event)}</div>` : ''}
+    ${meta     ? `<div class="fg-cover-meta">${_esc(meta)}</div>` : ''}
+    ${c.intro  ? `<div class="fg-cover-intro">${_esc(c.intro)}</div>` : ''}
+  </div>`;
+}
+
+// Workshop cover — full A4 page, Peín serif aesthetic.
+function _coverPageWorkshop(c) {
+  if (!c.event && !c.date && !c.location && !c.intro) return '';
+  const meta = [c.date, c.location].filter(Boolean).join(' · ');
+  return `<div class="ws-page ws-cover">
+    <div class="ws-cover-inner">
+      ${c.event ? `<div class="ws-cover-title">${_esc(c.event)}</div>` : ''}
+      ${meta    ? `<div class="ws-cover-meta">${_esc(meta)}</div>` : ''}
+      ${c.intro ? `<div class="ws-cover-intro">${_esc(c.intro)}</div>` : ''}
+      <div class="ws-cover-credit">Melvin Jarman</div>
+    </div>
+  </div>`;
+}
+
+// ── Print preview (Field Guide / Recipe Booklet / Workshops) ───────────────
+
+// Minimal Markdown → HTML for recipe bodies (headings, bold, paragraphs).
+function _mdLite(text) {
+  if (!text) return '';
+  const blocks = String(text).replace(/\r/g, '').split(/\n{2,}/);
+  return blocks.map(b => {
+    b = b.trim();
+    if (!b) return '';
+    const h = b.match(/^#{1,6}\s+(.*)$/);
+    if (h) return '<h3>' + _esc(h[1]) + '</h3>';
+    let html = _esc(b).replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>').replace(/\n/g, '<br>');
+    return '<p>' + html + '</p>';
+  }).join('');
+}
+
+function _seasonText(sp) {
+  const sm = seasonMonths(sp);
+  if (!sm.size) return '<span class="off">season unknown</span>';
+  return [...Array(12).keys()].map(i => {
+    const m = i + 1;
+    return sm.has(m) ? `<strong>${MONTHS[m - 1][0]}</strong>` : `<span class="off">${MONTHS[m - 1][0]}</span>`;
+  }).join(' ');
+}
+
+function _photoFileFor(name, prof) {
+  const chosen = ForagingList.getPhoto(name);
+  if (chosen) return chosen;
+  const thumbs = (prof.observations && prof.observations.thumbnails) || [];
+  return thumbs[0] && thumbs[0].thumbnail ? thumbs[0].thumbnail.split('/').pop() : null;
+}
+
+// ── Seasonal Returns ─────────────────────────────────────────────────────────
+function _loadSrLimit() {
+  try { return localStorage.getItem(SR_LIMIT_KEY) || '10'; } catch (_) { return '10'; }
+}
+function _saveSrLimit(v) { try { localStorage.setItem(SR_LIMIT_KEY, v); } catch (_) {} }
+function _saveSrData(items) { try { localStorage.setItem(SR_DATA_KEY, JSON.stringify(items)); } catch (_) {} }
+function _loadSrDataCache() {
+  try { return JSON.parse(localStorage.getItem(SR_DATA_KEY) || '[]'); } catch (_) { return []; }
+}
+
+async function _fetchAndCacheSr() {
+  const limit = _loadSrLimit();
+  try {
+    const r = await fetch('/api/notifications/seasonal-returns?all=true');
+    if (!r.ok) { _srData = []; _saveSrData([]); return; }
+    const d = await r.json();
+    let items = d.items || [];
+    // Service already sorts: timing "now" first, then recency, then sighting count
+    if (limit === 'foray') {
+      const nameSet = new Set(ForagingList.species());
+      items = items.filter(it => nameSet.has(it.scientific_name));
+    } else {
+      items = items.slice(0, parseInt(limit, 10));
+    }
+    _srData = items;
+    _saveSrData(items);
+  } catch (_) { _srData = []; _saveSrData([]); }
+}
+
+async function onSrLimitChange() {
+  const sel = document.getElementById('sr-limit-select');
+  if (sel) _saveSrLimit(sel.value);
+  await _fetchAndCacheSr();
+  renderPreview();
+}
+
+function _seasonalReturnsHtml(items) {
+  if (!items || !items.length) return '';
+  const rows = items.map(it => {
+    const date = it.last_seen
+      ? new Date(it.last_seen.replace(' ', 'T'))
+          .toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
+      : '';
+    const loc  = it.last_seen_place || '';
+    const meta = [date, loc].filter(Boolean).join(' · ');
+    const badge = it.timing === 'now'
+      ? `<span class="sr-badge sr-badge-now">in season</span>`
+      : `<span class="sr-badge sr-badge-soon">coming soon</span>`;
+    return `<div class="sr-entry">
+      ${it.common_name ? `<div class="sr-common">${_esc(it.common_name)}</div>` : ''}
+      <div class="sr-sci">${_esc(it.scientific_name)}</div>
+      <div class="sr-row">${badge}${meta ? `<span class="sr-meta">${_esc(meta)}</span>` : ''}</div>
+      ${it.reason ? `<div class="sr-reason">${_esc(it.reason)}</div>` : ''}
+    </div>`;
+  }).join('');
+  return `<div class="sr-section"><div class="sr-title">Seasonal Returns</div><div class="sr-grid">${rows}</div></div>`;
+}
+
+// Ensure every selected species has a profile in cache before building a preview.
+async function loadAllProfiles() {
+  const names = ForagingList.species();
+  await Promise.all(names.map(async name => {
+    if (_profileCache[name]) return;
+    try { _profileCache[name] = await (await fetch('/api/species/' + encodeURIComponent(name) + '/profile')).json(); }
+    catch (_) { _profileCache[name] = null; }
+  }));
+}
+
+function renderPreview() {
+  const area = document.getElementById('print-area');
+  const lbl  = document.getElementById('preview-mode-label');
+  if (!area) return;
+  const list  = ForagingList.load();
+  const modes = list.modes || ['field'];
+
+  const hasWorkshops = modes.includes('workshops');
+  const hasWorkshop  = modes.includes('workshop');
+  const hasField     = modes.includes('field');
+
+  // Layout template: workshop/workshops wins over field
+  const useWorkshopLayout = hasWorkshop || hasWorkshops;
+  area.className = useWorkshopLayout ? 'mode-workshop' : 'mode-field';
+
+  const modeLabels = [];
+  if (hasField)     modeLabels.push('Field Guide');
+  if (hasWorkshop)  modeLabels.push('Recipe Booklet');
+  if (hasWorkshops) modeLabels.push('Workshop');
+  if (lbl) lbl.textContent = modeLabels.join(' + ');
+
+  if (!list.species.length) { area.innerHTML = '<div class="preview-empty">Add species to see a print preview.</div>'; return; }
+
+  const cover    = _loadCover();
+  const coverHtml = useWorkshopLayout ? _coverPageWorkshop(cover) : _coverPageField(cover);
+  const snap     = _loadMapSnap();
+  const snapHtml = _loadContentToggles().map ? _mapSnapHtml(snap) : '';
+  area.innerHTML = coverHtml + snapHtml + _seasonalReturnsHtml(_srData) + list.species.map(name =>
+    _combinedPage(name, modes)).join('');
+}
+
+// Route a single species to the right renderer based on active modes.
+function _combinedPage(name, modes) {
+  const hasWorkshop      = modes.includes('workshop') || modes.includes('workshops');
+  const hasField         = modes.includes('field');
+  const isWorkshopHandout = modes.includes('workshops');
+  if (!hasWorkshop) return _fieldEntry(name);
+  return _workshopPage(name, hasField, isWorkshopHandout);
+}
+
+// Compact field-guide content block used when Field Guide is combined with Recipe Booklet.
+// Returns a ws-section fragment with ID notes, lookalike warning, edible parts.
+function _fieldGuideBlock(cul) {
+  const idNote    = (cul.id_notes || '').replace(/\[[^\]]*\]\s*/g, '').trim();
+  const lookalike = (cul.look_alike_warnings || '').trim();
+  const parts     = [cul.edible_parts, cul.harvest_stage].filter(Boolean).join(' · ');
+  const bits = [];
+  if (idNote)    bits.push(`<p>${_esc(idNote.slice(0, 220))}${idNote.length > 220 ? '…' : ''}</p>`);
+  if (lookalike) bits.push(`<p class="ws-fl">⚠ ${_esc(lookalike.slice(0, 160))}${lookalike.length > 160 ? '…' : ''}</p>`);
+  if (parts)     bits.push(`<p class="ws-fl">Edible parts — ${_esc(parts)}</p>`);
+  if (!bits.length) return '';
+  return `<div class="ws-section-h">Field ID notes</div><div class="ws-forage">${bits.join('')}</div>`;
+}
+
+function _fieldEntry(name) {
+  const prof = _profileCache[name];
+  const base = _baseByName[name] || {};
+  const sp   = (prof && prof.species)  || base;
+  const cul  = (prof && prof.culinary) || {};
+  const common = (sp.common_names && sp.common_names[0]) || (base.common_names && base.common_names[0]) || '';
+  const edib   = sp.edibility_status;
+  const recipes = (prof && prof.recipes) || [];
+  const key     = recipes.find(r => r.is_preferred) || recipes[0];
+
+  // Section prefs — undefined means no profile yet, show everything.
+  const prefs = prof ? _getSectionPrefs(name, prof) : null;
+  const ct = _loadContentToggles();
+  const showSeason    = ct.season    && (!prefs || prefs.phenology);
+  const showRecipe    = ct.recipes   && (!prefs || prefs.recipes)  && !!key;
+
+  // Primary: distinguishing features / ID notes — gated on ct.id_notes
+  const idNote = (cul.id_notes || '').replace(/\[[^\]]*\]\s*/g, '').trim();
+  const showId = ct.id_notes && !!idNote;
+
+  // Lookalike warnings — gated on ct.id_notes
+  const lookalike = (cul.look_alike_warnings || '').trim();
+  const showLookalike = ct.id_notes && (!prefs || prefs.lookalikes) && !!lookalike;
+
+  // Edible parts + harvest stage — gated on ct.foraging
+  const partsBits = [];
+  if (ct.foraging && cul.edible_parts)  partsBits.push(cul.edible_parts);
+  if (ct.foraging && cul.harvest_stage) partsBits.push(cul.harvest_stage);
+  const partsText = partsBits.join(' · ');
+
+  // Photo — controlled by content toggle
+  const showPhotos = ct.photos;
+  const file = prof ? _photoFileFor(name, prof) : null;
+  const photoHtml = (showPhotos && file)
+    ? `<img class="fg-photo" src="/thumbnails/${_esc(file)}" onerror="this.style.display='none'">` : '';
+
+  return `<div class="fg-entry">
+    ${photoHtml}
+    <div class="fg-sci">${_esc(name)}</div>
+    ${common ? `<div class="fg-common">${_esc(common)}</div>` : ''}
+    <div class="fg-row">
+      <span class="fg-pill ${edClass(edib)}">${_esc(edLabel(edib))}</span>
+      ${ct.season ? `<span class="fg-season">${_seasonText(sp)}</span>` : ''}
+    </div>
+    ${showId       ? `<div class="fg-id-primary">${_esc(idNote.slice(0, 200))}${idNote.length > 200 ? '…' : ''}</div>` : ''}
+    ${showLookalike ? `<div class="fg-lookalike">⚠ ${_esc(lookalike.slice(0, 130))}${lookalike.length > 130 ? '…' : ''}</div>` : ''}
+    ${partsText    ? `<div class="fg-note">${_esc(partsText)}</div>` : ''}
+    ${showRecipe   ? `<div class="fg-recipe"><div class="rt">${_esc(key.title)}</div>${_mdLite(key.body)}</div>` : ''}
+  </div>`;
+}
+
+function _workshopPage(name, withFieldBlock = false, isWorkshopHandout = false) {
+  const prof = _profileCache[name];
+  const base = _baseByName[name] || {};
+  const sp   = (prof && prof.species)  || base;
+  const cul  = (prof && prof.culinary) || {};
+  const common = (sp.common_names && sp.common_names[0]) || (base.common_names && base.common_names[0]) || '';
+  const edib   = sp.edibility_status;
+  const recipes = (prof && prof.recipes) || [];
+  const key     = recipes.find(r => r.is_preferred) || recipes[0];
+  const ct = _loadContentToggles();
+  const file = prof ? _photoFileFor(name, prof) : null;
+
+  // Section prefs — default all ON when no profile cached yet.
+  const prefs = prof ? _getSectionPrefs(name, prof) : {};
+
+  const photoHtml = (ct.photos && file)
+    ? `<img class="ws-photo" src="/thumbnails/${_esc(file)}" onerror="this.style.display='none'">` : '';
+
+  // Safety box — edibility + lookalike/prep warnings (gated on id_notes toggle + lookalikes pref).
+  const warnings = [];
+  if (ct.id_notes && prefs.lookalikes !== false && cul.look_alike_warnings)  warnings.push('Look-alikes: ' + cul.look_alike_warnings);
+  if (ct.id_notes && prefs.lookalikes !== false && cul.preparation_warnings) warnings.push('Preparation: ' + cul.preparation_warnings);
+  const safetyBody = warnings.map(w => `<p>${_esc(w)}</p>`).join('')
+    || (ct.id_notes && prefs.lookalikes !== false ? '<p>No specific look-alike warnings on record — always confirm identification before eating.</p>' : '');
+  const safety = `<div class="ws-safety">
+    <div class="ws-safety-h">⚠ Safety &amp; edibility</div>
+    <div class="ws-edib"><span class="fg-pill ${edClass(edib)}">${_esc(edLabel(edib))}</span></div>
+    ${safetyBody}
+  </div>`;
+
+  // Recipe section.
+  const recipeHtml = (ct.recipes && key && prefs.recipes !== false)
+    ? `<div class="ws-section-h">Recipe</div><div class="ws-recipe">${_mdLite(key.body)}</div>`
+    : '';
+
+  // Medicinal section — strip bracket citations from all fields.
+  const _stripCite = t => (t || '').replace(/\[[^\]]*\]\s*/g, '').trim();
+  const medBits = [];
+  if (cul.medicinal_notes)    medBits.push(_esc(_stripCite(cul.medicinal_notes)));
+  if (cul.medicinal_folklore) medBits.push(_esc(_stripCite(cul.medicinal_folklore)));
+  if (cul.traditional_uses)   medBits.push('<span class="ws-fl">Traditional uses —</span> ' + _esc(_stripCite(cul.traditional_uses)));
+  const medicinalHtml = (ct.herbal && medBits.length && prefs.medicinal !== false)
+    ? `<div class="ws-section-h">Medicinal preparations</div><div class="ws-forage">${medBits.map(b => `<p>${b}</p>`).join('')}</div>`
+    : '';
+
+  // ID notes — gated independently on ct.id_notes only.
+  const idn = (cul.id_notes || '').replace(/\[[^\]]*\]\s*/g, '').trim();
+  const idNotesHtml = (ct.id_notes && idn && !withFieldBlock)
+    ? `<div class="ws-section-h">Identification</div><div class="ws-forage"><p>${_esc(idn)}</p></div>`
+    : '';
+
+  // Foraging notes — edible parts + harvest stage only, gated on ct.foraging.
+  const forageBits = [];
+  if (ct.foraging && cul.edible_parts)   forageBits.push('<span class="ws-fl">Edible parts —</span> ' + _esc(cul.edible_parts));
+  if (ct.foraging && cul.harvest_stage)  forageBits.push('<span class="ws-fl">Harvest —</span> ' + _esc(cul.harvest_stage));
+  const forageHtml = (ct.foraging && forageBits.length && prefs.foraging !== false && !withFieldBlock)
+    ? `<div class="ws-section-h">Foraging notes</div><div class="ws-forage">${forageBits.map(b => `<p>${b}</p>`).join('')}</div>`
+    : '';
+
+  // Culinary section — flavour, cooking techniques, pairings.
+  const culBits = [];
+  if (cul.flavour_profile)     culBits.push('<span class="ws-fl">Flavour —</span> ' + _esc(cul.flavour_profile));
+  if (cul.cooking_techniques)  culBits.push('<span class="ws-fl">Cooking —</span> ' + _esc(cul.cooking_techniques));
+  if (cul.pairing_ideas)       culBits.push('<span class="ws-fl">Pairings —</span> ' + _esc(cul.pairing_ideas));
+  const culinaryHtml = (ct.culinary && culBits.length)
+    ? `<div class="ws-section-h">Culinary</div><div class="ws-forage">${culBits.map(b => `<p>${b}</p>`).join('')}</div>`
+    : '';
+
+  // Season bar — phenology months.
+  const seasonHtml = ct.season
+    ? `<div class="ws-section-h">Season</div><div class="ws-forage"><p>${_seasonText(sp)}</p></div>`
+    : '';
+
+  // Field Guide content block — compact ID notes / lookalike / edible parts
+  // injected above recipe when combined with Field Guide mode.
+  const fieldBlockHtml = withFieldBlock ? _fieldGuideBlock(cul) : '';
+
+  // Workshop handout structural blocks — gated on ct.my_notes.
+  const exercisePlaceholder = (isWorkshopHandout && ct.my_notes)
+    ? `<div class="ws-section-h">Exercise notes</div>
+       ${'<div class="ws-rule"></div>'.repeat(4)}`
+    : '';
+  const personalInputPlaceholder = (isWorkshopHandout && ct.my_notes)
+    ? `<div class="ws-section-h">Personal observations</div>
+       <div class="ws-ruled-box"></div>`
+    : '';
+
+  // Generic "My notes" section — suppressed in workshop-handout mode where
+  // the exercise / personal-input placeholders serve the same purpose.
+  const myNotes = (!isWorkshopHandout && ct.my_notes) ? `<div class="ws-mynotes">
+    <div class="ws-section-h">My notes</div>
+    ${'<div class="ws-rule"></div>'.repeat(5)}
+  </div>` : '';
+
+  return `<div class="ws-page">
+    <div class="ws-head">
+      <div class="ws-titles">
+        <div class="ws-sci">${_esc(name)}</div>
+        ${common ? `<div class="ws-common">${_esc(common)}</div>` : ''}
+      </div>
+      ${photoHtml}
+    </div>
+    ${safety}
+    ${fieldBlockHtml}
+    ${idNotesHtml}
+    ${medicinalHtml}
+    ${forageHtml}
+    ${culinaryHtml}
+    ${seasonHtml}
+    ${recipeHtml}
+    ${exercisePlaceholder}
+    ${personalInputPlaceholder}
+    ${myNotes}
+    <div class="ws-credit">Melvin Jarman</div>
+  </div>`;
+}
+
+let _previewReq = 0;
+async function refreshPreview() {
+  const req = ++_previewReq;
+  renderPreview();                 // immediate paint with whatever's cached
+  await loadAllProfiles();
+  if (req !== _previewReq) return; // a newer refresh superseded this one
+  renderPreview();                 // repaint with full data
+}
+
+function openPrintTab() {
+  if (!ForagingList.count()) return;
+  window.location.href = '/lists/print';
+}
+
+// ── Session / Foray ──────────────────────────────────────────────────────────
+
+const SP_ACTIVE_KEY = 'foragingid_active_session_id';
+
+let _spSessions   = [];   // [{id, name, status, walk_id, walk_name, session_date, ...}]
+let _spWalks      = [];   // [{id, name}]
+let _spCurrentId  = null; // active session id
+let _spDetail     = null; // full detail (species + attendees)
+let _spAddTimer   = null;
+
+// Persist/restore active session id
+function _spGetActiveId()      { try { return parseInt(localStorage.getItem(SP_ACTIVE_KEY)) || null; } catch(_) { return null; } }
+function _spSetActiveId(id)    { try { if (id) localStorage.setItem(SP_ACTIVE_KEY, String(id)); else localStorage.removeItem(SP_ACTIVE_KEY); } catch(_) {} }
+
+async function toggleSessionPanel() {
+  const panel = document.getElementById('session-panel');
+  if (!panel) return;
+  const open = panel.style.display !== 'none';
+  if (open) {
+    panel.style.display = 'none';
+    document.getElementById('session-tab-btn').classList.remove('active');
+    return;
+  }
+  // Close cover panel if open
+  const cp = document.getElementById('cover-panel');
+  if (cp) cp.style.display = 'none';
+  document.getElementById('cover-btn')?.classList.remove('active');
+
+  panel.style.display = 'block';
+  document.getElementById('session-tab-btn').classList.add('active');
+  await _spLoad();
+}
+
+function closeSessionPanel() {
+  const panel = document.getElementById('session-panel');
+  if (panel) panel.style.display = 'none';
+  document.getElementById('session-tab-btn')?.classList.remove('active');
+}
+
+async function _spLoad() {
+  // Load sessions + walks in parallel
+  try {
+    const [sessR, walkR] = await Promise.all([
+      fetch('/api/sessions'),
+      fetch('/api/walk/saves'),
+    ]);
+    _spSessions = sessR.ok ? await sessR.json() : [];
+    const wd    = walkR.ok ? await walkR.json() : {};
+    _spWalks    = wd.walks || [];
+  } catch(_) {
+    _spSessions = []; _spWalks = [];
+  }
+  _spPopulateWalkSelect();
+  _spPopulateSessionSelect();
+
+  // Restore active session from localStorage
+  const savedId = _spGetActiveId();
+  const sel = document.getElementById('sp-session-select');
+  if (savedId && _spSessions.some(s => s.id === savedId)) {
+    sel.value = String(savedId);
+  }
+  await onSessionSelectChange();
+}
+
+function _spPopulateWalkSelect() {
+  const sel = document.getElementById('sp-walk-select');
+  if (!sel) return;
+  sel.innerHTML = '<option value="">— No walk —</option>' +
+    _spWalks.map(w => `<option value="${w.id}">${_esc(w.name)}</option>`).join('');
+}
+
+function _spPopulateSessionSelect() {
+  const sel = document.getElementById('sp-session-select');
+  if (!sel) return;
+  const prev = sel.value;
+  sel.innerHTML = '<option value="">— New session —</option>' +
+    _spSessions.map(s => {
+      const date = s.session_date ? ` (${s.session_date})` : '';
+      return `<option value="${s.id}">${_esc(s.name)}${date}</option>`;
+    }).join('');
+  if (prev && _spSessions.some(s => String(s.id) === prev)) sel.value = prev;
+}
+
+async function onSessionSelectChange() {
+  const sel   = document.getElementById('sp-session-select');
+  const id    = sel ? parseInt(sel.value) || null : null;
+  _spCurrentId = id;
+  _spSetActiveId(id);
+
+  const isNew = !id;
+  document.getElementById('sp-form-label').textContent = isNew ? 'New session' : 'Edit session';
+  document.getElementById('sp-delete-btn').style.display = isNew ? 'none' : '';
+  document.getElementById('sp-species-section').style.display = isNew ? 'none' : '';
+  document.getElementById('sp-att-section').style.display = isNew ? 'none' : '';
+  document.getElementById('sp-access-section').style.display = isNew ? 'none' : '';
+  document.getElementById('sp-load-section').style.display = isNew ? 'none' : '';
+  document.getElementById('sp-populate-btn').style.display = 'none';
+  document.getElementById('sp-save-msg').textContent = '';
+
+  if (isNew) {
+    _spClearForm();
+    return;
+  }
+
+  // Load detail
+  try {
+    const r = await fetch(`/api/sessions/${id}`);
+    if (!r.ok) throw new Error();
+    _spDetail = await r.json();
+  } catch(_) {
+    _spDetail = null;
+  }
+  if (!_spDetail) return;
+
+  _spFillForm(_spDetail);
+  _spRenderSpecies();
+  _spRenderAttendees();
+  await _spRenderAccessPanel();
+  document.getElementById('sp-species-section').style.display = '';
+  document.getElementById('sp-att-section').style.display = '';
+  document.getElementById('sp-access-section').style.display = '';
+  document.getElementById('sp-load-section').style.display = '';
+  document.getElementById('sp-populate-btn').style.display = _spDetail.walk_id ? '' : 'none';
+}
+
+function _spClearForm() {
+  const today = new Date().toISOString().slice(0, 10);
+  document.getElementById('sp-name').value = '';
+  document.getElementById('sp-date').value = today;
+  document.getElementById('sp-walk-select').value = '';
+  document.getElementById('sp-location').value = '';
+  document.getElementById('sp-status').value = 'draft';
+  document.getElementById('sp-notes').value = '';
+}
+
+function _spFillForm(s) {
+  document.getElementById('sp-name').value     = s.name || '';
+  document.getElementById('sp-date').value     = s.session_date || '';
+  document.getElementById('sp-walk-select').value = s.walk_id ? String(s.walk_id) : '';
+  document.getElementById('sp-location').value = s.location_override || '';
+  document.getElementById('sp-status').value   = s.status || 'draft';
+  document.getElementById('sp-notes').value    = s.facilitator_notes || '';
+}
+
+function onWalkSelectChange() {
+  // Hint: if a walk is selected and field is blank, we'll populate on save
+}
+
+async function saveSession() {
+  const btn = document.getElementById('sp-save-btn');
+  const msg = document.getElementById('sp-save-msg');
+  btn.disabled = true; msg.textContent = 'Saving…'; msg.className = 'sp-msg';
+
+  const body = {
+    name:              document.getElementById('sp-name').value.trim(),
+    session_date:      document.getElementById('sp-date').value || null,
+    walk_id:           parseInt(document.getElementById('sp-walk-select').value) || null,
+    location_override: document.getElementById('sp-location').value.trim() || null,
+    status:            document.getElementById('sp-status').value,
+    facilitator_notes: document.getElementById('sp-notes').value.trim() || null,
+  };
+
+  if (!body.name) {
+    msg.textContent = 'Session name is required'; msg.className = 'sp-msg err';
+    btn.disabled = false; return;
+  }
+
+  try {
+    let r;
+    if (_spCurrentId) {
+      r = await fetch(`/api/sessions/${_spCurrentId}`, {
+        method: 'PATCH', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body),
+      });
+    } else {
+      r = await fetch('/api/sessions', {
+        method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body),
+      });
+    }
+    if (!r.ok) throw new Error((await r.json().catch(()=>({}))).detail || `HTTP ${r.status}`);
+    const saved = await r.json();
+
+    msg.textContent = '✓ Saved'; msg.className = 'sp-msg ok';
+    _spCurrentId = saved.id;
+    _spSetActiveId(saved.id);
+
+    // Reload and re-select
+    await _spLoad();
+    const sel = document.getElementById('sp-session-select');
+    if (sel) sel.value = String(saved.id);
+    await onSessionSelectChange();
+
+    // Auto-populate if walk was selected and it's a new session
+    if (!_spCurrentId && saved.walk_id) {
+      await autoPopulateSession();
+    }
+  } catch(e) {
+    msg.textContent = 'Error: ' + e.message; msg.className = 'sp-msg err';
+  }
+  btn.disabled = false;
+}
+
+async function deleteCurrentSession() {
+  if (!_spCurrentId) return;
+  const s = _spSessions.find(x => x.id === _spCurrentId);
+  if (!confirm(`Delete session "${s?.name || _spCurrentId}"?\n\nThis removes the session and all its species/attendees.`)) return;
+  try {
+    const r = await fetch(`/api/sessions/${_spCurrentId}`, { method: 'DELETE' });
+    if (!r.ok) throw new Error();
+    _spCurrentId = null;
+    _spSetActiveId(null);
+    await _spLoad();
+    document.getElementById('sp-session-select').value = '';
+    await onSessionSelectChange();
+  } catch(_) {
+    alert('Could not delete session.');
+  }
+}
+
+async function autoPopulateSession() {
+  if (!_spCurrentId) return;
+  const btn = document.getElementById('sp-populate-btn');
+  const msg = document.getElementById('sp-save-msg');
+  btn.disabled = true; btn.textContent = 'Populating…';
+  try {
+    const r = await fetch(`/api/sessions/${_spCurrentId}/auto-populate`, { method: 'POST' });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.detail || `HTTP ${r.status}`);
+    msg.textContent = `✓ ${d.inserted} species added from walk`; msg.className = 'sp-msg ok';
+    // Reload detail
+    const dr = await fetch(`/api/sessions/${_spCurrentId}`);
+    _spDetail = dr.ok ? await dr.json() : _spDetail;
+    _spRenderSpecies();
+    // Pre-fill cover page from session
+    _spSyncCoverPage();
+  } catch(e) {
+    msg.textContent = 'Error: ' + e.message; msg.className = 'sp-msg err';
+  }
+  btn.disabled = false; btn.textContent = '♻ Re-populate from walk';
+}
+
+// ── Species rendering + management ──────────────────────────────────────────
+
+function _spRenderSpecies() {
+  if (!_spDetail) return;
+  const list = _spDetail.species || [];
+  const container = document.getElementById('sp-species-list');
+  const strip = document.getElementById('sp-stat-strip');
+  if (!container) return;
+
+  const autoN   = list.filter(s => s.source === 'auto').length;
+  const manualN = list.filter(s => s.source === 'manual').length;
+  strip.innerHTML = list.length
+    ? `<span>🌿 <strong>${list.length}</strong> species total</span>` +
+      (autoN   ? `<span>● ${autoN} from walk</span>` : '') +
+      (manualN ? `<span>● ${manualN} added manually</span>` : '')
+    : '<span style="color:#aaa">No species yet — save a walk and auto-populate, or add manually below.</span>';
+
+  if (!list.length) { container.innerHTML = ''; return; }
+
+  container.innerHTML = list.map(s => {
+    const common = (s.common_names && s.common_names[0]) ? ` — ${_esc(s.common_names[0])}` : '';
+    const srcCls = s.source === 'auto' ? 'sp-sp-src-auto' : 'sp-sp-src-manual';
+    return `<div class="sp-sp-row" id="spsp-${s.species_id}">
+      <span class="sp-sp-name">${_esc(s.scientific_name)}</span>
+      <span class="sp-sp-common">${_esc(s.common_names && s.common_names[0] || '')}</span>
+      <span class="sp-sp-src ${srcCls}">${s.source}</span>
+      <button class="sp-sp-rm" onclick="removeSessionSpecies(${s.species_id})" title="Remove">×</button>
+    </div>`;
+  }).join('');
+}
+
+async function removeSessionSpecies(speciesId) {
+  if (!_spCurrentId) return;
+  try {
+    await fetch(`/api/sessions/${_spCurrentId}/species/${speciesId}`, { method: 'DELETE' });
+    _spDetail.species = _spDetail.species.filter(s => s.species_id !== speciesId);
+    _spRenderSpecies();
+    document.getElementById('spsp-' + speciesId)?.remove();
+  } catch(_) {}
+}
+
+// Species add / lookup
+function onSpAddInput() {
+  clearTimeout(_spAddTimer);
+  const q = document.getElementById('sp-add-input').value.trim();
+  if (q.length < 2) { closeSpLookup(); return; }
+  _spAddTimer = setTimeout(() => _spLookup(q), 280);
+}
+
+function _spLookup(q) {
+  const lq = q.toLowerCase();
+  const results = _baseSpecies.filter(s => {
+    if (s.scientific_name.toLowerCase().includes(lq)) return true;
+    const names = (s.common_names || []);
+    return names.some(n => n.toLowerCase().includes(lq));
+  }).slice(0, 10);
+
+  const box = document.getElementById('sp-add-results');
+  if (!results.length) { box.style.display = 'none'; return; }
+  box.innerHTML = results.map(x => {
+    const safe = (x.scientific_name || '').replace(/'/g,"&#39;").replace(/"/g,'&quot;');
+    const common = x.common_names && x.common_names[0] ? ` — ${_esc(x.common_names[0])}` : '';
+    return `<div class="sp-lookup-item" onclick="addSessionSpecies('${safe}')">
+      <span class="sp-lookup-sci">${_esc(x.scientific_name)}</span>
+      <span class="sp-lookup-common">${common}</span>
+    </div>`;
+  }).join('');
+  box.style.display = 'block';
+
+  // Position dropdown above the input row
+  const inp = document.getElementById('sp-add-input');
+  box.style.position = 'absolute';
+  box.style.zIndex   = '200';
+  box.style.width    = inp.offsetWidth + 'px';
+  inp.parentElement.style.position = 'relative';
+}
+
+function closeSpLookup() {
+  const box = document.getElementById('sp-add-results');
+  if (box) box.style.display = 'none';
+}
+
+async function addSessionSpecies(name) {
+  if (!_spCurrentId) return;
+  closeSpLookup();
+  document.getElementById('sp-add-input').value = '';
+  const msg = document.getElementById('sp-add-msg');
+  try {
+    const r = await fetch(`/api/sessions/${_spCurrentId}/species`, {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ scientific_name: name }),
+    });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.detail || `HTTP ${r.status}`);
+    if (d.already_present) {
+      msg.textContent = `${name} is already in the session`; msg.className = 'sp-msg';
+      setTimeout(() => msg.textContent = '', 2000);
+      return;
+    }
+    // Reload detail for fresh species list
+    const dr = await fetch(`/api/sessions/${_spCurrentId}`);
+    _spDetail = dr.ok ? await dr.json() : _spDetail;
+    _spRenderSpecies();
+    msg.textContent = `✓ Added ${name}`; msg.className = 'sp-msg ok';
+    setTimeout(() => msg.textContent = '', 2000);
+  } catch(e) {
+    msg.textContent = 'Error: ' + e.message; msg.className = 'sp-msg err';
+  }
+}
+
+// ── Attendees ────────────────────────────────────────────────────────────────
+
+function _spRenderAttendees() {
+  if (!_spDetail) return;
+  const list = _spDetail.attendees || [];
+  const container = document.getElementById('sp-att-list');
+  if (!container) return;
+  container.innerHTML = list.length
+    ? list.map(a =>
+        `<div class="sp-att-row" id="spatt-${a.id}">
+          <span class="sp-att-name">${_esc(a.name)}</span>
+          <button class="sp-att-rm" onclick="removeAttendee(${a.id})" title="Remove">×</button>
+        </div>`).join('')
+    : '<div style="font-size:0.8rem;color:#aaa;padding:4px 0">No attendees yet.</div>';
+}
+
+async function addAttendee() {
+  if (!_spCurrentId) return;
+  const inp = document.getElementById('sp-att-input');
+  const name = inp ? inp.value.trim() : '';
+  if (!name) return;
+  const msg = document.getElementById('sp-att-msg');
+  try {
+    const r = await fetch(`/api/sessions/${_spCurrentId}/attendees`, {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ name }),
+    });
+    if (!r.ok) throw new Error();
+    const a = await r.json();
+    _spDetail.attendees = [...(_spDetail.attendees || []), a];
+    _spRenderAttendees();
+    inp.value = '';
+    msg.textContent = `✓ Added ${name}`; msg.className = 'sp-msg ok';
+    setTimeout(() => msg.textContent = '', 2000);
+  } catch(_) {
+    msg.textContent = 'Error adding attendee'; msg.className = 'sp-msg err';
+  }
+}
+
+async function removeAttendee(attId) {
+  if (!_spCurrentId) return;
+  try {
+    await fetch(`/api/sessions/${_spCurrentId}/attendees/${attId}`, { method: 'DELETE' });
+    _spDetail.attendees = (_spDetail.attendees || []).filter(a => a.id !== attId);
+    _spRenderAttendees();
+  } catch(_) {}
+}
+
+// ── Load session into the ForagingList ───────────────────────────────────────
+
+function loadSessionIntoList() {
+  if (!_spDetail || !_spDetail.species.length) {
+    document.getElementById('sp-load-msg').textContent = 'No species in this session yet.';
+    return;
+  }
+  ForagingList.clear();
+  (_spDetail.species || []).forEach(s => ForagingList.add(s.scientific_name));
+  render();
+  // Pre-fill cover page from session metadata
+  _spSyncCoverPage();
+  closeSessionPanel();
+  document.getElementById('sp-load-msg').textContent = '';
+}
+
+function _spSyncCoverPage() {
+  if (!_spDetail) return;
+  const c = _loadCover();
+  // Only pre-fill blank fields — don't overwrite what the user has already typed
+  if (_spDetail.name     && !c.event)    c.event    = _spDetail.name;
+  if (_spDetail.session_date && !c.date) c.date     = _spDetail.session_date;
+  const loc = _spDetail.location_override || _spDetail.walk_name || '';
+  if (loc && !c.location) c.location = loc;
+  _saveCoverRaw(c);
+  _syncCoverBtn();
+}
+
+// ── Participants & Access ────────────────────────────────────────────────────
+
+async function _spRenderAccessPanel() {
+  if (!_spCurrentId) return;
+  const list = document.getElementById('sp-access-list');
+  if (!list) return;
+  list.innerHTML = '<div style="font-size:0.8rem;color:#888;padding:4px 0">Loading…</div>';
+  try {
+    const r = await fetch('/api/workshop/tokens?workshop_session_id=' + _spCurrentId);
+    const tokens = r.ok ? await r.json() : [];
+    if (!tokens.length) {
+      list.innerHTML = '<div style="font-size:0.8rem;color:#888;padding:4px 0">No participants yet.</div>';
+    } else {
+      const now = new Date();
+      list.innerHTML = tokens.map(t => {
+        const isExpired = new Date(t.expires_at) < now;
+        const badgeCls  = !t.is_active ? 'revoked' : isExpired ? 'expired' : 'active';
+        const badgeTxt  = !t.is_active ? 'Revoked' : isExpired ? 'Expired' : 'Active';
+        const exp       = new Date(t.expires_at).toLocaleDateString();
+        const name      = _esc(t.participant_name || ('id:' + t.participant_id));
+        const canRevoke = t.is_active && !isExpired;
+        const hasPid    = t.participant_id != null;
+        return '<div class="sp-acc-row">' +
+          '<span class="sp-acc-name">' + name + '</span>' +
+          '<span class="sp-acc-badge ' + badgeCls + '">' + badgeTxt + '</span>' +
+          '<span class="sp-acc-expiry">exp ' + exp + '</span>' +
+          '<button class="sp-btn-ghost" style="padding:3px 8px;font-size:0.75rem" ' +
+            'onclick="copyTokenLink(\'' + t.token + '\', this)">Copy link</button>' +
+          (canRevoke ? '<button class="sp-btn-ghost" style="padding:3px 8px;font-size:0.75rem;border-color:#fca5a5;color:#c0392b" ' +
+            'onclick="revokeToken(' + t.id + ')">Revoke</button>' : '') +
+          (hasPid ? '<button class="sp-btn-ghost" style="padding:3px 8px;font-size:0.75rem" ' +
+            'onclick="viewParticipantEncounters(' + t.participant_id + ')">Encounters</button>' : '') +
+          '</div>';
+      }).join('');
+    }
+  } catch(e) {
+    list.innerHTML = '<div style="font-size:0.8rem;color:#c0392b">Failed to load participants.</div>';
+  }
+  await _spPopulateExistingDropdown();
+}
+
+async function _spPopulateExistingDropdown() {
+  const sel = document.getElementById('sp-acc-existing-select');
+  if (!sel) return;
+  try {
+    const [partsR, toksR] = await Promise.all([
+      fetch('/api/workshop/participants'),
+      fetch('/api/workshop/tokens?workshop_session_id=' + _spCurrentId),
+    ]);
+    const parts  = partsR.ok ? await partsR.json() : [];
+    const tokens = toksR.ok  ? await toksR.json()  : [];
+    const now = new Date();
+    const alreadyActive = new Set(
+      tokens.filter(t => t.is_active && new Date(t.expires_at) >= now && t.participant_id != null)
+            .map(t => t.participant_id)
+    );
+    const available = parts.filter(p => !alreadyActive.has(p.id));
+    const row = document.getElementById('sp-acc-existing-row');
+    if (row) row.style.display = available.length ? '' : 'none';
+    sel.innerHTML = available.length
+      ? available.map(p => '<option value="' + p.id + '">' + _esc(p.name) + '</option>').join('')
+      : '<option value="">— none available —</option>';
+  } catch(_) {
+    sel.innerHTML = '<option value="">— load error —</option>';
+  }
+}
+
+async function addWorkshopParticipant() {
+  const nameEl  = document.getElementById('sp-acc-name');
+  const daysEl  = document.getElementById('sp-acc-days');
+  const msg     = document.getElementById('sp-acc-msg');
+  const linkBox = document.getElementById('sp-acc-new-link');
+  const name    = nameEl ? nameEl.value.trim() : '';
+  const days    = parseInt(daysEl ? daysEl.value : '7') || 7;
+  if (!name) { msg.textContent = 'Enter a participant name.'; msg.className = 'sp-msg err'; return; }
+  msg.textContent = 'Creating…'; msg.className = 'sp-msg';
+  linkBox.style.display = 'none';
+  try {
+    const pr = await fetch('/api/workshop/participants', {
+      method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ name }),
+    });
+    if (!pr.ok) throw new Error(((await pr.json().catch(function(){return {};})).detail) || ('HTTP ' + pr.status));
+    const participant = await pr.json();
+    const tr = await fetch('/api/workshop/tokens', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ participant_id: participant.id, workshop_session_id: _spCurrentId, expires_days: days }),
+    });
+    if (!tr.ok) throw new Error(((await tr.json().catch(function(){return {};})).detail) || ('HTTP ' + tr.status));
+    const tok = await tr.json();
+    const link = window.location.origin + '/encounters?token=' + tok.token;
+    linkBox.innerHTML = '<strong>' + _esc(name) + '</strong> — access link:<br>' +
+      '<code style="word-break:break-all">' + _esc(link) + '</code>' +
+      '<button class="sp-btn-ghost" style="margin-left:8px;padding:2px 8px;font-size:0.75rem" ' +
+        'onclick="copyTokenLink(\'' + tok.token + '\', this)">Copy</button>';
+    linkBox.style.display = '';
+    nameEl.value = '';
+    msg.textContent = '✓ Participant added'; msg.className = 'sp-msg ok';
+    setTimeout(function() { if (msg.className.includes('ok')) msg.textContent = ''; }, 3000);
+    await _spRenderAccessPanel();
+  } catch(e) {
+    msg.textContent = 'Error: ' + e.message; msg.className = 'sp-msg err';
+  }
+}
+
+async function addExistingParticipant() {
+  const sel     = document.getElementById('sp-acc-existing-select');
+  const daysEl  = document.getElementById('sp-acc-existing-days');
+  const msg     = document.getElementById('sp-acc-msg');
+  const linkBox = document.getElementById('sp-acc-new-link');
+  const pid     = parseInt(sel ? sel.value : '') || null;
+  const days    = parseInt(daysEl ? daysEl.value : '7') || 7;
+  if (!pid) { msg.textContent = 'Select a participant.'; msg.className = 'sp-msg err'; return; }
+  msg.textContent = 'Minting…'; msg.className = 'sp-msg';
+  linkBox.style.display = 'none';
+  try {
+    const tr = await fetch('/api/workshop/tokens', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ participant_id: pid, workshop_session_id: _spCurrentId, expires_days: days }),
+    });
+    if (!tr.ok) throw new Error(((await tr.json().catch(function(){return {};})).detail) || ('HTTP ' + tr.status));
+    const tok   = await tr.json();
+    const pname = (sel && sel.options[sel.selectedIndex]) ? sel.options[sel.selectedIndex].text : ('id:' + pid);
+    const link  = window.location.origin + '/encounters?token=' + tok.token;
+    linkBox.innerHTML = '<strong>' + _esc(pname) + '</strong> — access link:<br>' +
+      '<code style="word-break:break-all">' + _esc(link) + '</code>' +
+      '<button class="sp-btn-ghost" style="margin-left:8px;padding:2px 8px;font-size:0.75rem" ' +
+        'onclick="copyTokenLink(\'' + tok.token + '\', this)">Copy</button>';
+    linkBox.style.display = '';
+    msg.textContent = '✓ Link minted'; msg.className = 'sp-msg ok';
+    setTimeout(function() { if (msg.className.includes('ok')) msg.textContent = ''; }, 3000);
+    await _spRenderAccessPanel();
+  } catch(e) {
+    msg.textContent = 'Error: ' + e.message; msg.className = 'sp-msg err';
+  }
+}
+
+async function revokeToken(tokenId) {
+  if (!confirm('Revoke this access token? The participant\'s encounters are kept.')) return;
+  const msg = document.getElementById('sp-acc-msg');
+  try {
+    const r = await fetch('/api/workshop/tokens/' + tokenId + '/revoke', { method: 'POST' });
+    if (!r.ok) throw new Error(((await r.json().catch(function(){return {};})).detail) || ('HTTP ' + r.status));
+    msg.textContent = '✓ Token revoked'; msg.className = 'sp-msg ok';
+    setTimeout(function() { if (msg.className.includes('ok')) msg.textContent = ''; }, 2000);
+    await _spRenderAccessPanel();
+  } catch(e) {
+    msg.textContent = 'Error: ' + e.message; msg.className = 'sp-msg err';
+  }
+}
+
+function copyTokenLink(token, btn) {
+  const link = window.location.origin + '/encounters?token=' + token;
+  navigator.clipboard.writeText(link).then(function() {
+    var prev = btn.textContent;
+    btn.textContent = 'Copied ✓';
+    setTimeout(function() { btn.textContent = prev; }, 1800);
+  }).catch(function() {
+    prompt('Copy this link:', link);
+  });
+}
+
+function viewParticipantEncounters(participantId) {
+  window.open('/encounters?user_id=' + participantId, '_blank');
+}
+
+// ── Reach-back navigation ───────────────────────────────────────────────────
+function goSelect(where) {
+  if (where === 'map')     location.href = '/map?select=1';
+  else if (where === 'species') location.href = '/species?select=1';
+}
+
+// ── Init ────────────────────────────────────────────────────────────────────
+(async function init() {
+  renderFilterSummary();
+  try {
+    _baseSpecies = await (await fetch('/api/species/')).json();
+    _baseByName = {};
+    _baseSpecies.forEach(s => { _baseByName[s.scientific_name] = s; });
+  } catch (_) { /* non-fatal */ }
+  await autoPopulateFromFilters();
+  syncToolbar();
+  setPrintStyle(_loadStyle());
+  _syncCoverBtn();   // reflect any saved cover page on the toolbar button
+  // Restore SR selector, seed preview from cache, then fetch fresh data in background
+  const srSel = document.getElementById('sr-limit-select');
+  if (srSel) srSel.value = _loadSrLimit();
+  _srData = _loadSrDataCache();
+  render();
+  _fetchAndCacheSr().then(() => renderPreview());
+})();
+</script>
+<script src="/static/js/pwa.js"></script>
+<script src="/static/js/offline.js"></script>
+<script src="/static/js/guest-mode.js"></script>
+<script src="/static/js/job-status-widget.js"></script>
+<script src="/static/js/seasonal-returns.js"></script>
+<script src="/static/js/site-header.js"></script>
+</body>
+</html>

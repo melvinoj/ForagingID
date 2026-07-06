@@ -1,0 +1,991 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <link rel="manifest" href="/static/manifest.json">
+  <meta name="theme-color" content="#2d5a1b">
+  <link rel="apple-touch-icon" href="/static/icons/icon-192.png">
+  <link rel="icon" type="image/svg+xml" href="/static/icons/dandelion-icon.svg">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+  <title>ForagingID — Workshops</title>
+  <link rel="stylesheet" href="/static/css/tokens.css">
+  <link rel="stylesheet" href="/static/css/site-header.css">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: system-ui, sans-serif; background: #2a3330; color: #d8e4d8; min-height: 100dvh; }
+
+    /* ── Layout ──────────────────────────────────────────────────────── */
+    #main { max-width: 860px; margin: 0 auto; padding: 20px 16px 60px; }
+
+    .page-title { margin-bottom: 20px; }
+    .page-title h2 { font-size: 1.15rem; font-weight: 700; color: #8ab87a; }
+    .page-subtitle { font-size: 0.78rem; color: #7a9a7a; margin-top: 2px; }
+
+    /* ── Panel card ──────────────────────────────────────────────────── */
+    .panel {
+      background: #344440; border: 1px solid #4a5e5a; border-radius: 12px;
+      overflow: hidden; margin-bottom: 24px;
+    }
+    .panel-header {
+      background: #2f3d3a; padding: 10px 16px;
+      border-bottom: 1px solid #4a5e5a;
+      display: flex; align-items: center; gap: 8px;
+    }
+    .panel-title {
+      font-size: 0.82rem; font-weight: 700; text-transform: uppercase;
+      letter-spacing: 0.06em; color: #9aaa88; flex: 1;
+    }
+    .panel-body { padding: 16px; }
+
+    /* ── Table ───────────────────────────────────────────────────────── */
+    table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
+    th { text-align: left; color: #7a9288; font-size: 0.73rem; font-weight: 600;
+         text-transform: uppercase; letter-spacing: 0.04em;
+         padding: 6px 10px; border-bottom: 1px solid #3a4e4a; }
+    td { padding: 9px 10px; border-bottom: 1px solid #323e3c; vertical-align: middle; }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: #2f3c38; }
+    .empty-msg { text-align: center; color: #6a8a7a; padding: 20px; font-size: 0.82rem; }
+
+    /* ── Status badges ───────────────────────────────────────────────── */
+    .badge {
+      display: inline-block; font-size: 0.68rem; font-weight: 700;
+      padding: 2px 7px; border-radius: 10px; letter-spacing: 0.03em;
+    }
+    .badge-active  { background: #14532d; color: #86efac; }
+    .badge-expired { background: #451a03; color: #fdba74; }
+    .badge-none    { background: #1c2a26; color: #6a8a7a; }
+
+    /* ── Buttons ─────────────────────────────────────────────────────── */
+    .btn {
+      font-size: 0.75rem; font-weight: 600; padding: 4px 11px;
+      border: none; border-radius: 5px; cursor: pointer; transition: background 0.15s;
+      white-space: nowrap;
+    }
+    .btn-danger  { background: #7f1d1d; color: #fca5a5; }
+    .btn-danger:hover { background: #991b1b; }
+    .btn-danger:disabled { background: #3d3030; color: #888; cursor: default; }
+    .btn-primary { background: #2d5016; color: white; }
+    .btn-primary:hover { background: #3a6018; }
+    .btn-primary:disabled { background: #aaa; cursor: default; }
+    .btn-secondary { background: #344440; color: #a0c878; border: 1px solid #4a5e5a; }
+    .btn-secondary:hover { background: #3d524e; }
+    .btn-copy { background: #1e3a5f; color: #93c5fd; border: 1px solid #2563eb; }
+    .btn-copy:hover { background: #1d4ed8; color: white; }
+
+    /* ── Mint form ───────────────────────────────────────────────────── */
+    .mint-form { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end; }
+    .mint-field { display: flex; flex-direction: column; gap: 4px; }
+    .mint-field label { font-size: 0.73rem; color: #8aaa88; font-weight: 600; }
+    .mint-input {
+      padding: 6px 9px; border: 1px solid #4a5e5a; border-radius: 6px;
+      background: #2f3d3a; color: #d8e4d8; font-size: 0.82rem; font-family: inherit;
+    }
+    .mint-input:focus { outline: none; border-color: #5a8a35; }
+    .mint-input[list] { min-width: 200px; }
+
+    /* ── Token reveal box ────────────────────────────────────────────── */
+    #token-reveal {
+      display: none; margin-top: 16px;
+      background: #1a2e1a; border: 1px solid #3a6028; border-radius: 8px; padding: 14px 16px;
+    }
+    #token-reveal.visible { display: block; }
+    .token-reveal-label { font-size: 0.73rem; color: #8aaa88; font-weight: 600; margin-bottom: 6px; }
+    .token-reveal-warning { font-size: 0.72rem; color: #f59e0b; margin-bottom: 8px; }
+    .token-string-row { display: flex; gap: 8px; align-items: center; }
+    #token-string {
+      flex: 1; font-family: monospace; font-size: 0.82rem; color: #86efac;
+      background: #0f1f0f; border: 1px solid #2d5016; border-radius: 5px;
+      padding: 5px 9px; word-break: break-all;
+    }
+
+    /* ── Token list row ──────────────────────────────────────────────── */
+    .token-masked { font-family: monospace; font-size: 0.79rem; color: #8ab87a; }
+    .ts { font-size: 0.75rem; color: #6a8a7a; }
+
+    /* ── Toast ───────────────────────────────────────────────────────── */
+    #toast {
+      position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+      background: #2d5016; color: white; padding: 8px 18px; border-radius: 8px;
+      font-size: 0.82rem; opacity: 0; transition: opacity 0.2s; pointer-events: none;
+      z-index: 9999; white-space: nowrap;
+    }
+    #toast.show { opacity: 1; }
+    #toast.err  { background: #c0392b; }
+
+    /* ── Mint mode toggle ────────────────────────────────────────────── */
+    .seg-toggle { display: inline-flex; border: 1px solid #4a5e5a; border-radius: 6px; overflow: hidden; margin-bottom: 14px; }
+    .seg-toggle button {
+      background: #2f3d3a; color: #8aaa88; border: none; cursor: pointer;
+      font-size: 0.76rem; font-weight: 600; padding: 6px 14px; transition: background 0.15s;
+    }
+    .seg-toggle button.active { background: #2d5016; color: white; }
+    .mint-path { display: none; }
+    .mint-path.active { display: block; }
+    .mint-hint { font-size: 0.74rem; color: #c08a3a; margin-top: 8px; }
+    select.mint-input { min-width: 200px; }
+
+    /* ── History panel ───────────────────────────────────────────────── */
+    .history-session {
+      border-bottom: 1px solid #323e3c; padding: 0;
+    }
+    .history-session:last-child { border-bottom: none; }
+    .history-session-header {
+      background: #2f3d3a; padding: 8px 14px; font-size: 0.78rem; font-weight: 700;
+      color: #a0c878; display: flex; align-items: baseline; gap: 10px;
+    }
+    .history-session-date { font-size: 0.73rem; color: #7a9a7a; font-weight: 500; }
+    .history-session-count { margin-left: auto; font-size: 0.72rem; color: #6a8a7a; font-weight: 500; }
+    .history-enc {
+      padding: 8px 14px 8px 22px; border-top: 1px solid #2a3430; font-size: 0.8rem;
+      display: flex; flex-direction: column; gap: 2px;
+    }
+    .history-enc-top { display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; }
+    .history-enc-species { color: #cfe6cf; font-weight: 600; }
+    .history-enc-species.unlinked { color: #6a8a7a; font-weight: 500; font-style: italic; }
+    .history-enc-type { font-size: 0.68rem; background: #1c2a26; color: #8ab87a; padding: 1px 6px; border-radius: 8px; }
+    .history-enc-date { font-size: 0.72rem; color: #6a8a7a; }
+    .history-enc-snippet { color: #9ab09a; font-size: 0.76rem; line-height: 1.35; }
+
+    @media (max-width: 600px) {
+      .mint-form { flex-direction: column; }
+      .mint-input[list] { min-width: 0; }
+      select.mint-input { min-width: 0; }
+      table { font-size: 0.77rem; }
+      td, th { padding: 7px 6px; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- Nav chip + drawer injected by /static/js/site-header.js (Map Redesign P3-nav) -->
+
+<div id="main">
+  <div class="page-title">
+    <h2>Workshops</h2>
+    <div class="page-subtitle">Manage participants and access tokens. Curator-only.</div>
+  </div>
+
+  <!-- ── Sessions panel ────────────────────────────────────────────────── -->
+  <div class="panel">
+    <div class="panel-header">
+      <span class="panel-title">Sessions</span>
+      <button class="btn btn-secondary" onclick="loadSessions()">Refresh</button>
+    </div>
+    <div class="panel-body">
+      <div class="mint-form" style="margin-bottom:16px">
+        <div class="mint-field">
+          <label for="session-name">Session name</label>
+          <input id="session-name" class="mint-input" type="text"
+                 placeholder="e.g. Tuesday Foragers — May 2026" autocomplete="off" style="min-width:240px">
+        </div>
+        <div class="mint-field">
+          <label for="session-date">Date</label>
+          <input id="session-date" class="mint-input" type="date">
+        </div>
+        <div class="mint-field" style="justify-content:flex-end">
+          <button class="btn btn-primary" id="btn-create-session" onclick="createSession()">Create session</button>
+        </div>
+      </div>
+    </div>
+    <div style="padding:0">
+      <table>
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>Date</th>
+            <th style="text-align:right">Participants</th>
+            <th style="text-align:right">Encounters</th>
+            <th>Walk</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="sessions-tbody">
+          <tr><td colspan="6" class="empty-msg">Loading…</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ── Link-walk modal ────────────────────────────────────────────────── -->
+  <div id="link-walk-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:200;align-items:center;justify-content:center">
+    <div style="background:#2e3c39;border:1px solid #4a6a5a;border-radius:12px;padding:20px 24px;max-width:480px;width:90%;box-shadow:0 8px 32px #0006">
+      <div style="font-size:0.9rem;font-weight:700;color:#8ab87a;margin-bottom:12px">Link GPS Walk to Session</div>
+      <div style="font-size:0.78rem;color:#7a9a7a;margin-bottom:14px">
+        The linked walk's GPS track is used to suggest locations for text-only encounters with no coordinates.
+        Suggestions are never applied automatically — you review and accept each one.
+      </div>
+      <div style="margin-bottom:14px">
+        <label style="font-size:0.75rem;color:#9aaa88;display:block;margin-bottom:4px">Select recorded walk</label>
+        <select id="link-walk-select" style="width:100%;background:#1e2e2a;border:1px solid #4a6a5a;border-radius:6px;color:#d8e4d8;padding:7px 10px;font-size:0.82rem"></select>
+      </div>
+      <div style="display:flex;gap:10px;justify-content:flex-end">
+        <button class="btn btn-secondary" onclick="closeLinkWalk()">Cancel</button>
+        <button class="btn btn-primary" id="btn-link-walk-confirm" onclick="confirmLinkWalk()">Link walk</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Location suggestions modal ────────────────────────────────────── -->
+  <div id="suggestions-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:200;align-items:center;justify-content:center">
+    <div style="background:#2e3c39;border:1px solid #4a6a5a;border-radius:12px;padding:20px 24px;max-width:600px;width:95%;max-height:85dvh;display:flex;flex-direction:column;box-shadow:0 8px 32px #0006">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
+        <div style="font-size:0.9rem;font-weight:700;color:#8ab87a;flex:1" id="sugg-title">Location Suggestions</div>
+        <button class="btn btn-secondary" onclick="closeSuggestions()">✕ Close</button>
+      </div>
+      <div style="font-size:0.75rem;color:#7a9a7a;margin-bottom:14px" id="sugg-subtitle"></div>
+      <div style="overflow-y:auto;flex:1" id="sugg-body">
+        <div class="empty-msg">Loading…</div>
+      </div>
+      <div style="margin-top:14px;display:flex;gap:10px;justify-content:flex-end">
+        <button class="btn btn-secondary" id="btn-accept-all" onclick="acceptAllSuggestions()" style="display:none">Accept all</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Participants panel ────────────────────────────────────────────── -->
+  <div class="panel">
+    <div class="panel-header">
+      <span class="panel-title">Participants</span>
+      <button class="btn btn-secondary" id="btn-refresh-participants" onclick="loadParticipants()">Refresh</button>
+    </div>
+    <div class="panel-body" style="padding:0">
+      <table>
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>Token status</th>
+            <th style="text-align:right">Encounters</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="participants-tbody">
+          <tr><td colspan="4" class="empty-msg">Loading…</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ── Mint token form ───────────────────────────────────────────────── -->
+  <div class="panel">
+    <div class="panel-header">
+      <span class="panel-title">Mint Token</span>
+    </div>
+    <div class="panel-body">
+      <div class="seg-toggle">
+        <button id="seg-returning" class="active" onclick="setMintMode('returning')">Returning participant</button>
+        <button id="seg-new" onclick="setMintMode('new')">New participant</button>
+      </div>
+
+      <!-- Returning: explicit select of an existing participant (safer default) -->
+      <div class="mint-path active" id="path-returning">
+        <div class="mint-field" style="margin-bottom:6px">
+          <label for="mint-participant-select">Select existing participant</label>
+          <select id="mint-participant-select" class="mint-input"></select>
+        </div>
+      </div>
+
+      <!-- New: create a fresh participant by name -->
+      <div class="mint-path" id="path-new">
+        <div class="mint-field" style="margin-bottom:6px">
+          <label for="mint-new-name">New participant name</label>
+          <input id="mint-new-name" class="mint-input" type="text"
+                 placeholder="e.g. Alice" autocomplete="off">
+        </div>
+      </div>
+
+      <div class="mint-form" style="margin-top:6px">
+        <div class="mint-field">
+          <label for="mint-session-select">Session</label>
+          <select id="mint-session-select" class="mint-input"></select>
+        </div>
+        <div class="mint-field">
+          <label for="mint-expiry">Expires in (hours)</label>
+          <input id="mint-expiry" class="mint-input" type="number" value="24" min="1" max="2160" style="width:100px">
+        </div>
+        <div class="mint-field" style="justify-content:flex-end">
+          <button class="btn btn-primary" id="btn-mint" onclick="mintToken()">Mint Token</button>
+        </div>
+      </div>
+      <div class="mint-hint" id="mint-no-session" style="display:none">No sessions yet — create one above before minting.</div>
+
+      <div id="token-reveal">
+        <div class="token-reveal-label">Token minted — copy now. It will not be shown again.</div>
+        <div class="token-reveal-warning">⚠ Share this link with the participant, then close this panel.</div>
+        <div class="token-string-row">
+          <div id="token-string"></div>
+          <button class="btn btn-copy" onclick="copyToken()">Copy</button>
+        </div>
+        <div style="margin-top:8px">
+          <span id="token-link-label" style="font-size:0.73rem;color:#8aaa88">Share link: </span>
+          <span id="token-link" style="font-family:monospace;font-size:0.75rem;color:#93c5fd;word-break:break-all"></span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Token list for selected participant ───────────────────────────── -->
+  <div class="panel" id="token-list-panel" style="display:none">
+    <div class="panel-header">
+      <span class="panel-title" id="token-list-title">Tokens</span>
+      <button class="btn btn-secondary" onclick="closeTokenList()">✕ Close</button>
+    </div>
+    <div class="panel-body" style="padding:0">
+      <table>
+        <thead>
+          <tr>
+            <th>Token (last 6)</th>
+            <th>Created</th>
+            <th>Expires</th>
+            <th>Status</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="token-list-tbody">
+          <tr><td colspan="5" class="empty-msg">Loading…</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ── Participant history (read-only) ────────────────────────────────── -->
+  <div class="panel" id="history-panel" style="display:none">
+    <div class="panel-header">
+      <span class="panel-title" id="history-title">History</span>
+      <button class="btn btn-secondary" onclick="closeHistory()">✕ Close</button>
+    </div>
+    <div class="panel-body" id="history-body" style="padding:0">
+      <div class="empty-msg">Loading…</div>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+'use strict';
+
+// ── State ────────────────────────────────────────────────────────────────
+let _participants = [];
+let _sessions = [];
+let _recordedWalks = [];
+let _selectedParticipantId = null;
+let _mintMode = 'returning';   // 'returning' (default, safer) | 'new'
+let _linkWalkSessionId = null;
+let _suggSessionId = null;
+let _suggestions = [];  // current pending suggestions for the open modal
+
+// ── Utilities ────────────────────────────────────────────────────────────
+function _toast(msg, isErr) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className = 'show' + (isErr ? ' err' : '');
+  clearTimeout(el._t);
+  el._t = setTimeout(() => { el.className = ''; }, 2800);
+}
+
+function _fmtDate(iso) {
+  if (!iso) return '—';
+  const d = new Date(iso.endsWith('Z') ? iso : iso + 'Z');
+  return d.toLocaleString(undefined, { month: 'short', day: 'numeric', year: 'numeric',
+    hour: '2-digit', minute: '2-digit' });
+}
+
+function _fmtDay(ymd) {
+  // session_date is a plain 'YYYY-MM-DD' string (no time/zone)
+  if (!ymd) return 'No date';
+  const d = new Date(ymd + 'T00:00:00');
+  if (isNaN(d)) return ymd;
+  return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
+function _maskToken(tok) {
+  if (!tok || tok.length < 6) return tok;
+  return '••••••••••' + tok.slice(-6);
+}
+
+// ── Load participants ─────────────────────────────────────────────────────
+async function loadParticipants() {
+  try {
+    const r = await fetch('/api/workshop/participants');
+    if (r.status === 403) {
+      document.getElementById('participants-tbody').innerHTML =
+        '<tr><td colspan="4" class="empty-msg" style="color:#f87171">403 — curator access required</td></tr>';
+      return;
+    }
+    _participants = await r.json();
+    _renderParticipants();
+    _populateParticipantSelect();
+  } catch (e) {
+    _toast('Failed to load participants', true);
+  }
+}
+
+function _renderParticipants() {
+  const tbody = document.getElementById('participants-tbody');
+  if (!_participants.length) {
+    tbody.innerHTML = '<tr><td colspan="4" class="empty-msg">No participants yet — mint a token to create one.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = _participants.map(p => {
+    const badgeCls = p.token_status === 'active' ? 'badge-active' :
+                     p.token_status === 'expired' ? 'badge-expired' : 'badge-none';
+    const revokeBtn = p.token_status === 'active'
+      ? `<button class="btn btn-danger" onclick="revokeActiveToken(${p.id})">Revoke</button>`
+      : '';
+    const safeName = p.name.replace(/'/g, "\\'");
+    const historyBtn = `<button class="btn btn-secondary" onclick="showHistory(${p.id}, '${safeName}')">History</button>`;
+    const tokensBtn = `<button class="btn btn-secondary" onclick="showTokenList(${p.id}, '${safeName}')">Tokens</button>`;
+    return `<tr>
+      <td>${_esc(p.name)}</td>
+      <td><span class="badge ${badgeCls}">${p.token_status}</span></td>
+      <td style="text-align:right">${p.encounter_count}</td>
+      <td style="text-align:right;white-space:nowrap;display:flex;gap:6px;justify-content:flex-end">${historyBtn}${tokensBtn}${revokeBtn}</td>
+    </tr>`;
+  }).join('');
+}
+
+function _populateParticipantSelect() {
+  const sel = document.getElementById('mint-participant-select');
+  if (!sel) return;
+  const prev = sel.value;
+  if (!_participants.length) {
+    sel.innerHTML = '<option value="">No participants yet — use “New participant”</option>';
+    return;
+  }
+  sel.innerHTML = _participants
+    .map(p => `<option value="${p.id}">${_esc(p.name)}</option>`)
+    .join('');
+  if (prev) sel.value = prev;
+}
+
+function _esc(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// ── Recorded walks ─────────────────────────────────────────────────────────
+async function loadRecordedWalks() {
+  try {
+    const r = await fetch('/api/recorded-walks');
+    if (!r.ok) return;
+    _recordedWalks = await r.json();
+  } catch (_) {}
+}
+
+// ── Sessions ───────────────────────────────────────────────────────────────
+async function loadSessions() {
+  try {
+    const r = await fetch('/api/workshop/sessions');
+    if (r.status === 403) {
+      document.getElementById('sessions-tbody').innerHTML =
+        '<tr><td colspan="6" class="empty-msg" style="color:#f87171">403 — curator access required</td></tr>';
+      return;
+    }
+    _sessions = await r.json();
+    _renderSessions();
+    _populateSessionSelect();
+  } catch (e) {
+    _toast('Failed to load sessions', true);
+  }
+}
+
+function _walkName(id) {
+  if (!id) return null;
+  const w = _recordedWalks.find(w => w.id === id);
+  return w ? w.name : `Walk #${id}`;
+}
+
+function _renderSessions() {
+  const tbody = document.getElementById('sessions-tbody');
+  if (!_sessions.length) {
+    tbody.innerHTML = '<tr><td colspan="6" class="empty-msg">No sessions yet — create one above.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = _sessions.map(s => {
+    const walkName = _walkName(s.recorded_walk_id);
+    const walkCell = walkName
+      ? `<span style="font-size:0.75rem;color:#93c5fd">${_esc(walkName)}</span>`
+      : '<span style="font-size:0.73rem;color:#5a7a6a">—</span>';
+    const safeName = s.name.replace(/'/g, "\\'");
+    const linkBtn = `<button class="btn btn-secondary" style="font-size:0.72rem;padding:2px 8px" onclick="openLinkWalk(${s.id},'${safeName}')">Link walk</button>`;
+    const suggBtn = s.recorded_walk_id && s.encounter_count > 0
+      ? `<button class="btn btn-secondary" style="font-size:0.72rem;padding:2px 8px;margin-left:4px" onclick="openSuggestions(${s.id},'${safeName}')">Suggest locations</button>`
+      : '';
+    return `<tr>
+      <td>${_esc(s.name)}</td>
+      <td class="ts">${_fmtDay(s.session_date)}</td>
+      <td style="text-align:right">${s.participant_count}</td>
+      <td style="text-align:right">${s.encounter_count}</td>
+      <td>${walkCell}</td>
+      <td style="white-space:nowrap">${linkBtn}${suggBtn}</td>
+    </tr>`;
+  }).join('');
+}
+
+// ── Link walk modal ─────────────────────────────────────────────────────────
+function openLinkWalk(sessionId, sessionName) {
+  _linkWalkSessionId = sessionId;
+  const sel = document.getElementById('link-walk-select');
+  if (!_recordedWalks.length) {
+    sel.innerHTML = '<option value="">No recorded walks found</option>';
+  } else {
+    const curr = (_sessions.find(s => s.id === sessionId) || {}).recorded_walk_id;
+    sel.innerHTML = '<option value="">— none —</option>' +
+      _recordedWalks.map(w =>
+        `<option value="${w.id}"${w.id === curr ? ' selected' : ''}>${_esc(w.name)}${w.started_at ? ' (' + _fmtDay(w.started_at.slice(0,10)) + ')' : ''}</option>`
+      ).join('');
+  }
+  const ov = document.getElementById('link-walk-overlay');
+  ov.style.display = 'flex';
+}
+
+function closeLinkWalk() {
+  document.getElementById('link-walk-overlay').style.display = 'none';
+  _linkWalkSessionId = null;
+}
+
+async function confirmLinkWalk() {
+  if (!_linkWalkSessionId) return;
+  const sel = document.getElementById('link-walk-select');
+  const walkId = sel.value ? parseInt(sel.value, 10) : null;
+  const btn = document.getElementById('btn-link-walk-confirm');
+  btn.disabled = true;
+  try {
+    const r = await fetch(`/api/workshop/sessions/${_linkWalkSessionId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ recorded_walk_id: walkId }),
+    });
+    if (!r.ok) {
+      const err = await r.json().catch(() => ({}));
+      _toast(err.detail || 'Failed to link walk', true);
+      return;
+    }
+    _toast(walkId ? 'Walk linked' : 'Walk unlinked');
+    closeLinkWalk();
+    await loadSessions();
+  } catch (e) {
+    _toast('Failed to link walk', true);
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+// ── Location suggestions modal ───────────────────────────────────────────────
+async function openSuggestions(sessionId, sessionName) {
+  _suggSessionId = sessionId;
+  _suggestions = [];
+  document.getElementById('sugg-title').textContent = `Location Suggestions — ${sessionName}`;
+  document.getElementById('sugg-subtitle').textContent = '';
+  document.getElementById('sugg-body').innerHTML = '<div class="empty-msg">Loading…</div>';
+  document.getElementById('btn-accept-all').style.display = 'none';
+  document.getElementById('suggestions-overlay').style.display = 'flex';
+  try {
+    const r = await fetch(`/api/workshop/sessions/${sessionId}/location-suggestions`);
+    if (!r.ok) {
+      const err = await r.json().catch(() => ({}));
+      document.getElementById('sugg-body').innerHTML =
+        `<div class="empty-msg" style="color:#f87171">${_esc(err.detail || 'Failed to load suggestions')}</div>`;
+      return;
+    }
+    const data = await r.json();
+    _suggestions = data.suggestions || [];
+    document.getElementById('sugg-subtitle').textContent =
+      `Walk: ${data.walk_name} · ${_suggestions.length} location-less encounter${_suggestions.length === 1 ? '' : 's'}`;
+    _renderSuggestions();
+  } catch (e) {
+    document.getElementById('sugg-body').innerHTML =
+      '<div class="empty-msg" style="color:#f87171">Failed to load suggestions</div>';
+  }
+}
+
+function _renderSuggestions() {
+  const body = document.getElementById('sugg-body');
+  const pending = _suggestions.filter(s => !s._accepted && !s._rejected);
+  if (!_suggestions.length) {
+    body.innerHTML = '<div class="empty-msg">No location-less encounters in this session.</div>';
+    return;
+  }
+  if (!pending.length) {
+    body.innerHTML = '<div class="empty-msg" style="color:#6aaa6a">All suggestions reviewed.</div>';
+    document.getElementById('btn-accept-all').style.display = 'none';
+    return;
+  }
+  document.getElementById('btn-accept-all').style.display = '';
+  body.innerHTML = _suggestions.map((s, i) => {
+    if (s._accepted || s._rejected) return '';
+    const deltaMin = Math.round(s.delta_seconds / 60);
+    const uncertainty = s.delta_seconds > 300
+      ? `<span style="color:#fbbf24;font-size:0.72rem">⚠ ${deltaMin} min from nearest track point</span>`
+      : `<span style="color:#6aaa6a;font-size:0.72rem">${s.delta_seconds}s from nearest track point</span>`;
+    const snippet = s.snippet
+      ? `<div style="font-size:0.75rem;color:#9aaa88;margin-top:4px;font-style:italic">"${_esc(s.snippet)}"</div>` : '';
+    return `<div id="sugg-card-${i}" style="background:#263230;border:1px solid #3a5050;border-radius:8px;padding:12px 14px;margin-bottom:10px">
+      <div style="display:flex;align-items:flex-start;gap:8px">
+        <div style="flex:1">
+          <div style="font-size:0.78rem;color:#d8e4d8;margin-bottom:2px">${_fmtDate(s.encounter_date)}</div>
+          <div style="font-size:0.77rem;color:#93c5fd">${s.suggested_lat.toFixed(5)}, ${s.suggested_lng.toFixed(5)}</div>
+          <div style="margin-top:3px">${uncertainty}</div>
+          ${snippet}
+        </div>
+        <div style="display:flex;flex-direction:column;gap:6px;margin-left:8px">
+          <button class="btn btn-primary" style="font-size:0.72rem;padding:3px 10px" onclick="acceptSuggestion(${i})">Accept</button>
+          <button class="btn btn-secondary" style="font-size:0.72rem;padding:3px 10px" onclick="rejectSuggestion(${i})">Skip</button>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+async function acceptSuggestion(idx) {
+  const s = _suggestions[idx];
+  if (!s) return;
+  try {
+    const r = await fetch(`/api/encounters/${s.encounter_id}/coordinates`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ latitude: s.suggested_lat, longitude: s.suggested_lng }),
+    });
+    if (!r.ok) {
+      const err = await r.json().catch(() => ({}));
+      _toast(err.detail || 'Failed to apply location', true);
+      return;
+    }
+    s._accepted = true;
+    _toast('Location applied');
+    _renderSuggestions();
+  } catch (e) {
+    _toast('Failed to apply location', true);
+  }
+}
+
+function rejectSuggestion(idx) {
+  if (_suggestions[idx]) _suggestions[idx]._rejected = true;
+  _renderSuggestions();
+}
+
+async function acceptAllSuggestions() {
+  const pending = _suggestions.filter(s => !s._accepted && !s._rejected);
+  if (!pending.length) return;
+  const btn = document.getElementById('btn-accept-all');
+  btn.disabled = true;
+  let ok = 0, fail = 0;
+  for (const s of pending) {
+    try {
+      const r = await fetch(`/api/encounters/${s.encounter_id}/coordinates`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ latitude: s.suggested_lat, longitude: s.suggested_lng }),
+      });
+      if (r.ok) { s._accepted = true; ok++; }
+      else fail++;
+    } catch (_) { fail++; }
+  }
+  btn.disabled = false;
+  _toast(fail ? `${ok} applied, ${fail} failed` : `${ok} location${ok === 1 ? '' : 's'} applied`, fail > 0);
+  _renderSuggestions();
+}
+
+function closeSuggestions() {
+  document.getElementById('suggestions-overlay').style.display = 'none';
+  _suggSessionId = null;
+  _suggestions = [];
+  if (document.querySelector('#sessions-tbody')) loadSessions();
+}
+
+function _populateSessionSelect() {
+  const sel = document.getElementById('mint-session-select');
+  if (!sel) return;
+  const prev = sel.value;
+  const hint = document.getElementById('mint-no-session');
+  if (!_sessions.length) {
+    sel.innerHTML = '<option value="">— no sessions —</option>';
+    if (hint) hint.style.display = '';
+    return;
+  }
+  if (hint) hint.style.display = 'none';
+  sel.innerHTML = _sessions
+    .map(s => `<option value="${s.id}">${_esc(s.name)}${s.session_date ? ' (' + _esc(s.session_date) + ')' : ''}</option>`)
+    .join('');
+  if (prev) sel.value = prev;
+}
+
+async function createSession() {
+  const name = document.getElementById('session-name').value.trim();
+  const date = document.getElementById('session-date').value || null;   // 'YYYY-MM-DD'
+  if (!name) { _toast('Enter a session name', true); return; }
+  const btn = document.getElementById('btn-create-session');
+  btn.disabled = true;
+  try {
+    const r = await fetch('/api/workshop/sessions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, session_date: date }),
+    });
+    if (!r.ok) {
+      const err = await r.json().catch(() => ({}));
+      _toast(err.detail || 'Failed to create session', true);
+      return;
+    }
+    document.getElementById('session-name').value = '';
+    document.getElementById('session-date').value = '';
+    _toast('Session created');
+    await loadSessions();
+  } catch (e) {
+    _toast('Failed to create session', true);
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+// ── Mint mode toggle ────────────────────────────────────────────────────────
+function setMintMode(mode) {
+  _mintMode = mode;
+  document.getElementById('seg-returning').classList.toggle('active', mode === 'returning');
+  document.getElementById('seg-new').classList.toggle('active', mode === 'new');
+  document.getElementById('path-returning').classList.toggle('active', mode === 'returning');
+  document.getElementById('path-new').classList.toggle('active', mode === 'new');
+}
+
+// ── Revoke active token for participant (revokes the latest active one) ───
+async function revokeActiveToken(participantId) {
+  if (!confirm('Revoke the active token for this participant?')) return;
+  try {
+    // Fetch tokens to find the active one
+    const r = await fetch(`/api/workshop/tokens?participant_id=${participantId}`);
+    const tokens = await r.json();
+    const active = tokens.filter(t => t.is_active && new Date(t.expires_at + 'Z') > new Date());
+    if (!active.length) { _toast('No active token found', true); return; }
+    // Revoke all active tokens for this participant
+    for (const tok of active) {
+      await fetch(`/api/workshop/tokens/${tok.id}/revoke`, { method: 'POST' });
+    }
+    _toast('Token revoked');
+    await loadParticipants();
+    if (_selectedParticipantId === participantId) loadTokenList(participantId);
+  } catch (e) {
+    _toast('Revoke failed', true);
+  }
+}
+
+// ── Mint token ────────────────────────────────────────────────────────────
+// Two explicit paths:
+//   returning → mint against an existing participant_id (no duplicate person)
+//   new       → find-or-create by name, then mint
+// Both require an explicitly-selected session.
+async function mintToken() {
+  const hours = parseInt(document.getElementById('mint-expiry').value, 10) || 24;
+  const sessionId = parseInt(document.getElementById('mint-session-select').value, 10);
+  if (!sessionId) { _toast('Select a session first (create one above if needed)', true); return; }
+
+  const btn = document.getElementById('btn-mint');
+  btn.disabled = true;
+  try {
+    let participantId, participantName;
+
+    if (_mintMode === 'returning') {
+      const sel = document.getElementById('mint-participant-select');
+      participantId = parseInt(sel.value, 10);
+      if (!participantId) { _toast('Select an existing participant', true); return; }
+      participantName = sel.options[sel.selectedIndex]?.text || `#${participantId}`;
+    } else {
+      const name = document.getElementById('mint-new-name').value.trim();
+      if (!name) { _toast('Enter a participant name', true); return; }
+      const pRes = await fetch('/api/workshop/participants/find-or-create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name }),
+      });
+      if (!pRes.ok) {
+        const err = await pRes.json().catch(() => ({}));
+        _toast(err.detail || 'Failed to resolve participant', true);
+        return;
+      }
+      const p = await pRes.json();
+      participantId = p.id;
+      participantName = p.name;
+    }
+
+    // Mint token (expires_days rounds up from hours)
+    const days = Math.max(1, Math.ceil(hours / 24));
+    const tokRes = await fetch('/api/workshop/tokens', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        participant_id: participantId,
+        workshop_session_id: sessionId,
+        expires_days: days,
+      }),
+    });
+    if (!tokRes.ok) {
+      const err = await tokRes.json().catch(() => ({}));
+      _toast(err.detail || 'Mint failed', true);
+      return;
+    }
+    const tok = await tokRes.json();
+
+    // Show reveal box
+    const reveal = document.getElementById('token-reveal');
+    document.getElementById('token-string').textContent = tok.token;
+    const shareUrl = `${location.origin}/?token=${tok.token}`;
+    document.getElementById('token-link').textContent = shareUrl;
+    reveal.classList.add('visible');
+
+    const newNameInput = document.getElementById('mint-new-name');
+    if (newNameInput) newNameInput.value = '';
+    _toast(`Token minted for ${participantName}`);
+    await loadParticipants();
+    await loadSessions();   // participant/encounter counts may have shifted
+  } catch (e) {
+    _toast('Mint failed', true);
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+function copyToken() {
+  const tok = document.getElementById('token-string').textContent;
+  navigator.clipboard.writeText(`${location.origin}/?token=${tok}`)
+    .then(() => _toast('Link copied'))
+    .catch(() => _toast('Copy failed', true));
+}
+
+// ── Token list panel ──────────────────────────────────────────────────────
+async function showTokenList(participantId, name) {
+  _selectedParticipantId = participantId;
+  document.getElementById('token-list-title').textContent = `Tokens — ${name}`;
+  document.getElementById('token-list-panel').style.display = '';
+  document.getElementById('token-list-tbody').innerHTML =
+    '<tr><td colspan="5" class="empty-msg">Loading…</td></tr>';
+  document.getElementById('token-list-panel').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  await loadTokenList(participantId);
+}
+
+async function loadTokenList(participantId) {
+  try {
+    const r = await fetch(`/api/workshop/tokens?participant_id=${participantId}`);
+    const tokens = await r.json();
+    _renderTokenList(tokens);
+  } catch (e) {
+    _toast('Failed to load tokens', true);
+  }
+}
+
+function _renderTokenList(tokens) {
+  const tbody = document.getElementById('token-list-tbody');
+  if (!tokens.length) {
+    tbody.innerHTML = '<tr><td colspan="5" class="empty-msg">No tokens for this participant.</td></tr>';
+    return;
+  }
+  const now = new Date();
+  tbody.innerHTML = tokens.slice().reverse().map(t => {
+    const isActive = t.is_active && new Date(t.expires_at + 'Z') > now;
+    const badgeCls = isActive ? 'badge-active' : (!t.is_active ? 'badge-none' : 'badge-expired');
+    const badgeLabel = isActive ? 'active' : (!t.is_active ? 'revoked' : 'expired');
+    const revokeBtn = isActive
+      ? `<button class="btn btn-danger" onclick="revokeToken(${t.id})">Revoke</button>`
+      : '';
+    return `<tr>
+      <td class="token-masked">${_maskToken(t.token)}</td>
+      <td class="ts">${_fmtDate(t.created_at)}</td>
+      <td class="ts">${_fmtDate(t.expires_at)}</td>
+      <td><span class="badge ${badgeCls}">${badgeLabel}</span></td>
+      <td style="text-align:right">${revokeBtn}</td>
+    </tr>`;
+  }).join('');
+}
+
+async function revokeToken(tokenId) {
+  if (!confirm('Revoke this token?')) return;
+  try {
+    const r = await fetch(`/api/workshop/tokens/${tokenId}/revoke`, { method: 'POST' });
+    if (!r.ok) { _toast('Revoke failed', true); return; }
+    _toast('Token revoked');
+    await loadTokenList(_selectedParticipantId);
+    await loadParticipants();
+  } catch (e) {
+    _toast('Revoke failed', true);
+  }
+}
+
+function closeTokenList() {
+  _selectedParticipantId = null;
+  document.getElementById('token-list-panel').style.display = 'none';
+}
+
+// ── Participant history (read-only) ─────────────────────────────────────────
+async function showHistory(participantId, name) {
+  document.getElementById('history-title').textContent = `History — ${name}`;
+  document.getElementById('history-panel').style.display = '';
+  document.getElementById('history-body').innerHTML = '<div class="empty-msg">Loading…</div>';
+  document.getElementById('history-panel').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  try {
+    const r = await fetch(`/api/workshop/participants/${participantId}/history`);
+    if (r.status === 403) {
+      document.getElementById('history-body').innerHTML =
+        '<div class="empty-msg" style="color:#f87171">403 — curator access required</div>';
+      return;
+    }
+    if (!r.ok) {
+      document.getElementById('history-body').innerHTML =
+        '<div class="empty-msg" style="color:#f87171">Failed to load history</div>';
+      return;
+    }
+    _renderHistory(await r.json());
+  } catch (e) {
+    document.getElementById('history-body').innerHTML =
+      '<div class="empty-msg" style="color:#f87171">Failed to load history</div>';
+  }
+}
+
+function _renderHistory(data) {
+  const body = document.getElementById('history-body');
+  const sessions = data.sessions || [];
+  if (!sessions.length) {
+    body.innerHTML = '<div class="empty-msg">No encounters logged yet for this participant.</div>';
+    return;
+  }
+  body.innerHTML = sessions.map(s => {
+    const header = `<div class="history-session-header">
+        <span>${s.session_name ? _esc(s.session_name) : 'No session'}</span>
+        <span class="history-session-date">${s.session_date ? _fmtDay(s.session_date) : ''}</span>
+        <span class="history-session-count">${s.encounters.length} encounter${s.encounters.length === 1 ? '' : 's'}</span>
+      </div>`;
+    const encs = s.encounters.map(e => {
+      const species = e.species_name
+        ? `<span class="history-enc-species">${_esc(e.species_name)}</span>`
+        : `<span class="history-enc-species unlinked">No species linked</span>`;
+      const type = e.encounter_type
+        ? `<span class="history-enc-type">${_esc(e.encounter_type)}</span>` : '';
+      const date = `<span class="history-enc-date">${_fmtDate(e.encounter_date)}</span>`;
+      const snippet = e.snippet
+        ? `<div class="history-enc-snippet">${_esc(e.snippet)}</div>` : '';
+      return `<div class="history-enc">
+          <div class="history-enc-top">${species}${type}${date}</div>
+          ${snippet}
+        </div>`;
+    }).join('');
+    return `<div class="history-session">${header}${encs}</div>`;
+  }).join('');
+}
+
+function closeHistory() {
+  document.getElementById('history-panel').style.display = 'none';
+}
+
+// ── Boot ──────────────────────────────────────────────────────────────────
+
+// Close modals on backdrop click
+document.getElementById('link-walk-overlay').addEventListener('click', e => {
+  if (e.target === e.currentTarget) closeLinkWalk();
+});
+document.getElementById('suggestions-overlay').addEventListener('click', e => {
+  if (e.target === e.currentTarget) closeSuggestions();
+});
+
+loadRecordedWalks().then(() => loadSessions());
+loadParticipants();
+</script>
+<script src="/static/js/site-header.js"></script>
+</body>
+</html>

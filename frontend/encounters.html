@@ -1,0 +1,570 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="icon" type="image/svg+xml" href="/static/icons/dandelion-icon.svg">
+  <title>Encounters — ForagingID</title>
+  <link rel="stylesheet" href="/static/css/tokens.css">
+  <link rel="stylesheet" href="/static/css/site-header.css">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: system-ui, -apple-system, sans-serif; background: #2a3330; color: #e8e8e8; min-height: 100vh; }
+
+    .page-body { max-width: 760px; margin: 0 auto; padding: 20px 16px 60px; }
+
+    h2 { font-size: 1.15rem; font-weight: 600; color: #8ab87a; margin-bottom: 4px; }
+    .subtitle { font-size: 0.82rem; color: #7a9a7a; margin-bottom: 16px; }
+    .section { margin-bottom: 30px; }
+
+    /* -- Tab bar ----------------------------------------------- */
+    .tab-bar { display: flex; gap: 4px; margin-bottom: 22px; border-bottom: 2px solid #333; overflow-x: auto; }
+    .tab-btn { background: transparent; border: none; border-bottom: 3px solid transparent;
+               margin-bottom: -2px; color: #888; font-size: 0.92rem; font-weight: 600;
+               padding: 8px 18px; cursor: pointer; transition: color 0.15s; white-space: nowrap;
+               touch-action: manipulation; flex-shrink: 0; }
+    .tab-btn.active { color: #c8e6a0; border-bottom-color: #6aab3a; }
+    .tab-btn:hover:not(.active) { color: #ccc; }
+
+    /* -- Browse tab -------------------------------------------- */
+    .walk-group { margin-bottom:16px; }
+    .walk-header { font-size:0.78rem; font-weight:600; color:#8ab87a; padding:6px 0;
+                   border-bottom:1px solid #3a4e4a; margin-bottom:8px; display:flex;
+                   justify-content:space-between; align-items:center; }
+    .walk-header .walk-note { font-weight:400; color:#777; font-size:0.72rem; }
+    .enc-card { background:#283830; border:1px solid #3a4e4a; border-radius:8px;
+                padding:12px; margin-bottom:8px; }
+    .enc-card-top { display:flex; gap:10px; align-items:flex-start; }
+    .enc-thumb { width:64px; height:64px; border-radius:6px; object-fit:cover; flex-shrink:0; }
+    .enc-thumb-pending { width:64px; height:64px; border-radius:6px; flex-shrink:0;
+                         border:2px dashed #4a6e4a; display:flex; align-items:center;
+                         justify-content:center; font-size:0.7rem; color:#6a8a6a; text-align:center; }
+    .enc-card-body { flex:1; min-width:0; }
+    .enc-card-meta { font-size:0.72rem; color:#888; margin-bottom:4px; }
+    .enc-card-note { font-size:0.85rem; color:#c8ddb0; line-height:1.4;
+                     overflow:hidden; display:-webkit-box; -webkit-line-clamp:3;
+                     -webkit-box-orient:vertical; }
+    .enc-card-species { font-size:0.78rem; color:#8ab87a; font-weight:600; margin-bottom:2px; }
+    .enc-chips { display:flex; flex-wrap:wrap; gap:4px; margin-top:6px; }
+    .enc-chip { font-size:0.72rem; padding:2px 8px; border-radius:10px; cursor:pointer;
+                border:1px solid #4a6e4a; background:#1e2e1e; color:#a0c090; }
+    .enc-chip:hover { background:#2d4a2d; }
+    .enc-chip.confirmed { background:#2d5a1b; color:#fff; border-color:#2d5a1b; cursor:default; }
+    .photo-candidates { display:flex; gap:6px; flex-wrap:wrap; margin-top:6px; }
+    .photo-cand { position:relative; cursor:pointer; border-radius:6px; overflow:hidden;
+                  border:2px solid #4a6e4a; }
+    .photo-cand:hover { border-color:#8ab87a; }
+    .photo-cand img { width:48px; height:48px; object-fit:cover; display:block; }
+    .photo-cand-label { position:absolute; bottom:0; left:0; right:0; background:rgba(0,0,0,.7);
+                        font-size:0.6rem; color:#ccc; text-align:center; padding:1px; }
+
+    /* -- Capture form ------------------------------------------ */
+    .capture-card {
+      background: #252525;
+      border: 1px solid #3a3a3a;
+      border-radius: 10px;
+      padding: 18px;
+      margin-bottom: 28px;
+    }
+
+    .field-row { margin-bottom: 14px; }
+    .field-row label { display: block; font-size: 0.78rem; color: #aaa; margin-bottom: 5px;
+                       letter-spacing: 0.02em; text-transform: uppercase; }
+    .field-row select,
+    .field-row input[type="text"],
+    .field-row input[type="datetime-local"],
+    .field-row textarea {
+      width: 100%; background: #1e1e1e; border: 1px solid #444; border-radius: 6px;
+      color: #e8e8e8; font-size: 0.93rem; padding: 9px 12px;
+    }
+    .field-row select:focus, .field-row input:focus, .field-row textarea:focus {
+      outline: none; border-color: #6aab3a;
+    }
+    .field-row textarea { resize: vertical; min-height: 72px; font-family: inherit; }
+    .field-row select option { background: #2a2a2a; }
+
+    .loc-row { display: flex; gap: 8px; align-items: flex-start; }
+    .loc-row .loc-inputs { flex: 1; display: flex; flex-direction: column; gap: 6px; }
+    .loc-row .loc-inputs input { width: 100%; }
+    .btn-loc { background: #2d5a1b; color: #b8d48a; border: none; border-radius: 6px;
+               padding: 9px 13px; font-size: 0.85rem; cursor: pointer; white-space: nowrap; align-self: flex-start; }
+    .btn-loc:hover { background: #3a7022; }
+    .btn-loc:disabled { opacity: 0.5; cursor: not-allowed; }
+    .loc-coords { font-size: 0.72rem; color: #777; margin-top: 3px; }
+
+    .audio-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+    .btn-rec { border: none; border-radius: 6px; padding: 9px 16px; font-size: 0.85rem; cursor: pointer; }
+    .btn-rec-start { background: #7c2d12; color: #fca; }
+    .btn-rec-start:hover { background: #991f0a; }
+    .btn-rec-stop  { background: #555; color: #e8e8e8; }
+    .btn-rec-stop:hover  { background: #666; }
+    .btn-rec-play  { background: #1e3a5f; color: #90c0f8; }
+    .btn-rec-play:hover  { background: #264a76; }
+    .btn-rec-discard { background: transparent; border: 1px solid #555; color: #aaa; border-radius: 6px;
+                       padding: 9px 12px; font-size: 0.82rem; cursor: pointer; }
+    .btn-rec-discard:hover { border-color: #888; color: #ccc; }
+    .rec-status { font-size: 0.8rem; color: #aaa; display: flex; align-items: center; gap: 6px; }
+    .rec-dot { width: 8px; height: 8px; border-radius: 50%; background: #e55; animation: blink 1s infinite; }
+    @keyframes blink { 0%,100% { opacity: 1; } 50% { opacity: 0.2; } }
+    audio#audio-preview { width: 100%; height: 36px; margin-top: 8px; filter: invert(0.8); }
+
+    canvas#waveform { width: 100%; height: 84px; display: none; margin-top: 10px;
+                      background: #161a12; border: 1px solid #333; border-radius: 6px; }
+
+    .wakelock-row { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
+    .wakelock-row input { width: 16px; height: 16px; accent-color: #6aab3a; flex-shrink: 0; }
+    .wakelock-row label { text-transform: none; letter-spacing: 0; margin: 0; color: #aaa; font-size: 0.8rem; }
+
+    .audio-upload { margin-top: 12px; padding-top: 10px; border-top: 1px dashed #3a3a3a; }
+    .btn-upload { background: transparent; border: 1px dashed #555; color: #aaa; border-radius: 6px;
+                  padding: 8px 14px; font-size: 0.82rem; cursor: pointer; }
+    .btn-upload:hover { border-color: #6aab3a; color: #c8e6a0; }
+    .audio-upload input[type="file"] { display: none; }
+    .upload-name { font-size: 0.75rem; color: #777; margin-top: 5px; }
+
+    .stage1-row { background: #1f261a; border: 1px solid #3a4a2c; border-radius: 8px; padding: 12px 14px; }
+    .stage1-row label { color: #b8d48a; }
+    .stage1-row textarea { background: #161a12; min-height: 64px; }
+    .stage1-row textarea::placeholder { color: #6f8a52; font-style: italic; }
+    .stage1-hint { font-size: 0.72rem; color: #7a8a66; margin-top: 6px; line-height: 1.35; }
+
+    /* -- Record-first primary action ----------------------------- */
+    .rec-primary-row { display: flex; flex-direction: column; align-items: center;
+                       gap: 12px; padding: 18px 0 10px; }
+    .btn-rec-big { border: none; border-radius: 50%; width: 80px; height: 80px;
+                   font-size: 2rem; cursor: pointer; display: flex; align-items: center;
+                   justify-content: center; transition: transform 0.1s, box-shadow 0.1s; }
+    .btn-rec-big:active { transform: scale(0.93); }
+    .btn-rec-big.start { background: #7c2d12; color: #fca; box-shadow: 0 0 0 6px rgba(220,80,50,0.18); }
+    .btn-rec-big.start:hover { background: #991f0a; box-shadow: 0 0 0 10px rgba(220,80,50,0.22); }
+    .btn-rec-big.stop  { background: #555; color: #e8e8e8; box-shadow: 0 0 0 6px rgba(255,255,255,0.08); }
+    .btn-rec-big.stop:hover  { background: #666; }
+    .rec-hint { font-size: 0.8rem; color: #777; text-align: center; }
+    .rec-hint.recording { color: #e55; }
+
+    .secondary-audio { margin-top: 16px; padding-top: 14px; border-top: 1px dashed #3a3a3a;
+                       display: flex; flex-direction: column; align-items: flex-start; gap: 6px; }
+    .secondary-label { font-size: 0.66rem; color: #666; text-transform: uppercase; letter-spacing: 0.04em; }
+
+    .btn-save {
+      width: 100%; background: #3a7022; color: white; border: none; border-radius: 8px;
+      padding: 13px; font-size: 1rem; font-weight: 600; cursor: pointer; margin-top: 6px;
+    }
+    .btn-save:hover { background: #4a8a2a; }
+    .btn-save:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    .save-msg { font-size: 0.83rem; margin-top: 8px; text-align: center; }
+    .save-msg.ok  { color: #7ec850; }
+    .save-msg.err { color: #f87171; }
+
+    /* "Recording saved" confirmation beneath the record button */
+    .rec-saved { font-size: 0.8rem; color: #7ec850; text-align: center;
+                 background: #14331c; border: 1px solid #2d5a1b; border-radius: 8px;
+                 padding: 7px 12px; margin-top: 4px; }
+
+    /* -- My Season grid ---------------------------------------- */
+    .add-row { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
+    .add-row select { flex: 1; min-width: 180px; background: #1e1e1e; border: 1px solid #444;
+                      border-radius: 6px; color: #e8e8e8; font-size: 0.9rem; padding: 9px 12px; }
+    .add-row select option { background: #2a2a2a; }
+    .btn-add { background: #3a7022; color: white; border: none; border-radius: 6px;
+               padding: 9px 16px; font-size: 0.88rem; cursor: pointer; white-space: nowrap; }
+    .btn-add:hover { background: #4a8a2a; }
+    .btn-add:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    .season-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
+    .season-card { background: #252525; border: 1px solid #333; border-radius: 8px; overflow: hidden;
+                   cursor: pointer; position: relative; transition: border-color 0.15s; }
+    .season-card:hover { border-color: #6aab3a; }
+    .season-thumb { width: 100%; height: 96px; object-fit: cover; background: #161a12; display: block; }
+    .season-thumb.placeholder { display: flex; align-items: center; justify-content: center;
+                                 font-size: 1.8rem; color: #3a4a2c; }
+    .season-body { padding: 8px 10px; }
+    .season-sci { font-size: 0.85rem; font-weight: 600; color: #c8e6a0; font-style: italic;
+                  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .season-common { font-size: 0.72rem; color: #999; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .season-count { font-size: 0.72rem; color: #7ec850; margin-top: 4px; }
+    .season-remove { position: absolute; top: 5px; right: 5px; background: rgba(0,0,0,0.6); border: none;
+                     color: #f0a0a0; width: 22px; height: 22px; border-radius: 50%; cursor: pointer;
+                     font-size: 0.8rem; line-height: 1; }
+    .season-remove:hover { background: #7c2d12; color: #fff; }
+
+    .pill { display: inline-block; font-size: 0.66rem; padding: 1px 7px; border-radius: 9px; margin-top: 4px; }
+    .pill.edible { background: #14331c; color: #7ec850; }
+    .pill.toxic, .pill.inedible { background: #3a1414; color: #f08a8a; }
+    .pill.caution { background: #3a3214; color: #e0c060; }
+    .pill.unknown, .pill.none { background: #2a2a2a; color: #999; }
+
+    /* -- Filter bar -------------------------------------------- */
+    .filter-bar { background: #252525; border: 1px solid #3a3a3a; border-radius: 10px; padding: 14px;
+                  display: flex; gap: 10px; flex-wrap: wrap; align-items: flex-end; margin-bottom: 16px; }
+    .filter-bar .fld { display: flex; flex-direction: column; gap: 4px; }
+    .filter-bar label { font-size: 0.72rem; color: #aaa; text-transform: uppercase; letter-spacing: 0.02em; }
+    .filter-bar select, .filter-bar input {
+      background: #1e1e1e; border: 1px solid #444; border-radius: 6px;
+      color: #e8e8e8; font-size: 0.88rem; padding: 8px 10px;
+    }
+    .filter-bar select option { background: #2a2a2a; }
+    .btn-filter { background: #2d5a1b; color: #c8e6a0; border: none; border-radius: 6px;
+                  padding: 9px 14px; font-size: 0.85rem; cursor: pointer; }
+    .btn-filter:hover { background: #3a7022; color: #fff; }
+    .btn-clear { background: transparent; border: 1px solid #555; color: #aaa; border-radius: 6px;
+                 padding: 9px 12px; font-size: 0.85rem; cursor: pointer; }
+    .btn-clear:hover { border-color: #888; color: #ccc; }
+
+    /* -- Encounter cards --------------------------------------- */
+    .enc-list { display: flex; flex-direction: column; gap: 10px; }
+    .enc-card {
+      background: #252525; border: 1px solid #333; border-radius: 8px;
+      padding: 12px 14px; display: flex; gap: 12px; align-items: flex-start;
+    }
+    .enc-icon { font-size: 1.4rem; line-height: 1; flex-shrink: 0; margin-top: 2px; }
+    .enc-body { flex: 1; min-width: 0; }
+    .enc-species { font-size: 0.95rem; font-weight: 600; color: #a8c88a; font-style: italic; }
+    .enc-meta { font-size: 0.75rem; color: #888; margin-top: 2px; }
+    .enc-note { font-size: 0.83rem; color: #ccc; margin-top: 6px; white-space: pre-line;
+                display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+    .enc-audio { margin-top: 6px; }
+    .enc-audio audio { width: 100%; height: 32px; filter: invert(0.8); }
+    .enc-actions { display: flex; flex-direction: column; gap: 6px; flex-shrink: 0; }
+    .btn-del { background: transparent; border: 1px solid #555; color: #aaa; border-radius: 6px;
+               padding: 5px 10px; font-size: 0.8rem; cursor: pointer; }
+    .btn-del:hover { border-color: #e55; color: #f87171; }
+
+    .enc-prompt { font-size: 0.82rem; color: #c8e6a0; margin-top: 6px; padding: 6px 10px;
+                  background: #1f261a; border-left: 2px solid #4a7a25; border-radius: 4px; white-space: pre-line; }
+    .enc-prompt .enc-prompt-tag { font-size: 0.66rem; color: #7a8a66; text-transform: uppercase;
+                                  letter-spacing: 0.04em; display: block; margin-bottom: 2px; }
+
+    /* Transcription + extraction */
+    .enc-tools { display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap; }
+    .btn-tool { background: #1e3a5f; color: #90c0f8; border: none; border-radius: 6px;
+                padding: 5px 11px; font-size: 0.78rem; cursor: pointer; }
+    .btn-tool:hover { background: #264a76; }
+    .btn-tool:disabled { opacity: 0.5; cursor: not-allowed; }
+    .btn-tool.extract { background: #3a2d5a; color: #c4a8f8; }
+    .btn-tool.extract:hover { background: #4a3a72; }
+    .tool-msg { font-size: 0.74rem; color: #999; margin-top: 4px; }
+    .tool-msg.err { color: #f87171; }
+
+    .enc-transcript { font-size: 0.82rem; color: #cdd6c2; margin-top: 8px; padding: 8px 11px;
+                      background: #1c211a; border-left: 2px solid #5a7a35; border-radius: 4px;
+                      white-space: pre-line; line-height: 1.45; }
+    .enc-transcript .tlabel { font-size: 0.66rem; color: #7a8a66; text-transform: uppercase;
+                              letter-spacing: 0.04em; display: block; margin-bottom: 3px; }
+
+    .sugg-list { margin-top: 8px; display: flex; flex-direction: column; gap: 6px; }
+    .sugg-item { display: flex; align-items: flex-start; gap: 8px; padding: 7px 10px;
+                 background: #20242a; border: 1px solid #333; border-radius: 6px; }
+    .sugg-item.confirmed { border-color: #3a5a25; background: #1d241a; }
+    .sugg-ico { font-size: 0.95rem; line-height: 1.3; flex-shrink: 0; }
+    .sugg-body { flex: 1; min-width: 0; }
+    .sugg-kind { font-size: 0.66rem; color: #8aa0bf; text-transform: uppercase; letter-spacing: 0.04em; }
+    .sugg-val { font-size: 0.85rem; color: #e2e2e2; }
+    .sugg-quote { font-size: 0.72rem; color: #888; font-style: italic; margin-top: 2px; }
+    .sugg-match { font-size: 0.72rem; color: #7ec850; margin-top: 2px; }
+    .sugg-acts { display: flex; gap: 5px; flex-shrink: 0; }
+    .btn-sugg { border: 1px solid #444; background: transparent; border-radius: 5px;
+                padding: 3px 8px; font-size: 0.74rem; cursor: pointer; color: #aaa; }
+    .btn-sugg.ok:hover { border-color: #5a8a2a; color: #9ed870; }
+    .btn-sugg.no:hover { border-color: #aa4444; color: #f87171; }
+    .sugg-done { font-size: 0.72rem; color: #7ec850; align-self: center; white-space: nowrap; }
+    #sr-showall { display: block; width: 100%; margin-top: 6px; padding: 8px; border: none;
+                  border-top: 1px solid #2e2e2e; background: transparent; color: #7fb3e8;
+                  font-size: 0.8rem; cursor: pointer; }
+    #sr-showall:hover { color: #a8d0f8; text-decoration: underline; }
+
+    .empty-msg { color: #666; font-size: 0.88rem; text-align: center; padding: 28px 0; }
+
+    /* Field Recipe card on encounter (saved recipe) */
+    .field-recipe-block {
+      background: #2a2a1e; border: 1px solid #4a3f1a; border-radius: 6px;
+      padding: 12px 14px; margin-top: 10px;
+    }
+    .field-recipe-block .fr-header {
+      display: flex; align-items: center; gap: 8px; margin-bottom: 8px; flex-wrap: wrap;
+    }
+    .field-recipe-block .fr-title { font-weight: 700; color: #d4b060; font-size: 0.88rem; }
+    .field-recipe-block .fr-meta  { font-size: 0.72rem; color: #888; }
+    .field-recipe-block .fr-body  { font-size: 0.8rem; color: #ccc; line-height: 1.45; margin: 6px 0; }
+    .field-recipe-block .fr-ings  { display: flex; flex-wrap: wrap; gap: 4px; margin: 6px 0; }
+    .fr-ing-chip {
+      font-size: 0.69rem; padding: 2px 7px; border-radius: 8px;
+      background: #3a3010; color: #d4b060; border: 1px solid #5a4820;
+    }
+    .fr-ing-chip.matched { background: #1a3a1a; color: #7ec850; border-color: #2a5a2a; }
+    .fr-actions { display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap; }
+    .btn-fr-edit { background: #2a3a2a; border: 1px solid #4a6a3a; color: #7ec850;
+                   border-radius: 5px; padding: 4px 11px; font-size: 0.74rem; cursor: pointer; }
+    .btn-fr-del  { background: #3a1a1a; border: 1px solid #6a3a3a; color: #f87171;
+                   border-radius: 5px; padding: 4px 11px; font-size: 0.74rem; cursor: pointer; }
+    .btn-fr-save { background: #2a5a1a; border: 1px solid #4a8a2a; color: #b8d48a;
+                   border-radius: 5px; padding: 4px 14px; font-size: 0.74rem; cursor: pointer; font-weight: 600; }
+    .fr-edit-input { width: 100%; background: #1e1e14; border: 1px solid #4a3f1a; color: #eee;
+                     border-radius: 5px; padding: 6px 8px; font-size: 0.8rem; margin: 4px 0;
+                     font-family: inherit; box-sizing: border-box; }
+    textarea.fr-edit-input { min-height: 70px; resize: vertical; line-height: 1.45; }
+    /* Field recipe save suggestion card */
+    .sugg-recipe-card {
+      background: #2a2a1e; border: 1.5px solid #5a4820; border-radius: 7px;
+      padding: 12px 14px; margin: 8px 0;
+    }
+    .sugg-recipe-card .src-title { font-weight: 700; color: #d4b060; font-size: 0.88rem; margin-bottom: 6px; }
+    .sugg-recipe-card .src-ings  { display: flex; flex-wrap: wrap; gap: 4px; margin: 6px 0; }
+    .src-ing { font-size: 0.72rem; padding: 2px 8px; border-radius: 8px;
+               background: #3a3010; color: #ccc; border: 1px solid #5a4820; }
+    .src-ing.matched { background: #1a3a1a; color: #7ec850; border-color: #2a5a2a; }
+    .src-body { font-size: 0.78rem; color: #bbb; line-height: 1.4; margin: 6px 0; }
+    .sugg-recipe-card .src-acts { display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap; align-items: center; }
+
+    /* -- Personal card overlay ---------------------------------- */
+    #card-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 50;
+                    overflow-y: auto; padding: 24px 12px; }
+    #card-overlay.open { display: block; }
+    .personal-card { max-width: 720px; margin: 0 auto; background: #344440; color: #d8e4d8;
+                     border-radius: 10px; padding: 26px 28px; box-shadow: 0 8px 40px rgba(0,0,0,0.5);
+                     font-family: Georgia, 'Times New Roman', serif; }
+    .pc-toolbar { max-width: 720px; margin: 0 auto 12px; display: flex; gap: 8px; justify-content: flex-end; }
+    .pc-btn { border: none; border-radius: 6px; padding: 8px 16px; font-size: 0.85rem;
+              cursor: pointer; font-family: system-ui, sans-serif; }
+    .pc-print { background: #3a7022; color: #fff; }
+    .pc-print:hover { background: #4a8a2a; }
+    .pc-close { background: #444; color: #eee; }
+    .pc-close:hover { background: #555; }
+
+    .pc-head { display: flex; gap: 18px; align-items: flex-start; border-bottom: 2px solid #2d5a1b; padding-bottom: 14px; }
+    .pc-photo { width: 140px; height: 140px; object-fit: cover; border-radius: 8px;
+                flex-shrink: 0; background: #e8ead8; }
+    .pc-photo.placeholder { display: flex; align-items: center; justify-content: center; font-size: 2.4rem; color: #b8bca0; }
+    .pc-title { flex: 1; }
+    .pc-sci { font-size: 1.5rem; font-style: italic; color: #1f3a12; font-weight: 700; }
+    .pc-common { font-size: 1rem; color: #555; margin-top: 2px; }
+    .pc-meta { font-size: 0.85rem; color: #666; margin-top: 8px; }
+    .pc-edib { display: inline-block; font-size: 0.72rem; padding: 2px 9px; border-radius: 10px;
+               border: 1px solid #999; margin-right: 6px; text-transform: capitalize; }
+    .pc-section { margin-top: 18px; }
+    .pc-section h4 { font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.06em; color: #2d5a1b;
+                     border-bottom: 1px solid #d8dabf; padding-bottom: 3px; margin-bottom: 8px;
+                     font-family: system-ui, sans-serif; }
+    .pc-text { font-size: 0.92rem; line-height: 1.5; color: #222; white-space: pre-line; }
+    .pc-recipe-title { font-weight: 700; color: #1f3a12; margin-bottom: 4px; }
+    .pc-enc { border-left: 3px solid #6aab3a; padding: 4px 0 4px 12px; margin-bottom: 14px; }
+    .pc-enc-date { font-size: 0.78rem; color: #777; font-family: system-ui, sans-serif; }
+    .pc-enc-prompt { font-size: 0.92rem; color: #1f3a12; margin-top: 4px; font-style: italic; white-space: pre-line; }
+    .pc-enc-prompt .tag { font-style: normal; font-size: 0.66rem; color: #888; text-transform: uppercase;
+                          letter-spacing: 0.04em; display: block; }
+    .pc-enc-note { font-size: 0.9rem; color: #333; margin-top: 4px; white-space: pre-line; }
+    .pc-enc-audio { font-size: 0.78rem; color: #2d5a1b; margin-top: 4px; font-family: system-ui, sans-serif; }
+    .pc-readonly-note { font-size: 0.72rem; color: #999; margin-top: 22px; font-family: system-ui, sans-serif;
+                        border-top: 1px solid #e0e0d0; padding-top: 8px; }
+    .pc-credit { font-size: 0.72rem; color: #999; text-align: right; margin-top: 4px; font-family: system-ui, sans-serif; }
+
+    @media (max-width: 480px) {
+      .capture-card { padding: 14px; }
+      .pc-head { flex-direction: column; }
+      .pc-photo { width: 100%; height: 180px; }
+    }
+
+    @media print {
+      body { background: #fff; color: #000; }
+      #site-nav-chip, #nav-drawer, #nav-drawer-scrim, .page-body, .pc-toolbar { display: none !important; }
+      #card-overlay { display: block !important; position: static; background: #fff; padding: 0; overflow: visible; }
+      .personal-card { box-shadow: none; max-width: 100%; margin: 0; padding: 0; border-radius: 0; }
+      .pc-enc { page-break-inside: avoid; }
+    }
+
+    #view-banner {
+      background: #1e2d3a; border: 1px solid #2d4a6a; border-radius: 8px;
+      padding: 10px 16px; margin-bottom: 14px;
+      font-size: 0.88rem; color: #90c0f8; line-height: 1.5;
+    }
+    #view-banner strong { color: #a8d0f8; }
+    #view-banner a { color: #7fbbf5; font-size: 0.8rem; margin-left: 10px; text-decoration: none; }
+    #view-banner a:hover { text-decoration: underline; }
+  </style>
+</head>
+<body>
+
+<!-- Nav chip + drawer injected by /static/js/site-header.js (Map Redesign P3-nav) -->
+
+<div class="page-body">
+
+  <div id="view-banner" style="display:none"></div>
+
+  <div class="tab-bar">
+    <button class="tab-btn active" id="tab-record" onclick="switchTab('record')">🎙 Record</button>
+    <button class="tab-btn" id="tab-browse" onclick="switchTab('browse')">📋 Encounters</button>
+    <button class="tab-btn" id="tab-new" onclick="switchTab('new')">📝 New Encounter</button>
+    <button class="tab-btn" id="tab-season" onclick="switchTab('season')">🌿 My Season</button>
+    <button class="tab-btn" id="tab-reading" onclick="switchTab('reading')">📖 Reading note</button>
+  </div>
+
+  <!-- -- Tab: Record (landing, minimal) ------------------------ -->
+  <div class="tab-panel" id="panel-record">
+    <div class="section" style="padding:16px">
+      <!-- Voice -->
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
+        <button id="rec-btn" onclick="recToggle()" style="width:56px;height:56px;border-radius:50%;border:none;
+                background:#c0392b;color:#fff;font-size:1.5rem;cursor:pointer;flex-shrink:0"
+                title="Tap to record">🎙</button>
+        <div>
+          <div id="rec-status" style="font-size:0.85rem;color:#c8ddb0">Tap to record</div>
+          <div id="rec-timer" style="font-size:0.72rem;color:#888"></div>
+        </div>
+        <canvas id="rec-wave" width="200" height="40" style="flex:1;max-width:200px;display:none"></canvas>
+      </div>
+      <!-- Photo -->
+      <div style="display:flex;gap:8px;align-items:center;margin-bottom:12px">
+        <label style="display:inline-flex;align-items:center;gap:6px;padding:8px 14px;
+                      border:1px solid #4a6e38;border-radius:8px;background:#283830;color:#c8ddb0;
+                      font-size:0.85rem;cursor:pointer">
+          📷 Photo
+          <input type="file" accept="image/*" id="rec-photo-input" onchange="recPhotoSelected(this)"
+                 style="display:none">
+        </label>
+        <span id="rec-photo-name" style="font-size:0.78rem;color:#888;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:200px"></span>
+        <button id="rec-photo-clear" onclick="recPhotoClear()" style="display:none;background:none;border:none;color:#999;cursor:pointer;font-size:0.85rem" title="Remove photo">✕</button>
+      </div>
+      <!-- Note -->
+      <textarea id="rec-note" rows="2" placeholder="Quick note (optional)"
+                style="width:100%;box-sizing:border-box;border:1px solid #3a5e3a;border-radius:8px;
+                       padding:8px 10px;font-size:0.88rem;font-family:inherit;background:#1e2e1e;
+                       color:#c8ddb0;resize:vertical;margin-bottom:12px"></textarea>
+      <!-- Save -->
+      <button id="rec-save-btn" onclick="recSave()"
+              style="width:100%;padding:12px;border:none;border-radius:8px;background:#2d5a1b;
+                     color:#fff;font-size:1rem;font-weight:600;cursor:pointer">Save</button>
+      <div id="rec-msg" style="font-size:0.78rem;margin-top:6px;min-height:1.2em"></div>
+      <div id="rec-saved" style="display:none;font-size:0.79rem;color:#15803d;background:#ecfdf5;
+                                 border:1px solid #86efac;border-radius:8px;padding:6px 10px;margin-top:6px"></div>
+    </div>
+  </div>
+
+  <!-- -- Tab: New Encounter ----------------------------------- -->
+  <!-- -- Tab: Browse encounters (reverse-chron, walk-grouped) -- -->
+  <div class="tab-panel" id="panel-browse" style="display:none">
+    <div id="browse-content" style="padding:4px 0">
+      <div style="color:#888;font-size:0.85rem;padding:12px">Loading encounters…</div>
+    </div>
+  </div>
+
+  <!-- Observation / Goethean pipeline. NOT species-specific. No species
+       linking or "Foraging Notes" elements belong here. -->
+  <div class="tab-panel" id="panel-new" style="display:none">
+
+    <div class="section">
+      <h2>New Encounter</h2>
+      <p class="subtitle">Record what you actually see — the exact-seeing observation. Not tied to a species.</p>
+      <!-- Capture widget injected by _mountCapture('new') — saves encounter_type='field' -->
+      <div class="capture-card" id="cap-mount-new"></div>
+    </div>
+
+    <div class="section">
+      <h2>Recordings</h2>
+      <div class="enc-list" id="enc-list-new">
+        <div class="empty-msg">No recordings yet</div>
+      </div>
+    </div>
+
+  </div><!-- /panel-new -->
+
+  <!-- -- Tab: My Season --------------------------------------- -->
+  <div class="tab-panel" id="panel-season" style="display:none">
+
+    <div class="section">
+      <h2>My Season</h2>
+      <p class="subtitle">Your standing personal list — the workshop-of-one. Tap a species to open its personal card.</p>
+
+      <div class="add-row" data-guest-hide>
+        <select id="add-species-select"><option value="">Loading species…</option></select>
+        <button class="btn-add" id="btn-add-species" onclick="addSpecies()">+ Add to My Season</button>
+      </div>
+
+      <div class="season-grid" id="season-grid">
+        <div class="empty-msg">Loading…</div>
+      </div>
+    </div>
+
+    <div class="section" data-guest-hide>
+      <h2>Record</h2>
+      <p class="subtitle">Capture a voice note right here — it's saved to your season.</p>
+      <!-- Capture widget injected by _mountCapture('season') — saves encounter_type='season' -->
+      <div class="capture-card" id="cap-mount-season"></div>
+    </div>
+
+    <div class="section">
+      <h2>Recordings</h2>
+      <div class="enc-list" id="enc-list-season">
+        <div class="empty-msg">No recordings yet</div>
+      </div>
+    </div>
+
+  </div><!-- /panel-season -->
+
+  <!-- -- Tab: Reading note ----------------------------------- -->
+  <div class="tab-panel" id="panel-reading" style="display:none">
+
+    <div class="section">
+      <h2>Reading note</h2>
+      <p class="subtitle">Record a note from a book or reference source — transcribed and saved to your Goethean voice library.</p>
+
+      <div class="capture-card" id="rn-card">
+        <div class="field-row" style="margin-bottom:16px">
+          <label for="rn-source">Source (book title or reference)</label>
+          <input type="text" id="rn-source" placeholder="e.g. Edible Wild Plants of Britain — Richard Mabey" autocomplete="off">
+        </div>
+
+        <div class="rec-primary-row">
+          <button class="btn-rec-big start" id="rn-btn-start" onclick="rnStartRecording()" title="Tap to start recording">🎙</button>
+          <button class="btn-rec-big stop"  id="rn-btn-stop"  onclick="rnStopRecording()"  title="Tap to stop" style="display:none">⏹</button>
+          <span class="rec-hint" id="rn-rec-hint">Tap to record</span>
+          <span class="rec-status" id="rn-rec-status" style="display:none"><span class="rec-dot"></span> Recording…</span>
+        </div>
+
+        <div class="wakelock-row">
+          <input type="checkbox" id="rn-wakelock" checked>
+          <label for="rn-wakelock">Keep screen on while recording</label>
+        </div>
+
+        <canvas id="rn-waveform" width="640" height="84" style="display:none"></canvas>
+        <audio id="rn-audio-preview" style="display:none" controls></audio>
+
+        <div class="audio-row" id="rn-post-rec-row" style="display:none">
+          <button class="btn-rec btn-rec-play" onclick="rnPlayBack()">▶ Play back</button>
+          <button class="btn-rec-discard" onclick="rnDiscard()">Discard</button>
+        </div>
+
+        <div class="secondary-audio" style="margin-top:14px">
+          <span class="secondary-label">or upload an existing file</span>
+          <button type="button" class="btn-upload" onclick="document.getElementById('rn-file-input').click()">📁 Upload audio file</button>
+          <input type="file" id="rn-file-input" accept=".mp3,.m4a,.wav,.ogg,audio/mpeg,audio/mp4,audio/x-m4a,audio/wav,audio/ogg" onchange="rnHandleUpload(event)" style="display:none">
+          <div class="upload-name" id="rn-upload-name"></div>
+        </div>
+
+        <button class="btn-save" id="rn-btn-save" onclick="rnSave()" style="margin-top:18px">Save reading note</button>
+        <div class="save-msg" id="rn-save-msg"></div>
+      </div>
+    </div>
+
+  </div><!-- /panel-reading -->
+
+</div><!-- /page-body -->
+
+<!-- -- Personal card overlay ---------------------------------- -->
+<div id="card-overlay">
+  <div class="pc-toolbar">
+    <button class="pc-btn pc-print" onclick="window.print()">🖨 Print</button>
+    <button class="pc-btn pc-close" onclick="closeCard()">✕ Close</button>
+  </div>
+  <div class="personal-card" id="personal-card"></div>
+</div>
+
+<script src="/static/js/guest-mode.js"></script>
+<script src="/static/js/job-status-widget.js"></script>
+<script src="/static/js/seasonal-returns.js"></script>
+<script src="/static/js/gps.js"></script>
+<script src="/static/js/encounter-queue.js"></script>
+<script src="/static/js/encounters-main.js"></script>
+<script src="/static/js/site-header.js"></script>
+</body>
+</html>

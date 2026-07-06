@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <link rel="manifest" href="/static/manifest.json">
+  <meta name="theme-color" content="#2d5a1b">
+  <link rel="apple-touch-icon" href="/static/icons/icon-192.png">
+  <link rel="icon" type="image/svg+xml" href="/static/icons/dandelion-icon.svg">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ForagingID — About</title>
+  <link rel="stylesheet" href="/static/css/tokens.css">
+  <link rel="stylesheet" href="/static/css/site-header.css">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: system-ui, sans-serif; background: #2a3330; color: #d8e4d8; min-height: 100dvh; }
+
+    /* ── Layout ──────────────────────────────────────────────────────── */
+    #main { max-width: 820px; margin: 0 auto; padding: 24px 16px 80px; }
+    #load-status { font-size: 0.8rem; color: #888; margin-bottom: 18px; }
+
+    .about-section {
+      background: #344440; border: 1px solid #4a5e5a; border-radius: 12px;
+      padding: 22px 22px 24px; margin-bottom: 28px;
+    }
+    .about-section h2 { font-size: 1.2rem; font-weight: 700; color: #8ab87a; margin-bottom: 4px; }
+    .section-sub { font-size: 0.8rem; color: #666; line-height: 1.5; margin-bottom: 14px; }
+    .section-note { font-size: 0.74rem; color: #999; margin-top: 10px; line-height: 1.5; }
+
+    textarea {
+      width: 100%; border: 1px solid #ccc; border-radius: 8px;
+      font-family: Georgia, 'Times New Roman', serif; font-size: 0.98rem; line-height: 1.6;
+      color: #d8e4d8; background: #2f3d3a; padding: 16px 18px; resize: vertical;
+      transition: border-color 0.15s, background 0.15s;
+    }
+    textarea:focus { outline: none; border-color: #2d5016; background: #2f3d3a; }
+    textarea.dirty { border-color: #f59e0b; background: #fffbeb; }
+    #full-desc { min-height: 400px; }
+    #snappy { min-height: 160px; }
+
+    .btn-row { display: flex; gap: 10px; align-items: center; margin-top: 14px; flex-wrap: wrap; }
+    button {
+      font-size: 0.82rem; font-weight: 600; padding: 8px 18px;
+      border: none; border-radius: 7px; cursor: pointer; transition: background 0.15s;
+    }
+    .btn-primary { background: #2d5016; color: white; }
+    .btn-primary:hover { background: #3a6018; }
+    .btn-secondary { background: #e8f0dc; color: #2d5016; border: 1px solid #c4d4a4; }
+    .btn-secondary:hover { background: #dcebc8; }
+    button:disabled { background: #c8c8c8; color: #fff; cursor: default; border-color: #c8c8c8; }
+
+    .save-status { font-size: 0.8rem; font-weight: 600; }
+    .save-status.ok { color: #16a34a; }
+    .save-status.err { color: #dc2626; }
+  </style>
+</head>
+<body>
+
+<!-- Nav chip + drawer injected by /static/js/site-header.js (Map Redesign P3-nav) -->
+
+<div id="main">
+  <div id="load-status">Loading…</div>
+
+  <!-- ── Section A — Full description ──────────────────────────────── -->
+  <section class="about-section">
+    <h2>About ForagingID</h2>
+    <div class="section-sub">
+      The full description. The species and observation counts are filled in live —
+      edit the prose freely and save.
+    </div>
+    <textarea id="full-desc" spellcheck="true" placeholder="Full description…"></textarea>
+    <div class="btn-row">
+      <button class="btn-primary" id="save-full">Save changes</button>
+      <span class="save-status" id="full-status"></span>
+    </div>
+  </section>
+
+  <!-- ── Section B — Snappy summary ────────────────────────────────── -->
+  <section class="about-section">
+    <h2>Guest summary</h2>
+    <div class="section-sub">
+      This is what guests see on the landing page. Edit manually or regenerate from
+      the full description above.
+    </div>
+    <textarea id="snappy" spellcheck="true" placeholder="Guest summary…"></textarea>
+    <div class="btn-row">
+      <button class="btn-primary" id="save-snappy">Save</button>
+      <button class="btn-secondary" id="regen-snappy">Regenerate with Claude</button>
+      <span class="save-status" id="snappy-status"></span>
+    </div>
+    <div class="section-note">Changes here update the guest landing page immediately.</div>
+  </section>
+</div>
+
+<script>
+const fullEl   = document.getElementById('full-desc');
+const snappyEl = document.getElementById('snappy');
+const loadEl   = document.getElementById('load-status');
+
+// ── Auto-expand textareas to fit content ─────────────────────────────
+function autoGrow(el, minPx) {
+  el.style.height = 'auto';
+  el.style.height = Math.max(minPx, el.scrollHeight + 4) + 'px';
+}
+fullEl.addEventListener('input', () => { autoGrow(fullEl, 400); fullEl.classList.add('dirty'); });
+snappyEl.addEventListener('input', () => { autoGrow(snappyEl, 160); snappyEl.classList.add('dirty'); });
+
+// ── Status helper ────────────────────────────────────────────────────
+function showStatus(id, msg, ok) {
+  const el = document.getElementById(id);
+  el.textContent = msg;
+  el.className = 'save-status ' + (ok ? 'ok' : 'err');
+  if (ok) setTimeout(() => { if (el.textContent === msg) el.textContent = ''; }, 2500);
+}
+
+// ── Load ──────────────────────────────────────────────────────────────
+async function load() {
+  try {
+    const r = await fetch('/api/about');
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const d = await r.json();
+    fullEl.value   = d.full_description || '';
+    snappyEl.value = d.snappy_summary || '';
+    fullEl.classList.remove('dirty');
+    snappyEl.classList.remove('dirty');
+    autoGrow(fullEl, 400);
+    autoGrow(snappyEl, 160);
+    loadEl.style.display = 'none';
+  } catch (e) {
+    loadEl.textContent = 'Failed to load: ' + e.message;
+    loadEl.style.color = '#dc2626';
+  }
+}
+
+// ── Save full description ─────────────────────────────────────────────
+document.getElementById('save-full').addEventListener('click', async (ev) => {
+  const btn = ev.currentTarget;
+  btn.disabled = true;
+  try {
+    const r = await fetch('/api/about', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ full_description: fullEl.value }),
+    });
+    if (!r.ok) throw new Error((await r.json().catch(() => ({}))).detail || ('HTTP ' + r.status));
+    fullEl.classList.remove('dirty');
+    showStatus('full-status', 'Saved', true);
+  } catch (e) {
+    showStatus('full-status', 'Error: ' + e.message, false);
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+// ── Save snappy summary ───────────────────────────────────────────────
+document.getElementById('save-snappy').addEventListener('click', async (ev) => {
+  const btn = ev.currentTarget;
+  btn.disabled = true;
+  try {
+    const r = await fetch('/api/about', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ snappy_summary: snappyEl.value }),
+    });
+    if (!r.ok) throw new Error((await r.json().catch(() => ({}))).detail || ('HTTP ' + r.status));
+    snappyEl.classList.remove('dirty');
+    showStatus('snappy-status', 'Saved', true);
+  } catch (e) {
+    showStatus('snappy-status', 'Error: ' + e.message, false);
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+// ── Regenerate with Claude ────────────────────────────────────────────
+document.getElementById('regen-snappy').addEventListener('click', async (ev) => {
+  const btn = ev.currentTarget;
+  const orig = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = 'Regenerating…';
+  showStatus('snappy-status', '', true);
+  try {
+    const r = await fetch('/api/about/regenerate-summary', { method: 'POST' });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(d.detail || ('HTTP ' + r.status));
+    snappyEl.value = d.snappy_summary || '';
+    snappyEl.classList.remove('dirty');
+    autoGrow(snappyEl, 160);
+    showStatus('snappy-status', 'Regenerated & saved', true);
+  } catch (e) {
+    showStatus('snappy-status', 'Error: ' + e.message, false);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = orig;
+  }
+});
+
+load();
+</script>
+<script src="/static/js/pwa.js"></script>
+<script src="/static/js/offline.js"></script>
+<script src="/static/js/guest-mode.js"></script>
+<script src="/static/js/job-status-widget.js"></script>
+<script src="/static/js/seasonal-returns.js"></script>
+<script src="/static/js/site-header.js"></script>
+</body>
+</html>

@@ -1,0 +1,201 @@
+"""
+Lightweight helpers for creating and updating background_processes rows.
+
+All functions are fire-and-forget safe: exceptions are caught and logged so
+a DB hiccup never disrupts the calling process. Pattern mirrors scan_sessions.py.
+"""
+import logging
+from datetime import datetime, timedelta
+from typing import Optional
+
+from sqlalchemy import text
+
+from app.database import AsyncSessionLocal
+
+log = logging.getLogger(__name__)
+
+# A process is considered stalled when running and last_heartbeat is older than this.
+STALL_THRESHOLD_S = 60
+
+
+async def bp_start(process_type: str, progress_total: int = 0, detail: str = "") -> Optional[int]:
+    """
+    INSERT a new background_processes row and return its process_id.
+    Returns None on any failure.
+    """
+    try:
+        now = datetime.utcnow()
+        async with AsyncSessionLocal() as db:
+            result = await db.execute(
+                text(
+                    "INSERT INTO background_processes "
+                    "(process_type, status, started_at, updated_at, last_heartbeat, "
+                    " progress_current, progress_total, detail) "
+                    "VALUES (:pt, 'running', :now, :now, :now, 0, :total, :detail)"
+                ),
+                {"pt": process_type, "now": now, "total": progress_total, "detail": detail},
+            )
+            await db.commit()
+            return result.lastrowid
+    except Exception:
+        log.exception("background_processes: bp_start failed (type=%s)", process_type)
+        return None
+
+
+async def bp_progress(
+    process_id: Optional[int],
+    current: int,
+    total: int,
+    detail: str = "",
+    heartbeat: bool = True,
+) -> None:
+    """Update progress_current, progress_total, detail, and optionally last_heartbeat."""
+    if process_id is None:
+        return
+    try:
+        now = datetime.utcnow()
+        hb = ", last_heartbeat = :now" if heartbeat else ""
+        async with AsyncSessionLocal() as db:
+            await db.execute(
+                text(
+                    f"UPDATE background_processes "
+                    f"SET progress_current = :cur, progress_total = :tot, "
+                    f"    detail = :detail, updated_at = :now{hb} "
+                    f"WHERE process_id = :pid"
+                ),
+                {"cur": current, "tot": total, "detail": detail, "now": now, "pid": process_id},
+            )
+            await db.commit()
+    except Exception:
+        log.exception("background_processes: bp_progress failed (id=%s)", process_id)
+
+
+async def bp_heartbeat(process_id: Optional[int]) -> None:
+    """Stamp last_heartbeat = now (called during long-running loops)."""
+    if process_id is None:
+        return
+    try:
+        async with AsyncSessionLocal() as db:
+            await db.execute(
+                text("UPDATE background_processes SET last_heartbeat = :now WHERE process_id = :pid"),
+                {"now": datetime.utcnow(), "pid": process_id},
+            )
+            await db.commit()
+    except Exception:
+        log.exception("background_processes: bp_heartbeat failed (id=%s)", process_id)
+
+
+async def bp_finish(
+    process_id: Optional[int],
+    status: str = "complete",
+    error: str = "",
+    current: Optional[int] = None,
+    total: Optional[int] = None,
+) -> None:
+    """Mark the process as complete / failed / cancelled."""
+    if process_id is None:
+        return
+    try:
+        now = datetime.utcnow()
+        parts = ["status = :status", "updated_at = :now", "last_heartbeat = :now"]
+        params: dict = {"status": status, "now": now, "pid": process_id, "error": error or None}
+        parts.append("error = :error")
+        if current is not None:
+            parts.append("progress_current = :cur")
+            params["cur"] = current
+        if total is not None:
+            parts.append("progress_total = :tot")
+            params["tot"] = total
+        async with AsyncSessionLocal() as db:
+            await db.execute(
+                text(f"UPDATE background_processes SET {', '.join(parts)} WHERE process_id = :pid"),
+                params,
+            )
+            await db.commit()
+    except Exception:
+        log.exception("background_processes: bp_finish failed (id=%s)", process_id)
+
+
+async def bp_set_status(process_id: Optional[int], status: str) -> None:
+    """Set status field only (used for pause/cancel from the API)."""
+    if process_id is None:
+        return
+    try:
+        async with AsyncSessionLocal() as db:
+            await db.execute(
+                text("UPDATE background_processes SET status = :s, updated_at = :now WHERE process_id = :pid"),
+                {"s": status, "now": datetime.utcnow(), "pid": process_id},
+            )
+            await db.commit()
+    except Exception:
+        log.exception("background_processes: bp_set_status failed (id=%s)", process_id)
+
+
+async def bp_active_count(process_type: str) -> int:
+    """Count rows with status IN ('running', 'paused') for a given process_type."""
+    try:
+        async with AsyncSessionLocal() as db:
+            row = await db.execute(
+                text(
+                    "SELECT COUNT(*) FROM background_processes "
+                    "WHERE process_type = :pt AND status IN ('running', 'paused')"
+                ),
+                {"pt": process_type},
+            )
+            return row.scalar() or 0
+    except Exception:
+        log.exception("background_processes: bp_active_count failed")
+        return 0
+
+
+async def bp_active_row(process_type: str) -> Optional[dict]:
+    """Return the most recent active (running/paused) row for a process_type, or None."""
+    try:
+        async with AsyncSessionLocal() as db:
+            row = (await db.execute(
+                text(
+                    "SELECT process_id, process_type, status, started_at, updated_at, "
+                    "       last_heartbeat, progress_current, progress_total, detail, error "
+                    "FROM background_processes "
+                    "WHERE process_type = :pt AND status IN ('running', 'paused') "
+                    "ORDER BY started_at DESC LIMIT 1"
+                ),
+                {"pt": process_type},
+            )).fetchone()
+            if not row:
+                return None
+            return _row_to_dict(row)
+    except Exception:
+        log.exception("background_processes: bp_active_row failed")
+        return None
+
+
+def _row_to_dict(row) -> dict:
+    from datetime import datetime as _dt
+    def _dt_parse(v):
+        if v is None: return None
+        if isinstance(v, _dt): return v
+        try: return _dt.fromisoformat(str(v))
+        except Exception: return None
+
+    now = datetime.utcnow()
+    heartbeat = _dt_parse(row[5])
+    status = row[2]
+    is_stalled = (
+        status == "running"
+        and (heartbeat is None or (now - heartbeat).total_seconds() > STALL_THRESHOLD_S)
+    )
+    return {
+        "process_id":       row[0],
+        "process_type":     row[1],
+        "status":           status,
+        "started_at":       _dt_parse(row[3]).isoformat() if _dt_parse(row[3]) else None,
+        "updated_at":       _dt_parse(row[4]).isoformat() if _dt_parse(row[4]) else None,
+        "last_heartbeat":   heartbeat.isoformat() if heartbeat else None,
+        "progress_current": row[6] or 0,
+        "progress_total":   row[7] or 0,
+        "detail":           row[8],
+        "error":            row[9],
+        "is_stalled":       is_stalled,
+        "heartbeat_age_s":  int((now - heartbeat).total_seconds()) if heartbeat else None,
+    }

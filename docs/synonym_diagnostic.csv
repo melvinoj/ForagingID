@@ -1,0 +1,33 @@
+ema_binomial,name_key,matching_species,collapsed_form,itis_status,itis_accepted,itis_matches_existing,gbif_accepted,gbif_matches_existing,bucket
+Fragaria moschata,fragaria moschata,—,—,no_match,—,—,Fragaria moschata,—,NO_DB_MATCH
+Fragaria viridis,fragaria viridis,—,—,no_match,—,—,Fragaria viridis,—,NO_DB_MATCH
+Fragaria ananassa,fragaria ananassa,—,—,no_match,—,—,Fragaria ananassa,—,NO_DB_MATCH
+Hieracium pilosella,hieracium pilosella,—,—,error: 'utf-8' codec can't decode byte 0xfc in position 389: invali,—,—,Pilosella officinarum,—,SYNONYM_TO_ABSENT
+Primula veris,primula veris,—,—,accepted,Primula veris,—,Primula veris,—,NO_DB_MATCH
+Primula veris,primula veris,—,—,accepted,Primula veris,—,Primula veris,—,NO_DB_MATCH
+Allium sativum,allium sativum,—,—,accepted,Allium sativum,—,Allium sativum,—,NO_DB_MATCH
+Plantago afra,plantago afra,—,—,no_match,—,—,Plantago afra,—,NO_DB_MATCH
+Plantago indica,plantago indica,—,—,synonym,Plantago psyllium,—,Plantago arenaria arenaria,—,SYNONYM_TO_ABSENT
+Urtica urens,urtica urens,—,—,accepted,Urtica urens,—,Urtica urens,—,NO_DB_MATCH
+Urtica urens,urtica urens,—,—,accepted,Urtica urens,—,Urtica urens,—,NO_DB_MATCH
+Malva sylvestris,malva sylvestris,—,—,accepted,Malva sylvestris,—,Malva sylvestris,—,NO_DB_MATCH
+Malva sylvestris,malva sylvestris,—,—,accepted,Malva sylvestris,—,Malva sylvestris,—,NO_DB_MATCH
+Malva neglecta,malva neglecta,—,—,accepted,Malva neglecta,—,Malva neglecta,—,NO_DB_MATCH
+Rosa centifolia,rosa centifolia,—,—,synonym,Rosa X,—,Rosa centifolia,—,SYNONYM_TO_ABSENT
+Rosa gallica,rosa gallica,—,—,accepted,Rosa gallica,—,Rosa gallica,—,NO_DB_MATCH
+Rosa damascena,rosa damascena,—,—,no_match,—,—,Rosa damascena,—,NO_DB_MATCH
+Origanum majorana,origanum majorana,—,—,accepted,Origanum majorana,—,Origanum majorana,—,NO_DB_MATCH
+Vaccinium macrocarpon,vaccinium macrocarpon,—,—,accepted,Vaccinium macrocarpon,—,Vaccinium macrocarpon,—,NO_DB_MATCH
+Tilia platyphyllos,tilia platyphyllos,—,—,accepted,Tilia platyphyllos,—,Tilia platyphyllos,—,NO_DB_MATCH
+Tilia vulgaris,tilia vulgaris,Tilia × europaea,—,no_match,—,—,Tilia europaea,Tilia × europaea,SAME_GENUS_SYNONYM
+Epilobium parviflorum,epilobium parviflorum,—,—,accepted,Epilobium parviflorum,—,Epilobium parviflorum,—,NO_DB_MATCH
+Origanum dictamnus,origanum dictamnus,—,—,no_match,—,—,Origanum dictamnus,—,NO_DB_MATCH
+Rhamnus purshianus,rhamnus purshianus,—,—,no_match,—,—,Frangula purshiana purshiana,—,SYNONYM_TO_ABSENT
+Rhamnus frangula,rhamnus frangula,Frangula alnus,—,accepted,Rhamnus frangula,—,Frangula alnus alnus,Frangula alnus,CROSS_GENUS_SYNONYM
+Urtica urens,urtica urens,—,—,accepted,Urtica urens,—,Urtica urens,—,NO_DB_MATCH
+Ilex paraguariensis,ilex paraguariensis,—,—,accepted,Ilex paraguariensis,—,Ilex paraguariensis,—,NO_DB_MATCH
+Viola tricolor,viola tricolor,—,—,accepted,Viola tricolor,—,Viola tricolor,—,NO_DB_MATCH
+Viola arvensis,viola arvensis,—,—,accepted,Viola arvensis,—,Viola arvensis,—,NO_DB_MATCH
+Viola vulgaris,viola vulgaris,—,—,no_match,—,—,Viola reichenbachiana,—,SYNONYM_TO_ABSENT
+Solidago virgaurea,solidago virgaurea,—,—,no_match,—,—,Solidago virgaurea,—,NO_DB_MATCH
+Thymus zygis,thymus zygis,—,—,no_match,—,—,Thymus zygis,—,NO_DB_MATCH

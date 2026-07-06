@@ -1,0 +1,1144 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Seasons — ForagingID</title>
+<link rel="icon" type="image/svg+xml" href="/static/icons/dandelion-icon.svg">
+<link rel="stylesheet" href="/static/css/tokens.css">
+<link rel="stylesheet" href="/static/css/site-header.css">
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html, body { height:100%; overflow:hidden; background:#0e1a0e; color:#c8ddb0;
+               font-family:system-ui,-apple-system,sans-serif;
+               -webkit-tap-highlight-color:transparent; }
+
+  /* ── Month labels ─────────────────────────────────────────── */
+  .month-bar { position:fixed; bottom:0; left:0; right:0; z-index:90;
+               background:rgba(14,26,14,.88); backdrop-filter:blur(6px);
+               display:flex; justify-content:space-around; padding:6px 0;
+               border-top:1px solid #1e3e1e; }
+  .month-label { font-size:0.68rem; color:#5a8a5a; cursor:pointer;
+                 padding:4px 6px; border-radius:4px; user-select:none;
+                 position:relative; z-index:1; }
+  .month-label:hover, .month-label.active { color:#c8ddb0; background:#1e3e1e; }
+  .month-tick { position:absolute; bottom:2px; width:1px; height:8px;
+                background:rgba(255,255,255,.15); pointer-events:none; }
+
+  /* ── Band container (photo band — upper region) ─────────── */
+  .band-wrap { position:fixed; top:0; bottom:36px; left:0; right:0;
+               overflow:hidden; }
+  .band-scroll { width:100%; height:100%; overflow-x:scroll; overflow-y:hidden;
+                 -webkit-overflow-scrolling:touch;
+                 scrollbar-width:none; }
+  .band-scroll::-webkit-scrollbar { display:none; }
+  .band-track { position:relative; height:100%; }
+
+  .snap-stop { position:absolute; top:0; height:100%; width:1px;
+               scroll-snap-align:center; pointer-events:none; }
+
+  /* ── Vertical opacity gradient ─────────────────────────────  */
+  .band-wrap::before, .band-wrap::after {
+    content:''; position:absolute; left:0; right:0; z-index:10;
+    pointer-events:none;
+  }
+  .band-wrap::before { top:0; height:30%;
+    background:linear-gradient(to bottom, rgba(14,26,14,.4), transparent); }
+  .band-wrap::after { bottom:0; height:30%;
+    background:linear-gradient(to top, rgba(14,26,14,.4), transparent); }
+
+  /* ── Species thumbnail ──────────────────────────────────── */
+  .sp-dot { position:absolute; transform:translate(-50%,-50%);
+            width:48px; height:48px;
+            transition:opacity 0.15s ease, transform 0.15s ease, filter 0.15s ease;
+            will-change:transform, opacity, filter;
+            cursor:pointer; }
+  .sp-dot img { width:48px; height:48px; border-radius:50%; object-fit:cover;
+                border:2px solid #2a4a2a; display:block;
+                transition:border-color 0.2s, box-shadow 0.2s; }
+  .sp-dot img.sp-main-thumb { width:100%; height:100%; }
+
+  /* Phenology ring colours */
+  .sp-dot[data-ring="leaf"]   img { border-color:#4a9e4a; }
+  .sp-dot[data-ring="flower"] img { border-color:#c9a020; }
+  .sp-dot[data-ring="fruit"]  img { border-color:#c0392b; }
+  .sp-dot[data-ring="root"]   img { border-color:#7B2D8B; }
+  .sp-dot[data-ring="none"]   img { border-color:#444; }
+
+  .sp-dot .sp-name { position:absolute; top:100%; left:50%; transform:translateX(-50%);
+                     white-space:nowrap; font-size:0.58rem; color:#8ab87a;
+                     text-align:center; margin-top:2px; pointer-events:none;
+                     max-width:80px; overflow:hidden; text-overflow:ellipsis; }
+  .sp-dot.highlighted img { border-color:#e8c84a; box-shadow:0 0 8px rgba(232,200,74,.5); }
+  .sp-dot.selected img { border-color:#6adf6a; box-shadow:0 0 6px rgba(106,223,106,.4); }
+  .sp-dot .select-badge { position:absolute; top:-4px; right:-4px; width:16px; height:16px;
+                          border-radius:50%; background:#6adf6a; display:none;
+                          align-items:center; justify-content:center;
+                          font-size:10px; color:#0e1a0e; font-weight:bold; line-height:16px;
+                          text-align:center; }
+  .sp-dot.selected .select-badge { display:flex; }
+
+  /* ── Hover/focus expand (desktop) ──────────────────────── */
+  .sp-dot .hover-card { position:absolute; top:50%; left:50%; transform:translate(-50%,-50%);
+                        background:rgba(14,26,14,.95); border:1px solid #3a6a3a;
+                        border-radius:10px; padding:6px; display:none;
+                        flex-direction:column; align-items:center; gap:4px;
+                        pointer-events:none; z-index:20; min-width:90px; }
+  .sp-dot .hover-card img { width:72px; height:72px; border-radius:50%; object-fit:cover;
+                            border:2px solid #3a6a3a; }
+  .sp-dot .hover-card .hc-name { font-size:0.62rem; color:#c8ddb0; text-align:center;
+                                  white-space:nowrap; max-width:120px; overflow:hidden;
+                                  text-overflow:ellipsis; }
+  @media (hover:hover) {
+    .sp-dot.hovered .hover-card, .sp-dot:focus-within .hover-card { display:flex; }
+    .sp-dot.hovered img.sp-main-thumb, .sp-dot:focus-within img.sp-main-thumb { opacity:0; }
+    .sp-dot.hovered .sp-name, .sp-dot:focus-within .sp-name { opacity:0; }
+  }
+
+  /* ── My Season list ────────────────────────────────────── */
+  .my-season-bar { position:fixed; bottom:36px; left:0; right:0;
+                   background:rgba(14,26,14,.92); backdrop-filter:blur(6px);
+                   border-top:1px solid #1e3e1e; z-index:85;
+                   max-height:100px; overflow-y:auto; padding:6px 12px;
+                   display:none; }
+  .my-season-bar.has-items { display:block; }
+  .my-season-bar .ms-title { font-size:0.65rem; color:#5a8a5a; margin-bottom:4px; }
+  .my-season-bar .ms-list { display:flex; flex-wrap:wrap; gap:4px 10px; }
+  .my-season-bar .ms-item { font-size:0.68rem; color:#c8ddb0; }
+
+  /* ── Centre crosshair ──────────────────────────────────── */
+  .centre-line { position:fixed; top:0; bottom:36px; left:50%;
+                 width:1px; background:rgba(138,184,122,.12); z-index:5;
+                 pointer-events:none; }
+
+  /* ── Phenology band (hidden — data layer preserved for re-enable) */
+  .pheno-wrap { position:fixed; bottom:36px; left:0; right:0; height:144px;
+                background:rgba(14,26,14,.95); border-top:1px solid #1e3e1e;
+                overflow:hidden; z-index:80;
+                display:none; }
+  .pheno-scroll { width:100%; height:100%; overflow-x:scroll; overflow-y:hidden;
+                  scrollbar-width:none; -webkit-overflow-scrolling:touch; }
+  .pheno-scroll::-webkit-scrollbar { display:none; }
+  .pheno-track { position:relative; height:100%; }
+
+  .pheno-cursor { position:absolute; top:0; bottom:0; width:1px;
+                  background:rgba(200,221,176,.35); z-index:10; pointer-events:none; }
+
+  .pheno-row { position:absolute; left:0; height:14px; display:flex;
+               align-items:center; cursor:pointer; }
+  .pheno-row:hover { filter:brightness(1.2); }
+  .pheno-row .row-label { position:absolute; right:100%; margin-right:6px;
+                          white-space:nowrap; font-size:0.55rem; color:#8ab87a;
+                          max-width:80px; overflow:hidden; text-overflow:ellipsis; }
+
+  .pheno-bar { position:absolute; height:10px; border-radius:3px; opacity:0.8; }
+  .pheno-bar.leaf   { background:#5a9a3a; }
+  .pheno-bar.flower { background:#d4a030; }
+  .pheno-bar.fruit  { background:#c04848; }
+
+  .pheno-stage-word { position:absolute; top:-1px; font-size:0.48rem; color:rgba(200,221,176,.7);
+                      pointer-events:none; white-space:nowrap; }
+
+  .density-marker { position:absolute; height:4px; border-radius:2px;
+                    background:rgba(138,184,122,.3); }
+  .density-dot { position:absolute; width:3px; height:3px; border-radius:50%;
+                 background:#8ab87a; opacity:0.6; top:50%; transform:translateY(-50%); }
+
+  /* ── Zoom overlay ──────────────────────────────────────── */
+  .zoom-overlay { position:fixed; top:0; bottom:36px; left:0; right:0;
+                  background:rgba(14,26,14,.92); z-index:200; display:none;
+                  overflow:auto; }
+  .zoom-overlay.active { display:block; }
+  .zoom-close { position:fixed; top:8px; right:12px; z-index:210;
+                background:rgba(30,62,30,.9); border:1px solid #3a6a3a;
+                color:#c8ddb0; border-radius:50%; width:32px; height:32px;
+                font-size:18px; cursor:pointer; display:none; align-items:center;
+                justify-content:center; }
+  .zoom-overlay.active ~ .zoom-close { display:flex; }
+
+  .zoom-grid { display:flex; flex-wrap:wrap; gap:8px; padding:16px;
+               justify-content:center; align-items:flex-start; }
+  .zoom-species { background:rgba(30,62,30,.6); border:1px solid #2a4a2a;
+                  border-radius:8px; padding:10px; min-width:140px; max-width:200px;
+                  flex:1 1 140px; }
+  .zoom-species-name { font-size:0.72rem; color:#c8ddb0; margin-bottom:6px;
+                       font-weight:600; }
+  .zoom-encounters { display:flex; flex-wrap:wrap; gap:4px; }
+  .zoom-enc-thumb { width:52px; height:52px; border-radius:6px; object-fit:cover;
+                    border:1px solid #2a4a2a; cursor:pointer; }
+  .zoom-enc-thumb:hover { border-color:#8ab87a; }
+  .zoom-enc-text { font-size:0.56rem; color:#8ab87a; padding:4px;
+                   background:rgba(14,26,14,.5); border-radius:4px;
+                   max-width:110px; overflow:hidden; text-overflow:ellipsis;
+                   white-space:nowrap; cursor:pointer; }
+  .zoom-enc-text:hover { color:#c8ddb0; }
+
+  /* ── Species card modal ────────────────────────────────── */
+  .card-overlay { position:fixed; inset:0; background:rgba(0,0,0,.6);
+                  z-index:300; display:none; align-items:center; justify-content:center; }
+  .card-overlay.active { display:flex; }
+  .card-panel { background:#0e1a0e; border:1px solid #2a4a2a; border-radius:12px;
+                padding:20px; max-width:360px; width:90%; max-height:80vh;
+                overflow-y:auto; position:relative; }
+  .card-close { position:absolute; top:8px; right:12px; color:#8ab87a;
+                cursor:pointer; font-size:18px; background:none; border:none; }
+  .card-thumb { width:80px; height:80px; border-radius:50%; object-fit:cover;
+                border:2px solid #2a4a2a; display:block; margin:0 auto 12px; }
+  .card-name { font-size:1rem; font-weight:700; text-align:center; margin-bottom:4px; }
+  .card-sci { font-size:0.75rem; color:#8ab87a; text-align:center;
+              font-style:italic; margin-bottom:12px; }
+  .card-edibility { font-size:0.68rem; text-align:center; padding:2px 10px;
+                    border-radius:10px; display:inline-block; margin:0 auto 12px;
+                    width:auto; }
+  .card-edibility.edible { background:rgba(90,154,58,.2); color:#6adf6a; }
+  .card-edibility.caution { background:rgba(212,160,48,.2); color:#d4a030; }
+  .card-edibility.toxic, .card-edibility.inedible, .card-edibility.not_edible {
+    background:rgba(192,72,72,.2); color:#e06060; }
+  .card-season-btn { display:block; width:100%; margin-top:12px; padding:8px;
+                     border-radius:6px; border:1px solid #3a6a3a; background:rgba(30,62,30,.6);
+                     color:#c8ddb0; font-size:0.78rem; cursor:pointer; text-align:center; }
+  .card-season-btn:hover { background:rgba(50,100,50,.6); }
+  .card-season-btn.in-season { border-color:#6adf6a; color:#6adf6a; }
+  .card-link { display:block; text-align:center; margin-top:8px;
+               font-size:0.72rem; color:#8ab87a; text-decoration:none; }
+  .card-link:hover { color:#c8ddb0; }
+
+  /* Phenology legend — toggle from month bar */
+  .legend-toggle { color:#5a8a5a; font-size:0.68rem; cursor:pointer;
+                   padding:4px 6px; border-radius:4px; user-select:none;
+                   background:none; border:none; white-space:nowrap; }
+  .legend-toggle:hover, .legend-toggle.active { color:#c8ddb0; background:#1e3e1e; }
+  .pheno-legend { position:fixed; right:8px; z-index:91;
+                  background:rgba(14,26,14,.95); backdrop-filter:blur(6px);
+                  border:1px solid #1e3e1e; border-radius:8px 8px 0 0;
+                  padding:8px 12px; display:none; }
+  .pheno-legend.open { display:block; }
+  .pheno-legend .leg-row { display:flex; align-items:center; gap:6px; margin:2px 0;
+                           font-size:0.62rem; color:#c8ddb0; white-space:nowrap; }
+  .pheno-legend .leg-swatch { width:10px; height:10px; border-radius:50%; border:2px solid; display:inline-block; }
+</style>
+</head>
+<body>
+
+<!-- Nav chip + drawer injected by /static/js/site-header.js (Map Redesign P3-nav) -->
+
+<div class="centre-line"></div>
+
+
+<div class="band-wrap">
+  <div class="band-scroll" id="band-scroll">
+    <div class="band-track" id="band-track"></div>
+  </div>
+</div>
+
+<div class="pheno-wrap">
+  <div class="pheno-scroll" id="pheno-scroll">
+    <div class="pheno-track" id="pheno-track">
+      <div class="pheno-cursor" id="pheno-cursor"></div>
+    </div>
+  </div>
+</div>
+
+<div class="my-season-bar" id="my-season-bar">
+  <div class="ms-title">My Season</div>
+  <div class="ms-list" id="my-season-list"></div>
+</div>
+
+<div class="pheno-legend" id="pheno-legend">
+  <div class="leg-row"><span class="leg-swatch" style="border-color:#4a9e4a"></span> 🌿 Leaf / shoot</div>
+  <div class="leg-row"><span class="leg-swatch" style="border-color:#c9a020"></span> 🌸 Flower</div>
+  <div class="leg-row"><span class="leg-swatch" style="border-color:#c0392b"></span> 🍎 Fruit / seed</div>
+  <div class="leg-row"><span class="leg-swatch" style="border-color:#7B2D8B"></span> 🌱 Root</div>
+  <div class="leg-row"><span class="leg-swatch" style="border-color:#444"></span> No data / not in season</div>
+</div>
+<div class="month-bar" id="month-bar"></div>
+
+<div class="zoom-overlay" id="zoom-overlay">
+  <div class="zoom-grid" id="zoom-grid"></div>
+</div>
+<button class="zoom-close" id="zoom-close">&times;</button>
+
+<div class="card-overlay" id="card-overlay">
+  <div class="card-panel" id="card-panel"></div>
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  var STOPS = 36;
+  var MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  var MONTH_STARTS = [1,32,60,91,121,152,182,213,244,274,305,335];
+  var MONTH_ENDS = [31,59,90,120,151,181,212,243,273,304,334,366];
+  var DAYS_IN_YEAR = 366;
+
+  var _positions = [];
+  var _thumbCache = {};
+  var _atCache = {};
+  var _dots = {};
+  var _selectedSpecies = {};
+  var _scrollEl, _trackEl, _bandWidth, _viewW, _viewH;
+  var _phenoScrollEl, _phenoTrackEl, _phenoCursorEl;
+  var _currentDay = _todayDOY();
+  var _rafPending = false;
+  var _lastFetchDay = -1;
+  var _lastPhenoDay = -1;
+  var _highlightedSid = null;
+  var _hoveredSid = null;
+
+  // Zoom state
+  var _zoomActive = false;
+  var _zoomCentreDoy = null;
+  var _tapTimer = null;
+  var _tapCount = 0;
+  var _lastTapTime = 0;
+  var _holdTimer = null;
+
+  function _todayDOY() {
+    var now = new Date();
+    var start = new Date(now.getFullYear(), 0, 0);
+    return Math.floor((now - start) / 86400000);
+  }
+
+  function _doyToX(doy) { return (doy - 1) / DAYS_IN_YEAR * _bandWidth; }
+
+  function _esc(s) {
+    var d = document.createElement('div'); d.textContent = s; return d.innerHTML;
+  }
+
+  function _monthFromDoy(doy) {
+    for (var i = 11; i >= 0; i--) {
+      if (doy >= MONTH_STARTS[i]) return i;
+    }
+    return 0;
+  }
+
+  function _doyToLabel(doy) {
+    var m = _monthFromDoy(doy);
+    var dayInMonth = doy - MONTH_STARTS[m] + 1;
+    return MONTHS[m] + ' ' + dayInMonth;
+  }
+
+  // ── Init ─────────────────────────────────────────────────────
+  function _computeDimensions() {
+    _viewW = _scrollEl.clientWidth || window.innerWidth || 800;
+    _viewH = _scrollEl.clientHeight || (window.innerHeight - 74) || 400;
+    _bandWidth = _viewW * (STOPS / 3);
+    _trackEl.style.width = _bandWidth + 'px';
+    _phenoTrackEl.style.width = _bandWidth + 'px';
+  }
+
+  async function init() {
+    _scrollEl = document.getElementById('band-scroll');
+    _trackEl = document.getElementById('band-track');
+    _phenoScrollEl = document.getElementById('pheno-scroll');
+    _phenoTrackEl = document.getElementById('pheno-track');
+    _phenoCursorEl = document.getElementById('pheno-cursor');
+
+    _buildMonthBar();
+
+    var r = await fetch('/api/timeline/positions?lens=edibility');
+    var data = await r.json();
+    _positions = data.positions || [];
+
+    _computeDimensions();
+    if (_bandWidth < 100) {
+      _viewW = window.innerWidth || 800;
+      _viewH = (window.innerHeight - 74) || 400;
+      _bandWidth = _viewW * (STOPS / 3);
+      _trackEl.style.width = _bandWidth + 'px';
+      _phenoTrackEl.style.width = _bandWidth + 'px';
+    }
+
+    // Load My Season selection state
+    await _loadMySeasonState();
+
+    _buildSnapStops();
+    _placeSpecies();
+    _renderMySeasonList();
+
+    _scrollEl.addEventListener('scroll', _onScroll, { passive: true });
+
+    var _scrollAttempts = 0;
+    function _tryScrollToToday() {
+      var trackWidth = _trackEl ? _trackEl.getBoundingClientRect().width : 0;
+      if (trackWidth > window.innerWidth * 2) {
+        _scrollToDay(_currentDay);
+        _onScrollFrame();
+      } else if (_scrollAttempts < 20) {
+        _scrollAttempts++;
+        setTimeout(_tryScrollToToday, 100);
+      }
+    }
+    _tryScrollToToday();
+
+    // Sync phenology band scroll to photo band
+    _scrollEl.addEventListener('scroll', _syncPhenoScroll, { passive: true });
+    _phenoScrollEl.addEventListener('scroll', _syncBandScroll, { passive: true });
+
+    // Zoom gestures on band
+    _scrollEl.addEventListener('dblclick', _onDoubleTap);
+    _scrollEl.addEventListener('touchstart', _onTouchStart, { passive: true });
+    _scrollEl.addEventListener('touchend', _onTouchEnd);
+
+    document.getElementById('zoom-close').addEventListener('click', _closeZoom);
+    document.getElementById('card-overlay').addEventListener('click', function (e) {
+      if (e.target === this) _closeCard();
+    });
+
+    window.addEventListener('resize', function () {
+      _computeDimensions();
+      _buildSnapStops();
+      _repositionSpecies();
+      _onScrollFrame();
+    });
+
+    _onScrollFrame();
+  }
+
+  // ── My Season state ──────────────────────────────────────────
+  async function _loadMySeasonState() {
+    try {
+      var r = await fetch('/api/personal-lists/my-season');
+      var data = await r.json();
+      _selectedSpecies = {};
+      (data.species || []).forEach(function (sp) {
+        _selectedSpecies[sp.species_id] = true;
+      });
+    } catch (e) { /* non-fatal */ }
+  }
+
+  function _isSelected(sid) { return !!_selectedSpecies[sid]; }
+
+  async function _toggleSelect(sid) {
+    if (_selectedSpecies[sid]) {
+      try {
+        await fetch('/api/personal-lists/my-season/species/' + sid, { method: 'DELETE' });
+        delete _selectedSpecies[sid];
+      } catch (e) { return; }
+    } else {
+      try {
+        await fetch('/api/personal-lists/my-season/species', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ species_id: sid })
+        });
+        _selectedSpecies[sid] = true;
+      } catch (e) { return; }
+    }
+    _updateDotSelectState(sid);
+  }
+
+  function _updateDotSelectState(sid) {
+    var dot = _dots[sid];
+    if (!dot) return;
+    if (_selectedSpecies[sid]) {
+      dot.classList.add('selected');
+    } else {
+      dot.classList.remove('selected');
+    }
+    _renderMySeasonList();
+  }
+
+  function _renderMySeasonList() {
+    var bar = document.getElementById('my-season-bar');
+    var list = document.getElementById('my-season-list');
+    var names = [];
+    for (var sid in _selectedSpecies) {
+      if (!_selectedSpecies[sid]) continue;
+      var pos = _positions.find(function (p) { return String(p.species_id) === String(sid); });
+      names.push(pos ? pos.display_name : ('species #' + sid));
+    }
+    names.sort();
+    if (names.length) {
+      list.innerHTML = names.map(function (n) { return '<span class="ms-item">' + _esc(n) + '</span>'; }).join('');
+      bar.classList.add('has-items');
+    } else {
+      list.innerHTML = '';
+      bar.classList.remove('has-items');
+    }
+  }
+
+  // ── Scroll sync ──────────────────────────────────────────────
+  var _syncingFromBand = false;
+  var _syncingFromPheno = false;
+
+  function _syncPhenoScroll() {
+    if (_syncingFromPheno) return;
+    _syncingFromBand = true;
+    _phenoScrollEl.scrollLeft = _scrollEl.scrollLeft;
+    requestAnimationFrame(function () { _syncingFromBand = false; });
+  }
+
+  function _syncBandScroll() {
+    if (_syncingFromBand) return;
+    _syncingFromPheno = true;
+    _scrollEl.scrollLeft = _phenoScrollEl.scrollLeft;
+    requestAnimationFrame(function () { _syncingFromPheno = false; });
+  }
+
+  // Clamp bubble centre so the full bubble + label + hover-card stays within canvas
+  var _EDGE_INSET = 40;
+  var _BUBBLE_R = 24;  // half of 48px bubble
+  var _LABEL_H = 16;   // sp-name below bubble
+  var _HOVER_HALF_W = 50; // half of hover-card min-width ~90px + padding
+  var _HOVER_HALF_H = 55; // half of hover-card height ~100px
+
+  function _clampPos(rawX, rawY) {
+    var minX = _EDGE_INSET + Math.max(_BUBBLE_R, _HOVER_HALF_W);
+    var maxX = _bandWidth - minX;
+    var minY = _EDGE_INSET + Math.max(_BUBBLE_R, _HOVER_HALF_H);
+    var maxY = _viewH - _EDGE_INSET - Math.max(_BUBBLE_R + _LABEL_H, _HOVER_HALF_H);
+    return {
+      x: Math.max(minX, Math.min(maxX, rawX)),
+      y: Math.max(minY, Math.min(maxY, rawY))
+    };
+  }
+
+  function _repositionSpecies() {
+    _positions.forEach(function (sp) {
+      var dot = _dots[sp.species_id];
+      if (dot) {
+        var clamped = _clampPos(sp.home.x * _bandWidth, sp.home.y * _viewH);
+        dot.style.left = clamped.x + 'px';
+        dot.style.top = clamped.y + 'px';
+      }
+    });
+  }
+
+  function _buildSnapStops() {
+    var existing = _trackEl.querySelectorAll('.snap-stop');
+    existing.forEach(function (el) { el.remove(); });
+    for (var i = 0; i <= STOPS; i++) {
+      var el = document.createElement('div');
+      el.className = 'snap-stop';
+      el.style.left = (i / STOPS * _bandWidth) + 'px';
+      _trackEl.appendChild(el);
+    }
+  }
+
+  function _buildMonthBar() {
+    var bar = document.getElementById('month-bar');
+    MONTHS.forEach(function (m, i) {
+      var btn = document.createElement('span');
+      btn.className = 'month-label';
+      btn.textContent = m;
+      btn.dataset.month = i;
+      btn.onclick = function () { _scrollToDay(MONTH_STARTS[i]); };
+      bar.appendChild(btn);
+    });
+    // Pill indicator — moves across all 36 stop positions.
+    var pill = document.createElement('span');
+    pill.id = 'month-pill';
+    pill.style.cssText = 'position:absolute;bottom:0;width:3px;height:3px;border-radius:2px;background:#c8ddb0;pointer-events:none;transition:left 0.1s;transform:translateX(-1px)';
+    bar.appendChild(pill);
+    // Add tick marks at 1/3 and 2/3 of each month span (24 ticks total).
+    // Positioned after labels are in the DOM so we can measure bar width.
+    requestAnimationFrame(function () {
+      var barW = bar.offsetWidth;
+      var monthW = barW / 12;
+      for (var i = 0; i < 12; i++) {
+        for (var t = 1; t <= 2; t++) {
+          var tick = document.createElement('span');
+          tick.className = 'month-tick';
+          tick.style.left = (i * monthW + t * monthW / 3) + 'px';
+          bar.appendChild(tick);
+        }
+      }
+    });
+    var legBtn = document.createElement('button');
+    legBtn.className = 'legend-toggle';
+    legBtn.textContent = '🌿 Legend';
+    legBtn.title = 'Phenology legend';
+    legBtn.onclick = function () {
+      var panel = document.getElementById('pheno-legend');
+      var open = panel.classList.toggle('open');
+      legBtn.classList.toggle('active', open);
+      if (open) {
+        var msBar = document.getElementById('my-season-bar');
+        var msH = (msBar && msBar.classList.contains('has-items')) ? msBar.offsetHeight : 0;
+        panel.style.bottom = (36 + msH + 4) + 'px';
+      }
+    };
+    bar.appendChild(legBtn);
+  }
+
+  // ── Place species dots ────────────────────────────────────────
+  function _placeSpecies() {
+    _positions.forEach(function (sp) {
+      var dot = document.createElement('div');
+      dot.className = 'sp-dot';
+      if (_selectedSpecies[sp.species_id]) dot.classList.add('selected');
+      var clamped = _clampPos(sp.home.x * _bandWidth, sp.home.y * _viewH);
+      dot.style.left = clamped.x + 'px';
+      dot.style.top = clamped.y + 'px';
+      dot.style.opacity = '0';
+      dot.dataset.sid = sp.species_id;
+      dot.dataset.visFrom = sp.visible_from;
+      dot.dataset.visTo = sp.visible_to;
+      dot.dataset.peakDoy = sp.peak_doy;
+      dot.dataset.flowerMonths = sp.flower_months || '';
+      dot.dataset.fruitMonths = sp.fruit_months || '';
+      dot.dataset.leafMonths = sp.leaf_months || '';
+      dot.dataset.edibility = sp.edibility_status || '';
+
+      var html = '<img class="sp-main-thumb" src="" alt="">';
+      html += '<div class="sp-name">' + _esc(sp.display_name) + '</div>';
+      html += '<div class="select-badge">+</div>';
+      html += '<div class="hover-card"><img src="" alt=""><div class="hc-name">' + _esc(sp.display_name) + '</div></div>';
+      dot.innerHTML = html;
+
+      // Tap = open card, long-press = toggle select
+      var pressTimer = null;
+      var didLongPress = false;
+      dot.addEventListener('pointerdown', function (e) {
+        didLongPress = false;
+        pressTimer = setTimeout(function () {
+          didLongPress = true;
+          _toggleSelect(parseInt(dot.dataset.sid));
+        }, 500);
+      });
+      dot.addEventListener('pointerup', function (e) {
+        clearTimeout(pressTimer);
+        if (!didLongPress) {
+          e.stopPropagation();
+          _openCard(parseInt(dot.dataset.sid));
+        }
+      });
+      dot.addEventListener('pointerleave', function () { clearTimeout(pressTimer); });
+
+      // Hover lift (desktop only — CSS @media(hover:hover) guards the visual)
+      dot.addEventListener('mouseenter', function () {
+        _hoveredSid = parseInt(dot.dataset.sid);
+        dot.classList.add('hovered');
+        dot.style.zIndex = '15';
+        dot.style.opacity = '1';
+        dot.style.transform = 'translate(-50%,-50%) scale(1.1)';
+        dot.style.filter = 'none';
+      });
+      dot.addEventListener('mouseleave', function () {
+        dot.classList.remove('hovered');
+        dot.style.zIndex = '';
+        _hoveredSid = null;
+        _onScrollFrame();
+      });
+
+      _trackEl.appendChild(dot);
+      _dots[sp.species_id] = dot;
+    });
+  }
+
+  // ── Scroll handling ────────────────────────────────────────────
+  function _scrollToDay(doy) {
+    var x = _doyToX(doy) - _viewW / 2;
+    _scrollEl.scrollLeft = Math.max(0, Math.min(x, _bandWidth - _viewW));
+  }
+
+  function _onScroll() {
+    if (!_rafPending) {
+      _rafPending = true;
+      requestAnimationFrame(_onScrollFrame);
+    }
+  }
+
+  function _phenoRingColour(dot, doy) {
+    var month = _monthFromDoy(doy) + 1; // _monthFromDoy returns 0-based index
+    var leaf = dot.dataset.leafMonths;
+    var flower = dot.dataset.flowerMonths;
+    var fruit = dot.dataset.fruitMonths;
+    if (leaf && leaf.split(',').some(function(m) { return parseInt(m) === month; })) return 'leaf';
+    if (flower && flower.split(',').some(function(m) { return parseInt(m) === month; })) return 'flower';
+    if (fruit && fruit.split(',').some(function(m) { return parseInt(m) === month; })) return 'fruit';
+    return 'none';
+  }
+
+  function _onScrollFrame() {
+    _rafPending = false;
+    var scrollLeft = _scrollEl.scrollLeft;
+    var centreX = scrollLeft + _viewW / 2;
+    var centreDoy = Math.round(centreX / _bandWidth * DAYS_IN_YEAR) + 1;
+    centreDoy = Math.max(1, Math.min(DAYS_IN_YEAR, centreDoy));
+    _currentDay = centreDoy;
+
+    // Update month highlights — track the nearest of 36 stops.
+    var stopIndex = Math.floor(centreX / _bandWidth * STOPS);
+    stopIndex = Math.max(0, Math.min(STOPS - 1, stopIndex));
+    var activeMonth = Math.floor(stopIndex / 3);
+    document.querySelectorAll('.month-label').forEach(function (el, i) {
+      el.classList.toggle('active', i === activeMonth);
+    });
+    // Move the pill indicator to the exact stop position (36 stops).
+    var pill = document.getElementById('month-pill');
+    if (pill) {
+      var bar = document.getElementById('month-bar');
+      var barW = bar.offsetWidth;
+      pill.style.left = (stopIndex / STOPS * barW) + 'px';
+    }
+
+    // Update species visibility + temporal focus effect
+    var FOCUS_WINDOW = 30;
+    for (var sid in _dots) {
+      var dot = _dots[sid];
+      var visFrom = parseInt(dot.dataset.visFrom);
+      var visTo = parseInt(dot.dataset.visTo);
+      var peakDoy = parseInt(dot.dataset.peakDoy);
+
+      var visible = _isVisible(visFrom, visTo, centreDoy);
+      if (!visible) {
+        dot.style.opacity = '0';
+        dot.style.pointerEvents = 'none';
+        continue;
+      }
+
+      var dayDist = Math.min(Math.abs(peakDoy - centreDoy), DAYS_IN_YEAR - Math.abs(peakDoy - centreDoy));
+      var normDt = Math.min(dayDist / FOCUS_WINDOW, 1.0);
+
+      // Species with active phenology at the scroll date get a focus boost —
+      // they're "in season now" even if their sighting peak was earlier.
+      // Toxic species don't get the boost (they should stay receded).
+      var ringColour = _phenoRingColour(dot, centreDoy);
+      if (ringColour !== 'none') {
+        var edib = (dot.dataset.edibility || '').toLowerCase();
+        if (edib !== 'toxic' && edib !== 'inedible' && edib !== 'not_edible') {
+          normDt = Math.min(normDt, 0.15);
+        }
+      }
+
+      var scale = 1.0 - normDt * 0.4;
+      var blur = normDt * 3;
+      var opacity = 1.0 - normDt * 0.5;
+
+      dot.style.pointerEvents = '';
+      if (_hoveredSid !== null && String(sid) === String(_hoveredSid)) continue;
+      dot.style.opacity = String(Math.max(0.15, opacity));
+      dot.style.transform = 'translate(-50%,-50%) scale(' + scale.toFixed(3) + ')';
+      dot.style.filter = blur > 0.2 ? 'blur(' + blur.toFixed(1) + 'px)' : 'none';
+    }
+
+    // Fetch thumbnails + phenology data
+    _maybeLoadThumbs(centreDoy);
+    _maybeLoadPheno(centreDoy);
+
+    // Update phenology cursor position
+    _phenoCursorEl.style.left = centreX + 'px';
+
+    // Update phenology ring colours for current scroll day
+    for (var rsid in _dots) {
+      var rdot = _dots[rsid];
+      if (parseFloat(rdot.style.opacity) < 0.1) continue;
+      rdot.dataset.ring = _phenoRingColour(rdot, centreDoy);
+    }
+  }
+
+  function _isVisible(from, to, day) {
+    if (from <= to) return day >= from && day <= to;
+    return day >= from || day <= to;
+  }
+
+  // ── Thumbnail loading ──────────────────────────────────────────
+  var _thumbDebounce = null;
+
+  function _maybeLoadThumbs(day) {
+    var quantised = Math.round(day / 10) * 10 || 1;
+    if (quantised === _lastFetchDay) return;
+    clearTimeout(_thumbDebounce);
+    _thumbDebounce = setTimeout(function () { _fetchThumbs(quantised); }, 150);
+  }
+
+  async function _fetchThumbs(day) {
+    _lastFetchDay = day;
+    if (_thumbCache[day]) {
+      _applyThumbs(_thumbCache[day]);
+      return;
+    }
+    try {
+      var r = await fetch('/api/timeline/at?day=' + day + '&lens=edibility');
+      var data = await r.json();
+      _atCache[day] = data;
+      var map = {};
+      (data.species || []).forEach(function (sp) {
+        if (sp.thumbnail) map[sp.species_id] = sp.thumbnail;
+      });
+      _thumbCache[day] = map;
+      _applyThumbs(map);
+    } catch (e) { /* non-fatal */ }
+  }
+
+  function _applyThumbs(map) {
+    for (var sid in map) {
+      var dot = _dots[sid];
+      if (!dot) continue;
+      var mainImg = dot.querySelector('img.sp-main-thumb');
+      if (mainImg && mainImg.src !== location.origin + map[sid]) {
+        mainImg.src = map[sid];
+      }
+      var hcImg = dot.querySelector('.hover-card img');
+      if (hcImg && hcImg.src !== location.origin + map[sid]) {
+        hcImg.src = map[sid];
+      }
+    }
+  }
+
+  // ── Phenology band ─────────────────────────────────────────────
+  var _phenoDebounce = null;
+  var _phenoRenderedDay = -1;
+
+  function _maybeLoadPheno(day) {
+    var quantised = Math.round(day / 10) * 10 || 1;
+    if (quantised === _lastPhenoDay) return;
+    clearTimeout(_phenoDebounce);
+    _phenoDebounce = setTimeout(function () { _renderPheno(quantised); }, 200);
+  }
+
+  async function _renderPheno(day) {
+    _lastPhenoDay = day;
+    var data = _atCache[day];
+    if (!data) {
+      try {
+        var r = await fetch('/api/timeline/at?day=' + day + '&lens=edibility');
+        data = await r.json();
+        _atCache[day] = data;
+      } catch (e) { return; }
+    }
+
+    if (_phenoRenderedDay === day) return;
+    _phenoRenderedDay = day;
+
+    // Clear existing rows (keep cursor)
+    var rows = _phenoTrackEl.querySelectorAll('.pheno-row');
+    rows.forEach(function (r) { r.remove(); });
+
+    var species = data.species || [];
+    var rowH = 14;
+    var gap = 2;
+    var topPad = 4;
+
+    species.forEach(function (sp, idx) {
+      var row = document.createElement('div');
+      row.className = 'pheno-row';
+      row.style.top = (topPad + idx * (rowH + gap)) + 'px';
+      row.style.width = _bandWidth + 'px';
+      row.style.height = rowH + 'px';
+      row.dataset.sid = sp.species_id;
+
+      // Row click = open card + highlight in photo band
+      row.addEventListener('click', function () {
+        _highlightSpecies(sp.species_id);
+        _openCard(sp.species_id);
+      });
+
+      if (sp.phenology) {
+        _renderPhenoBar(row, sp.phenology, rowH);
+      } else {
+        _renderDensityMarker(row, sp.sighting_doys || [], rowH);
+      }
+
+      _phenoTrackEl.appendChild(row);
+    });
+  }
+
+  function _monthToDoyStart(m) { return MONTH_STARTS[m - 1] || 1; }
+  function _monthToDoyEnd(m) { return MONTH_ENDS[m - 1] || 366; }
+
+  function _renderPhenoBar(row, pheno, rowH) {
+    var stages = [];
+    if (pheno.leaf_months && pheno.leaf_months.length) {
+      stages.push({ type: 'leaf', months: pheno.leaf_months, label: 'leaf' });
+    }
+    if (pheno.flower_months && pheno.flower_months.length) {
+      stages.push({ type: 'flower', months: pheno.flower_months, label: 'flower' });
+    }
+    if (pheno.fruit_months && pheno.fruit_months.length) {
+      stages.push({ type: 'fruit', months: pheno.fruit_months, label: 'fruit' });
+    }
+
+    stages.forEach(function (st) {
+      var startDoy = _monthToDoyStart(st.months[0]);
+      var endDoy = _monthToDoyEnd(st.months[st.months.length - 1]);
+      var x1 = _doyToX(startDoy);
+      var x2 = _doyToX(endDoy);
+
+      var bar = document.createElement('div');
+      bar.className = 'pheno-bar ' + st.type;
+      bar.style.left = x1 + 'px';
+      bar.style.width = Math.max(4, x2 - x1) + 'px';
+      bar.style.top = ((rowH - 10) / 2) + 'px';
+      row.appendChild(bar);
+
+      var word = document.createElement('span');
+      word.className = 'pheno-stage-word';
+      word.textContent = st.label;
+      word.style.left = (x1 + 3) + 'px';
+      row.appendChild(word);
+    });
+  }
+
+  function _renderDensityMarker(row, doys, rowH) {
+    if (!doys || !doys.length) {
+      // Even with no DOY data, show a faint full-width marker
+      var bg = document.createElement('div');
+      bg.className = 'density-marker';
+      bg.style.left = '0';
+      bg.style.width = _bandWidth + 'px';
+      bg.style.top = ((rowH - 4) / 2) + 'px';
+      bg.style.opacity = '0.15';
+      row.appendChild(bg);
+      return;
+    }
+
+    var minD = Math.min.apply(null, doys);
+    var maxD = Math.max.apply(null, doys);
+    var x1 = _doyToX(Math.max(1, minD - 5));
+    var x2 = _doyToX(Math.min(366, maxD + 5));
+
+    var bg = document.createElement('div');
+    bg.className = 'density-marker';
+    bg.style.left = x1 + 'px';
+    bg.style.width = Math.max(8, x2 - x1) + 'px';
+    bg.style.top = ((rowH - 4) / 2) + 'px';
+    row.appendChild(bg);
+
+    doys.forEach(function (d) {
+      var dot = document.createElement('div');
+      dot.className = 'density-dot';
+      dot.style.left = (_doyToX(d) - x1) + 'px';
+      bg.appendChild(dot);
+    });
+  }
+
+  // ── Cross-highlight ─────────────────────────────────────────────
+  function _highlightSpecies(sid) {
+    if (_highlightedSid !== null) {
+      var prev = _dots[_highlightedSid];
+      if (prev) prev.classList.remove('highlighted');
+    }
+    _highlightedSid = sid;
+    var dot = _dots[sid];
+    if (dot) dot.classList.add('highlighted');
+  }
+
+  // ── Zoom ────────────────────────────────────────────────────────
+  function _onDoubleTap(e) {
+    e.preventDefault();
+    var rect = _scrollEl.getBoundingClientRect();
+    var clickX = e.clientX - rect.left + _scrollEl.scrollLeft;
+    var doy = Math.round(clickX / _bandWidth * DAYS_IN_YEAR) + 1;
+    _activateZoom(doy);
+  }
+
+  function _onTouchStart(e) {
+    if (e.touches.length !== 1) return;
+    var now = Date.now();
+    if (now - _lastTapTime < 350) {
+      _tapCount++;
+    } else {
+      _tapCount = 1;
+    }
+    _lastTapTime = now;
+
+    var touch = e.touches[0];
+    _holdTimer = setTimeout(function () {
+      var rect = _scrollEl.getBoundingClientRect();
+      var clickX = touch.clientX - rect.left + _scrollEl.scrollLeft;
+      var doy = Math.round(clickX / _bandWidth * DAYS_IN_YEAR) + 1;
+      _activateZoom(doy);
+    }, 600);
+  }
+
+  function _onTouchEnd(e) {
+    clearTimeout(_holdTimer);
+    if (_tapCount >= 2) {
+      _tapCount = 0;
+      var rect = _scrollEl.getBoundingClientRect();
+      var touch = e.changedTouches[0];
+      var clickX = touch.clientX - rect.left + _scrollEl.scrollLeft;
+      var doy = Math.round(clickX / _bandWidth * DAYS_IN_YEAR) + 1;
+      _activateZoom(doy);
+    }
+  }
+
+  async function _activateZoom(centreDoy) {
+    _zoomActive = true;
+    _zoomCentreDoy = centreDoy;
+    var overlay = document.getElementById('zoom-overlay');
+    var grid = document.getElementById('zoom-grid');
+    overlay.classList.add('active');
+
+    // Find species near this day from cache, or fetch
+    var quantised = Math.round(centreDoy / 10) * 10 || 1;
+    var data = _atCache[quantised];
+    if (!data) {
+      try {
+        var r = await fetch('/api/timeline/at?day=' + quantised + '&lens=edibility');
+        data = await r.json();
+        _atCache[quantised] = data;
+      } catch (e) { return; }
+    }
+
+    grid.innerHTML = '';
+
+    var fortnightFrom = Math.max(1, centreDoy - 7);
+    var fortnightTo = Math.min(366, centreDoy + 7);
+
+    // Header
+    var header = document.createElement('div');
+    header.style.cssText = 'width:100%;text-align:center;font-size:0.78rem;color:#8ab87a;padding:4px 0 8px;';
+    header.textContent = _doyToLabel(fortnightFrom) + ' -- ' + _doyToLabel(fortnightTo);
+    grid.appendChild(header);
+
+    (data.species || []).forEach(function (sp) {
+      var card = document.createElement('div');
+      card.className = 'zoom-species';
+
+      var nameEl = document.createElement('div');
+      nameEl.className = 'zoom-species-name';
+      nameEl.textContent = sp.display_name;
+      nameEl.style.cursor = 'pointer';
+      nameEl.addEventListener('click', function () { _openCard(sp.species_id); });
+      card.appendChild(nameEl);
+
+      var encWrap = document.createElement('div');
+      encWrap.className = 'zoom-encounters';
+
+      var encounters = sp.encounters || [];
+      // Filter to roughly the fortnight window
+      var nearby = encounters.filter(function (enc) {
+        if (!enc.doy) return true;
+        return enc.doy >= fortnightFrom && enc.doy <= fortnightTo;
+      });
+      // If none in window, show all
+      if (!nearby.length) nearby = encounters;
+      // Show max 6
+      nearby = nearby.slice(0, 6);
+
+      if (nearby.length === 0 && sp.thumbnail) {
+        // No encounters, just show the main thumbnail
+        var img = document.createElement('img');
+        img.className = 'zoom-enc-thumb';
+        img.src = sp.thumbnail;
+        img.alt = sp.display_name;
+        img.addEventListener('click', function () { _openCard(sp.species_id); });
+        encWrap.appendChild(img);
+      }
+
+      nearby.forEach(function (enc) {
+        if (enc.has_photo && enc.thumbnail) {
+          var img = document.createElement('img');
+          img.className = 'zoom-enc-thumb';
+          img.src = enc.thumbnail;
+          img.alt = enc.date || '';
+          img.title = (enc.location || '') + (enc.date ? ' (' + enc.date.substring(0, 10) + ')' : '');
+          img.addEventListener('click', function () { _openCard(sp.species_id); });
+          encWrap.appendChild(img);
+        } else if (enc.text_note) {
+          var stub = document.createElement('div');
+          stub.className = 'zoom-enc-text';
+          stub.textContent = enc.text_note;
+          stub.title = (enc.location || '') + (enc.date ? ' (' + enc.date.substring(0, 10) + ')' : '');
+          stub.addEventListener('click', function () { _openCard(sp.species_id); });
+          encWrap.appendChild(stub);
+        }
+      });
+
+      if (encWrap.children.length === 0 && sp.thumbnail) {
+        var img = document.createElement('img');
+        img.className = 'zoom-enc-thumb';
+        img.src = sp.thumbnail;
+        img.addEventListener('click', function () { _openCard(sp.species_id); });
+        encWrap.appendChild(img);
+      }
+
+      card.appendChild(encWrap);
+      grid.appendChild(card);
+    });
+  }
+
+  function _closeZoom() {
+    _zoomActive = false;
+    document.getElementById('zoom-overlay').classList.remove('active');
+  }
+
+  // ── Species card ───────────────────────────────────────────────
+  async function _openCard(sid) {
+    _highlightSpecies(sid);
+    var overlay = document.getElementById('card-overlay');
+    var panel = document.getElementById('card-panel');
+    overlay.classList.add('active');
+    panel.innerHTML = '<div style="text-align:center;color:#5a8a5a;padding:20px">Loading...</div>';
+
+    try {
+      var r = await fetch('/api/personal-lists/card/' + sid);
+      var data = await r.json();
+      _renderCard(panel, data, sid);
+    } catch (e) {
+      panel.innerHTML = '<div style="text-align:center;color:#c04848;padding:20px">Failed to load</div>';
+    }
+  }
+
+  function _renderCard(panel, data, sid) {
+    var sp = data.species;
+    var inSeason = data.in_my_season;
+
+    var html = '<button class="card-close" id="card-close-btn">&times;</button>';
+
+    if (sp.thumbnail) {
+      html += '<img class="card-thumb" src="/thumbnails/' + sp.thumbnail.split('/').pop() + '" alt="">';
+    }
+
+    html += '<div class="card-name">' + _esc(sp.common_name || sp.scientific_name) + '</div>';
+    html += '<div class="card-sci">' + _esc(sp.scientific_name) + '</div>';
+
+    if (sp.edibility_status) {
+      var cls = (sp.edibility_status || '').toLowerCase().replace(/\s+/g, '_');
+      html += '<div style="text-align:center"><span class="card-edibility ' + cls + '">' + _esc(sp.edibility_status) + '</span></div>';
+    }
+
+    if (data.recipe) {
+      html += '<div style="margin-top:12px;font-size:0.72rem;color:#8ab87a;font-weight:600">' + _esc(data.recipe.title) + '</div>';
+      html += '<div style="font-size:0.68rem;color:#c8ddb0;margin-top:4px">' + _esc((data.recipe.body || '').substring(0, 200)) + '</div>';
+    }
+
+    if (data.encounter_count > 0) {
+      html += '<div style="margin-top:10px;font-size:0.68rem;color:#5a8a5a">' + data.encounter_count + ' encounter' + (data.encounter_count > 1 ? 's' : '') + '</div>';
+    }
+
+    var btnText = inSeason ? 'Remove from My Season' : 'Add to My Season';
+    var btnClass = inSeason ? 'card-season-btn in-season' : 'card-season-btn';
+    html += '<button class="' + btnClass + '" id="card-season-toggle" data-sid="' + sid + '">' + btnText + '</button>';
+
+    html += '<a class="card-link" href="/species?s=' + encodeURIComponent(sp.scientific_name) + '">View full species card</a>';
+
+    panel.innerHTML = html;
+
+    document.getElementById('card-close-btn').addEventListener('click', _closeCard);
+    document.getElementById('card-season-toggle').addEventListener('click', async function () {
+      var s = parseInt(this.dataset.sid);
+      await _toggleSelect(s);
+      // Refresh card to update button state
+      _openCard(s);
+    });
+  }
+
+  function _closeCard() {
+    document.getElementById('card-overlay').classList.remove('active');
+    if (_highlightedSid !== null) {
+      var dot = _dots[_highlightedSid];
+      if (dot) dot.classList.remove('highlighted');
+      _highlightedSid = null;
+    }
+  }
+
+  // Expose to global scope for onclick attribute
+;
+
+  // ── Boot ────────────────────────────────────────────────────────
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init);
+  } else {
+    init();
+  }
+})();
+</script>
+<script src="/static/js/site-header.js"></script>
+</body>
+</html>

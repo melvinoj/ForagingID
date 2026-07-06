@@ -1,0 +1,57 @@
+# Environment variables (secrets)
+.env
+.env.*
+.envy
+
+# Python
+venv/
+__pycache__/
+*.pyc
+*.pyo
+
+# Mac system files
+.DS_Store
+
+# Claude / AI local configs
+.claude/
+
+# Logs
+*.log
+
+# IDE/editor files
+.vscode/
+.idea/
+
+# ── Generated data (never commit) ─────────────────────────────────────────
+# SQLite database (trial observations, thumbnails index)
+data/foragingid.db
+
+# Generated thumbnails (rebuilt from source photos)
+data/thumbnails/
+
+# Cache and checkpoint files from scan runs
+data/cache/
+data/checkpoint_*.json
+
+# Upload staging directory
+uploads/
+
+# DB snapshots (binary blobs — project-relative, pruned by rolling retention)
+snapshots/
+
+# DB backup/rescue copies (ad hoc pre-fix safety copies, not the live DB)
+data/*.bak_*
+data/*_backup_*.db
+data/*.db.bak
+
+# ── Photos ─────────────────────────────────────────────────────────────────
+# Only confirmed/approved photos live in the app folder.
+# Raw scan sources stay in ~/Documents/Pictures (Task 2).
+# Ignore all direct children of photos/ except confirmed_plants/logs/
+# (negating a path requires un-ignoring each ancestor directory too —
+# a bare `!photos/confirmed_plants/logs/` has no effect while
+# `photos/*` still excludes the confirmed_plants/ parent directory itself)
+photos/*
+!photos/confirmed_plants/
+photos/confirmed_plants/*
+!photos/confirmed_plants/logs/

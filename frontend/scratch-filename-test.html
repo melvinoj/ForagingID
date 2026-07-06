@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Filename Test (scratch — delete after)</title>
+<style>
+  body { font-family: system-ui; max-width: 600px; margin: 40px auto; padding: 0 16px;
+         background: #1a2a1a; color: #c8ddb0; }
+  h1 { font-size: 1.2rem; }
+  .result { background: #283830; border: 1px solid #3a5e3a; border-radius: 8px;
+            padding: 12px; margin-top: 12px; font-family: monospace; font-size: 0.85rem;
+            white-space: pre-wrap; word-break: break-all; }
+  label { display: block; margin-top: 20px; font-weight: 600; }
+  input[type="file"] { margin-top: 8px; }
+</style>
+</head><body>
+<h1>Filename Test — gallery pick</h1>
+<p>Pick a photo from the gallery. This page reports the <code>file.name</code> the browser returns.</p>
+
+<label>Pick from gallery (no capture):</label>
+<input type="file" accept="image/*" onchange="showName(this, 'r1')">
+<div class="result" id="r1">Waiting for file pick...</div>
+
+<label>Pick with capture="environment":</label>
+<input type="file" accept="image/*" capture="environment" onchange="showName(this, 'r2')">
+<div class="result" id="r2">Waiting for capture...</div>
+
+<script>
+function showName(input, resultId) {
+  const el = document.getElementById(resultId);
+  if (!input.files || !input.files.length) { el.textContent = 'No file selected'; return; }
+  const f = input.files[0];
+  el.textContent = [
+    'file.name:     ' + f.name,
+    'file.type:     ' + f.type,
+    'file.size:     ' + f.size + ' bytes',
+    'lastModified:  ' + new Date(f.lastModified).toISOString(),
+  ].join('\n');
+}
+</script>
+</body></html>

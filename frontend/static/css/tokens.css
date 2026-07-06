@@ -1,0 +1,26 @@
+/* ── Site design tokens (originated Map Redesign P1) ──────────────────────
+   See DESIGN.md at repo root for the principles behind these values.
+   Scope: site-wide (Map Redesign P3-nav) — linked on every app-shell page. */
+
+:root {
+  /* Colour */
+  --ink:         #1E2A22;
+  --ground:      #EEF0EA;
+  --paper:       #FDFDFB;
+  --moss:        #5A6B58;
+  --moss-light:  #8A9884;
+  --leaf:        #7E9471;
+  --leaf-pale:   #C9D2BC;
+  --hairline:    #D8DCD2;
+  --damson:      #5B3A4E;
+  --amber:       #C89B3C;
+  --water:       #6E8FA8;
+  --alert:       #B0524A;
+
+  /* Type */
+  --font-display: Georgia, 'Times New Roman', serif;
+  --font-ui: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+
+  /* Layout */
+  --touch-min: 44px;
+}

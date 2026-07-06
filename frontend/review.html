@@ -2128,8 +2128,12 @@ function _renderSOPResults(obsId, data, withRef = false) {
         </div>
       </div>` : '';
 
+    // JS-escape single quotes so apostrophes in a common name don't break the onclick string
+    const sciArg = _resc(r.scientific_name).replace(/'/g, "\\'");
+    const comArg = _resc(r.common_name || '').replace(/'/g, "\\'");
+
     return `<div class="sop-card">
-      <div class="sop-row" onclick="_sopSelect(${obsId},'${_resc(r.scientific_name)}','${_resc(r.common_name||'')}',${r.confidence})">
+      <div class="sop-row" onclick="_sopSelect(${obsId},'${sciArg}','${comArg}',${r.confidence})">
         <div class="sop-conf" style="color:${confColor}">${confLabel}</div>
         <div class="sop-name">
           <div class="sop-sci">${_esc(r.scientific_name)}</div>

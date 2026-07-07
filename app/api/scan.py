@@ -926,7 +926,7 @@ async def _identify_scanned(
     This is always True for phone uploads and override-prefilter actions.
     """
     from app.integrations.plantnet import identify_image as pn_identify, PlantNetError
-    from app.integrations.inaturalist import score_image as inat_score
+    from app.integrations.inaturalist import score_image as inat_score, last_inat_status
     from app.services.identification import (
         LOW_CONFIDENCE_THRESHOLD,
         _INAT_SEMAPHORE,   # shared singleton — same object as the identification service
@@ -1054,6 +1054,8 @@ async def _identify_scanned(
             pn_result  = None
             pn_error   = None
             inat_hits  = []
+            inat_outcome = None  # captured inside the semaphore so a concurrent
+                                  # call elsewhere can't overwrite it before we read it
 
             async def _get_pn() -> None:
                 nonlocal pn_result, pn_error
@@ -1066,7 +1068,7 @@ async def _identify_scanned(
                     pn_error = str(exc)
 
             async def _get_inat() -> None:
-                nonlocal inat_hits
+                nonlocal inat_hits, inat_outcome
                 async with _INAT_SEMAPHORE:
                     inat_hits = await inat_score(
                         path, api_token=inat_token,
@@ -1074,6 +1076,7 @@ async def _identify_scanned(
                         observed_on=(obs.photo_taken_at.date().isoformat()
                                      if obs.photo_taken_at else None),
                     )
+                    inat_outcome = last_inat_status()
                     await asyncio.sleep(INAT_DELAY_S)
 
             tasks = []
@@ -1086,6 +1089,25 @@ async def _identify_scanned(
                     observation_id=obs_id, stage="identify", status="failed",
                     message=f"PlantNet error: {pn_error}",
                 ))
+
+            # ── iNat call outcome (observability only) ──────────────────────
+            # Symmetric with the PlantNet error log above: PlantNet failures were
+            # already visible in processing_logs, but iNat's state was only ever
+            # tracked in-memory (last_inat_status()), so a call that returned
+            # nothing was indistinguishable after the fact from a genuine empty
+            # response. Logs the outcome only — does not affect scoring/ranking.
+            if use_inat and inat_outcome is not None:
+                _inat_state = inat_outcome.get("state")
+                if _inat_state in ("ok", "ok_empty"):
+                    session.add(ProcessingLog(
+                        observation_id=obs_id, stage="identify", status="success",
+                        message=f"iNat vision: {len(inat_hits)} candidate(s) returned",
+                    ))
+                else:
+                    session.add(ProcessingLog(
+                        observation_id=obs_id, stage="identify", status="failed",
+                        message=f"iNat vision error: state={_inat_state} detail={inat_outcome.get('detail')}",
+                    ))
 
             # ── Merge candidates ──────────────────────────────────────────
             candidates = []

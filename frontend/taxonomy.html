@@ -1,0 +1,391 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ForagingID — Taxonomy Tree (prototype)</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
+<style>
+  :root {
+    --bg: #14100c;
+    --bg2: #1c1610;
+    --ink: #e8e0d2;
+    --ink-dim: #9a8f7d;
+    --bark: #7a5c3e;
+    --bark-dim: #5a4530;
+    --leaf: #7ca85c;
+    --leaf-bright: #a3c77e;
+    --fungi: #c8963e;
+    --fungi-dim: #8a6a2e;
+    --unplaced: #b5503f;
+    --panel: rgba(28,22,16,0.92);
+    --line: rgba(122,92,62,0.25);
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0; height: 100%;
+    background: radial-gradient(ellipse at 50% 120%, var(--bg2), var(--bg));
+    color: var(--ink);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    overflow: hidden;
+  }
+  #wrap { position: fixed; inset: 0; }
+  svg { width: 100%; height: 100%; display: block; cursor: grab; }
+  svg.dragging { cursor: grabbing; }
+
+  .header {
+    position: fixed; top: 0; left: 0; right: 0; z-index: 10;
+    padding: 14px 20px;
+    display: flex; align-items: baseline; gap: 14px;
+    pointer-events: none;
+  }
+  .header h1 {
+    margin: 0; font-size: 16px; font-weight: 600; letter-spacing: 0.3px;
+  }
+  .header .sub { font-size: 12px; color: var(--ink-dim); }
+  .badge {
+    pointer-events: auto;
+    font-size: 11px; color: var(--ink-dim);
+    background: var(--panel); border: 1px solid var(--line);
+    padding: 3px 9px; border-radius: 20px;
+  }
+
+  .legend {
+    position: fixed; bottom: 16px; left: 16px; z-index: 10;
+    background: var(--panel); border: 1px solid var(--line);
+    border-radius: 12px; padding: 12px 14px;
+    font-size: 12px; min-width: 168px;
+    backdrop-filter: blur(8px);
+  }
+  .legend .row { display: flex; align-items: center; gap: 8px; margin: 5px 0; }
+  .legend .dot { width: 11px; height: 11px; border-radius: 50%; flex: 0 0 auto; }
+  .legend .hint { color: var(--ink-dim); font-size: 11px; margin-top: 8px; line-height: 1.4; }
+
+  .controls {
+    position: fixed; bottom: 16px; right: 16px; z-index: 10;
+    display: flex; flex-direction: column; gap: 8px;
+  }
+  .controls button {
+    background: var(--panel); border: 1px solid var(--line); color: var(--ink);
+    width: 38px; height: 38px; border-radius: 10px; cursor: pointer;
+    font-size: 17px; line-height: 1;
+    backdrop-filter: blur(8px); transition: border-color .15s;
+  }
+  .controls button:hover { border-color: var(--bark); }
+
+  .tip {
+    position: fixed; z-index: 20; pointer-events: none;
+    background: rgba(10,8,6,0.96); border: 1px solid var(--line);
+    border-radius: 9px; padding: 8px 11px; font-size: 12px;
+    max-width: 240px; opacity: 0; transition: opacity .12s;
+    box-shadow: 0 6px 22px rgba(0,0,0,0.5);
+  }
+  .tip .t-name { font-style: italic; color: var(--leaf-bright); }
+  .tip .t-rank { color: var(--ink-dim); font-size: 10px; text-transform: uppercase; letter-spacing: .5px; }
+  .tip .t-meta { color: var(--ink-dim); margin-top: 3px; }
+
+  .link { fill: none; stroke: var(--bark); stroke-opacity: 0.55; }
+  .node-label {
+    font-size: 11px; fill: var(--ink); pointer-events: none;
+    paint-order: stroke; stroke: var(--bg); stroke-width: 3px; stroke-linejoin: round;
+  }
+  .node-label.rank-family { font-size: 12.5px; font-weight: 600; }
+  .node-label.rank-species { font-style: italic; fill: var(--ink-dim); }
+  .node-circle { cursor: pointer; transition: r .15s; }
+  .collapsed-ring { fill: none; stroke-dasharray: 2 2; }
+</style>
+</head>
+<body>
+<div id="wrap">
+  <div class="header">
+    <h1>Taxonomy</h1>
+    <span class="sub">Plantae — a living tree of what you've found</span>
+    <span class="badge" id="count-badge">—</span>
+  </div>
+  <svg id="tree"></svg>
+  <div class="legend">
+    <div class="row"><span class="dot" style="background:var(--leaf-bright)"></span> Plant — confirmed</div>
+    <div class="row"><span class="dot" style="background:var(--bark)"></span> Family / genus</div>
+    <div class="row"><span class="dot" style="background:var(--fungi)"></span> Fungi</div>
+    <div class="row"><span class="dot" style="background:var(--unplaced)"></span> Unplaced — needs review</div>
+    <div class="hint">Click a bough to fold / unfold.<br>Drag to pan · scroll to zoom.</div>
+  </div>
+  <div class="controls">
+    <button id="zoom-in" title="Zoom in">+</button>
+    <button id="zoom-out" title="Zoom out">−</button>
+    <button id="reset" title="Reset view">⤢</button>
+  </div>
+  <div class="tip" id="tip"></div>
+</div>
+
+<script>
+// ---------------------------------------------------------------------------
+// LIVE DATA — fetched from /api/species/taxonomy-tree (Unit A GBIF lineage).
+// Shape: { RAW: { Plantae: { family: { genus: [scientific names] } } },
+//          FUNGI: { family: [scientific names] },
+//          UNPLACED: [ "scientific name (reason)", ... ] }
+// Populated by loadAndRender() below, once the fetch resolves.
+// ---------------------------------------------------------------------------
+let RAW = { Plantae: {} };
+let FUNGI = {};
+let UNPLACED = [];
+
+// ---- build hierarchy ----
+// ---- build hierarchy (kingdom > family > genus > species) ----
+function buildTree() {
+  const root = { name: "Plantae", rank: "kingdom", children: [] };
+  for (const [fam, genera] of Object.entries(RAW.Plantae)) {
+    const famNode = { name: fam, rank: "family", children: [] };
+    for (const [gen, species] of Object.entries(genera)) {
+      famNode.children.push({ name: gen, rank: "genus",
+        children: species.map(s => ({ name: s, rank: "species" })) });
+    }
+    root.children.push(famNode);
+  }
+  return root;
+}
+
+const svg = d3.select("#tree");
+const g = svg.append("g");         // world group (zoom/pan)
+const soilG = g.append("g");
+const linkG = g.append("g");
+const nodeG = g.append("g");
+const fungiG = g.append("g");
+const bucketG = g.append("g");
+let W = window.innerWidth, H = window.innerHeight;
+
+const zoom = d3.zoom().scaleExtent([0.3, 4]).on("zoom", e => g.attr("transform", e.transform));
+svg.call(zoom);
+svg.on("mousedown", () => svg.classed("dragging", true));
+svg.on("mouseup", () => svg.classed("dragging", false));
+
+// ---------------------------------------------------------------------------
+// RADIAL layout. Trunk at BOTTOM rising into an upward FAN.
+// We use a radial cluster but sweep only the UPPER arc (canopy above soil),
+// with the kingdom root at the base and angle increasing left→right across
+// the top. Fungi live BELOW the soil line as amber roots (drawn separately).
+// Collapsible: default collapsed at genus (species hidden until tapped).
+// ---------------------------------------------------------------------------
+const ARC = Math.PI * 1.15;                 // canopy spread (a touch over 180°)
+const ARC_START = -Math.PI/2 - ARC/2;       // centred on straight-up
+const RING = 150;                           // radial distance per depth level
+
+let rootH;
+
+const cluster = d3.cluster().separation((a,b) => (a.parent === b.parent ? 1 : 1.6));
+
+const tip = d3.select("#tip");
+let confirmedCount = 0;
+
+function colourFor(d){
+  if (d.data.rank === "species") return "var(--leaf-bright)";
+  if (d.data.rank === "kingdom") return "var(--leaf)";
+  return "var(--bark)";
+}
+function radiusFor(d){
+  return d.data.rank==="kingdom" ? 9 : d.data.rank==="family" ? 6.5 : d.data.rank==="genus" ? 5 : 3.6;
+}
+// map a node's (angle a, radius r) to x,y with the trunk rising upward from base
+function project(a, r){ return [ Math.cos(a) * r, Math.sin(a) * r ]; }
+
+// assign radial coords: cluster gives d.x in [0,1]*2π-ish (breadth), d.y depth
+function layout(){
+  cluster.size([ARC, 1])(rootH);            // breadth spread across ARC, depth normalised
+  const maxDepth = d3.max(rootH.descendants(), d => d.depth) || 1;
+  rootH.each(d => {
+    d.ang = ARC_START + d.x;                 // canopy angle
+    d.rad = d.depth === 0 ? 0 : d.depth * RING;
+    const [px,py] = project(d.ang, d.rad);
+    d.px = px; d.py = py;                     // screen coords (y negative = up)
+  });
+}
+
+// organic radial limb: quadratic through a mid-radius control point
+function limb(s, t){
+  const midR = (s.rad + t.rad)/2;
+  const midA = (s.ang + t.ang)/2;
+  const [c1x,c1y] = project(s.ang, midR);
+  const [c2x,c2y] = project(t.ang, midR);
+  return `M${s.px},${s.py} C${c1x},${c1y} ${c2x},${c2y} ${t.px},${t.py}`;
+}
+
+function update(source){
+  layout();
+  const nodes = rootH.descendants();
+  const links = rootH.links();
+  const strokeFor = d => Math.max(0.9, 6.5 - d.target.depth * 1.4);
+
+  const link = linkG.selectAll("path.link").data(links, d => d.target.data.name + d.target.depth);
+  link.enter().append("path").attr("class","link")
+      .attr("d", d => limb({ang:source.ang0??d.source.ang, rad:source.rad0??d.source.rad, px:source.px0??d.source.px, py:source.py0??d.source.py},
+                            {ang:source.ang0??d.source.ang, rad:source.rad0??d.source.rad, px:source.px0??d.source.px, py:source.py0??d.source.py}))
+    .merge(link).transition().duration(450)
+      .attr("d", d => limb(d.source, d.target)).attr("stroke-width", strokeFor);
+  link.exit().transition().duration(300).attr("stroke-opacity",0).remove();
+
+  const node = nodeG.selectAll("g.node").data(nodes, d => d.data.name + d.depth);
+  const nEnter = node.enter().append("g").attr("class","node")
+      .attr("transform", `translate(${source.px0??source.px},${source.py0??source.py})`)
+      .on("click",(e,d)=>{ if (d._children||d.children) toggle(d); })
+      .on("mousemove",(e,d)=>showTip(e,d)).on("mouseleave",hideTip);
+
+  nEnter.append("circle").attr("class","node-circle").attr("r",0)
+      .attr("fill",colourFor).attr("stroke","var(--bg)").attr("stroke-width",1.5);
+  nEnter.append("circle").attr("class","collapsed-ring").attr("r",0).attr("stroke","var(--bark)");
+  nEnter.append("text").attr("class",d=>"node-label rank-"+d.data.rank)
+      .attr("dy","0.32em")
+      .text(d=>d.data.rank==="species" ? d.data.name.split(" ").slice(1).join(" ") : d.data.name)
+      .style("opacity",0);
+
+  const nMerge = nEnter.merge(node);
+  nMerge.transition().duration(450).attr("transform", d=>`translate(${d.px},${d.py})`);
+  nMerge.select("circle.node-circle").transition().duration(450).attr("r",radiusFor).attr("fill",colourFor);
+  nMerge.select("circle.collapsed-ring").transition().duration(450)
+      .attr("r",d=>d._children?radiusFor(d)+4:0).attr("stroke-opacity",d=>d._children?0.6:0);
+  // labels: rotate to follow the radial angle, flip on the left half for legibility
+  nMerge.select("text").transition().duration(450).style("opacity",1)
+      .attr("transform", d=>{
+        if (d.depth===0) return "translate(0,20)";
+        const deg = d.ang * 180/Math.PI;
+        const flip = (d.ang > 0 && d.ang < Math.PI);   // lower half — unused in canopy, guard anyway
+        const off = radiusFor(d)+6;
+        return `rotate(${deg}) translate(${off},0) ${ (deg>90||deg<-90) ? "rotate(180)" : "" }`;
+      })
+      .attr("text-anchor", d=>{
+        if (d.depth===0) return "middle";
+        const deg = d.ang*180/Math.PI;
+        return (deg>90||deg<-90) ? "end" : "start";
+      });
+
+  const nExit = node.exit().transition().duration(300)
+      .attr("transform",`translate(${source.px},${source.py})`).remove();
+  nExit.select("circle").attr("r",0);
+  nExit.select("text").style("opacity",0);
+
+  nodes.forEach(d=>{ d.ang0=d.ang; d.rad0=d.rad; d.px0=d.px; d.py0=d.py; });
+}
+
+function toggle(d){
+  if (d.children){ d._children=d.children; d.children=null; }
+  else { d.children=d._children; d._children=null; }
+  update(d);
+}
+
+function showTip(e,d){
+  let meta="";
+  if (d.data.rank==="family") meta=`${(d.children||d._children||[]).length} genera`;
+  else if (d.data.rank==="genus") meta=`${(d.children||d._children||[]).length} species`;
+  else if (d.data.rank==="species") meta="confirmed · EXACT lineage";
+  tip.html(`<div class="t-rank">${d.data.rank}</div><div class="t-name">${d.data.name}</div><div class="t-meta">${meta}</div>`)
+     .style("left",(e.clientX+14)+"px").style("top",(e.clientY+14)+"px").style("opacity",1);
+}
+function hideTip(){ tip.style("opacity",0); }
+
+// ---- soil line ----
+function drawSoil(){
+  soilG.append("line").attr("x1",-20000).attr("x2",20000).attr("y1",8).attr("y2",8)
+    .attr("stroke","var(--bark-dim)").attr("stroke-opacity",0.35).attr("stroke-width",1).attr("stroke-dasharray","2 5");
+}
+
+// ---- fungi as amber ROOTS below the soil, loosely (dotted) linked to the trunk base ----
+function drawFungi(){
+  const fam = Object.entries(FUNGI);
+  const baseY = 8;                          // soil line
+  const spread = 150;
+  fam.forEach(([f,sp],i)=>{
+    const side = i % 2 === 0 ? -1 : 1;
+    const tier = Math.floor(i/2)+1;
+    const fx = side * (60 + tier*70);
+    const fy = baseY + 70 + tier*55;
+    // dotted companion link from trunk base (0,baseY) — not a solid limb of descent
+    fungiG.append("path").attr("class","link")
+      .attr("d",`M0,${baseY} C${fx*0.4},${baseY+40} ${fx*0.7},${fy-30} ${fx},${fy}`)
+      .attr("stroke","var(--fungi-dim)").attr("stroke-width",1.4).attr("stroke-dasharray","1 4").attr("stroke-opacity",0.7);
+    fungiG.append("circle").attr("cx",fx).attr("cy",fy).attr("r",5).attr("fill","var(--fungi)").attr("stroke","var(--bg)").attr("stroke-width",1.5);
+    fungiG.append("text").attr("x",fx).attr("y",fy+ (side<0?4:4)).attr("dx",side<0?-10:10)
+      .attr("text-anchor",side<0?"end":"start").attr("dy","0.32em")
+      .attr("class","node-label").style("font-size","10px").style("fill","var(--fungi)").text(f);
+    sp.forEach((s,j)=>{
+      const sx = fx + side*(20 + j*14);
+      const sy = fy + 26 + j*8;
+      fungiG.append("path").attr("class","link").attr("stroke","var(--fungi-dim)").attr("stroke-opacity",0.4)
+        .attr("stroke-dasharray","1 3").attr("d",`M${fx},${fy} L${sx},${sy}`).attr("stroke-width",1);
+      fungiG.append("circle").attr("cx",sx).attr("cy",sy).attr("r",3).attr("fill","var(--fungi)").attr("fill-opacity",0.8);
+    });
+  });
+}
+
+// ---- unplaced bucket: tucked at the base near the roots, collapsible ----
+function drawUnplaced(){
+  const bx = 0, by = 60;                     // just under the trunk base
+  let open=false;
+  const chips = bucketG.append("g").style("opacity",0).style("pointer-events","none");
+  UNPLACED.forEach((u,i)=>{
+    const yy = by + 30 + i*18;
+    chips.append("circle").attr("cx",bx+16).attr("cy",yy).attr("r",3).attr("fill","var(--unplaced)");
+    chips.append("text").attr("x",bx+26).attr("y",yy).attr("dy","0.32em").attr("class","node-label")
+      .style("font-size","10px").style("fill","var(--ink-dim)").text(u);
+  });
+  const knot = bucketG.append("g").style("cursor","pointer")
+      .on("click",()=>{ open=!open; chips.transition().duration(250).style("opacity",open?1:0).style("pointer-events",open?"all":"none"); });
+  knot.append("circle").attr("cx",bx).attr("cy",by).attr("r",9).attr("fill","var(--unplaced)").attr("stroke","var(--bg)").attr("stroke-width",1.5);
+  knot.append("text").attr("x",bx).attr("y",by).attr("text-anchor","middle").attr("dy","0.32em")
+    .style("font-size","10px").style("font-weight","700").style("fill","#fff").text(UNPLACED.length);
+  knot.append("text").attr("x",bx).attr("y",by+22).attr("text-anchor","middle").attr("class","node-label")
+    .style("fill","var(--unplaced)").style("font-size","10px").text("Unplaced");
+}
+
+function countConfirmed(){ confirmedCount = rootH.descendants().filter(d=>d.data.rank==="species").length; }
+
+function centre(){
+  W=window.innerWidth; H=window.innerHeight;
+  svg.attr("viewBox",`0 0 ${W} ${H}`);
+  // trunk base sits low-centre; canopy rises upward (negative y), so bias view downward
+  const t = d3.zoomIdentity.translate(W*0.5, H*0.72).scale(0.7);
+  svg.transition().duration(500).call(zoom.transform, t);
+}
+
+// ---------------------------------------------------------------------------
+// init — fetch live data, then run the exact same build/render sequence the
+// prototype ran synchronously against its hardcoded RAW/FUNGI/UNPLACED.
+// ---------------------------------------------------------------------------
+document.getElementById("count-badge").textContent = "Loading…";
+
+async function loadAndRender(){
+  let data;
+  try {
+    const resp = await fetch("/api/species/taxonomy-tree");
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    data = await resp.json();
+  } catch (err) {
+    console.error("taxonomy-tree fetch failed:", err);
+    document.getElementById("count-badge").textContent = "Failed to load";
+    return;
+  }
+
+  RAW = data.RAW || { Plantae: {} };
+  FUNGI = data.FUNGI || {};
+  UNPLACED = data.UNPLACED || [];
+
+  rootH = d3.hierarchy(buildTree());
+  rootH.each(d => { if (d.data.rank === "genus" && d.children) { d._children = d.children; d.children = null; } });
+  rootH.ang0=0; rootH.rad0=0; rootH.px0=0; rootH.py0=0;
+
+  drawSoil();
+  update(rootH);
+  drawFungi();
+  drawUnplaced();
+  countConfirmed();
+  document.getElementById("count-badge").textContent =
+    `${confirmedCount} confirmed · ${Object.keys(RAW.Plantae).length} families · ${UNPLACED.length} unplaced`;
+  centre();
+}
+loadAndRender();
+
+d3.select("#zoom-in").on("click",()=>svg.transition().call(zoom.scaleBy,1.3));
+d3.select("#zoom-out").on("click",()=>svg.transition().call(zoom.scaleBy,0.75));
+d3.select("#reset").on("click",centre);
+window.addEventListener("resize",()=>{ W=window.innerWidth;H=window.innerHeight;svg.attr("viewBox",`0 0 ${W} ${H}`); });
+</script>
+</body>
+</html>

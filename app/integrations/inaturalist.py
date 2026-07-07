@@ -140,12 +140,14 @@ async def score_image(
     # Vision API requires a token since mid-2024
     if not api_token:
         log.warning("iNat vision skipped: no API token configured")
+        record_inat_status("no_token", "no API token configured")
         return []
 
     try:
         image_bytes = image_path.read_bytes()
     except OSError as exc:
         log.warning("iNat vision skipped: cannot read %s (%s)", image_path, exc)
+        record_inat_status("file_error", str(exc)[:120])
         return []
 
     # Derive correct MIME type from extension — hardcoding image/jpeg for PNGs
@@ -208,6 +210,7 @@ async def score_image(
         return []
     except Exception as exc:
         log.warning("iNat vision request failed: %s: %s", type(exc).__name__, exc)
+        record_inat_status("error", f"{type(exc).__name__}: {exc}"[:120])
         return []
 
     candidates: List[INatCandidate] = []
@@ -253,6 +256,11 @@ async def score_image(
         key=lambda c: c.geo_score if c.geo_score is not None else c.score,
         reverse=True,
     )
+    # Distinguish a genuinely empty (but successful) response from an error —
+    # a 200 with zero results is not the same failure mode as a token/HTTP
+    # problem, and callers logging call outcomes need to tell them apart.
+    if not candidates:
+        record_inat_status("ok_empty", "HTTP 200, 0 candidates in response")
     return candidates
 
 

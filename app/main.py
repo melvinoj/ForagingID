@@ -22,6 +22,7 @@ from app.api import about as about_api
 from app.api import nearby as nearby_api
 from app.api import edibility as edibility_api
 from app.api import find as find_api
+from app.api import taxonomy as taxonomy_api
 from app.api import encounters as encounters_api
 from app.api import chat as chat_api
 from app.api import data_sources as data_sources_api
@@ -200,6 +201,7 @@ app.include_router(trust_api.router)
 app.include_router(chat_api.router)
 app.include_router(edibility_api.router)
 app.include_router(find_api.router)
+app.include_router(taxonomy_api.router)
 app.include_router(encounters_api.router)
 app.include_router(resources_api.router)
 app.include_router(data_sources_api.router)
@@ -317,6 +319,11 @@ async def serve_review():
 @app.get("/species", include_in_schema=False)
 async def serve_species():
     return FileResponse("frontend/species.html", headers=_NO_STORE)
+
+
+@app.get("/taxonomy", include_in_schema=False)
+async def serve_taxonomy():
+    return FileResponse("frontend/taxonomy.html", headers=_NO_STORE)
 
 
 @app.get("/scan", include_in_schema=False)

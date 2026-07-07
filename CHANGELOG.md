@@ -1,11 +1,21 @@
 ## Current State
 
-Current State
-Planning-only session. No code written, no DB writes, no commits from this thread. ForagingID sits where the last End Session left it — fixlist items outstanding (observations ownership gap, Apiaceae safety pass, Alembic-head CLAUDE.md doc fix, iNat token expiry, and the remaining Phase 13 review items).
-New task scoped and prompt-ready, not yet run: taxonomic data layer (Unit A). Full GBIF lineage per species, backfilled and hooked into new-species enrichment, metadata-only — walled off from identification, confidence, auto-approve routing, and edibility. Four-step Code prompt authored (schema diagnostic → additive Alembic migration → GBIF backfill with match-type gating → _enrich_new_species_card() hook). Decisions locked: denormalized rank columns + gbif_taxon_key on species; store GBIF's actual mixed-kingdom lineage (Plantae + Fungi, not a hardcoded plant ladder); EXACT matches write cleanly, FUZZY/HIGHERRANK/NONE park to a manual-review list, existing human-curated family/genus never clobbered. Stop-and-confirm gate set after Step 2.
-Unit B (taxonomic graph visualisation) deliberately parked until Unit A lands and the FUZZY list is eyeballed — sits in the Phase 13+ reference/glossary layer, not October-critical.
-Session summary
-Scoped a taxonomic data layer for ForagingID: GBIF full-lineage backfill per species plus pipeline enrichment hook, metadata-only and safety-walled from all identification/edibility logic. Authored the four-step Code prompt (diagnostic → migration → gated backfill → pipeline hook). Split viz (Unit B) out as parked Phase 13+ work. No build this session.
+Taxonomic data layer (Unit A) — BUILT this session. Full GBIF lineage now on the species card as pure descriptive metadata, fully walled off from identification, confidence scoring, dual-API agreement, auto-approve routing, and edibility (verified: only additive changes; scan.py touched solely by a +26-line block inside the fire-and-forget _enrich_new_species_card, 0 deletions).
+
+Delivered:
+- Migration 0045_add_species_taxonomy_lineage (head). Additive columns on species: phylum, class_, order_, gbif_match_type, gbif_match_confidence. Reused existing gbif_usage_key (243->549 populated) instead of adding a redundant gbif_taxon_key; kingdom/family/genus already existed and were left as-is.
+- app/integrations/gbif.py (new): GBIF backbone client (/species/match + /species/{key}), GBIFMatch dataclass, apply_gbif_lineage() EXACT-only write-gate that never clobbers human kingdom/family/genus and withholds the whole lineage on an EXACT-but-conflicting match (EXACT_CONFLICT), enrich_species_taxonomy() resolve-by-key-else-name helper.
+- app/api/scan.py: taxonomy step added inside _enrich_new_species_card() — own session, own error isolation, guarded on gbif_match_type IS NULL, idempotent, outside all ID/scoring/edibility paths.
+
+Backfill (644 species, 0 errors, snapshot db_20260706_174529.sqlite taken first): 501 clean EXACT (full lineage written), 130 EXACT_CONFLICT (marked EXACT+confidence, lineage withheld, human family/genus preserved), 1 FUZZY, 8 HIGHERRANK, 4 NONE. Nothing auto-resolved.
+
+Pending / next:
+- MANUAL REVIEW of the 130 EXACT_CONFLICT list. Two kinds: (a) family column holding a genus/placeholder (benign, GBIF correct), (b) genuine wrong-organism card desyncs — Boletus edulis carried Ericaceae/Calluna (heather), Acer pseudoplatanus carried Oleaceae/Fraxinus (ash), Lycoperdon perlatum carried Caprifoliaceae/Dipsacus (teasel), Viola riviniana carried Apocynaceae/Vinca, plus Trifolium/Bromus, Polygonum/Stellaria, Sisymbrium/Knautia. This is fresh concrete evidence for audit finding #3b and independently confirms already-flagged species 412 (genus Oreopteris) and 625 (Betonica, different usage_key).
+- MANUAL REVIEW of 13 FUZZY/HIGHERRANK/NONE incl. scientific_name data-quality typos: 287 Sambuca nigra (->Sambucus), 288 Valeriana officianalis (->officinalis), 685 norway spruce (common name in sci-name field), 250 Betacoronavirus pandemicum (junk row).
+- Unit B (taxonomic graph visualisation) — still parked until the FUZZY/CONFLICT lists are eyeballed; Phase 13+ reference/glossary layer, not October-critical.
+- Carried over (untouched this session): GDrive token re-paste persistence; audit #3b (now with the desync list above), #5 card-level approval design; enrichment gap remediation (9 AI drafts, 6 unscanned species, 79 no-PFAF).
+
+Known issues: none introduced. Server healthy (reload cycled cleanly after scan.py edit; /api/species/ 200).
 
 ## Current State — 03 July 2026
 
@@ -28,6 +38,28 @@ Still open:
 - Enrichment gap remediation — 9 AI drafts pending approval, 6 species never scanned, 79 no-PFAF species need alt-source decision
 
 ## History
+
+### 2026-07-07 03:28
+**Snapshot** — End of session — Built the taxonomic data layer (Unit A) end to end: additive migration 0045 (phylum/class_/order_ + gbif_match_type/confidence, reusing gbif_usage_key), a new GBIF backbone client with an EXACT-only non-clobbering write-gate, a 644-species backfill (501 clean EXACT / 130 conflict-withheld / 13 parked, 0 errors), and a metadata-only enrichment hook in _enrich_new_species_card() — all verified walled off from identification, confidence, routing, and edibility. Backfill surfaced a batch of wrong-organism card desyncs (evidence for audit #3b) and several sci-name typos, all parked for manual review, none auto-resolved.
+DB: `snapshots/db_20260707_032827.sqlite`
+
+### 2026-07-07 03:28
+**Session ended** — Built the taxonomic data layer (Unit A) end to end: additive migration 0045 (phylum/class_/order_ + gbif_match_type/confidence, reusing gbif_usage_key), a new GBIF backbone client with an EXACT-only non-clobbering write-gate, a 644-species backfill (501 clean EXACT / 130 conflict-withheld / 13 parked, 0 errors), and a metadata-only enrichment hook in _enrich_new_species_card() — all verified walled off from identification, confidence, routing, and edibility. Backfill surfaced a batch of wrong-organism card desyncs (evidence for audit #3b) and several sci-name typos, all parked for manual review, none auto-resolved.
+
+### 2026-07-07 03:27
+**Taxonomic data layer (Unit A) — full GBIF lineage per species, backfilled + hooked into new-species enrichment. Metadata-only, walled off from identification/confidence/routing/edibility.**
+
+**Built:**
+- Migration 0045: additive rank + GBIF match columns on species (phylum, class_, order_, gbif_match_type, gbif_match_confidence); reused existing gbif_usage_key instead of adding redundant gbif_taxon_key
+- app/integrations/gbif.py: GBIF backbone client (name /species/match + /species/{key}), GBIFMatch dataclass, apply_gbif_lineage() EXACT-only write-gate with non-clobber-of-human-values + coherent EXACT_CONFLICT withholding, enrich_species_taxonomy() resolve-by-key-else-name helper
+- Step 4 pipeline hook in _enrich_new_species_card(): own session, own error isolation, guarded on gbif_match_type IS NULL, fully outside identification/routing/edibility
+**Fixed:**
+- GBIF backfill surfaced 130 EXACT-conflicts: many family-column-holds-genus placeholders plus a batch of genuine wrong-organism card desyncs (evidence for audit #3b; confirms species 412 + 625). None auto-resolved — parked for manual review.
+**Files:** `app/models/species.py`, `migrations/versions/0045_add_species_taxonomy_lineage.py`, `app/integrations/gbif.py`, `app/api/scan.py`
+**Pending:**
+- Manual review of 130 EXACT_CONFLICT list (esp. wrong-organism desyncs) — overlaps audit #3b
+- Manual review of 13 FUZZY/HIGHERRANK/NONE incl. scientific_name typos (287 Sambuca nigra, 288 Valeriana officianalis, 685 norway spruce)
+- Unit B (taxonomic graph visualisation) — still parked until FUZZY list eyeballed
 
 ### 2026-07-06 17:45
 **Snapshot** — Manual snapshot

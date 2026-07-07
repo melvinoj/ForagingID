@@ -1482,6 +1482,32 @@ async def _enrich_new_species_card(scientific_name: str) -> None:
 
     await asyncio.sleep(3)   # brief pause — let the commit settle and avoid API bursts
 
+    # --- Taxonomy enrichment (GBIF full lineage) --------------------------
+    # Pure descriptive metadata. Runs in its OWN session with its own error
+    # isolation so a GBIF hiccup can never touch the culinary enrichment below.
+    # Sits entirely outside identification, confidence scoring, dual-API
+    # agreement, auto-approve routing, and edibility — it only fills the
+    # taxonomic rank columns. Same EXACT-only write-gate + non-clobber-of-
+    # human-values rule as the Step 3 backfill (app/integrations/gbif.py).
+    # Guarded on gbif_match_type IS NULL so it resolves each card once.
+    try:
+        async with AsyncSessionLocal() as tax_session:
+            sp_tax = await tax_session.scalar(
+                select(Species).where(Species.name_key == normalize_taxon_key(scientific_name))
+            )
+            if sp_tax is not None and sp_tax.gbif_match_type is None:
+                from app.integrations.gbif import enrich_species_taxonomy
+                res = await enrich_species_taxonomy(sp_tax)
+                await tax_session.commit()
+                _flags = ("; ".join(res["flags"])) if res["flags"] else ""
+                log.info(
+                    "[auto-taxonomy] %r → %s%s",
+                    scientific_name, res["status"],
+                    (" | conflicts: " + _flags) if _flags else "",
+                )
+    except Exception as exc:
+        log.warning("[auto-taxonomy] Failed for %r: %s", scientific_name, exc)
+
     async with AsyncSessionLocal() as session:
         try:
             sp = await session.scalar(

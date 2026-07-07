@@ -1,21 +1,18 @@
 ## Current State
 
-Taxonomic data layer (Unit A) — BUILT this session. Full GBIF lineage now on the species card as pure descriptive metadata, fully walled off from identification, confidence scoring, dual-API agreement, auto-approve routing, and edibility (verified: only additive changes; scan.py touched solely by a +26-line block inside the fire-and-forget _enrich_new_species_card, 0 deletions).
+Current State
+Taxonomic data layer (Unit A) shipped and committed prior in session (migration 0045, 644-species GBIF backfill: 501 EXACT clean, 130 conflict-withheld, 13 parked; metadata-only enrichment hook walled off from identification/confidence/routing/edibility). Two map fixes landed and verified (frontend/index.html): VIEW-sheet control-offset regression (#config-sheet.open desktop-shift/mobile-hide, #rp-pane rules untouched) and heatmap sliders relocated to a collapsed Heatmap-view-only disclosure below Overlays. Fix 1 desktop control-shift confirmed by Melvin in the live app.
+Unit B (taxonomy tree) — aesthetic phase complete. Standalone radial prototype built and approved (taxonomy_tree_prototype.html): bottom-rising radial fan, collapsible at genus, fungi as amber companion-roots below a soil line with dotted links, collapsible unplaced bucket. Synthetic data, look-only. Wire-to-live is the next Unit B step — parked, behind the items below.
+Parked / next (priority order):
 
-Delivered:
-- Migration 0045_add_species_taxonomy_lineage (head). Additive columns on species: phylum, class_, order_, gbif_match_type, gbif_match_confidence. Reused existing gbif_usage_key (243->549 populated) instead of adding a redundant gbif_taxon_key; kingdom/family/genus already existed and were left as-is.
-- app/integrations/gbif.py (new): GBIF backbone client (/species/match + /species/{key}), GBIFMatch dataclass, apply_gbif_lineage() EXACT-only write-gate that never clobbers human kingdom/family/genus and withholds the whole lineage on an EXACT-but-conflicting match (EXACT_CONFLICT), enrich_species_taxonomy() resolve-by-key-else-name helper.
-- app/api/scan.py: taxonomy step added inside _enrich_new_species_card() — own session, own error isolation, guarded on gbif_match_type IS NULL, idempotent, outside all ID/scoring/edibility paths.
+Regional-protocol diagnostic (read-only, safety-adjacent) — Taiwan/Japan fern (Macrothelypteris polypodioides) topping ID list for a Black Forest native (Oreopteris limbosperma, obs #21722) suggests geo-weighting may not be biting. Recommended first.
+Legends (map fix 3) — recon done; two legend mechanisms to merge, per-layer coverage, collapsible Pins component. Own session.
+Lemon-scented Fern (Oreopteris/Thelypteris limbosperma = species 412, already a flagged #3b conflict): caution + ID content. Descriptive draft Claude-assisted; lookalike/safety block Melvin-authored verbatim, never paraphrased. Fold into #3b, not done blind. Ostrich Fern caution queued pending photo/card.
+#3b conflict review (130 EXACT_CONFLICT, incl. wrong-organism desyncs + species 412/625) and sci-name typos (287 Sambuca→Sambucus, 288 officianalis→officinalis, 685 norway spruce→Picea abies).
+Unit B wire-to-live.
 
-Backfill (644 species, 0 errors, snapshot db_20260706_174529.sqlite taken first): 501 clean EXACT (full lineage written), 130 EXACT_CONFLICT (marked EXACT+confidence, lineage withheld, human family/genus preserved), 1 FUZZY, 8 HIGHERRANK, 4 NONE. Nothing auto-resolved.
-
-Pending / next:
-- MANUAL REVIEW of the 130 EXACT_CONFLICT list. Two kinds: (a) family column holding a genus/placeholder (benign, GBIF correct), (b) genuine wrong-organism card desyncs — Boletus edulis carried Ericaceae/Calluna (heather), Acer pseudoplatanus carried Oleaceae/Fraxinus (ash), Lycoperdon perlatum carried Caprifoliaceae/Dipsacus (teasel), Viola riviniana carried Apocynaceae/Vinca, plus Trifolium/Bromus, Polygonum/Stellaria, Sisymbrium/Knautia. This is fresh concrete evidence for audit finding #3b and independently confirms already-flagged species 412 (genus Oreopteris) and 625 (Betonica, different usage_key).
-- MANUAL REVIEW of 13 FUZZY/HIGHERRANK/NONE incl. scientific_name data-quality typos: 287 Sambuca nigra (->Sambucus), 288 Valeriana officianalis (->officinalis), 685 norway spruce (common name in sci-name field), 250 Betacoronavirus pandemicum (junk row).
-- Unit B (taxonomic graph visualisation) — still parked until the FUZZY/CONFLICT lists are eyeballed; Phase 13+ reference/glossary layer, not October-critical.
-- Carried over (untouched this session): GDrive token re-paste persistence; audit #3b (now with the desync list above), #5 card-level approval design; enrichment gap remediation (9 AI drafts, 6 unscanned species, 79 no-PFAF).
-
-Known issues: none introduced. Server healthy (reload cycled cleanly after scan.py edit; /api/species/ 200).
+Session summary
+Shipped taxonomic data layer (GBIF lineage backfill + walled-off enrichment hook, migration 0045). Landed two map fixes (VIEW-sheet control regression, heatmap disclosure). Built and approved the radial taxonomy-tree aesthetic prototype (standalone, synthetic). Parked five items in priority order, regional-protocol diagnostic first.
 
 ## Current State — 03 July 2026
 
@@ -38,6 +35,13 @@ Still open:
 - Enrichment gap remediation — 9 AI drafts pending approval, 6 species never scanned, 79 no-PFAF species need alt-source decision
 
 ## History
+
+### 2026-07-07 08:57
+**Snapshot** — End of session — Session ended from Settings page
+DB: `snapshots/db_20260707_085719.sqlite`
+
+### 2026-07-07 08:57
+**Session ended** — Session ended from Settings page
 
 ### 2026-07-07 03:28
 **Snapshot** — End of session — Built the taxonomic data layer (Unit A) end to end: additive migration 0045 (phylum/class_/order_ + gbif_match_type/confidence, reusing gbif_usage_key), a new GBIF backbone client with an EXACT-only non-clobbering write-gate, a 644-species backfill (501 clean EXACT / 130 conflict-withheld / 13 parked, 0 errors), and a metadata-only enrichment hook in _enrich_new_species_card() — all verified walled off from identification, confidence, routing, and edibility. Backfill surfaced a batch of wrong-organism card desyncs (evidence for audit #3b) and several sci-name typos, all parked for manual review, none auto-resolved.

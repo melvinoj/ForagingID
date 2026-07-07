@@ -1321,6 +1321,34 @@
       display: none;
     }
 
+    /* ── VIEW sheet (#config-sheet) open — shift/hide controls ─────────────
+       Separate from the #rp-pane.rp-open rules above: that pane is 300px, this
+       sheet is 360px, so the offset differs (do NOT reuse 310px). Desktop
+       (>=1024px, where #config-sheet is a 360px right side-sheet): shift the
+       right-hand Leaflet controls + top/bottom-right chips inward past it, keep
+       them visible. #legend-chip is bottom-LEFT — a right sheet never overlaps
+       it, so it is left alone. Mobile (<1024px, where the sheet is full-width):
+       nothing can shift inward, so hide the controls + chips instead. */
+    @media (min-width: 1024px) {
+      body:has(#config-sheet.open) .leaflet-top.leaflet-right,
+      body:has(#config-sheet.open) .leaflet-bottom.leaflet-right {
+        right: 370px !important; /* 10px base gutter + 360px sheet */
+      }
+      body:has(#config-sheet.open) #search-chip-wrap,
+      body:has(#config-sheet.open) #config-sheet-chip {
+        right: 372px; /* 12px base gutter + 360px sheet — kept visible */
+      }
+    }
+    @media (max-width: 1023px) {
+      body:has(#config-sheet.open) .leaflet-top.leaflet-right,
+      body:has(#config-sheet.open) .leaflet-bottom.leaflet-right,
+      body:has(#config-sheet.open) #search-chip-wrap,
+      body:has(#config-sheet.open) #config-sheet-chip,
+      body:has(#config-sheet.open) #legend-chip {
+        display: none;
+      }
+    }
+
     /* ── Attribution — kept legible (links/text intact) but less prominent ── */
     .leaflet-control-attribution {
       font-size: 0.62rem !important;
@@ -1755,6 +1783,16 @@
     .cs-seg-btn:hover:not(.active) { background: var(--leaf-pale); }
     #view-heatmap-sliders { margin-top: 10px; }
 
+    /* ── Heatmap controls disclosure (below Overlays; heatmap view only) ──── */
+    #heatmap-disclosure .cs-disclosure-summary {
+      cursor: pointer; list-style: none;
+      font-family: var(--font-ui); font-size: 0.72rem; font-weight: 700;
+      text-transform: uppercase; letter-spacing: .04em; color: var(--moss);
+    }
+    #heatmap-disclosure .cs-disclosure-summary::-webkit-details-marker { display: none; }
+    #heatmap-disclosure .cs-disclosure-summary::before { content: '▸ '; }
+    #heatmap-disclosure[open] .cs-disclosure-summary::before { content: '▾ '; }
+
     @media (max-width: 1023px) {
       #config-sheet {
         left: 0; right: 0; bottom: 0;
@@ -1829,26 +1867,6 @@
         <button class="cs-seg-btn"        id="btn-layer-clusters" onclick="setLayer('clusters')">Clusters</button>
         <button class="cs-seg-btn active" id="btn-layer-heatmap"  onclick="setLayer('heatmap')">Heatmap</button>
       </div>
-      <div class="hc-sliders-row" id="view-heatmap-sliders">
-        <div class="hc-col">
-          <span class="hc-val" id="hc-radius-val">30</span>
-          <input type="range" id="hc-radius" min="15" max="80" value="30"
-                 oninput="updateHeatmapOptions()">
-          <span class="hc-label">Radius</span>
-        </div>
-        <div class="hc-col">
-          <span class="hc-val" id="hc-blur-val">20</span>
-          <input type="range" id="hc-blur" min="5" max="40" value="20"
-                 oninput="updateHeatmapOptions()">
-          <span class="hc-label">Blur</span>
-        </div>
-        <div class="hc-col">
-          <span class="hc-val" id="hc-brightness-val">80%</span>
-          <input type="range" id="hc-brightness" min="40" max="100" value="80"
-                 oninput="updateHeatmapOptions()">
-          <span class="hc-label">Brightness</span>
-        </div>
-      </div>
     </section>
     <section class="cs-section" id="cs-baselayer">
       <div class="cs-section-title">Base layer</div>
@@ -1914,6 +1932,33 @@
         <input type="checkbox" id="overlay-in-season" onchange="_setInSeason(this.checked)">
         <label for="overlay-in-season">🌱 In season now</label>
       </label>
+    </section>
+    <!-- Heatmap controls — below Overlays, collapsed disclosure, shown only in
+         Heatmap view (gate driven by _applyLayer, which toggles this section). -->
+    <section class="cs-section" id="cs-heatmap">
+      <details id="heatmap-disclosure" class="cs-disclosure">
+        <summary class="cs-disclosure-summary">Heatmap controls</summary>
+        <div class="hc-sliders-row" id="view-heatmap-sliders">
+          <div class="hc-col">
+            <span class="hc-val" id="hc-radius-val">30</span>
+            <input type="range" id="hc-radius" min="15" max="80" value="30"
+                   oninput="updateHeatmapOptions()">
+            <span class="hc-label">Radius</span>
+          </div>
+          <div class="hc-col">
+            <span class="hc-val" id="hc-blur-val">20</span>
+            <input type="range" id="hc-blur" min="5" max="40" value="20"
+                   oninput="updateHeatmapOptions()">
+            <span class="hc-label">Blur</span>
+          </div>
+          <div class="hc-col">
+            <span class="hc-val" id="hc-brightness-val">80%</span>
+            <input type="range" id="hc-brightness" min="40" max="100" value="80"
+                   oninput="updateHeatmapOptions()">
+            <span class="hc-label">Brightness</span>
+          </div>
+        </div>
+      </details>
     </section>
     <section class="cs-section" id="cs-tools">
       <div class="cs-section-title">Tools</div>
@@ -2596,6 +2641,9 @@ function openConfigSheet() {
   document.getElementById('config-sheet').classList.add('open');
   document.getElementById('config-sheet-scrim').classList.add('show');
   document.getElementById('config-sheet-chip').setAttribute('aria-expanded', 'true');
+  // Heatmap controls disclosure: collapsed by default each time the sheet opens
+  const _hd = document.getElementById('heatmap-disclosure');
+  if (_hd) _hd.open = false;
 }
 function closeConfigSheet() {
   document.getElementById('config-sheet').classList.remove('open');
@@ -3008,9 +3056,10 @@ function _applyLayer() {
   if (showHeat     && !map.hasLayer(heatLayer))    map.addLayer(heatLayer);
   if (!showHeat    &&  map.hasLayer(heatLayer))    map.removeLayer(heatLayer);
 
-  // Heatmap sliders only make sense when the heatmap is the active view
-  const sliders = document.getElementById('view-heatmap-sliders');
-  if (sliders) sliders.style.display = showHeat ? '' : 'none';
+  // Heatmap controls disclosure only makes sense when the heatmap is the active
+  // view — toggle the whole #cs-heatmap section (retargeted from the sliders).
+  const heatSection = document.getElementById('cs-heatmap');
+  if (heatSection) heatSection.style.display = showHeat ? '' : 'none';
 
   // Counts pill: Pins/Clusters views only, hidden in Heatmap (Step 7)
   const pill = document.getElementById('counts-pill');

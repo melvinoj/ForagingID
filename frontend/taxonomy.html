@@ -333,6 +333,15 @@ const TRUNK_GATHER = 0.32;  // 0=all trunk nodes collapse to the centre line, 1=
 let rootH;       // plant fan root (d3.hierarchy) — unchanged variable, unchanged meaning
 let fungiRootH;  // fungi fan root (d3.hierarchy) — separate tree, separate root
 let focusedNode = null;  // currently focused node (either fan), or null — see toggle()/setFocus()/clearFocus() below
+// The subtree root that was actually force-expanded by _expandSubtree() —
+// NOT always the same node as focusedNode. A genus click force-expands its
+// PARENT family (every sibling genus + their species — see toggle()), so
+// expandedRoot is the family in that case, while focusedNode stays the
+// clicked genus (for zoom/highlight targeting). This is what _collapseExpanded()
+// folds back on defocus; collapsing focusedNode alone would leave every
+// sibling genus's species permanently expanded — the reported "smeary
+// cluster near the trunk" that never clears.
+let expandedRoot = null;
 
 const cluster = d3.cluster().separation((a,b) => (a.parent === b.parent ? 1 : 1.6));
 
@@ -389,8 +398,8 @@ function layout(root, arc, arcStart, gatherTrunk){
   // Runs after the pass above, so every species' parent genus already has
   // its final ang/rad. A species always renders at its genus's angle
   // (fanned by a small offset if the genus has more than one species) and
-  // at the genus's radius plus one RING step — strictly further from
-  // centre than the genus, never inward, never piled at the genus's point.
+  // at the genus's radius plus 1.5 RING steps — clearly further out than
+  // the genus, never inward, never piled at the genus's point.
   // This is the only code in the file that sets a species' ang/rad/px/py.
   // ---------------------------------------------------------------------
   root.each(d => {
@@ -400,7 +409,7 @@ function layout(root, arc, arcStart, gatherTrunk){
     const n = siblings.length;
     const FAN = 0.12; // total angular spread (radians) across sibling species
     d.ang = d.parent.ang + (n > 1 ? (i - (n - 1) / 2) * (FAN / (n - 1)) : 0);
-    d.rad = d.parent.rad + RING;
+    d.rad = d.parent.rad + RING * 1.5;
     const [px, py] = project(d.ang, d.rad);
     d.px = px; d.py = py;
   });
@@ -432,7 +441,7 @@ function update(source, root, arc, arcStart, gatherTrunk, linkSel, nodeSel){
   link.enter().append("path").attr("class","link")
       .attr("d", d => limb({ang:source.ang0??d.source.ang, rad:source.rad0??d.source.rad, px:source.px0??d.source.px, py:source.py0??d.source.py},
                             {ang:source.ang0??d.source.ang, rad:source.rad0??d.source.rad, px:source.px0??d.source.px, py:source.py0??d.source.py}))
-    .merge(link).transition().duration(450)
+    .merge(link).transition("linkMove").duration(450)
       .attr("d", d => limb(d.source, d.target)).attr("stroke-width", strokeFor)
       .attr("stroke", d => d.target.data.fungi ? "var(--fungi-dim)" : null);
   link.exit().transition().duration(300).attr("stroke-opacity",0).remove();
@@ -456,7 +465,18 @@ function update(source, root, arc, arcStart, gatherTrunk, linkSel, nodeSel){
       .style("opacity",0);
 
   const nMerge = nEnter.merge(node);
-  nMerge.transition().duration(450).attr("transform", d=>`translate(${d.px},${d.py})`);
+  // Named "nodeMove": D3 interrupts any existing transition in the SAME
+  // (element, namespace) slot when a new one starts there. _applyFocusStyles()
+  // also runs a .transition() on these same <g class="node"> elements (for
+  // opacity), immediately after update() returns, inside setFocus()/clearFocus().
+  // Both used the default unnamed namespace, so the opacity transition was
+  // interrupting this transform transition before it ever reached {d.px,d.py}
+  // — confirmed via a DOM-vs-computed-position check (species nodes froze at
+  // a stale, near-genus position instead of their correct far-out radius).
+  // Naming this transition puts it in its own namespace so it can no longer
+  // be cut off by _applyFocusStyles()'s opacity transition (named "focusFade"
+  // there, for the same reason).
+  nMerge.transition("nodeMove").duration(450).attr("transform", d=>`translate(${d.px},${d.py})`);
   nMerge.select("circle.node-circle").transition().duration(450).attr("r",radiusFor).attr("fill",colourFor);
   nMerge.select("circle.collapsed-ring").transition().duration(450)
       .attr("r",d=>d._children?radiusFor(d)+4:0).attr("stroke-opacity",d=>d._children?0.6:0);
@@ -501,16 +521,24 @@ function update(source, root, arc, arcStart, gatherTrunk, linkSel, nodeSel){
 // d._children||d.children is truthy, never true for a leaf.
 function toggle(d, root, arc, arcStart, gatherTrunk, linkSel, nodeSel){
   if (focusedNode === d) {
-    // clearFocus() now owns collapsing the focused node back down (see
+    // clearFocus() now owns collapsing the expanded scope back down (see
     // below) — delegate rather than duplicate that logic here.
     clearFocus();
     return;
   }
 
+  // Retract whatever the PREVIOUS focus force-expanded before expanding the
+  // new target — otherwise switching focus from A to B just adds B's
+  // expansion on top of A's, which is never cleaned up (the accumulating
+  // "smeary cluster" bug: every family/genus ever clicked stays expanded
+  // forever, just dimmed once focus moves elsewhere).
+  _collapseExpanded();
+
   if (d._children) { d.children = d._children; d._children = null; }
 
   if (d.data.rank === "family") {
     _expandSubtree(d);
+    expandedRoot = d;
   } else if (d.data.rank === "genus" && d.parent) {
     // Genus click reveals every species across the WHOLE family (every
     // sibling genus too, not just this one) — a genus click means "show me
@@ -518,8 +546,16 @@ function toggle(d, root, arc, arcStart, gatherTrunk, linkSel, nodeSel){
     // specifically (setFocus(d) below), so the view is tight on it while the
     // rest of the now-expanded family sits dimmed in the background, ready
     // to click into. d.parent is the family: genus's direct parent in the
-    // hierarchy built by buildTree()/buildFungiTree().
+    // hierarchy built by buildTree()/buildFungiTree(). expandedRoot tracks
+    // the FAMILY here (what was actually force-expanded), not the genus.
     _expandSubtree(d.parent);
+    expandedRoot = d.parent;
+  } else {
+    // class/order: nothing force-expanded beyond the plain un-collapse
+    // above, but still track d itself so a later re-click/defocus can fold
+    // it back down (matches the old single-level collapse behaviour these
+    // ranks always had).
+    expandedRoot = d;
   }
 
   update(d, root, arc, arcStart, gatherTrunk, linkSel, nodeSel);
@@ -548,10 +584,17 @@ function _isDescendantOrSelf(node, ancestor){
 // on every call (not just opacity) — when focusedNode is null (cleared),
 // this unconditionally restores every circle to its plain colourFor() fill
 // and default stroke, so no node is left painted with the focus highlight.
+// Named "focusFade" so this opacity transition runs in its own D3 transition
+// namespace, separate from update()'s "nodeMove"/"linkMove" position
+// transitions on these same elements — otherwise starting this transition
+// interrupts an in-flight position transition (same default namespace =
+// same slot per element), freezing nodes at a stale, never-reached position.
+// Confirmed via a DOM-vs-computed-position check: species froze near their
+// genus instead of reaching their correct far-out radius.
 function _applyFocusStyles(){
   const inFocus = d => !focusedNode || _isDescendantOrSelf(d, focusedNode);
   [nodeG, fungiNodeG].forEach(sel => {
-    sel.selectAll("g.node").transition().duration(300)
+    sel.selectAll("g.node").transition("focusFade").duration(300)
       .style("opacity", d => inFocus(d) ? 1 : 0.15);
     sel.selectAll("g.node").select("circle.node-circle")
       .attr("fill", colourFor)
@@ -559,7 +602,7 @@ function _applyFocusStyles(){
       .attr("stroke-width", d => (focusedNode && d === focusedNode) ? 3 : 1.5);
   });
   [linkG, fungiLinkG].forEach(sel => {
-    sel.selectAll("path.link").transition().duration(300)
+    sel.selectAll("path.link").transition("focusFade").duration(300)
       .style("opacity", d => inFocus(d.target) ? 1 : 0.15);
   });
 }
@@ -590,28 +633,33 @@ function setFocus(d){
   _zoomToFit(d);
   closeSpeciesPopup();
 }
-// Collapses whatever the current focus expanded, THEN clears focus state —
-// re-collapsing is what was missing before (Bug 1/2): clicking empty canvas
-// used to only dim the previous focus, never fold it back down, so an
-// expanded family/genus (and its popped-out species) stayed permanently in
-// the DOM, showing up later as "stray" full-opacity, full-colour nodes.
-// Also reached from toggle()'s "click the already-focused node again" path,
-// so there's one single place that does this collapse, not two.
-function clearFocus(){
-  if (focusedNode) {
-    if (focusedNode.children) {
-      focusedNode._children = focusedNode.children;
-      focusedNode.children = null;
-    }
-    // Which fan focusedNode belongs to determines which fixed set of
-    // render params (root/arc/arcStart/gatherTrunk/groups) update() needs —
-    // same fungi:true flag colourFor()/link-stroke already key off.
-    if (focusedNode.data.fungi) {
-      update(focusedNode, fungiRootH, FUNGI_ARC, FUNGI_ARC_START, false, fungiLinkG, fungiNodeG);
-    } else {
-      update(focusedNode, rootH, PLANT_ARC, ARC_START, true, linkG, nodeG);
-    }
+// Collapses expandedRoot (the actual force-expanded scope — see its
+// declaration above) back to its pre-focus state and re-renders that fan,
+// so D3's exit selection (update()'s node.exit()...remove(), already
+// correct — it fully removes elements, not just fades them) actually fires
+// for the now-hidden nodes and takes them out of the DOM. This is the one
+// place that does this collapse — shared by clearFocus() (background click
+// / re-click) and toggle()'s "focus something else" path (switching focus
+// must retract the PREVIOUS expansion too, not leave it sitting there).
+function _collapseExpanded(){
+  if (!expandedRoot) return;
+  if (expandedRoot.children) {
+    expandedRoot._children = expandedRoot.children;
+    expandedRoot.children = null;
   }
+  // Which fan expandedRoot belongs to determines which fixed set of render
+  // params (root/arc/arcStart/gatherTrunk/groups) update() needs — same
+  // fungi:true flag colourFor()/link-stroke already key off.
+  if (expandedRoot.data.fungi) {
+    update(expandedRoot, fungiRootH, FUNGI_ARC, FUNGI_ARC_START, false, fungiLinkG, fungiNodeG);
+  } else {
+    update(expandedRoot, rootH, PLANT_ARC, ARC_START, true, linkG, nodeG);
+  }
+  expandedRoot = null;
+}
+
+function clearFocus(){
+  _collapseExpanded();
   focusedNode = null;
   _applyFocusStyles();
   centre();

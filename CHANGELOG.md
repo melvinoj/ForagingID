@@ -1,18 +1,27 @@
 ## Current State
 
 Current State
-Taxonomy page (/taxonomy) — nav, radial tree (class→order→family→genus→species), two mirrored fans (plant up, fungi down 150°), collapsible, crash-guards, SW stale-cache fix, legend collapse-to-icon, and the species→card popup with thumbnail (read-only, working) are all in and committed. Species popup confirmed good.
-BROKEN — species pop-out on family/genus focus. When a family/genus is focused, its species should render as leaf nodes extending OUTWARD past the family ring (each species one RING beyond its genus). Instead they render as a grey unspread smear piled at the genus point, inward. Patched ~4 times this session (identity-focus, whole-family expansion, RADIUS_BY_RANK, a "second layout pass", then a clean rewrite) — none worked; the attempts are now tangled in the file. No pre-tangle working commit exists — the whole pop-out feature is uncommitted, so there's no clean baseline to revert to. Green-residue-node bug (stray highlighted node left after clearFocus) may or may not be resolved — unverified. This is the first fix to tackle next session, ideally by rewriting the species-positioning function clean against a committed baseline.
-Parked (aesthetic/behaviour, not started):
+Taxonomy page (/taxonomy) is live and mostly functional: radial tree (class→order→family→genus→species), two mirrored fans (plant up, fungi + lichen down), collapsible, nav-linked, SW cache fix, legend (collapse-to-icon), species→card popup with thumbnail (read-only, confirmed working, no DB writes anywhere in the page).
+Root cause of today's species-positioning saga found and fixed: update()'s position transitions and _applyFocusStyles()'s opacity transitions shared D3's default unnamed transition namespace on the same elements, so starting the opacity fade interrupted the still-running position transition — species froze mid-move at the wrong coordinates. Fixed by giving position and opacity separate named transitions (nodeMove/linkMove/focusFade) so they run concurrently without interrupting each other. This was the real bug underlying most of today's "species won't move outward" reports — earlier fixes (radius math, d.parent.rad chain, node-cleanup on defocus) were all individually correct but couldn't be observed working because of this collision.
+Not yet done — clear spec, prompt written, not yet run: apply four rules to finish the layout: (1) use available canvas space beyond current tree edge — increase radial scale; (2) all expansion moves outward only, never inward (existing snap-back-on-refocus is correct, don't touch); (3) class (6) and order (~30) tiers need more radial spacing so every label is legible; (4) species render in one clean fixed 5th ring (FAMILY_RADIUS + 2×RING), not per-genus derived. Genus tier is fine as-is.
+Parked (aesthetic, not started):
 
-Class/order tier spacing — class needs all 6 legible non-overlapping; order moved further out toward family for spacing.
-Auto-spread on zoom — overlapping labels should spread as you zoom in.
-Species-as-hairlines on main view — species shown as faint short lines at full-tree zoom, becoming legible when zoomed/focused.
-Three-way node colour: plant brown/green, fungi amber, lichen (Lecanoromycetes) lichen-green — legend already shows these; nodes not yet recoloured.
-floratree.org — reference to review for ideas.
+Auto-spread on zoom for any remaining overlaps.
+Species-as-hairlines on the main view (faint lines at full-tree zoom, legible on focus/zoom).
+Three-way node colour: plant brown/green, fungi amber, lichen (Lecanoromycetes) green — legend already reflects this, nodes don't yet.
+floratree.org — reference, not yet reviewed for ideas.
+
+Non-taxonomy fixes still outstanding (unrelated to today):
+
+Regional-protocol diagnostic (safety-adjacent) — Taiwan/Japan fern topping ID for a Black Forest native.
+Map legends rework (map fix 3) — recon done, never built.
+Lemon-scented Fern caution/content — species 412, folds into #3b, safety block Melvin-authored.
+#3b conflict review (130 EXACT_CONFLICT) + sci-name typos.
+20 non-plant/fungi cards investigation (Animalia/Chromista).
+Google Drive token refresh.
 
 Session summary
-Built taxonomy page end-to-end (endpoint, radial tree, rank tiers, mirrored fungi fan, legend, nav, SW cache fix, species→card popup + thumbnail). Species pop-out interaction attempted repeatedly and remains broken/tangled with no clean git baseline — top priority next session. Aesthetic passes (colour, spacing, hairline species, zoom-spread) parked.
+Long session on taxonomy tree interaction: fixed a transition-namespace collision that was the true root cause of species appearing stuck/inward despite correct position math; species popup + thumbnail shipped clean; four-rule layout spec (radial scale, outward-only movement, class/order spacing, fixed 5th species ring) written and ready to run next thread. Not committed mid-session — commit via this End Session captures everything, including the transition fix.
 
 ## Current State — 03 July 2026
 
@@ -35,6 +44,13 @@ Still open:
 - Enrichment gap remediation — 9 AI drafts pending approval, 6 species never scanned, 79 no-PFAF species need alt-source decision
 
 ## History
+
+### 2026-07-08 09:41
+**Snapshot** — End of session — Session ended from Settings page
+DB: `snapshots/db_20260708_094155.sqlite`
+
+### 2026-07-08 09:41
+**Session ended** — Session ended from Settings page
 
 ### 2026-07-08 06:42
 **Snapshot** — End of session — Session ended from Settings page

@@ -1,19 +1,16 @@
 ## Current State
 
 Current State
-Taxonomy tree layout is DONE and confirmed working live. Fixed today: RING 150→200, TRUNK_RING 90→230 (class=230, order=460), species now render at a single fixed ring — FAMILY_RADIUS (3×RING=600) + 2×RING = 1000 — rather than derived per-genus. Radii strictly increase by rank (kingdom 0 → class 230 → order 460 → family 600 → genus 800 → species 1000), so outward-only expansion holds by construction. All four layout rules (use available space, outward-only, class/order legibility, fixed species ring) satisfied. Confirmed visually: class/order legible, species ring outward and uncluttered, no residue, no smear.
-Underlying root-cause fix from earlier in the day: update()'s position transitions and _applyFocusStyles()'s opacity transitions were sharing D3's default unnamed transition namespace, so the opacity fade interrupted the still-running position transition — species froze mid-move. Fixed with separate named transitions (nodeMove/linkMove/focusFade). This was the true cause of the prior session's extended "species won't move" saga.
-Taxonomy page overall: radial tree (class→order→family→genus→species), two mirrored fans, collapsible, nav-linked, SW cache fix, legend (collapse-to-icon), species→card popup with thumbnail (read-only, no writes).
-Parked (aesthetic, not started):
+Taxonomy tree: colour pass shipped and confirmed (genus/species plant-green, lichen distinct green within fungi fan, legend matches). Label-crowding at class/order tiers remains — three approaches tried and reverted this session (radial bump, tangential nudge, per-parent angular respacing); all failed for the same root reason: label width × sibling count exceeds available arc length at that radius, so repositioning within fixed space can't solve it. Tree reverted cleanly to the last known-good geometry (post-colour, pre-spacing-attempts) — confirmed matching that state exactly.
+Next fix, scoped and ready to build: zoom-conditional label visibility for class/order (and any other tier that needs it). Tier text renders only above a zoom-scale threshold where arc-length-per-label exceeds label width at that tier's radius; below threshold, dots/ticks only, no text. This targets "legible when zoomed in" directly rather than fighting density at every zoom level. Does not touch RING/TRUNK_RING/any radius or angle — pure render-time show/hide keyed on d3.zoomTransform(svg.node()).k.
+Ready-to-run prompt for next thread:
 
-Auto-spread on zoom for any remaining label overlaps.
-Species-as-hairlines on the main/zoomed-out view.
-Three-way node colour: plant brown/green, fungi amber, lichen (Lecanoromycetes) green — legend already reflects this, nodes don't.
-floratree.org — reference, not yet reviewed.
+frontend/taxonomy.html. No schema/DB/snapshot. Add zoom-conditional label visibility for class and order tiers (do not touch family/genus/species text rendering). For each of those two tiers, compute the arc-length-per-label at current zoom scale (radius × angularGap × k) versus that label's rendered width; hide the <text> (opacity 0, not removed) when width exceeds available arc-length, show it (fade in) once it clears. Recompute on zoom change (zoom.on("zoom", ...), not a separate "end" hook — must feel responsive as you zoom, not settle-only). Do NOT change any d.ang/d.rad/RING/TRUNK_RING/FAMILY_RADIUS value — this is visibility only, not layout. Keep circles/links always visible regardless of label state. Read back the visibility logic. No browser — user tests live.
 
-Non-taxonomy outstanding (unchanged): regional-protocol diagnostic, map legends rework, Lemon-scented Fern caution (species 412, folds into #3b), #3b conflict review, 20 non-plant/fungi card investigation, Google Drive token refresh.
+Parked (unchanged): auto-spread on zoom (superseded by the above — same problem, better-scoped fix), species-as-hairlines on main view (same design family as the class/order fix, worth doing together), floratree.org reviewed — nothing to borrow, it's a flat search/browse UI not a visualisation reference, closed.
+Non-taxonomy outstanding (unchanged): regional-protocol diagnostic, map legends rework, Lemon-scented Fern caution (species 412, →#3b), #3b conflict review, 20 non-plant/fungi card investigation, Google Drive token refresh.
 Session summary
-Taxonomy tree layout fixed and confirmed: widened RING/TRUNK_RING constants, fixed species to a single outward ring rather than per-genus derivation. Root transition-collision bug (from prior session) also confirmed resolved. Tree is now in a good, demonstrable state. Committing this as the clean baseline before any further cosmetic work.
+Shipped taxonomy colour pass (plant-green genus/species, lichen distinction, legend sync). Investigated label-crowding at class/order tiers via three approaches, all reverted after being disproven live — root cause identified as arc-space-vs-label-width mismatch, not a positioning bug. Next fix scoped as zoom-conditional visibility, prompt ready for immediate use.
 
 ## Current State — 03 July 2026
 
@@ -36,6 +33,13 @@ Still open:
 - Enrichment gap remediation — 9 AI drafts pending approval, 6 species never scanned, 79 no-PFAF species need alt-source decision
 
 ## History
+
+### 2026-07-08 19:24
+**Snapshot** — End of session — Session ended from Settings page
+DB: `snapshots/db_20260708_192449.sqlite`
+
+### 2026-07-08 19:24
+**Session ended** — Session ended from Settings page
 
 ### 2026-07-08 11:49
 **Snapshot** — End of session — Session ended from Settings page

@@ -19,8 +19,9 @@
     --leaf-bright: #a3c77e;
     --fungi: #c8963e;
     --fungi-dim: #8a6a2e;
-    --plant: #5a6b58;    /* legend "Plant" swatch — brown/green; matches sitewide --moss token */
-    --lichen: #8fae9c;   /* legend "Lichen" swatch — lichen-green, new tri-colour category */
+    --plant-green: #3f9e52;  /* plant fan genus/species node fill — fresh, saturated green, distinct from --leaf/--leaf-bright (olive-toned) and from --lichen (grey-sage) */
+    --plant: var(--plant-green);  /* legend "Plant" swatch — aliased to --plant-green so the swatch always matches the actual genus/species node colour */
+    --lichen: #8fae9c;   /* legend "Lichen" swatch AND actual Lecanoromycetes species node fill — lichen-green, distinct shade from --plant-green */
     --unplaced: #b5503f;
     --panel: rgba(28,22,16,0.92);
     --line: rgba(122,92,62,0.25);
@@ -255,10 +256,17 @@ function buildTree() {
 // rank strings ("kingdom"/"class"/"order"/"family"/"genus"/"species") so all
 // existing CSS (.rank-family bold, .rank-species italic) and showTip() meta
 // logic apply unchanged to fungi nodes too.
+// Lichen carve-out: `cls` here IS the class_ name (FUNGI's top-level key), so
+// cls === "Lecanoromycetes" is the exact rule confirmed earlier (Agaricomycetes
+// 21 / Sordariomycetes 3 / Saccharomycetes 1 / Dacrymycetes 1 = true fungi;
+// only Lecanoromycetes = lichen). Only SPECIES nodes get `lichen: true` — class/
+// order/family/genus under Lecanoromycetes stay plain fungi:true (amber),
+// per spec ("Fungi fan unchanged except the 4 Lecanoromycetes species").
 function buildFungiTree() {
   const root = { name: "Fungi", rank: "kingdom", fungi: true, children: [] };
   for (const [cls, orders] of Object.entries(FUNGI)) {
     if (!_isPlainObject(orders)) continue;
+    const lichen = cls === "Lecanoromycetes";
     const clsNode = { name: cls, rank: "class", fungi: true, children: [] };
     for (const [ord, families] of Object.entries(orders)) {
       if (!_isPlainObject(families)) continue;
@@ -269,7 +277,7 @@ function buildFungiTree() {
         for (const [gen, species] of Object.entries(genera)) {
           if (!Array.isArray(species)) continue;
           famNode.children.push({ name: gen, rank: "genus", fungi: true,
-            children: species.map(s => ({ name: s, rank: "species", fungi: true })) });
+            children: species.map(s => ({ name: s, rank: "species", fungi: true, lichen })) });
         }
         ordNode.children.push(famNode);
       }
@@ -350,10 +358,13 @@ const tip = d3.select("#tip");
 let confirmedCount = 0;
 
 function colourFor(d){
-  if (d.data.fungi) return d.data.rank === "species" ? "var(--fungi)" : "var(--fungi-dim)";
-  if (d.data.rank === "species") return "var(--leaf-bright)";
+  if (d.data.fungi) {
+    if (d.data.lichen) return "var(--lichen)";       // Lecanoromycetes species only (see buildFungiTree)
+    return d.data.rank === "species" ? "var(--fungi)" : "var(--fungi-dim)";
+  }
+  if (d.data.rank === "species" || d.data.rank === "genus") return "var(--plant-green)";
   if (d.data.rank === "kingdom") return "var(--leaf)";
-  return "var(--bark)";
+  return "var(--bark)";  // class/order/family — unchanged
 }
 function radiusFor(d){
   return d.data.rank==="kingdom" ? 9 : d.data.rank==="family" ? 6.5 : d.data.rank==="genus" ? 5 : 3.6;
@@ -490,7 +501,6 @@ function update(source, root, arc, arcStart, gatherTrunk, linkSel, nodeSel){
       .attr("transform", d=>{
         if (d.depth===0) return "translate(0,20)";
         const deg = d.ang * 180/Math.PI;
-        const flip = (d.ang > 0 && d.ang < Math.PI);   // lower half — unused in canopy, guard anyway
         const off = radiusFor(d)+6;
         return `rotate(${deg}) translate(${off},0) ${ (deg>90||deg<-90) ? "rotate(180)" : "" }`;
       })

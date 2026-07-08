@@ -7,12 +7,12 @@ in a prior session). No writes, no schema changes.
 
 Bucket policy (safety-load-bearing — see CLAUDE.md Unit A note on species 412):
 a species only gets placed on a real branch if Unit A's own GBIF write-gate
-marked it EXACT *and* wrote a full lineage (phylum/family/genus all non-null).
-Anything else — conflict-withheld (EXACT but phylum IS NULL), parked
-(FUZZY/HIGHERRANK/NONE), or never matched — falls into the unplaced bucket.
-This reuses Unit A's own withholding signal rather than a second, driftable
-check, so a conflict-withheld species (e.g. 412) can never render on a false
-branch.
+marked it EXACT *and* wrote a full lineage (phylum/class_/order_/family/genus
+all non-null). Anything else — conflict-withheld (EXACT but phylum IS NULL),
+parked (FUZZY/HIGHERRANK/NONE), incomplete lineage (missing class_/order_),
+or never matched — falls into the unplaced bucket. This reuses Unit A's own
+withholding signal rather than a second, driftable check, so a
+conflict-withheld species (e.g. 412) can never render on a false branch.
 
 Kingdoms outside Plantae/Fungi (Animalia, Chromista — misidentified fauna
 that slipped through the pipeline) have no branch in this view's design and
@@ -47,6 +47,8 @@ async def get_taxonomy_tree():
                 select(
                     Species.scientific_name,
                     Species.kingdom,
+                    Species.class_,
+                    Species.order_,
                     Species.family,
                     Species.genus,
                     Species.phylum,
@@ -55,25 +57,28 @@ async def get_taxonomy_tree():
             )
         ).all()
 
-    raw_plantae: dict[str, dict[str, list[str]]] = defaultdict(lambda: defaultdict(list))
-    fungi: dict[str, list[str]] = defaultdict(list)
+    # class_ -> order_ -> family -> genus -> [species...] (same shape for both kingdoms)
+    raw_plantae: dict = defaultdict(lambda: defaultdict(lambda: defaultdict(lambda: defaultdict(list))))
+    fungi: dict = defaultdict(lambda: defaultdict(lambda: defaultdict(lambda: defaultdict(list))))
     unplaced: list[str] = []
 
-    for scientific_name, kingdom, family, genus, phylum, match_type in rows:
+    for scientific_name, kingdom, class_, order_, family, genus, phylum, match_type in rows:
         kingdom_l = (kingdom or "").lower()
 
         placeable = (
             match_type == "EXACT"
             and phylum is not None
+            and class_ is not None
+            and order_ is not None
             and family is not None
             and genus is not None
             and kingdom_l in _PLACEABLE_KINGDOMS
         )
         if placeable:
             if kingdom_l == "plantae":
-                raw_plantae[family][genus].append(scientific_name)
-            else:  # fungi — flat, no genus level (matches approved prototype shape)
-                fungi[family].append(scientific_name)
+                raw_plantae[class_][order_][family][genus].append(scientific_name)
+            else:  # fungi — now nested class->order->family->genus, same shape as Plantae
+                fungi[class_][order_][family][genus].append(scientific_name)
             continue
 
         # Out-of-scope kingdoms (Animalia/Chromista) with otherwise-clean lineage
@@ -84,14 +89,30 @@ async def get_taxonomy_tree():
 
         if match_type == "EXACT" and phylum is None:
             reason = "conflict"
+        elif match_type == "EXACT":
+            # phylum present (not conflict-withheld) but class_/order_/family/
+            # genus incomplete — currently 0 rows in the live DB, but coded
+            # explicitly rather than falling through to "not yet matched",
+            # which would misrepresent a row that DID match.
+            reason = "incomplete lineage"
         elif match_type in _UNPLACED_REASONS:
             reason = _UNPLACED_REASONS[match_type]
         else:
             reason = "not yet matched"
         unplaced.append(f"{scientific_name} ({reason})")
 
+    def _flatten(nested: dict) -> dict:
+        """class_ -> order_ -> family -> {genus: [species...]}, all as plain dicts."""
+        return {
+            cls: {
+                ordr: {fam: dict(genera) for fam, genera in families.items()}
+                for ordr, families in orders.items()
+            }
+            for cls, orders in nested.items()
+        }
+
     return {
-        "RAW": {"Plantae": {fam: dict(genera) for fam, genera in raw_plantae.items()}},
-        "FUNGI": dict(fungi),
+        "RAW": {"Plantae": _flatten(raw_plantae)},
+        "FUNGI": _flatten(fungi),
         "UNPLACED": unplaced,
     }

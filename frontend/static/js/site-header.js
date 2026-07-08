@@ -12,14 +12,15 @@
   // per-page .curator-nav class) that predated this file.
   var NAV_LINKS = [
     { href: '/',           label: 'Map' },
-    { href: '/review',     label: 'Review', badgeId: 'nav-badge-review', curatorOnly: true },
-    { href: '/species',    label: 'Species' },
     { href: '/seasons',    label: 'Seasons' },
-    { href: '/lists',      label: 'Booklets' },
+    { href: '/taxonomy',   label: 'Taxonomy' },
+    { href: '/species',    label: 'Species' },
     { href: '/encounters', label: 'Encounters', badgeId: 'nav-badge-encounters' },
+    { href: '/lists',      label: 'Booklets' },
+    { href: '/workshops',  label: 'Workshops', curatorOnly: true },
+    { href: '/review',     label: 'Review', badgeId: 'nav-badge-review', curatorOnly: true },
     { href: '/scan',       label: 'Scan', curatorOnly: true },
     { href: '/settings',   label: 'Settings', curatorOnly: true },
-    { href: '/workshops',  label: 'Workshops', curatorOnly: true },
     { href: '/about',      label: 'About' }
   ];
 

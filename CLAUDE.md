@@ -211,6 +211,7 @@ Before editing any file:
 5. Never declare "no fix needed" without showing the evidence
 Never apply a CSS change to a shared class without checking every element that uses it
 Never confirm a fix is working based on code presence alone — only on observed behaviour
+Never verify in an in-browser preview, headless browser, or preview sandbox. Code's verification ends at reading back the edited code. All live/visual/behavioural verification is done by the user in their own browser. If a change must be confirmed working before the next step can proceed, STOP and ask the user to test and report back — do not spin up a browser to check it yourself.
 
 ## Code discipline — mandatory
 

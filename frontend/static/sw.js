@@ -1,21 +1,29 @@
 // ForagingID service worker — Phase 10a (Session C).
 //
 // Caching strategy:
-//   STATIC_CACHE   — app shell (install-time precache), cache-first
+//   STATIC_CACHE   — app shell (JS/CSS/icons/manifest), network-first with cache fallback
 //   RUNTIME_CACHE  — same-origin API + navigations, network-first with cache fallback
 //   TILE_CACHE     — OSM/ESRI/OpenTopoMap tiles, cache-on-use, bulk 30-day expiry
 //   SPECIES_CACHE  — /api/species/* GET responses, cache-first with 7-day per-entry TTL
+//                    (except /api/species/taxonomy-tree, whose shape isn't stable enough
+//                    for a long-lived cache — routed through RUNTIME_CACHE instead)
 //
 // Tile caching is cache-on-request only. No bounding boxes, no pre-fetch.
 // Tiles load naturally as the user browses the map and are stored for offline use.
 //
 // Writes (POST / PATCH / DELETE) are never intercepted — they always go to the network.
 
-const CACHE_VERSION  = 'foragingid-v7';   // bump → old caches evicted on activate
+const CACHE_VERSION  = 'foragingid-v7';   // bump → old STATIC/RUNTIME caches evicted on activate
 const STATIC_CACHE   = CACHE_VERSION + '-static';
 const RUNTIME_CACHE  = CACHE_VERSION + '-runtime';
-const TILE_CACHE     = CACHE_VERSION + '-tiles';
-const SPECIES_CACHE  = CACHE_VERSION + '-species';
+// TILE_CACHE and SPECIES_CACHE are deliberately version-independent. Both
+// already self-evict on their own TTL (tiles: 30-day bulk, species: 7-day
+// per-entry), so they don't need version-driven clearing — and if they were
+// suffixed with CACHE_VERSION, bumping it to flush stale JS/HTML would also
+// rename them, and the activate cleanup below would then delete the old
+// name, wiping every offline map tile on that one deploy. Fixed names avoid that.
+const TILE_CACHE     = 'foragingid-tiles';
+const SPECIES_CACHE  = 'foragingid-species';
 
 const TILE_TTL_MS    = 30 * 24 * 60 * 60 * 1000;   // 30 days — bulk cache expiry
 const SPECIES_TTL_MS =  7 * 24 * 60 * 60 * 1000;   // 7 days  — per-entry TTL
@@ -49,7 +57,15 @@ function isTile(url) {
 function isSpeciesGet(url) {
   // Same-origin /api/species/* reads. Non-GET requests are already excluded
   // by the early-return in the fetch handler, so this is safe to apply broadly.
-  return url.origin === self.location.origin && url.pathname.startsWith('/api/species/');
+  // Exception: /api/species/taxonomy-tree is excluded on purpose. Per-species
+  // profile reads rarely change shape, which is what makes a 7-day cache-first
+  // policy safe for them; taxonomy-tree's response shape has changed multiple
+  // times as the tree view evolved, and a stale cached body of an older shape
+  // crashes the tree renderer (see buildTree()/buildFungiTree() in
+  // taxonomy.html). It falls through to isApi() below instead, which is
+  // network-first with no long-lived TTL to go stale against.
+  return url.origin === self.location.origin && url.pathname.startsWith('/api/species/')
+      && url.pathname !== '/api/species/taxonomy-tree';
 }
 
 function isApi(url) {
@@ -138,16 +154,24 @@ async function networkFirst(request) {
   }
 }
 
-// Static assets: cache-first, populate on miss.
-async function cacheFirst(request) {
-  const cached = await caches.match(request);
-  if (cached) return cached;
-  const fresh = await fetch(request);
-  if (fresh && fresh.ok) {
-    const cache = await caches.open(STATIC_CACHE);
-    cache.put(request, fresh.clone()).catch(() => {});
+// Static assets (JS/CSS/icons/manifest under /static/): network-first, so an
+// edited shell file shows up on the next reload instead of waiting on a
+// CACHE_VERSION bump + the browser noticing sw.js changed. Falls back to
+// STATIC_CACHE when offline — preserves the same offline app-shell behaviour
+// cache-first gave, it just no longer serves stale content while online.
+async function networkFirstStatic(request) {
+  try {
+    const fresh = await fetch(request);
+    if (fresh && fresh.ok) {
+      const cache = await caches.open(STATIC_CACHE);
+      cache.put(request, fresh.clone()).catch(() => {});
+    }
+    return fresh;
+  } catch (err) {
+    const cached = await caches.match(request);
+    if (cached) return cached;
+    throw err;
   }
-  return fresh;
 }
 
 // ---------------------------------------------------------------------------
@@ -192,9 +216,31 @@ self.addEventListener('install', (event) => {
   );
 });
 
+// One-time migration: TILE_CACHE/SPECIES_CACHE used to be version-suffixed
+// (foragingid-vN-tiles / foragingid-vN-species, back when they derived from
+// CACHE_VERSION). Copy any existing versioned cache forward into the new
+// fixed-name cache before the generic cleanup below deletes it, so shipping
+// this fix doesn't itself wipe tiles on the one deploy that ships it.
+async function _migrateVersionedCache(oldNamePattern, newCacheName) {
+  const keys = await caches.keys();
+  const oldKey = keys.find(k => oldNamePattern.test(k) && k !== newCacheName);
+  if (!oldKey) return;
+  const oldCache = await caches.open(oldKey);
+  const newCache = await caches.open(newCacheName);
+  const reqs = await oldCache.keys();
+  await Promise.all(reqs.map(async (req) => {
+    const res = await oldCache.match(req);
+    if (res) await newCache.put(req, res);
+  }));
+}
+
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     (async () => {
+      // Migrate tiles/species forward from their old version-suffixed cache
+      // names (pre-decoupling) before the generic cleanup below deletes them.
+      await _migrateVersionedCache(/^foragingid-v\d+-tiles$/, TILE_CACHE);
+      await _migrateVersionedCache(/^foragingid-v\d+-species$/, SPECIES_CACHE);
       // Remove all caches from previous versions
       const keys = await caches.keys();
       await Promise.all(
@@ -240,9 +286,9 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Same-origin static assets → cache-first
+  // Same-origin static assets → network-first, cache fallback when offline
   if (isStatic(url)) {
-    event.respondWith(cacheFirst(request));
+    event.respondWith(networkFirstStatic(request));
     return;
   }
 

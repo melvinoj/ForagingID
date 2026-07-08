@@ -4,6 +4,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>ForagingID — Taxonomy Tree (prototype)</title>
+<link rel="stylesheet" href="/static/css/tokens.css">
+<link rel="stylesheet" href="/static/css/site-header.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
 <style>
   :root {
@@ -17,10 +19,18 @@
     --leaf-bright: #a3c77e;
     --fungi: #c8963e;
     --fungi-dim: #8a6a2e;
+    --plant: #5a6b58;    /* legend "Plant" swatch — brown/green; matches sitewide --moss token */
+    --lichen: #8fae9c;   /* legend "Lichen" swatch — lichen-green, new tri-colour category */
     --unplaced: #b5503f;
     --panel: rgba(28,22,16,0.92);
     --line: rgba(122,92,62,0.25);
   }
+  /* This page's own --ink (above) is the tree's light foreground text colour,
+     not the site-wide chrome colour site-header.css expects (dark ink /
+     cream paper, from tokens.css) — the two share a name by coincidence.
+     Pin the shared nav chip/drawer to the site's actual token values so they
+     render correctly here without touching --ink anywhere the tree uses it. */
+  #site-nav-chip, #nav-drawer { background: #1E2A22; color: #FDFDFB; }
   * { box-sizing: border-box; }
   html, body {
     margin: 0; padding: 0; height: 100%;
@@ -35,7 +45,7 @@
 
   .header {
     position: fixed; top: 0; left: 0; right: 0; z-index: 10;
-    padding: 14px 20px;
+    padding: 14px 20px 14px 64px;
     display: flex; align-items: baseline; gap: 14px;
     pointer-events: none;
   }
@@ -50,16 +60,37 @@
     padding: 3px 9px; border-radius: 20px;
   }
 
+  /* Legend collapses into a chip, expands into the panel on click — mirrors
+     the map page's #legend-chip / toggleLegendPanel() convention (frontend/
+     index.html): a round chip toggles a `.visible` class on the panel, which
+     is `display:none` until then and carries its own explicit close button. */
+  #legend-chip {
+    position: fixed; bottom: 16px; left: 16px; z-index: 11;
+    width: 38px; height: 38px; border-radius: 10px;
+    background: var(--panel); border: 1px solid var(--line); color: var(--ink);
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer; backdrop-filter: blur(8px); transition: border-color .15s;
+  }
+  #legend-chip:hover { border-color: var(--bark); }
+
   .legend {
-    position: fixed; bottom: 16px; left: 16px; z-index: 10;
+    display: none;
+    position: fixed; bottom: 66px; left: 16px; z-index: 10;
     background: var(--panel); border: 1px solid var(--line);
     border-radius: 12px; padding: 12px 14px;
     font-size: 12px; min-width: 168px;
     backdrop-filter: blur(8px);
   }
+  .legend.visible { display: block; }
   .legend .row { display: flex; align-items: center; gap: 8px; margin: 5px 0; }
   .legend .dot { width: 11px; height: 11px; border-radius: 50%; flex: 0 0 auto; }
   .legend .hint { color: var(--ink-dim); font-size: 11px; margin-top: 8px; line-height: 1.4; }
+  .legend-close {
+    position: absolute; top: 6px; right: 6px;
+    min-width: 20px; min-height: 20px; padding: 0;
+    background: none; border: none; color: var(--ink-dim); font-size: 0.8rem; cursor: pointer;
+  }
+  .legend-close:hover { color: var(--ink); }
 
   .controls {
     position: fixed; bottom: 16px; right: 16px; z-index: 10;
@@ -84,9 +115,40 @@
   .tip .t-rank { color: var(--ink-dim); font-size: 10px; text-transform: uppercase; letter-spacing: .5px; }
   .tip .t-meta { color: var(--ink-dim); margin-top: 3px; }
 
+  /* Species-click popup — navigation only (thumbnail from an existing
+     observations endpoint, scientific name, link to the existing read-only
+     /species?s= card route). No edibility/verdict/warnings/card content —
+     that's the card page's job, not this popup's; a thumbnail image is the
+     one exception, explicitly OK'd (2026-07-08) — the safety boundary is
+     "no DB writes", not "no imagery". */
+  .species-popup {
+    display: none;
+    position: fixed; z-index: 30;
+    background: rgba(10,8,6,0.96); border: 1px solid var(--line);
+    border-radius: 9px; padding: 10px 26px 10px 12px; font-size: 12px;
+    max-width: 240px; text-align: center;
+    box-shadow: 0 6px 22px rgba(0,0,0,0.5);
+  }
+  .species-popup.visible { display: block; }
+  .species-popup-close {
+    position: absolute; top: 5px; right: 5px;
+    min-width: 20px; min-height: 20px; padding: 0;
+    background: none; border: none; color: var(--ink-dim); font-size: 0.8rem; cursor: pointer;
+  }
+  .species-popup-close:hover { color: var(--ink); }
+  .species-popup-thumb {
+    display: none; width: 64px; height: 64px; border-radius: 50%;
+    object-fit: cover; border: 2px solid var(--line); margin: 2px auto 8px;
+  }
+  .species-popup-thumb.visible { display: block; }
+  .species-popup-name { font-style: italic; color: var(--ink); margin-bottom: 8px; }
+  .species-popup-link { display: inline-block; color: var(--leaf-bright); font-size: 11px; font-weight: 600; text-decoration: none; }
+  .species-popup-link:hover { text-decoration: underline; }
+
   .link { fill: none; stroke: var(--bark); stroke-opacity: 0.55; }
   .node-label {
-    font-size: 11px; fill: var(--ink); pointer-events: none;
+    font-size: 11px; fill: var(--ink); pointer-events: auto; cursor: pointer;
+    user-select: none; -webkit-user-select: none;
     paint-order: stroke; stroke: var(--bg); stroke-width: 3px; stroke-linejoin: round;
   }
   .node-label.rank-family { font-size: 12.5px; font-weight: 600; }
@@ -103,10 +165,21 @@
     <span class="badge" id="count-badge">—</span>
   </div>
   <svg id="tree"></svg>
-  <div class="legend">
-    <div class="row"><span class="dot" style="background:var(--leaf-bright)"></span> Plant — confirmed</div>
-    <div class="row"><span class="dot" style="background:var(--bark)"></span> Family / genus</div>
+  <button id="legend-chip" onclick="toggleLegend()" aria-label="Open legend" aria-haspopup="true" aria-expanded="false">
+    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="3" y="5" width="4" height="4" rx="1"/>
+      <line x1="10" y1="7" x2="21" y2="7"/>
+      <rect x="3" y="11" width="4" height="4" rx="1"/>
+      <line x1="10" y1="13" x2="21" y2="13"/>
+      <rect x="3" y="17" width="4" height="4" rx="1"/>
+      <line x1="10" y1="19" x2="21" y2="19"/>
+    </svg>
+  </button>
+  <div class="legend" id="legend-panel">
+    <button class="legend-close" onclick="closeLegend()" aria-label="Close legend">✕</button>
+    <div class="row"><span class="dot" style="background:var(--plant)"></span> Plant</div>
     <div class="row"><span class="dot" style="background:var(--fungi)"></span> Fungi</div>
+    <div class="row"><span class="dot" style="background:var(--lichen)"></span> Lichen</div>
     <div class="row"><span class="dot" style="background:var(--unplaced)"></span> Unplaced — needs review</div>
     <div class="hint">Click a bough to fold / unfold.<br>Drag to pan · scroll to zoom.</div>
   </div>
@@ -116,13 +189,19 @@
     <button id="reset" title="Reset view">⤢</button>
   </div>
   <div class="tip" id="tip"></div>
+  <div class="species-popup" id="species-popup">
+    <button class="species-popup-close" onclick="closeSpeciesPopup()" aria-label="Close">✕</button>
+    <img class="species-popup-thumb" id="species-popup-thumb" alt="">
+    <div class="species-popup-name" id="species-popup-name"></div>
+    <a class="species-popup-link" id="species-popup-link" href="#">View card</a>
+  </div>
 </div>
 
 <script>
 // ---------------------------------------------------------------------------
 // LIVE DATA — fetched from /api/species/taxonomy-tree (Unit A GBIF lineage).
-// Shape: { RAW: { Plantae: { family: { genus: [scientific names] } } },
-//          FUNGI: { family: [scientific names] },
+// Shape: { RAW: { Plantae: { class_: { order_: { family: { genus: [names] } } } } },
+//          FUNGI: { class_: { order_: { family: { genus: [names] } } } },
 //          UNPLACED: [ "scientific name (reason)", ... ] }
 // Populated by loadAndRender() below, once the fetch resolves.
 // ---------------------------------------------------------------------------
@@ -130,27 +209,83 @@ let RAW = { Plantae: {} };
 let FUNGI = {};
 let UNPLACED = [];
 
+// Type guard used by buildTree()/buildFungiTree() at every nesting level: a
+// stale cached response (older endpoint shape) can hand us a string or array
+// where an object of {key: subtree} is expected, or vice versa. Object.entries()
+// never throws on the wrong type, but the mismatched value it produces does,
+// several levels deeper — so every level checks its own input and skips the
+// entry rather than let a malformed branch reach .map()/Object.entries() and
+// throw. A bad/stale response degrades to a partial or empty tree, never a
+// frozen page.
+function _isPlainObject(x) {
+  return x !== null && typeof x === "object" && !Array.isArray(x);
+}
+
 // ---- build hierarchy ----
 // ---- build hierarchy (kingdom > family > genus > species) ----
 function buildTree() {
   const root = { name: "Plantae", rank: "kingdom", children: [] };
-  for (const [fam, genera] of Object.entries(RAW.Plantae)) {
-    const famNode = { name: fam, rank: "family", children: [] };
-    for (const [gen, species] of Object.entries(genera)) {
-      famNode.children.push({ name: gen, rank: "genus",
-        children: species.map(s => ({ name: s, rank: "species" })) });
+  for (const [cls, orders] of Object.entries(RAW.Plantae)) {
+    if (!_isPlainObject(orders)) continue;
+    const clsNode = { name: cls, rank: "class", children: [] };
+    for (const [ord, families] of Object.entries(orders)) {
+      if (!_isPlainObject(families)) continue;
+      const ordNode = { name: ord, rank: "order", children: [] };
+      for (const [fam, genera] of Object.entries(families)) {
+        if (!_isPlainObject(genera)) continue;
+        const famNode = { name: fam, rank: "family", children: [] };
+        for (const [gen, species] of Object.entries(genera)) {
+          if (!Array.isArray(species)) continue;
+          famNode.children.push({ name: gen, rank: "genus",
+            children: species.map(s => ({ name: s, rank: "species" })) });
+        }
+        ordNode.children.push(famNode);
+      }
+      clsNode.children.push(ordNode);
     }
-    root.children.push(famNode);
+    root.children.push(clsNode);
+  }
+  return root;
+}
+
+// Same walk as buildTree(), reading FUNGI instead of RAW.Plantae, rooted at
+// "Fungi" instead of "Plantae". Every node is tagged fungi:true so colourFor()
+// and the link-stroke logic in update() can render this fan amber instead of
+// the plant fan's green/bark/cream — the two fans otherwise share identical
+// rank strings ("kingdom"/"class"/"order"/"family"/"genus"/"species") so all
+// existing CSS (.rank-family bold, .rank-species italic) and showTip() meta
+// logic apply unchanged to fungi nodes too.
+function buildFungiTree() {
+  const root = { name: "Fungi", rank: "kingdom", fungi: true, children: [] };
+  for (const [cls, orders] of Object.entries(FUNGI)) {
+    if (!_isPlainObject(orders)) continue;
+    const clsNode = { name: cls, rank: "class", fungi: true, children: [] };
+    for (const [ord, families] of Object.entries(orders)) {
+      if (!_isPlainObject(families)) continue;
+      const ordNode = { name: ord, rank: "order", fungi: true, children: [] };
+      for (const [fam, genera] of Object.entries(families)) {
+        if (!_isPlainObject(genera)) continue;
+        const famNode = { name: fam, rank: "family", fungi: true, children: [] };
+        for (const [gen, species] of Object.entries(genera)) {
+          if (!Array.isArray(species)) continue;
+          famNode.children.push({ name: gen, rank: "genus", fungi: true,
+            children: species.map(s => ({ name: s, rank: "species", fungi: true })) });
+        }
+        ordNode.children.push(famNode);
+      }
+      clsNode.children.push(ordNode);
+    }
+    root.children.push(clsNode);
   }
   return root;
 }
 
 const svg = d3.select("#tree");
 const g = svg.append("g");         // world group (zoom/pan)
-const soilG = g.append("g");
-const linkG = g.append("g");
-const nodeG = g.append("g");
-const fungiG = g.append("g");
+const linkG = g.append("g");       // plant fan links
+const nodeG = g.append("g");       // plant fan nodes
+const fungiLinkG = g.append("g");  // fungi fan links (separate group — no shared parent with plant fan)
+const fungiNodeG = g.append("g");  // fungi fan nodes
 const bucketG = g.append("g");
 let W = window.innerWidth, H = window.innerHeight;
 
@@ -158,19 +293,46 @@ const zoom = d3.zoom().scaleExtent([0.3, 4]).on("zoom", e => g.attr("transform",
 svg.call(zoom);
 svg.on("mousedown", () => svg.classed("dragging", true));
 svg.on("mouseup", () => svg.classed("dragging", false));
+// Background click (not a node — node clicks stopPropagation() before this
+// can fire) clears any active focus. d3-zoom suppresses the synthetic click
+// that would otherwise follow a drag-to-pan gesture, so this doesn't fire
+// spuriously mid-pan.
+svg.on("click", () => clearFocus());
 
 // ---------------------------------------------------------------------------
-// RADIAL layout. Trunk at BOTTOM rising into an upward FAN.
-// We use a radial cluster but sweep only the UPPER arc (canopy above soil),
-// with the kingdom root at the base and angle increasing left→right across
-// the top. Fungi live BELOW the soil line as amber roots (drawn separately).
+// RADIAL layout. Two independent fans meet at a shared centre point: the
+// plant fan sweeps the UPPER arc (root at the base, rising up — unchanged),
+// the fungi fan sweeps the LOWER arc, mirrored across the horizontal (root
+// at the same base point, pointing down). Each fan is its own d3.hierarchy
+// with its own root — they do not share a parent node, so folding/collapsing
+// one never affects the other.
 // Collapsible: default collapsed at genus (species hidden until tapped).
 // ---------------------------------------------------------------------------
-const ARC = Math.PI * 1.15;                 // canopy spread (a touch over 180°)
-const ARC_START = -Math.PI/2 - ARC/2;       // centred on straight-up
-const RING = 150;                           // radial distance per depth level
+// Plant and fungi fans use different arc widths so they occupy disjoint
+// angular ranges (previously both used the same ~207° arc, which overshot
+// the horizontal on both sides and let fungi labels bleed into plant space,
+// e.g. Lecanoromycetes/Parmeliaceae appearing on the plant side).
+// Plant range:  [-193.5°, 13.5°]  (unwrapped)      →  wraps to [166.5°,360°)∪[0°,13.5°]
+// Fungi range:  [15°, 165°]
+// → disjoint, with a 1.5° gap on each side (13.5°–15° and 165°–166.5°).
+const PLANT_ARC = Math.PI * 1.15;                    // plant canopy spread (unchanged, ~207°)
+const ARC_START = -Math.PI/2 - PLANT_ARC/2;          // plant fan: centred on straight-up (unchanged)
+const FUNGI_ARC = Math.PI * (150/180);                // fungi fan spread — its own, narrower arc (150°)
+const FUNGI_ARC_START = Math.PI/2 - FUNGI_ARC/2;     // fungi fan: centred on straight-down
+const RING = 150;                           // radial distance per depth level (family/genus/species — unchanged)
 
-let rootH;
+// Plant fan only: class/order gather into a tight "trunk" near the root —
+// reduced radius (TRUNK_RING per tier instead of RING) and angles pulled
+// toward the arc's centre (TRUNK_GATHER < 1) — before flaring out to the
+// family tier at its original, unmodified position (RING*3, full angle).
+// Fungi never gets this (see layout()'s gatherTrunk param) — it stays plain
+// spokes at every depth, so the two kingdoms read differently at a glance.
+const TRUNK_RING = 90;      // radial distance per trunk tier (class, order) — tune to taste
+const TRUNK_GATHER = 0.32;  // 0=all trunk nodes collapse to the centre line, 1=full spoke spread — tune to taste
+
+let rootH;       // plant fan root (d3.hierarchy) — unchanged variable, unchanged meaning
+let fungiRootH;  // fungi fan root (d3.hierarchy) — separate tree, separate root
+let focusedNode = null;  // currently focused node (either fan), or null — see toggle()/setFocus()/clearFocus() below
 
 const cluster = d3.cluster().separation((a,b) => (a.parent === b.parent ? 1 : 1.6));
 
@@ -178,6 +340,7 @@ const tip = d3.select("#tip");
 let confirmedCount = 0;
 
 function colourFor(d){
+  if (d.data.fungi) return d.data.rank === "species" ? "var(--fungi)" : "var(--fungi-dim)";
   if (d.data.rank === "species") return "var(--leaf-bright)";
   if (d.data.rank === "kingdom") return "var(--leaf)";
   return "var(--bark)";
@@ -189,14 +352,57 @@ function radiusFor(d){
 function project(a, r){ return [ Math.cos(a) * r, Math.sin(a) * r ]; }
 
 // assign radial coords: cluster gives d.x in [0,1]*2π-ish (breadth), d.y depth
-function layout(){
-  cluster.size([ARC, 1])(rootH);            // breadth spread across ARC, depth normalised
-  const maxDepth = d3.max(rootH.descendants(), d => d.depth) || 1;
-  rootH.each(d => {
-    d.ang = ARC_START + d.x;                 // canopy angle
-    d.rad = d.depth === 0 ? 0 : d.depth * RING;
+// root/arc/arcStart are parameterised so the same layout can drive either fan
+// at its own width; called with (rootH, PLANT_ARC, ARC_START, true) the plant
+// fan gathers its class/order tiers into a trunk (see gatherTrunk below);
+// called with (fungiRootH, FUNGI_ARC, FUNGI_ARC_START, false) the fungi fan
+// stays plain spokes at every depth — the two kingdoms read differently.
+function layout(root, arc, arcStart, gatherTrunk){
+  cluster.size([arc, 1])(root);              // breadth spread across this fan's arc, depth normalised
+  const centreX = arc / 2;                   // cluster x-space mid-point (breadth centre)
+
+  // Kingdom/class/order/family/genus — general breadth-cluster layout.
+  // Species are deliberately skipped here: their position is set by the one
+  // explicit rule below, not by this pass, so there is a single place that
+  // decides where a species renders (see that rule for why).
+  root.each(d => {
+    if (d.data.rank === "species") return;
+    if (gatherTrunk && d.depth >= 1 && d.depth <= 2) {
+      // class (depth 1) / order (depth 2): pull angle toward centre and use
+      // a short, shared trunk radius instead of the normal per-depth ring —
+      // an organic gathered bundle rising from the root before family flares
+      // out at its usual position. Only the plant fan (gatherTrunk=true)
+      // reaches this branch — fungi's class/order use the else branch below,
+      // same as every other fungi depth (no trunk gather for fungi).
+      d.ang = arcStart + centreX + (d.x - centreX) * TRUNK_GATHER;
+      d.rad = d.depth * TRUNK_RING;          // 90 (class) / 180 (order)
+    } else {
+      d.ang = arcStart + d.x;                // canopy angle — unchanged formula
+      d.rad = d.depth === 0 ? 0 : d.depth * RING;
+    }
     const [px,py] = project(d.ang, d.rad);
     d.px = px; d.py = py;                     // screen coords (y negative = up)
+  });
+
+  // ---------------------------------------------------------------------
+  // SPECIES POSITIONING — the one and only rule for species-rank nodes.
+  // Runs after the pass above, so every species' parent genus already has
+  // its final ang/rad. A species always renders at its genus's angle
+  // (fanned by a small offset if the genus has more than one species) and
+  // at the genus's radius plus one RING step — strictly further from
+  // centre than the genus, never inward, never piled at the genus's point.
+  // This is the only code in the file that sets a species' ang/rad/px/py.
+  // ---------------------------------------------------------------------
+  root.each(d => {
+    if (d.data.rank !== "species" || !d.parent) return;
+    const siblings = d.parent.children || [];
+    const i = Math.max(0, siblings.indexOf(d));
+    const n = siblings.length;
+    const FAN = 0.12; // total angular spread (radians) across sibling species
+    d.ang = d.parent.ang + (n > 1 ? (i - (n - 1) / 2) * (FAN / (n - 1)) : 0);
+    d.rad = d.parent.rad + RING;
+    const [px, py] = project(d.ang, d.rad);
+    d.px = px; d.py = py;
   });
 }
 
@@ -209,24 +415,36 @@ function limb(s, t){
   return `M${s.px},${s.py} C${c1x},${c1y} ${c2x},${c2y} ${t.px},${t.py}`;
 }
 
-function update(source){
-  layout();
-  const nodes = rootH.descendants();
-  const links = rootH.links();
+// root/arc/arcStart/gatherTrunk/linkSel/nodeSel are parameterised so the exact
+// same function drives both fans. Calling
+// update(source, rootH, PLANT_ARC, ARC_START, true, linkG, nodeG) reproduces
+// the plant fan (with the trunk gather); the fungi fan is rendered by calling
+// this same function with fungiRootH, FUNGI_ARC, FUNGI_ARC_START, false,
+// fungiLinkG, fungiNodeG instead — separate D3 selections, so the two fans'
+// data-joins never touch each other (no shared parent).
+function update(source, root, arc, arcStart, gatherTrunk, linkSel, nodeSel){
+  layout(root, arc, arcStart, gatherTrunk);
+  const nodes = root.descendants();
+  const links = root.links();
   const strokeFor = d => Math.max(0.9, 6.5 - d.target.depth * 1.4);
 
-  const link = linkG.selectAll("path.link").data(links, d => d.target.data.name + d.target.depth);
+  const link = linkSel.selectAll("path.link").data(links, d => d.target.data.name + d.target.depth);
   link.enter().append("path").attr("class","link")
       .attr("d", d => limb({ang:source.ang0??d.source.ang, rad:source.rad0??d.source.rad, px:source.px0??d.source.px, py:source.py0??d.source.py},
                             {ang:source.ang0??d.source.ang, rad:source.rad0??d.source.rad, px:source.px0??d.source.px, py:source.py0??d.source.py}))
     .merge(link).transition().duration(450)
-      .attr("d", d => limb(d.source, d.target)).attr("stroke-width", strokeFor);
+      .attr("d", d => limb(d.source, d.target)).attr("stroke-width", strokeFor)
+      .attr("stroke", d => d.target.data.fungi ? "var(--fungi-dim)" : null);
   link.exit().transition().duration(300).attr("stroke-opacity",0).remove();
 
-  const node = nodeG.selectAll("g.node").data(nodes, d => d.data.name + d.depth);
+  const node = nodeSel.selectAll("g.node").data(nodes, d => d.data.name + d.depth);
   const nEnter = node.enter().append("g").attr("class","node")
       .attr("transform", `translate(${source.px0??source.px},${source.py0??source.py})`)
-      .on("click",(e,d)=>{ if (d._children||d.children) toggle(d); })
+      .on("click",(e,d)=>{
+        e.stopPropagation();
+        if (d.data.rank === "species") { openSpeciesPopup(d, e); return; }
+        if (d._children||d.children) toggle(d, root, arc, arcStart, gatherTrunk, linkSel, nodeSel);
+      })
       .on("mousemove",(e,d)=>showTip(e,d)).on("mouseleave",hideTip);
 
   nEnter.append("circle").attr("class","node-circle").attr("r",0)
@@ -244,6 +462,7 @@ function update(source){
       .attr("r",d=>d._children?radiusFor(d)+4:0).attr("stroke-opacity",d=>d._children?0.6:0);
   // labels: rotate to follow the radial angle, flip on the left half for legibility
   nMerge.select("text").transition().duration(450).style("opacity",1)
+      .style("fill", d => d.data.fungi ? "var(--fungi-dim)" : null)
       .attr("transform", d=>{
         if (d.depth===0) return "translate(0,20)";
         const deg = d.ang * 180/Math.PI;
@@ -265,10 +484,195 @@ function update(source){
   nodes.forEach(d=>{ d.ang0=d.ang; d.rad0=d.rad; d.px0=d.px; d.py0=d.py; });
 }
 
-function toggle(d){
-  if (d.children){ d._children=d.children; d.children=null; }
-  else { d.children=d._children; d._children=null; }
-  update(d);
+// Focus is keyed on IDENTITY (is `d` the currently-focused node), not on raw
+// open/closed state — a node's own children/_children can already be open
+// because an ANCESTOR's focus force-expanded it (see _expandSubtree below),
+// so "is d.children truthy" is not the same question as "did the user just
+// click d to focus it". Using expand-state as the focus signal caused a bug:
+// clicking a genus already opened by its parent family's focus would
+// collapse it and clear focus instead of zooming in further on it.
+//
+// So: clicking the node that's ALREADY focused is a genuine "click it again"
+// — delegate to clearFocus(), which collapses it back down (see clearFocus()
+// below). Clicking anything else focuses it: ensure it's open (expand if
+// collapsed; leave as-is if an ancestor already opened it), force-expand
+// family/genus subtrees so species pop into view, then focus. Species never
+// reach here: the click handler only calls toggle() when
+// d._children||d.children is truthy, never true for a leaf.
+function toggle(d, root, arc, arcStart, gatherTrunk, linkSel, nodeSel){
+  if (focusedNode === d) {
+    // clearFocus() now owns collapsing the focused node back down (see
+    // below) — delegate rather than duplicate that logic here.
+    clearFocus();
+    return;
+  }
+
+  if (d._children) { d.children = d._children; d._children = null; }
+
+  if (d.data.rank === "family") {
+    _expandSubtree(d);
+  } else if (d.data.rank === "genus" && d.parent) {
+    // Genus click reveals every species across the WHOLE family (every
+    // sibling genus too, not just this one) — a genus click means "show me
+    // everything in this family." Focus/zoom still targets the clicked genus
+    // specifically (setFocus(d) below), so the view is tight on it while the
+    // rest of the now-expanded family sits dimmed in the background, ready
+    // to click into. d.parent is the family: genus's direct parent in the
+    // hierarchy built by buildTree()/buildFungiTree().
+    _expandSubtree(d.parent);
+  }
+
+  update(d, root, arc, arcStart, gatherTrunk, linkSel, nodeSel);
+  setFocus(d);
+}
+
+// Recursively expand every collapsed descendant (and the node itself if it
+// was still collapsed) — used only for the family/genus "pop out" case above.
+function _expandSubtree(d){
+  if (d._children) { d.children = d._children; d._children = null; }
+  if (d.children) d.children.forEach(_expandSubtree);
+}
+
+// true if `node` is `ancestor` itself or a descendant of it (walks .parent).
+function _isDescendantOrSelf(node, ancestor){
+  let cur = node;
+  while (cur) { if (cur === ancestor) return true; cur = cur.parent; }
+  return false;
+}
+
+// Full opacity + a brighter outline on the focused node for the focused
+// subtree (or everything, when focusedNode is null); reduced opacity for
+// everything else, across BOTH fans — "everything not in that subtree"
+// includes the other kingdom's fan entirely, per spec.
+// Every node's fill AND stroke/stroke-width are explicitly re-applied here
+// on every call (not just opacity) — when focusedNode is null (cleared),
+// this unconditionally restores every circle to its plain colourFor() fill
+// and default stroke, so no node is left painted with the focus highlight.
+function _applyFocusStyles(){
+  const inFocus = d => !focusedNode || _isDescendantOrSelf(d, focusedNode);
+  [nodeG, fungiNodeG].forEach(sel => {
+    sel.selectAll("g.node").transition().duration(300)
+      .style("opacity", d => inFocus(d) ? 1 : 0.15);
+    sel.selectAll("g.node").select("circle.node-circle")
+      .attr("fill", colourFor)
+      .attr("stroke", d => (focusedNode && d === focusedNode) ? "var(--ink)" : "var(--bg)")
+      .attr("stroke-width", d => (focusedNode && d === focusedNode) ? 3 : 1.5);
+  });
+  [linkG, fungiLinkG].forEach(sel => {
+    sel.selectAll("path.link").transition().duration(300)
+      .style("opacity", d => inFocus(d.target) ? 1 : 0.15);
+  });
+}
+
+// Pan+zoom the viewport (existing d3.zoom transform — geometry itself is
+// never recomputed) so the focused subtree's bounding box, in the same
+// world-space px/py coordinates layout() already assigned, fits on screen.
+function _zoomToFit(node){
+  const nodes = node.descendants();
+  let minX=Infinity, maxX=-Infinity, minY=Infinity, maxY=-Infinity;
+  nodes.forEach(d => {
+    minX = Math.min(minX, d.px); maxX = Math.max(maxX, d.px);
+    minY = Math.min(minY, d.py); maxY = Math.max(maxY, d.py);
+  });
+  const pad = 80;
+  const bw = Math.max(1, (maxX - minX) + pad*2);
+  const bh = Math.max(1, (maxY - minY) + pad*2);
+  const cx = (minX + maxX) / 2;
+  const cy = (minY + maxY) / 2;
+  const scale = Math.min(4, Math.max(0.3, Math.min(W / bw, H / bh)));
+  const t = d3.zoomIdentity.translate(W/2 - cx*scale, H/2 - cy*scale).scale(scale);
+  svg.transition().duration(500).call(zoom.transform, t);
+}
+
+function setFocus(d){
+  focusedNode = d;
+  _applyFocusStyles();
+  _zoomToFit(d);
+  closeSpeciesPopup();
+}
+// Collapses whatever the current focus expanded, THEN clears focus state —
+// re-collapsing is what was missing before (Bug 1/2): clicking empty canvas
+// used to only dim the previous focus, never fold it back down, so an
+// expanded family/genus (and its popped-out species) stayed permanently in
+// the DOM, showing up later as "stray" full-opacity, full-colour nodes.
+// Also reached from toggle()'s "click the already-focused node again" path,
+// so there's one single place that does this collapse, not two.
+function clearFocus(){
+  if (focusedNode) {
+    if (focusedNode.children) {
+      focusedNode._children = focusedNode.children;
+      focusedNode.children = null;
+    }
+    // Which fan focusedNode belongs to determines which fixed set of
+    // render params (root/arc/arcStart/gatherTrunk/groups) update() needs —
+    // same fungi:true flag colourFor()/link-stroke already key off.
+    if (focusedNode.data.fungi) {
+      update(focusedNode, fungiRootH, FUNGI_ARC, FUNGI_ARC_START, false, fungiLinkG, fungiNodeG);
+    } else {
+      update(focusedNode, rootH, PLANT_ARC, ARC_START, true, linkG, nodeG);
+    }
+  }
+  focusedNode = null;
+  _applyFocusStyles();
+  centre();
+  closeSpeciesPopup();
+}
+
+// Species-click popup — navigation only. Shows a thumbnail (if one exists),
+// the scientific name, and a link to the existing, canonical read-only
+// species-card route (matches the Seasons-page convention exactly:
+// /species?s=<encoded scientific name>, see frontend/seasons.html's
+// card-link). Read-only GET only — no DB writes of any kind, from here or
+// anywhere in taxonomy.html. The thumbnail is fetched from the existing
+// /api/species/{name}/observations endpoint (thumbnail + coords + date +
+// review status only — no edibility/verdict/warnings in that response at
+// all), and only the thumbnail field is ever read from it. Species clicks
+// don't touch focusedNode/dimming/zoom at all, so an open popup can sit
+// alongside an existing internal-rank focus without disturbing it; any
+// subsequent focus change (setFocus/clearFocus, i.e. any internal-rank
+// click or a background click) closes the popup, so it never goes stale.
+async function openSpeciesPopup(d, e){
+  const nameEl  = document.getElementById("species-popup-name");
+  const linkEl  = document.getElementById("species-popup-link");
+  const thumbEl = document.getElementById("species-popup-thumb");
+  const popup   = document.getElementById("species-popup");
+
+  thumbEl.classList.remove("visible");
+  thumbEl.src = "";
+
+  const sciName = d.data.name;
+  if (!sciName) {
+    nameEl.textContent = "Can't open card — species name unavailable";
+    linkEl.style.display = "none";
+  } else {
+    nameEl.textContent = sciName;
+    linkEl.href = "/species?s=" + encodeURIComponent(sciName);
+    linkEl.style.display = "inline-block";
+  }
+
+  popup.style.left = (e.clientX + 14) + "px";
+  popup.style.top  = (e.clientY + 14) + "px";
+  popup.classList.add("visible");
+
+  if (!sciName) return;
+
+  try {
+    const resp = await fetch("/api/species/" + encodeURIComponent(sciName) + "/observations");
+    if (!resp.ok) return;
+    const obs = await resp.json();
+    const withThumb = Array.isArray(obs) ? obs.find(o => o.thumbnail) : null;
+    // Popup may have moved on to a different species (or closed) by the
+    // time this resolves — only apply the image if it's still relevant.
+    if (withThumb && popup.classList.contains("visible") && nameEl.textContent === sciName) {
+      thumbEl.src = "/thumbnails/" + withThumb.thumbnail.split("/").pop();
+      thumbEl.classList.add("visible");
+    }
+  } catch (err) {
+    console.error("species popup thumbnail fetch failed:", err);
+  }
+}
+function closeSpeciesPopup(){
+  document.getElementById("species-popup").classList.remove("visible");
 }
 
 function showTip(e,d){
@@ -280,40 +684,6 @@ function showTip(e,d){
      .style("left",(e.clientX+14)+"px").style("top",(e.clientY+14)+"px").style("opacity",1);
 }
 function hideTip(){ tip.style("opacity",0); }
-
-// ---- soil line ----
-function drawSoil(){
-  soilG.append("line").attr("x1",-20000).attr("x2",20000).attr("y1",8).attr("y2",8)
-    .attr("stroke","var(--bark-dim)").attr("stroke-opacity",0.35).attr("stroke-width",1).attr("stroke-dasharray","2 5");
-}
-
-// ---- fungi as amber ROOTS below the soil, loosely (dotted) linked to the trunk base ----
-function drawFungi(){
-  const fam = Object.entries(FUNGI);
-  const baseY = 8;                          // soil line
-  const spread = 150;
-  fam.forEach(([f,sp],i)=>{
-    const side = i % 2 === 0 ? -1 : 1;
-    const tier = Math.floor(i/2)+1;
-    const fx = side * (60 + tier*70);
-    const fy = baseY + 70 + tier*55;
-    // dotted companion link from trunk base (0,baseY) — not a solid limb of descent
-    fungiG.append("path").attr("class","link")
-      .attr("d",`M0,${baseY} C${fx*0.4},${baseY+40} ${fx*0.7},${fy-30} ${fx},${fy}`)
-      .attr("stroke","var(--fungi-dim)").attr("stroke-width",1.4).attr("stroke-dasharray","1 4").attr("stroke-opacity",0.7);
-    fungiG.append("circle").attr("cx",fx).attr("cy",fy).attr("r",5).attr("fill","var(--fungi)").attr("stroke","var(--bg)").attr("stroke-width",1.5);
-    fungiG.append("text").attr("x",fx).attr("y",fy+ (side<0?4:4)).attr("dx",side<0?-10:10)
-      .attr("text-anchor",side<0?"end":"start").attr("dy","0.32em")
-      .attr("class","node-label").style("font-size","10px").style("fill","var(--fungi)").text(f);
-    sp.forEach((s,j)=>{
-      const sx = fx + side*(20 + j*14);
-      const sy = fy + 26 + j*8;
-      fungiG.append("path").attr("class","link").attr("stroke","var(--fungi-dim)").attr("stroke-opacity",0.4)
-        .attr("stroke-dasharray","1 3").attr("d",`M${fx},${fy} L${sx},${sy}`).attr("stroke-width",1);
-      fungiG.append("circle").attr("cx",sx).attr("cy",sy).attr("r",3).attr("fill","var(--fungi)").attr("fill-opacity",0.8);
-    });
-  });
-}
 
 // ---- unplaced bucket: tucked at the base near the roots, collapsible ----
 function drawUnplaced(){
@@ -363,22 +733,35 @@ async function loadAndRender(){
     return;
   }
 
-  RAW = data.RAW || { Plantae: {} };
-  FUNGI = data.FUNGI || {};
-  UNPLACED = data.UNPLACED || [];
+  // Everything downstream of a successful fetch — build + render — is its own
+  // failure domain: a stale/malformed body that survives the type guards in
+  // buildTree()/buildFungiTree() as a partial tree could still throw elsewhere
+  // (d3, layout, etc). Catch it here too, so any such throw fails the badge
+  // instead of leaving it stuck on "Loading…" forever.
+  try {
+    RAW = data.RAW || { Plantae: {} };
+    FUNGI = data.FUNGI || {};
+    UNPLACED = data.UNPLACED || [];
 
-  rootH = d3.hierarchy(buildTree());
-  rootH.each(d => { if (d.data.rank === "genus" && d.children) { d._children = d.children; d.children = null; } });
-  rootH.ang0=0; rootH.rad0=0; rootH.px0=0; rootH.py0=0;
+    rootH = d3.hierarchy(buildTree());
+    rootH.each(d => { if (d.data.rank === "genus" && d.children) { d._children = d.children; d.children = null; } });
+    rootH.ang0=0; rootH.rad0=0; rootH.px0=0; rootH.py0=0;
 
-  drawSoil();
-  update(rootH);
-  drawFungi();
-  drawUnplaced();
-  countConfirmed();
-  document.getElementById("count-badge").textContent =
-    `${confirmedCount} confirmed · ${Object.keys(RAW.Plantae).length} families · ${UNPLACED.length} unplaced`;
-  centre();
+    fungiRootH = d3.hierarchy(buildFungiTree());
+    fungiRootH.each(d => { if (d.data.rank === "genus" && d.children) { d._children = d.children; d.children = null; } });
+    fungiRootH.ang0=0; fungiRootH.rad0=0; fungiRootH.px0=0; fungiRootH.py0=0;
+
+    update(rootH, rootH, PLANT_ARC, ARC_START, true, linkG, nodeG);
+    update(fungiRootH, fungiRootH, FUNGI_ARC, FUNGI_ARC_START, false, fungiLinkG, fungiNodeG);
+    drawUnplaced();
+    countConfirmed();
+    document.getElementById("count-badge").textContent =
+      `${confirmedCount} confirmed · ${Object.keys(RAW.Plantae).length} families · ${UNPLACED.length} unplaced`;
+    centre();
+  } catch (err) {
+    console.error("taxonomy-tree render failed:", err);
+    document.getElementById("count-badge").textContent = "Failed to load";
+  }
 }
 loadAndRender();
 
@@ -386,6 +769,21 @@ d3.select("#zoom-in").on("click",()=>svg.transition().call(zoom.scaleBy,1.3));
 d3.select("#zoom-out").on("click",()=>svg.transition().call(zoom.scaleBy,0.75));
 d3.select("#reset").on("click",centre);
 window.addEventListener("resize",()=>{ W=window.innerWidth;H=window.innerHeight;svg.attr("viewBox",`0 0 ${W} ${H}`); });
+
+// Legend collapse/expand — mirrors the map page's toggleLegendPanel()/
+// closeLegendPanel() (frontend/index.html): a chip toggles a `.visible`
+// class on the panel, the panel's own close button removes it.
+function toggleLegend(){
+  const open = document.getElementById("legend-panel").classList.toggle("visible");
+  document.getElementById("legend-chip").setAttribute("aria-expanded", open ? "true" : "false");
+}
+function closeLegend(){
+  document.getElementById("legend-panel").classList.remove("visible");
+  document.getElementById("legend-chip").setAttribute("aria-expanded", "false");
+}
 </script>
+
+<!-- Nav chip + drawer injected by /static/js/site-header.js (Map Redesign P3-nav) -->
+<script src="/static/js/site-header.js"></script>
 </body>
 </html>

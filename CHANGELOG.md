@@ -1,19 +1,18 @@
 ## Current State
 
 Current State
-Unit B (taxonomy tree) shipped end-to-end. app/api/taxonomy.py — read-only GET /api/species/taxonomy-tree, allow-list bucketing (gbif_match_type='EXACT' + full lineage + kingdom Plantae/Fungi → placed; all else → unplaced; Animalia/Chromista omitted by design). frontend/taxonomy.html — approved radial prototype wired to live data (const→let + fetch only; render/interaction byte-untouched). /taxonomy route added. Regression gate passed (synthetic fixture matched prototype, reverted clean), live render + click-to-expand verified, no console errors, no writes/schema/migration. Live: 482 placed (452 Plantae + 30 Fungi), 146 unplaced (130 conflict − 4 omitted Animalia + 13 parked + 7 never-matched) — reconciles against Unit A. Badge shows placeable count honestly; 20 Animalia/Chromista clean-lineage rows omitted from tree scope.
-Unit A (taxonomic data layer, migration 0045) shipped earlier same session. Two map fixes (VIEW-sheet control regression, heatmap disclosure) shipped and Melvin-verified.
-Parked / next (priority order):
+Taxonomy page (/taxonomy) — nav, radial tree (class→order→family→genus→species), two mirrored fans (plant up, fungi down 150°), collapsible, crash-guards, SW stale-cache fix, legend collapse-to-icon, and the species→card popup with thumbnail (read-only, working) are all in and committed. Species popup confirmed good.
+BROKEN — species pop-out on family/genus focus. When a family/genus is focused, its species should render as leaf nodes extending OUTWARD past the family ring (each species one RING beyond its genus). Instead they render as a grey unspread smear piled at the genus point, inward. Patched ~4 times this session (identity-focus, whole-family expansion, RADIUS_BY_RANK, a "second layout pass", then a clean rewrite) — none worked; the attempts are now tangled in the file. No pre-tangle working commit exists — the whole pop-out feature is uncommitted, so there's no clean baseline to revert to. Green-residue-node bug (stray highlighted node left after clearFocus) may or may not be resolved — unverified. This is the first fix to tackle next session, ideally by rewriting the species-positioning function clean against a committed baseline.
+Parked (aesthetic/behaviour, not started):
 
-Regional-protocol diagnostic (read-only, safety-adjacent) — Taiwan/Japan fern (Macrothelypteris polypodioides) topping ID list for Black Forest native Oreopteris limbosperma (obs #21722); geo-weighting may not be biting. Recommended next.
-Legends (map fix 3) — recon done; merge two legend mechanisms, per-layer coverage, collapsible Pins component. Own session.
-Lemon-scented Fern (Oreopteris/Thelypteris limbosperma = species 412, flagged #3b conflict): caution + ID content. Descriptive draft Claude-assisted; lookalike/safety block Melvin-authored verbatim, never paraphrased. Fold into #3b. Ostrich Fern caution queued pending photo/card.
-#3b conflict review (130 EXACT_CONFLICT incl. wrong-organism desyncs + species 412/625) + sci-name typos (287 Sambuca→Sambucus, 288 officianalis→officinalis, 685 norway spruce→Picea abies).
-Investigate 20 non-plant/fungi species cards (19 Animalia, 1 Chromista) — recat-leak (review→scene doesn't downgrade card) vs false-promotion. Read-only diagnostic, review-path-adjacent. Fixing removes them from all lists + self-corrects tree count.
-Tree canopy density/legibility tuning (radial-at-scale, look-only) — 84 families extends off-frame; wire-to-live itself complete.
+Class/order tier spacing — class needs all 6 legible non-overlapping; order moved further out toward family for spacing.
+Auto-spread on zoom — overlapping labels should spread as you zoom in.
+Species-as-hairlines on main view — species shown as faint short lines at full-tree zoom, becoming legible when zoomed/focused.
+Three-way node colour: plant brown/green, fungi amber, lichen (Lecanoromycetes) lichen-green — legend already shows these; nodes not yet recoloured.
+floratree.org — reference to review for ideas.
 
 Session summary
-Shipped Unit B taxonomy tree end-to-end: read-only bucketing endpoint + approved radial prototype wired to live data + /taxonomy route, regression-gated and verified, no writes. Earlier same session: Unit A data layer (0045) and two map fixes. Parked six items, regional-protocol diagnostic next.
+Built taxonomy page end-to-end (endpoint, radial tree, rank tiers, mirrored fungi fan, legend, nav, SW cache fix, species→card popup + thumbnail). Species pop-out interaction attempted repeatedly and remains broken/tangled with no clean git baseline — top priority next session. Aesthetic passes (colour, spacing, hairline species, zoom-spread) parked.
 
 ## Current State — 03 July 2026
 
@@ -36,6 +35,13 @@ Still open:
 - Enrichment gap remediation — 9 AI drafts pending approval, 6 species never scanned, 79 no-PFAF species need alt-source decision
 
 ## History
+
+### 2026-07-08 06:42
+**Snapshot** — End of session — Session ended from Settings page
+DB: `snapshots/db_20260708_064238.sqlite`
+
+### 2026-07-08 06:42
+**Session ended** — Session ended from Settings page
 
 ### 2026-07-07 11:55
 **Snapshot** — End of session — Session ended from Settings page

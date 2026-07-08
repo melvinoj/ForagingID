@@ -1,5 +1,8 @@
 ## Current State
 
+Session summary:
+Taxonomy tree polish pass: fixed class/order label crowding (angle-only, locked radii), extended click-highlighting to show full ancestor lineage plus a sibling intermediate-brightness tier (including down sibling subtrees), made species-tier links persistently visible at low opacity, added rank-based colour coding to labels across both plant and fungi fans, and closed out a recurring D3 transition bug by adding a standing rendering-discipline section to CLAUDE.md.
+
 ## Current State — 8 July 2026
 
 Taxonomy tree (frontend/taxonomy.html) — spacing, highlighting, and colour 
@@ -86,6 +89,13 @@ Still open:
 - Enrichment gap remediation — 9 AI drafts pending approval, 6 species never scanned, 79 no-PFAF species need alt-source decision
 
 ## History
+
+### 2026-07-08 21:43
+**Snapshot** — End of session — Session ended from Settings page
+DB: `snapshots/db_20260708_214330.sqlite`
+
+### 2026-07-08 21:43
+**Session ended** — Session ended from Settings page
 
 ### 2026-07-08 21:43
 **Snapshot** — End of session — Session ended from Settings page

@@ -1,27 +1,19 @@
 ## Current State
 
 Current State
-Taxonomy page (/taxonomy) is live and mostly functional: radial tree (class→order→family→genus→species), two mirrored fans (plant up, fungi + lichen down), collapsible, nav-linked, SW cache fix, legend (collapse-to-icon), species→card popup with thumbnail (read-only, confirmed working, no DB writes anywhere in the page).
-Root cause of today's species-positioning saga found and fixed: update()'s position transitions and _applyFocusStyles()'s opacity transitions shared D3's default unnamed transition namespace on the same elements, so starting the opacity fade interrupted the still-running position transition — species froze mid-move at the wrong coordinates. Fixed by giving position and opacity separate named transitions (nodeMove/linkMove/focusFade) so they run concurrently without interrupting each other. This was the real bug underlying most of today's "species won't move outward" reports — earlier fixes (radius math, d.parent.rad chain, node-cleanup on defocus) were all individually correct but couldn't be observed working because of this collision.
-Not yet done — clear spec, prompt written, not yet run: apply four rules to finish the layout: (1) use available canvas space beyond current tree edge — increase radial scale; (2) all expansion moves outward only, never inward (existing snap-back-on-refocus is correct, don't touch); (3) class (6) and order (~30) tiers need more radial spacing so every label is legible; (4) species render in one clean fixed 5th ring (FAMILY_RADIUS + 2×RING), not per-genus derived. Genus tier is fine as-is.
+Taxonomy tree layout is DONE and confirmed working live. Fixed today: RING 150→200, TRUNK_RING 90→230 (class=230, order=460), species now render at a single fixed ring — FAMILY_RADIUS (3×RING=600) + 2×RING = 1000 — rather than derived per-genus. Radii strictly increase by rank (kingdom 0 → class 230 → order 460 → family 600 → genus 800 → species 1000), so outward-only expansion holds by construction. All four layout rules (use available space, outward-only, class/order legibility, fixed species ring) satisfied. Confirmed visually: class/order legible, species ring outward and uncluttered, no residue, no smear.
+Underlying root-cause fix from earlier in the day: update()'s position transitions and _applyFocusStyles()'s opacity transitions were sharing D3's default unnamed transition namespace, so the opacity fade interrupted the still-running position transition — species froze mid-move. Fixed with separate named transitions (nodeMove/linkMove/focusFade). This was the true cause of the prior session's extended "species won't move" saga.
+Taxonomy page overall: radial tree (class→order→family→genus→species), two mirrored fans, collapsible, nav-linked, SW cache fix, legend (collapse-to-icon), species→card popup with thumbnail (read-only, no writes).
 Parked (aesthetic, not started):
 
-Auto-spread on zoom for any remaining overlaps.
-Species-as-hairlines on the main view (faint lines at full-tree zoom, legible on focus/zoom).
-Three-way node colour: plant brown/green, fungi amber, lichen (Lecanoromycetes) green — legend already reflects this, nodes don't yet.
-floratree.org — reference, not yet reviewed for ideas.
+Auto-spread on zoom for any remaining label overlaps.
+Species-as-hairlines on the main/zoomed-out view.
+Three-way node colour: plant brown/green, fungi amber, lichen (Lecanoromycetes) green — legend already reflects this, nodes don't.
+floratree.org — reference, not yet reviewed.
 
-Non-taxonomy fixes still outstanding (unrelated to today):
-
-Regional-protocol diagnostic (safety-adjacent) — Taiwan/Japan fern topping ID for a Black Forest native.
-Map legends rework (map fix 3) — recon done, never built.
-Lemon-scented Fern caution/content — species 412, folds into #3b, safety block Melvin-authored.
-#3b conflict review (130 EXACT_CONFLICT) + sci-name typos.
-20 non-plant/fungi cards investigation (Animalia/Chromista).
-Google Drive token refresh.
-
+Non-taxonomy outstanding (unchanged): regional-protocol diagnostic, map legends rework, Lemon-scented Fern caution (species 412, folds into #3b), #3b conflict review, 20 non-plant/fungi card investigation, Google Drive token refresh.
 Session summary
-Long session on taxonomy tree interaction: fixed a transition-namespace collision that was the true root cause of species appearing stuck/inward despite correct position math; species popup + thumbnail shipped clean; four-rule layout spec (radial scale, outward-only movement, class/order spacing, fixed 5th species ring) written and ready to run next thread. Not committed mid-session — commit via this End Session captures everything, including the transition fix.
+Taxonomy tree layout fixed and confirmed: widened RING/TRUNK_RING constants, fixed species to a single outward ring rather than per-genus derivation. Root transition-collision bug (from prior session) also confirmed resolved. Tree is now in a good, demonstrable state. Committing this as the clean baseline before any further cosmetic work.
 
 ## Current State — 03 July 2026
 
@@ -44,6 +36,13 @@ Still open:
 - Enrichment gap remediation — 9 AI drafts pending approval, 6 species never scanned, 79 no-PFAF species need alt-source decision
 
 ## History
+
+### 2026-07-08 11:49
+**Snapshot** — End of session — Session ended from Settings page
+DB: `snapshots/db_20260708_114945.sqlite`
+
+### 2026-07-08 11:49
+**Session ended** — Session ended from Settings page
 
 ### 2026-07-08 09:41
 **Snapshot** — End of session — Session ended from Settings page

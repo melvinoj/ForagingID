@@ -319,7 +319,7 @@ const PLANT_ARC = Math.PI * 1.15;                    // plant canopy spread (unc
 const ARC_START = -Math.PI/2 - PLANT_ARC/2;          // plant fan: centred on straight-up (unchanged)
 const FUNGI_ARC = Math.PI * (150/180);                // fungi fan spread — its own, narrower arc (150°)
 const FUNGI_ARC_START = Math.PI/2 - FUNGI_ARC/2;     // fungi fan: centred on straight-down
-const RING = 150;                           // radial distance per depth level (family/genus/species — unchanged)
+const RING = 200;                           // radial distance per depth level (family/genus/species) — was 150; widened to use canvas space beyond the old tree edge
 
 // Plant fan only: class/order gather into a tight "trunk" near the root —
 // reduced radius (TRUNK_RING per tier instead of RING) and angles pulled
@@ -327,8 +327,9 @@ const RING = 150;                           // radial distance per depth level (
 // family tier at its original, unmodified position (RING*3, full angle).
 // Fungi never gets this (see layout()'s gatherTrunk param) — it stays plain
 // spokes at every depth, so the two kingdoms read differently at a glance.
-const TRUNK_RING = 90;      // radial distance per trunk tier (class, order) — tune to taste
+const TRUNK_RING = 230;     // radial distance per trunk tier (class, order) — was 90; widened so ~30 order labels (and 6 class labels) get enough arc-length to stay legible. Now bigger than the RING step itself, so class↔order separation (230) exceeds order↔family separation (600-460=140) — deliberate, legibility at these two crowded tiers takes priority over even spacing.
 const TRUNK_GATHER = 0.32;  // 0=all trunk nodes collapse to the centre line, 1=full spoke spread — tune to taste
+const FAMILY_RADIUS = 3 * RING;  // family tier's fixed radius (depth 3 × RING) — named so species positioning below can anchor to it directly instead of re-deriving from genus
 
 let rootH;       // plant fan root (d3.hierarchy) — unchanged variable, unchanged meaning
 let fungiRootH;  // fungi fan root (d3.hierarchy) — separate tree, separate root
@@ -384,7 +385,7 @@ function layout(root, arc, arcStart, gatherTrunk){
       // reaches this branch — fungi's class/order use the else branch below,
       // same as every other fungi depth (no trunk gather for fungi).
       d.ang = arcStart + centreX + (d.x - centreX) * TRUNK_GATHER;
-      d.rad = d.depth * TRUNK_RING;          // 90 (class) / 180 (order)
+      d.rad = d.depth * TRUNK_RING;          // 230 (class) / 460 (order)
     } else {
       d.ang = arcStart + d.x;                // canopy angle — unchanged formula
       d.rad = d.depth === 0 ? 0 : d.depth * RING;
@@ -398,8 +399,11 @@ function layout(root, arc, arcStart, gatherTrunk){
   // Runs after the pass above, so every species' parent genus already has
   // its final ang/rad. A species always renders at its genus's angle
   // (fanned by a small offset if the genus has more than one species) and
-  // at the genus's radius plus 1.5 RING steps — clearly further out than
-  // the genus, never inward, never piled at the genus's point.
+  // at a single FIXED radius — FAMILY_RADIUS + 2*RING (5*RING total) —
+  // not derived from the genus's own radius. Genus sits at 4*RING, so this
+  // is always one full RING step further out than genus: clearly further
+  // out, never inward, never piled at the genus's point, and immune to any
+  // future per-genus radius drift since it no longer reads d.parent.rad.
   // This is the only code in the file that sets a species' ang/rad/px/py.
   // ---------------------------------------------------------------------
   root.each(d => {
@@ -409,7 +413,7 @@ function layout(root, arc, arcStart, gatherTrunk){
     const n = siblings.length;
     const FAN = 0.12; // total angular spread (radians) across sibling species
     d.ang = d.parent.ang + (n > 1 ? (i - (n - 1) / 2) * (FAN / (n - 1)) : 0);
-    d.rad = d.parent.rad + RING * 1.5;
+    d.rad = FAMILY_RADIUS + 2 * RING;
     const [px, py] = project(d.ang, d.rad);
     d.px = px; d.py = py;
   });

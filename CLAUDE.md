@@ -213,6 +213,21 @@ Never apply a CSS change to a shared class without checking every element that u
 Never confirm a fix is working based on code presence alone — only on observed behaviour
 Never verify in an in-browser preview, headless browser, or preview sandbox. Code's verification ends at reading back the edited code. All live/visual/behavioural verification is done by the user in their own browser. If a change must be confirmed working before the next step can proceed, STOP and ask the user to test and report back — do not spin up a browser to check it yourself.
 
+## Frontend / D3 Rendering Discipline
+
+The existing rule stands: Code does not verify in a browser, headless browser, or preview sandbox — Melvin verifies all live/visual/behavioural changes.
+
+This means Code cannot self-catch runtime-only failures (exceptions, transition timing, race conditions) — only static code review. Historically this has caused real cost: this file's D3 code has hit the same bug class (unnamed transitions on shared elements silently cancelling each other) three separate times, and at least once a fix was declared "clean" from code read-back alone when the actual behavior was still broken.
+
+Given that constraint, the following are mandatory, not optional, for any change touching `layout()`, `update()`, zoom, click/focus/highlight handlers, or any D3 transition:
+
+1. **Every D3 transition on an element shared by more than one function (zoom tick, click/focus, expand/collapse, enter/exit) must be explicitly named.** No transition on a shared element may use the default/unnamed namespace, ever — this is the exact recurring failure mode in this file.
+2. **Any lookup used as a locked/anchor reference must fail loud.** If code does `nodes.find(n => n.name === X)` and then reads a property off the result, it must throw a named, descriptive error if the lookup returns undefined — never silently proceed with undefined and let a later line throw an opaque error.
+3. **Declaration language must reflect what was actually verified.** Code may not say "fixed," "confirmed clean," "working," or similar for anything in this category based on code presence alone. Correct language: "implemented, unverified — here's specifically what to check live: [X]." Name the exact symptom a live check should look for, not just "please test."
+4. **Before declaring a change to a shared-element function complete, trace every other function that touches the same elements** (e.g. if editing the click handler, check `zoom.on()`, `update()`, and any exit/enter logic that also touches `g.node`/`path.link`) and state in the report that this trace was done and what it found — not just "nothing else touched."
+
+Note: points 2-4 are general discipline, not D3-specific — apply them to any code, not just taxonomy.html.
+
 ## Code discipline — mandatory
 
 If user puts a ? means i want to to look at all angles and critique what I suggest too - finding the best option - not pleasing me.

@@ -15,6 +15,22 @@
     --ink-dim: #9a8f7d;
     --bark: #7a5c3e;
     --bark-dim: #5a4530;
+    /* Class/order/family LABEL TEXT colour (dots stay --bark, unchanged).
+       Superseded 9 July: the first pass derived these from --bark (amber/
+       brown tonal steps) and it read as low-legibility mud against the
+       previous plain --ink white — this version is white-BASED instead,
+       one subtle hue tint per tier, all near --ink's own lightness
+       (~85-87%) so contrast against --bg stays as good as plain --ink.
+       Blue/red sit at S=26% (H=215/355); yellow needed S=48% and a couple
+       points lower L to actually read as tinted at all — pale yellow
+       desaturates toward "looks like plain cream" much faster than blue
+       or red at the same saturation (a real perceptual asymmetry, not an
+       inconsistency), and --ink itself is already a warm H=38° cream, so
+       a weak yellow tint would have been nearly indistinguishable from
+       untouched genus/kingdom text. */
+    --ink-class: #d5dce7;   /* white, subtle blue tint */
+    --ink-order: #e7d5d7;   /* white, subtle red tint */
+    --ink-family: #e7e6bb;  /* white, subtle yellow tint */
     --leaf: #7ca85c;
     --leaf-bright: #a3c77e;
     --fungi: #c8963e;
@@ -152,7 +168,9 @@
     user-select: none; -webkit-user-select: none;
     paint-order: stroke; stroke: var(--bg); stroke-width: 3px; stroke-linejoin: round;
   }
-  .node-label.rank-family { font-size: 12.5px; font-weight: 600; }
+  .node-label.rank-class { fill: var(--ink-class); }
+  .node-label.rank-order { fill: var(--ink-order); }
+  .node-label.rank-family { font-size: 12.5px; font-weight: 600; fill: var(--ink-family); }
   .node-label.rank-species { font-style: italic; fill: var(--ink-dim); }
   .node-circle { cursor: pointer; transition: r .15s; }
   .collapsed-ring { fill: none; stroke-dasharray: 2 2; }
@@ -181,6 +199,9 @@
     <div class="row"><span class="dot" style="background:var(--plant)"></span> Plant</div>
     <div class="row"><span class="dot" style="background:var(--fungi)"></span> Fungi</div>
     <div class="row"><span class="dot" style="background:var(--lichen)"></span> Lichen</div>
+    <div class="row"><span class="dot" style="background:var(--ink-class)"></span> Class text</div>
+    <div class="row"><span class="dot" style="background:var(--ink-order)"></span> Order text</div>
+    <div class="row"><span class="dot" style="background:var(--ink-family)"></span> Family text</div>
     <div class="row"><span class="dot" style="background:var(--unplaced)"></span> Unplaced — needs review</div>
     <div class="hint">Click a bough to fold / unfold.<br>Drag to pan · scroll to zoom.</div>
   </div>
@@ -291,13 +312,23 @@ function buildFungiTree() {
 const svg = d3.select("#tree");
 const g = svg.append("g");         // world group (zoom/pan)
 const linkG = g.append("g");       // plant fan links
+// Persistent species-tier (genus->species) links — always in the DOM at an
+// ambient low opacity, independent of genus expand/collapse state (see
+// renderSpeciesLinks()). Appended before nodeG so species dots still draw
+// on top, matching the existing links-under-nodes stacking per fan.
+const speciesLinkG = g.append("g");
 const nodeG = g.append("g");       // plant fan nodes
 const fungiLinkG = g.append("g");  // fungi fan links (separate group — no shared parent with plant fan)
+const fungiSpeciesLinkG = g.append("g");  // fungi fan persistent species links — same reasoning as speciesLinkG
 const fungiNodeG = g.append("g");  // fungi fan nodes
 const bucketG = g.append("g");
 let W = window.innerWidth, H = window.innerHeight;
 
-const zoom = d3.zoom().scaleExtent([0.3, 4]).on("zoom", e => g.attr("transform", e.transform));
+const zoom = d3.zoom().scaleExtent([0.3, 4]).on("zoom", e => {
+  g.attr("transform", e.transform);
+  updateLabelVisibility(nodeG, e.transform.k);
+  updateLabelVisibility(fungiNodeG, e.transform.k);
+});
 svg.call(zoom);
 svg.on("mousedown", () => svg.classed("dragging", true));
 svg.on("mouseup", () => svg.classed("dragging", false));
@@ -406,6 +437,102 @@ function layout(root, arc, arcStart, gatherTrunk){
   });
 
   // ---------------------------------------------------------------------
+  // CLASS-TIER ANGULAR REDISTRIBUTION (plant fan only, confirmed 8 July).
+  // Magnoliopsida (212 genera) dominates the leaf-count-weighted cluster
+  // layout above, squeezing Polypodiopsida/Liliopsida/Pinopsida/
+  // Florideophyceae/Bryopsida into ~9° of arc while ~16° between
+  // Magnoliopsida and Polypodiopsida sits empty. Fix: hold the two
+  // outermost class labels (Magnoliopsida, Bryopsida) at whatever d.ang
+  // the general formula above already gave them — read here, not
+  // recomputed, so they are genuinely unchanged — and evenly re-space the
+  // four interior ones between them. d.rad (still depth*TRUNK_RING) and
+  // every other rank/tier are untouched; this only overwrites d.ang (and
+  // the px/py it feeds) for these four named class nodes.
+  // ---------------------------------------------------------------------
+  if (gatherTrunk) {
+    const REDISTRIBUTE = ["Polypodiopsida", "Liliopsida", "Pinopsida", "Florideophyceae"];
+    const classNodes = root.children || [];
+    const leftAnchor = classNodes.find(d => d.data.name === "Magnoliopsida");
+    const rightAnchor = classNodes.find(d => d.data.name === "Bryopsida");
+    // Fail loud, not silent: a missing locked anchor previously just
+    // skipped this block with no visible effect, which would have hidden a
+    // real data/name-drift bug behind "the redistribution just didn't run."
+    if (!leftAnchor || !rightAnchor) {
+      throw new Error(`class-tier redistribution: locked anchor not found in live data (Magnoliopsida found=${!!leftAnchor}, Bryopsida found=${!!rightAnchor})`);
+    }
+    const step = (rightAnchor.ang - leftAnchor.ang) / (REDISTRIBUTE.length + 1);
+    REDISTRIBUTE.forEach((name, i) => {
+      const node = classNodes.find(d => d.data.name === name);
+      if (!node) {
+        throw new Error(`class-tier redistribution: interior class node "${name}" not found in live data`);
+      }
+      node.ang = leftAnchor.ang + step * (i + 1);
+      const [px, py] = project(node.ang, node.rad);
+      node.px = px; node.py = py;
+    });
+  }
+
+  // ---------------------------------------------------------------------
+  // ORDER-TIER MINIMUM-GAP ENFORCEMENT (plant fan only, confirmed 8 July).
+  // Unlike class tier, order tier is NOT evenly redistributed — most of it
+  // (Rosales/Lamiales/Asterales and the rest of the front half) already
+  // has healthy, density-proportional spacing that would be destroyed by
+  // a uniform reflow. Instead: isotonic regression via pool-adjacent-
+  // violators (PAVA) — the standard, minimal-total-movement way to
+  // enforce "every consecutive gap >= MIN_ORDER_GAP" in 1D. Concretely:
+  // transform each sorted node's angle to q_i = ang_i - i*MIN_ORDER_GAP,
+  // fit the largest non-decreasing (isotonic) curve through q that
+  // minimises total squared deviation, then map back via
+  // ang_i = fitted_i + i*MIN_ORDER_GAP. Any node whose neighbours already
+  // satisfied the minimum is provably left at its EXACT original angle —
+  // this only ever pushes nodes apart by the real shortfall, propagating
+  // to the next neighbour only when a push would itself cause a new
+  // collision (that's what "pooling" a violation into a block does).
+  // MIN_ORDER_GAP = 1° is grounded in the live data: the tightest
+  // pairwise gap that read clean with no overlap (confirmed 8 July) was
+  // Boraginales→Gentianales at 1.088°, rounded down slightly for margin.
+  // The back portion of the order tier (Malpighiales through
+  // Orthotrichales) is genuinely dense in the real data — many pairwise
+  // gaps as low as 0.358° — so holding even this modest 1° floor pools
+  // ~29 of 40 nodes into one cascading block; that's the real data's
+  // density, not the algorithm redistributing more than it needs to. The
+  // front ~15 nodes (Rosales through Dipsacales) stay untouched.
+  // d.rad (still depth*TRUNK_RING) is untouched throughout.
+  // ---------------------------------------------------------------------
+  if (gatherTrunk) {
+    const MIN_ORDER_GAP = Math.PI / 180;  // 1°, see rationale above
+    const classNodesForOrder = root.children || [];
+    const orderNodes = classNodesForOrder
+      .flatMap(c => c.children || [])
+      .filter(d => d.data.rank === "order");
+    orderNodes.sort((a, b) => a.ang - b.ang);
+    const n = orderNodes.length;
+    if (n > 0) {
+      const q = orderNodes.map((d, i) => d.ang - i * MIN_ORDER_GAP);
+      const stack = [];  // pooled blocks: {avg, w (count), start (index)}
+      for (let i = 0; i < n; i++) {
+        let avg = q[i], w = 1, start = i;
+        while (stack.length && stack[stack.length - 1].avg > avg) {
+          const p = stack.pop();
+          avg = (avg * w + p.avg * p.w) / (w + p.w);
+          w += p.w;
+          start = p.start;
+        }
+        stack.push({ avg, w, start });
+      }
+      const fitted = new Array(n);
+      for (const blk of stack) {
+        for (let j = blk.start; j < blk.start + blk.w; j++) fitted[j] = blk.avg;
+      }
+      orderNodes.forEach((d, i) => {
+        d.ang = fitted[i] + i * MIN_ORDER_GAP;
+        const [px, py] = project(d.ang, d.rad);
+        d.px = px; d.py = py;
+      });
+    }
+  }
+
+  // ---------------------------------------------------------------------
   // SPECIES POSITIONING — the one and only rule for species-rank nodes.
   // Runs after the pass above, so every species' parent genus already has
   // its final ang/rad. A species always renders at its genus's angle
@@ -416,17 +543,28 @@ function layout(root, arc, arcStart, gatherTrunk){
   // out, never inward, never piled at the genus's point, and immune to any
   // future per-genus radius drift since it no longer reads d.parent.rad.
   // This is the only code in the file that sets a species' ang/rad/px/py.
+  //
+  // Walks from the GENUS side (d.children || d._children) rather than
+  // relying on root.each() to organically reach species nodes — genus is
+  // always reachable via .children (never collapsed itself), but a
+  // COLLAPSED genus's species live in ._children, invisible to a plain
+  // root.each() species-side walk. Confirmed 9 July: needed so persistent
+  // species-links (see renderSpeciesLinks()) have a valid position for
+  // every species even while its genus dot is collapsed — same fan-offset
+  // formula as before, just computed for every genus regardless of
+  // expand state, not only expanded ones.
   // ---------------------------------------------------------------------
   root.each(d => {
-    if (d.data.rank !== "species" || !d.parent) return;
-    const siblings = d.parent.children || [];
-    const i = Math.max(0, siblings.indexOf(d));
-    const n = siblings.length;
+    if (d.data.rank !== "genus") return;
+    const species = d.children || d._children || [];
+    const n = species.length;
     const FAN = 0.12; // total angular spread (radians) across sibling species
-    d.ang = d.parent.ang + (n > 1 ? (i - (n - 1) / 2) * (FAN / (n - 1)) : 0);
-    d.rad = FAMILY_RADIUS + 2 * RING;
-    const [px, py] = project(d.ang, d.rad);
-    d.px = px; d.py = py;
+    species.forEach((sp, i) => {
+      sp.ang = d.ang + (n > 1 ? (i - (n - 1) / 2) * (FAN / (n - 1)) : 0);
+      sp.rad = FAMILY_RADIUS + 2 * RING;
+      const [px, py] = project(sp.ang, sp.rad);
+      sp.px = px; sp.py = py;
+    });
   });
 }
 
@@ -439,6 +577,41 @@ function limb(s, t){
   return `M${s.px},${s.py} C${c1x},${c1y} ${c2x},${c2y} ${t.px},${t.py}`;
 }
 
+// Persistent species-tier (genus->species) links — confirmed 9 July,
+// deliberate design change: these are ALWAYS in the DOM at DIM_OPACITY,
+// independent of whether their genus is expanded or collapsed (unlike
+// every other tier's links, which still enter/exit with update()'s main
+// join below). Species DOTS/LABELS are untouched — they still only render
+// while their genus is expanded, exactly as before; only the LINK is
+// persistent. Reads every genus's species from d.children || d._children
+// (both, since layout()'s species-positioning pass above now computes
+// valid ang/rad/px/py for every species regardless of collapse state) so
+// a link can always be drawn even when the species dot itself is hidden.
+// The species list itself never changes at runtime, so after the first
+// call this is effectively update-only (position via the "speciesLinkMove"
+// transition) — enter/exit fire once each, if ever.
+// This also structurally closes the recurring unnamed-transition-residue
+// bug for this tier: species links never exit the DOM on collapse/
+// deselect, so they can't get stuck mid-exit-transition.
+function renderSpeciesLinks(root, gatherTrunk){
+  const sel = gatherTrunk ? speciesLinkG : fungiSpeciesLinkG;
+  const speciesLinks = [];
+  root.each(d => {
+    if (d.data.rank !== "genus") return;
+    (d.children || d._children || []).forEach(sp => speciesLinks.push({ source: d, target: sp }));
+  });
+  const strokeFor = d => Math.max(0.9, 6.5 - d.target.depth * 1.4);  // same floor as the main link join
+  const link = sel.selectAll("path.link").data(speciesLinks, d => d.target.data.name + d.target.depth);
+  link.enter().append("path").attr("class","link")
+      .attr("d", d => limb(d.source, d.target))
+      .attr("stroke-width", strokeFor)
+      .attr("stroke", d => d.target.data.fungi ? "var(--fungi-dim)" : null)
+      .style("opacity", DIM_OPACITY)  // ambient rest state — _applyFocusStyles() takes over on any focus change
+    .merge(link).transition("speciesLinkMove").duration(450)
+      .attr("d", d => limb(d.source, d.target));
+  link.exit().remove();  // should not fire in practice — species list is static after load
+}
+
 // root/arc/arcStart/gatherTrunk/linkSel/nodeSel are parameterised so the exact
 // same function drives both fans. Calling
 // update(source, rootH, PLANT_ARC, ARC_START, true, linkG, nodeG) reproduces
@@ -448,8 +621,12 @@ function limb(s, t){
 // data-joins never touch each other (no shared parent).
 function update(source, root, arc, arcStart, gatherTrunk, linkSel, nodeSel){
   layout(root, arc, arcStart, gatherTrunk);
+  renderSpeciesLinks(root, gatherTrunk);
   const nodes = root.descendants();
-  const links = root.links();
+  // genus->species edges are handled exclusively by renderSpeciesLinks()
+  // above (persistent, not collapse-gated) — excluded here so they're
+  // never double-drawn between this join and that one.
+  const links = root.links().filter(d => d.target.data.rank !== "species");
   const strokeFor = d => Math.max(0.9, 6.5 - d.target.depth * 1.4);
 
   const link = linkSel.selectAll("path.link").data(links, d => d.target.data.name + d.target.depth);
@@ -459,7 +636,15 @@ function update(source, root, arc, arcStart, gatherTrunk, linkSel, nodeSel){
     .merge(link).transition("linkMove").duration(450)
       .attr("d", d => limb(d.source, d.target)).attr("stroke-width", strokeFor)
       .attr("stroke", d => d.target.data.fungi ? "var(--fungi-dim)" : null);
-  link.exit().transition().duration(300).attr("stroke-opacity",0).remove();
+  // Named "linkExit" (same reasoning as "nodeMove"/"focusFade" below): this
+  // is the one transition on path.link that was still on the default
+  // namespace, sharing a slot with _applyFocusStyles()'s "focusFade"
+  // opacity transition on the same elements (it runs right after collapse,
+  // touching every currently-rendered link). Confirmed live 9 July: stray
+  // species nodes/links survived a genus deselect instead of exiting —
+  // giving this its own namespace means .remove() can no longer be
+  // silently cancelled by anything else that later touches these elements.
+  link.exit().transition("linkExit").duration(300).attr("stroke-opacity",0).remove();
 
   const node = nodeSel.selectAll("g.node").data(nodes, d => d.data.name + d.depth);
   const nEnter = node.enter().append("g").attr("class","node")
@@ -495,9 +680,33 @@ function update(source, root, arc, arcStart, gatherTrunk, linkSel, nodeSel){
   nMerge.select("circle.node-circle").transition().duration(450).attr("r",radiusFor).attr("fill",colourFor);
   nMerge.select("circle.collapsed-ring").transition().duration(450)
       .attr("r",d=>d._children?radiusFor(d)+4:0).attr("stroke-opacity",d=>d._children?0.6:0);
-  // labels: rotate to follow the radial angle, flip on the left half for legibility
-  nMerge.select("text").transition().duration(450).style("opacity",1)
-      .style("fill", d => d.data.fungi ? "var(--fungi-dim)" : null)
+  // labels: rotate to follow the radial angle, flip on the left half for legibility.
+  // Opacity is skipped here for order rank only — its visibility is owned by
+  // updateLabelVisibility() (zoom-conditional), not this fixed-1 transition.
+  // Class tier is evenly spaced (~5.2° apart) now, so there's no crowding
+  // left to gate against — it gets the same unconditional opacity as every
+  // other rank here (confirmed 8 July).
+  // Named "labelOpacity": same interruption hazard as nodeMove/focusFade above
+  // — this and the fill/transform transition below both run on the same <text>
+  // elements: two unnamed transitions in the same slot cancel each other,
+  // silently dropping the opacity:1 target and leaving every label stuck at
+  // its nEnter initial opacity:0 (confirmed live — this was the actual cause
+  // of "every label blanked" reported 8 July, not the class-tier redistribution).
+  nMerge.select("text").filter(d => d.data.rank!=="order")
+      .transition("labelOpacity").duration(450).style("opacity",1);
+  nMerge.select("text").transition().duration(450)
+      .style("fill", d => {
+        if (!d.data.fungi) return null;
+        // class/order/family: don't override — let the existing
+        // .node-label.rank-class/.rank-order/.rank-family CSS rules apply.
+        // Those selectors key on rank only (not fungi), so this reuses the
+        // exact same --ink-class/--ink-order/--ink-family tints already
+        // shipped for the plant side (confirmed 9 July) — same rank, same
+        // colour, in either kingdom. Kingdom/genus/species text (not in
+        // scope for this change) keep the existing flat --fungi-dim.
+        if (d.data.rank === "class" || d.data.rank === "order" || d.data.rank === "family") return null;
+        return "var(--fungi-dim)";
+      })
       .attr("transform", d=>{
         if (d.depth===0) return "translate(0,20)";
         const deg = d.ang * 180/Math.PI;
@@ -509,13 +718,77 @@ function update(source, root, arc, arcStart, gatherTrunk, linkSel, nodeSel){
         const deg = d.ang*180/Math.PI;
         return (deg>90||deg<-90) ? "end" : "start";
       });
+  updateLabelVisibility(nodeSel, d3.zoomTransform(svg.node()).k);
 
-  const nExit = node.exit().transition().duration(300)
+  // Named "nodeExit" — same reasoning as "linkExit" above: this was the
+  // one transition on g.node still on the default namespace, sharing a
+  // slot with _applyFocusStyles()'s "focusFade" opacity transition, which
+  // runs on every currently-rendered node immediately after a collapse.
+  // Confirmed live 9 July: stray species nodes survived a genus deselect
+  // instead of exiting. Own namespace means .remove() can't be silently
+  // cancelled by anything else touching these elements.
+  const nExit = node.exit().transition("nodeExit").duration(300)
       .attr("transform",`translate(${source.px},${source.py})`).remove();
   nExit.select("circle").attr("r",0);
   nExit.select("text").style("opacity",0);
 
   nodes.forEach(d=>{ d.ang0=d.ang; d.rad0=d.rad; d.px0=d.px; d.py0=d.py; });
+}
+
+// Zoom-conditional visibility for the order tier only (class tier is
+// evenly spaced now and gets unconditional opacity in update() above;
+// family/genus/species text is untouched too — always opacity 1).
+// Sort order-rank rendered <text> nodes by angle and derive each one's
+// available angular gap from its nearest neighbours at the same rank
+// (midpoint-to-midpoint; a one-sided gap at either end of the sorted
+// list, since there's no neighbour beyond it). Arc-length-per-label at the
+// CURRENT zoom scale is d.rad (world-space radius, unaffected by zoom) ×
+// gap (radians, also world-space — angles don't change with zoom) × k
+// (screen-space zoom factor) — this grows as you zoom in, while the label's
+// rendered width (getComputedTextLength(), local/world units, unaffected by
+// the ancestor zoom transform) stays fixed. So the same label starts hidden
+// (arc-length too small) and clears the threshold as k increases. Does not
+// read/write d.ang or d.rad — visibility only, no layout changes.
+//
+// ORDER_LABEL_VIS_BOOST: scaleExtent caps k at 4, which — checked against
+// the live data — leaves the order tier's mostly-sub-2° gaps unable to
+// clear their own label width until very late zoom, if ever. A pure
+// multiplier on this side of the comparison only (not on scaleExtent, not
+// on geometry) keeps the same "starts hidden, reveals on zoom" behaviour
+// but gives real headroom: ×6 gets a clear majority (29/40) clearing by
+// moderate zoom (k=2.0), while the initial ~k0.7 view stays reasonably
+// uncluttered (~11/40, still mostly ≥2°-gap labels, not the crowded
+// cluster) — and correctly leaves the genuinely-sub-0.7°-gap order cluster
+// (e.g. Cornales/Santalales/Vitales/Orthotrichales) hidden even at k=4,
+// which is the actual crowding this feature exists to prevent.
+// Caveat (pre-existing, not introduced by this tuning): text here isn't
+// counter-scaled, so a label's rendered width and its real arc-gap grow
+// at the same rate with zoom — the boost doesn't create real extra room,
+// it only shifts when the threshold trips. A label whose true width
+// already exceeds its true gap will still visually crowd its neighbour
+// once revealed, at whatever k that happens to be. Fixing that for real
+// needs counter-scaled text, out of scope for a threshold-only change.
+const ORDER_LABEL_VIS_BOOST = 6;
+function updateLabelVisibility(nodeSel, k){
+  for (const rank of ["order"]) {
+    const boost = ORDER_LABEL_VIS_BOOST;
+    const items = [];
+    nodeSel.selectAll(`text.rank-${rank}`).each(function(d){ items.push({ d, el:this }); });
+    items.sort((a,b) => a.d.ang - b.d.ang);
+    items.forEach((item,i) => {
+      const prev = items[i-1], next = items[i+1];
+      let gap;
+      if (prev && next) gap = (next.d.ang - prev.d.ang) / 2;
+      else if (next) gap = next.d.ang - item.d.ang;
+      else if (prev) gap = item.d.ang - prev.d.ang;
+      else gap = Math.PI;
+      const arcLen = item.d.rad * Math.max(gap, 0) * k * boost;
+      const labelW = item.el.getComputedTextLength();
+      const visible = labelW <= arcLen;
+      d3.select(item.el).transition("labelVis").duration(150)
+          .style("opacity", visible ? 1 : 0);
+    });
+  }
 }
 
 // Focus is keyed on IDENTITY (is `d` the currently-focused node), not on raw
@@ -605,11 +878,51 @@ function _isDescendantOrSelf(node, ancestor){
 // same slot per element), freezing nodes at a stale, never-reached position.
 // Confirmed via a DOM-vs-computed-position check: species froze near their
 // genus instead of reaching their correct far-out radius.
+// Opacity tiers: FULL for the focused node, its descendants, AND its full
+// ancestor path up to the kingdom root (confirmed 9 July — a click should
+// show "how did we get here", not just "what's under here"); DIM for
+// everything else; SIBLING (midpoint of the two, not a new hardcoded
+// value) for the focused node's own siblings — other children of the
+// SAME immediate parent — AND their full subtrees (confirmed 9 July: a
+// sibling genus's species inherit the same intermediate tier as the
+// sibling genus itself, the same way FULL already propagates down the
+// focused node's own subtree — "nearest highlighted ancestor is a
+// sibling" reads as intermediate all the way down). Sibling tier is
+// intentionally NOT extended to ancestors' siblings (e.g. other families
+// under the focused genus's order stay DIM, not intermediate) — only the
+// clicked node's own immediate siblings (and what's under them) get that
+// treatment, per spec.
+// _isDescendantOrSelf(d, focusedNode) covers "d is focusedNode or below
+// it"; _isDescendantOrSelf(focusedNode, d) — same function, swapped
+// args — covers "focusedNode is below d", i.e. d is an ANCESTOR of
+// focusedNode. Together they cover the whole path: self, descendants,
+// and ancestors.
+const FULL_OPACITY = 1, DIM_OPACITY = 0.15;
+const SIBLING_OPACITY = (FULL_OPACITY + DIM_OPACITY) / 2;
 function _applyFocusStyles(){
-  const inFocus = d => !focusedNode || _isDescendantOrSelf(d, focusedNode);
+  const inFocus = d => !focusedNode || _isDescendantOrSelf(d, focusedNode) || _isDescendantOrSelf(focusedNode, d);
+  // "d is at-or-under some OTHER direct child of focusedNode's parent" —
+  // reuses _isDescendantOrSelf(d, sib) per sibling, so a sibling's own
+  // descendants (not just the sibling node itself) qualify.
+  const isInSiblingSubtree = d => {
+    if (!focusedNode || !focusedNode.parent) return false;
+    const siblings = focusedNode.parent.children || [];
+    return siblings.some(sib => sib !== focusedNode && _isDescendantOrSelf(d, sib));
+  };
+  const tierOpacity = d => inFocus(d) ? FULL_OPACITY : (isInSiblingSubtree(d) ? SIBLING_OPACITY : DIM_OPACITY);
+  // Species-links have a different REST value: every other tier's "no
+  // focus at all" state is FULL_OPACITY (inFocus() returns true for
+  // everyone when focusedNode is null — "show everything at rest"), but
+  // species-links are meant to sit at the ambient DIM_OPACITY even at
+  // rest, per spec — only actual bright/intermediate targeting should
+  // raise them above that. Same bright/intermediate logic otherwise.
+  const speciesLinkOpacity = d => {
+    if (!focusedNode) return DIM_OPACITY;
+    return inFocus(d) ? FULL_OPACITY : (isInSiblingSubtree(d) ? SIBLING_OPACITY : DIM_OPACITY);
+  };
   [nodeG, fungiNodeG].forEach(sel => {
     sel.selectAll("g.node").transition("focusFade").duration(300)
-      .style("opacity", d => inFocus(d) ? 1 : 0.15);
+      .style("opacity", tierOpacity);
     sel.selectAll("g.node").select("circle.node-circle")
       .attr("fill", colourFor)
       .attr("stroke", d => (focusedNode && d === focusedNode) ? "var(--ink)" : "var(--bg)")
@@ -617,7 +930,11 @@ function _applyFocusStyles(){
   });
   [linkG, fungiLinkG].forEach(sel => {
     sel.selectAll("path.link").transition("focusFade").duration(300)
-      .style("opacity", d => inFocus(d.target) ? 1 : 0.15);
+      .style("opacity", d => tierOpacity(d.target));
+  });
+  [speciesLinkG, fungiSpeciesLinkG].forEach(sel => {
+    sel.selectAll("path.link").transition("focusFade").duration(300)
+      .style("opacity", d => speciesLinkOpacity(d.target));
   });
 }
 

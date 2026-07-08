@@ -1,16 +1,69 @@
 ## Current State
 
-Current State
-Taxonomy tree: colour pass shipped and confirmed (genus/species plant-green, lichen distinct green within fungi fan, legend matches). Label-crowding at class/order tiers remains — three approaches tried and reverted this session (radial bump, tangential nudge, per-parent angular respacing); all failed for the same root reason: label width × sibling count exceeds available arc length at that radius, so repositioning within fixed space can't solve it. Tree reverted cleanly to the last known-good geometry (post-colour, pre-spacing-attempts) — confirmed matching that state exactly.
-Next fix, scoped and ready to build: zoom-conditional label visibility for class/order (and any other tier that needs it). Tier text renders only above a zoom-scale threshold where arc-length-per-label exceeds label width at that tier's radius; below threshold, dots/ticks only, no text. This targets "legible when zoomed in" directly rather than fighting density at every zoom level. Does not touch RING/TRUNK_RING/any radius or angle — pure render-time show/hide keyed on d3.zoomTransform(svg.node()).k.
-Ready-to-run prompt for next thread:
+## Current State — 8 July 2026
 
-frontend/taxonomy.html. No schema/DB/snapshot. Add zoom-conditional label visibility for class and order tiers (do not touch family/genus/species text rendering). For each of those two tiers, compute the arc-length-per-label at current zoom scale (radius × angularGap × k) versus that label's rendered width; hide the <text> (opacity 0, not removed) when width exceeds available arc-length, show it (fade in) once it clears. Recompute on zoom change (zoom.on("zoom", ...), not a separate "end" hook — must feel responsive as you zoom, not settle-only). Do NOT change any d.ang/d.rad/RING/TRUNK_RING/FAMILY_RADIUS value — this is visibility only, not layout. Keep circles/links always visible regardless of label state. Read back the visibility logic. No browser — user tests live.
+Taxonomy tree (frontend/taxonomy.html) — spacing, highlighting, and colour 
+passes complete for this session.
 
-Parked (unchanged): auto-spread on zoom (superseded by the above — same problem, better-scoped fix), species-as-hairlines on main view (same design family as the class/order fix, worth doing together), floratree.org reviewed — nothing to borrow, it's a flat search/browse UI not a visualisation reference, closed.
-Non-taxonomy outstanding (unchanged): regional-protocol diagnostic, map legends rework, Lemon-scented Fern caution (species 412, →#3b), #3b conflict review, 20 non-plant/fungi card investigation, Google Drive token refresh.
-Session summary
-Shipped taxonomy colour pass (plant-green genus/species, lichen distinction, legend sync). Investigated label-crowding at class/order tiers via three approaches, all reverted after being disproven live — root cause identified as arc-space-vs-label-width mismatch, not a positioning bug. Next fix scoped as zoom-conditional visibility, prompt ready for immediate use.
+Spacing (class + order tiers):
+- Class tier (6 nodes): evenly redistributed, Magnoliopsida + Bryopsida locked 
+  as anchors, Pinopsida included after diagnostic showed it was near-crowded 
+  too. Now always-visible (removed from zoom-gated visibility function) — no 
+  crowding left to gate against.
+- Order tier (~40 nodes): minimum-gap enforcement, not uniform redistribution — 
+  preserves d3.cluster's density-proportional spacing where it already works, 
+  only pushes apart nodes below the minimum readable gap. Stays zoom-gated 
+  (correct — not all ~40 need to show at rest).
+- d.rad/RING/TRUNK_RING/FAMILY_RADIUS untouched throughout — angle-only changes.
+
+Highlighting:
+- Click/focus now lights up full ancestor path (parent chain to root), not 
+  just the selected node + descendants.
+- Sibling tier (same immediate parent) gets intermediate opacity, midpoint of 
+  existing bright/dim values.
+- Intermediate tier propagates down through sibling's own subtree (e.g. 
+  sibling genus's species also go intermediate, not just the sibling genus 
+  node itself).
+
+Species-tier links:
+- Changed from enter/exit-toggled to persistently visible at low ambient 
+  opacity, always in the DOM. Deliberate design choice (Melvin likes the look) 
+  that also structurally closes a recurring residue bug (see below).
+- Known follow-up, not yet actioned: species links from different sibling 
+  genera can visually cross in the fixed species ring when highlighted 
+  together, since species aren't locally grouped by genus in that ring. 
+  Deferred — real fix would be sorting species order within the ring to match 
+  sibling-genus adjacency. Revisit only if it becomes a visible problem.
+
+Colour:
+- Class/order/family labels now get distinct, subtle white-based tints 
+  (blue/red/yellow) instead of flat white — first attempt used bark-derived 
+  amber tones and was a legibility regression, corrected on the spot.
+- Same tint-per-rank scheme extended to fungi-fan class/order/family labels — 
+  reused the exact same CSS rules (rank-keyed, kingdom-agnostic), not new 
+  values. Fungi node-dot colour and lichen species colour-carve-out untouched.
+- Legend updated to match.
+- Brown-appearing genus/species dots investigated: confirmed NOT a colour 
+  scheme bug — species and genus share identical fill (#3f9e52); "brown" is 
+  the collapsed-ring stroke artifact on collapsed genus nodes. No fix applied, 
+  none needed.
+
+Bug fixed: recurring unnamed-D3-transition collision (3rd occurrence in this 
+file) caused a full label blackout after the initial class-tier edit, and was 
+the suspected (not fully live-confirmed) cause of a deselect residue bug — 
+made moot once species links stopped exit/entering the DOM.
+
+Standing process change: CLAUDE.md updated with new "Frontend / D3 Rendering 
+Discipline" section — mandatory named transitions on shared elements, loud-fail 
+on anchor lookups, honest unverified-vs-confirmed declaration language, and 
+blast-radius tracing before declaring a shared-function change done. Applies 
+project-wide, not just taxonomy.html.
+
+Pending / minor:
+- Hex values for the new white-tint rank colours weren't printed in Code's 
+  report as instructed — worth holding Code to this next time rather than 
+  chasing it down now.
+- Species-link crossing (above) — watch, not yet a confirmed problem.
 
 ## Current State — 03 July 2026
 
@@ -33,6 +86,13 @@ Still open:
 - Enrichment gap remediation — 9 AI drafts pending approval, 6 species never scanned, 79 no-PFAF species need alt-source decision
 
 ## History
+
+### 2026-07-08 21:43
+**Snapshot** — End of session — Session ended from Settings page
+DB: `snapshots/db_20260708_214307.sqlite`
+
+### 2026-07-08 21:43
+**Session ended** — Session ended from Settings page
 
 ### 2026-07-08 19:24
 **Snapshot** — End of session — Session ended from Settings page

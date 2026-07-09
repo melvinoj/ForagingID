@@ -2619,6 +2619,58 @@ function toggleEditMode() {
     el.removeAttribute('data-field-key');   // prevent double-processing
     el.dataset.editHost = key;              // mark as hosting a textarea
   });
+
+  // preparation_warnings / look_alike_warnings must ALWAYS be editable, for
+  // every species, regardless of edibility_status/toxicity_severity/content.
+  // The sweep above only ever converts a [data-field-key] element that the
+  // SAFETY section's read-view branching (species.html ~1846-1915, and the
+  // static "No known warnings recorded" default at ~1072) already rendered
+  // — and several of those branches emit no data-field-key at all for one
+  // or both fields (caution placeholder, the plain edible/no-warnings
+  // default, and look_alike_warnings specifically whenever it's empty, in
+  // every branch). This is purely additive: it only fires for a field when
+  // the sweep found nothing to convert, so a species that DID get a real
+  // read-view warning block keeps using that exact element untouched. The
+  // read-view render branches themselves are not modified by this at all —
+  // this runs only in edit mode, strictly after that markup already exists.
+  _ensureAlwaysEditableSafetyField('preparation_warnings', 'Preparation Warning');
+  _ensureAlwaysEditableSafetyField('look_alike_warnings', 'Look-alike Warning');
+}
+
+// See toggleEditMode() above. Injects an edit-only textarea for `key` into
+// #safety-content, seeded from the real stored value (window._lastProfileData,
+// set in renderProfile()) — but ONLY if no [data-edit-host="key"] already
+// exists, i.e. only if the sweep above found nothing for this field. Marked
+// data-injected so cancelEditMode() knows to remove it on cancel rather than
+// convert it back to a populated element — its seed value is guaranteed
+// empty (if it weren't, the read-view would already have rendered a real
+// [data-field-key] block for it, and the sweep would have converted that).
+function _ensureAlwaysEditableSafetyField(key, title) {
+  if (document.querySelector(`[data-edit-host="${key}"]`)) return;
+  const safetyEl = document.getElementById('safety-content');
+  if (!safetyEl) return;
+  const ci = (window._lastProfileData && window._lastProfileData.culinary) || {};
+  const orig = ci[key] || '';
+
+  const wrap = document.createElement('div');
+  wrap.className = 'safety-warn';
+  wrap.dataset.editHost = key;
+  wrap.dataset.injected = '1';
+
+  const label = document.createElement('strong');
+  label.textContent = `⚠ ${title}`;
+  wrap.appendChild(label);
+  wrap.appendChild(document.createElement('br'));
+
+  const ta = document.createElement('textarea');
+  ta.className = 'field-edit-ta';
+  ta.dataset.fieldKey = key;
+  ta.dataset.fieldOrig = orig;
+  ta.value = orig;
+  ta.rows = Math.max(2, Math.ceil(orig.length / 60));
+  wrap.appendChild(ta);
+
+  safetyEl.appendChild(wrap);
 }
 
 async function saveEditMode() {
@@ -2694,6 +2746,13 @@ function cancelEditMode(reload) {
   else {
     // Restore textareas to plain text without a reload
     document.querySelectorAll('[data-edit-host]').forEach(el => {
+      // Fallback-injected safety field (see _ensureAlwaysEditableSafetyField)
+      // — its seed value is always empty (that's the only reason it got
+      // injected instead of being picked up by the normal sweep), so on
+      // cancel the correct restore is to remove it entirely, reproducing
+      // the exact pre-edit-mode read view (nothing rendered for this field)
+      // rather than leaving an empty warning box that was never there.
+      if (el.dataset.injected) { el.remove(); return; }
       const ta = el.querySelector('textarea.field-edit-ta');
       const key = el.dataset.editHost;
       const val = ta ? ta.dataset.fieldOrig : '';

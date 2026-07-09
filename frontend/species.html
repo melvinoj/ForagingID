@@ -2647,7 +2647,41 @@ async function saveEditMode() {
 
   await Promise.all(tasks);
   if (saved) toast(`✓ Saved ${saved} field${saved !== 1 ? 's' : ''}`);
+  if (saved) await _invalidateSpeciesCacheEntry(name);
   cancelEditMode(true);   // reload profile to re-render with fresh data
+}
+
+// Invalidates just this species' cached /profile response in the SW's
+// SPECIES_CACHE (see sw.js — cache-first, 7-day TTL, deliberately kept for
+// October field-offline reliability). Without this, saveEditMode()'s
+// cancelEditMode(true) -> loadProfile() reload can be served the stale
+// pre-save response on a normal reload (the SW intercepts that GET
+// cache-first) even though the save itself landed correctly — only a hard
+// reset that bypasses the SW showed the real value. Scoped to a single
+// cache entry, not offline.js's whole-cache clear.
+// Awaits the SW's confirmation (with a timeout fallback so a missing/
+// unregistered SW can never block the save flow) so the invalidation is
+// guaranteed to land before the reload's fetch runs — sending the message
+// and immediately reloading without waiting would just reintroduce the
+// same race with the SW's async cache.delete().
+function _invalidateSpeciesCacheEntry(sciName) {
+  return new Promise(resolve => {
+    if (!(navigator.serviceWorker && navigator.serviceWorker.controller)) { resolve(); return; }
+    const url = `${location.origin}/api/species/${encodeURIComponent(sciName)}/profile`;
+    const timeout = setTimeout(() => {
+      navigator.serviceWorker.removeEventListener('message', onMsg);
+      resolve();
+    }, 500);
+    function onMsg(event) {
+      if (event.data && event.data.type === 'species-cache-cleared') {
+        clearTimeout(timeout);
+        navigator.serviceWorker.removeEventListener('message', onMsg);
+        resolve();
+      }
+    }
+    navigator.serviceWorker.addEventListener('message', onMsg);
+    navigator.serviceWorker.controller.postMessage({ type: 'clear-species-cache', url });
+  });
 }
 
 function cancelEditMode(reload) {

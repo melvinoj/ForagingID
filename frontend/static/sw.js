@@ -311,9 +311,22 @@ self.addEventListener('message', (event) => {
   switch (event.data.type) {
 
     case 'clear-species-cache':
-      caches.delete(SPECIES_CACHE).then(() => {
+      // No url: whole-cache clear — unchanged behaviour, this is the only
+      // path offline.js's Settings "Refresh" button has ever used.
+      // With a url: targeted single-entry invalidation (added for
+      // saveEditMode() in species.html) — deletes just that one cached
+      // profile response so the very next fetch to it is a genuine network
+      // request, without evicting the rest of the 7-day-TTL cache that
+      // every other species relies on for October field-offline use.
+      (async () => {
+        if (event.data.url) {
+          const cache = await caches.open(SPECIES_CACHE);
+          await cache.delete(event.data.url);
+        } else {
+          await caches.delete(SPECIES_CACHE);
+        }
         if (event.source) event.source.postMessage({ type: 'species-cache-cleared' });
-      }).catch(() => {});
+      })().catch(() => {});
       break;
 
     case 'cache-tiles':

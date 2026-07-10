@@ -309,6 +309,58 @@ function buildFungiTree() {
   return root;
 }
 
+// Computes how much angular arc the PLANT fan's genus tier actually needs —
+// confirmed 9 July (v2): each genus gets a slot of GENUS_SLOT_UNIT *
+// max(1, species_count) (a single-species genus gets one unit; a 10-species
+// genus gets ten) — then sizes PLANT_ARC/ARC_START to exactly fit the sum of
+// all slots, and shrinks FUNGI_ARC/FUNGI_ARC_START to whatever's left so the
+// two fans stay non-overlapping on the same circle (they still sum to a full
+// 2π with the same 1.5°-per-side gap convention documented above).
+// GENUS_SLOT_UNIT = 0.65° is a deliberate choice, not derived from a single
+// "smallest gap that worked" number the way earlier tiers were — there's no
+// such number here (see the 9 July recon: genus spacing is uniform
+// everywhere, there's no already-fine region to measure). It's chosen to
+// land PLANT_ARC at a large-but-workable ~298° (real 458-plant-species
+// total confirmed against live data), leaving fungi ~59° — down from its
+// previous fixed 150°, but proportionally MORE generous than plant gets per
+// species (fungi: ~30 species / ~59° ≈ 1.97°/species vs plant's ~0.65°/
+// species), so fungi is not shortchanged relative to plant's own new
+// density target. This does NOT re-run fungi's own layout logic or touch
+// its genus/species positioning — only its total arc WIDTH. If fungi's own
+// tree still reads as crowded at 59° that's a separate, not-yet-done pass
+// (this task's scope is the plant fan only) — flagging, not fixing.
+// Called once per successful data load, before the first layout()/update()
+// call for either fan — PLANT_ARC/ARC_START/FUNGI_ARC/FUNGI_ARC_START are
+// `let`, not `const`, specifically so this can resize them here.
+function _computePlantArcFromGenusSlots(){
+  const GENUS_SLOT_UNIT = 0.65 * Math.PI / 180;
+  let totalUnits = 0;
+  for (const orders of Object.values(RAW.Plantae || {})) {
+    if (!_isPlainObject(orders)) continue;
+    for (const families of Object.values(orders)) {
+      if (!_isPlainObject(families)) continue;
+      for (const genera of Object.values(families)) {
+        if (!_isPlainObject(genera)) continue;
+        for (const species of Object.values(genera)) {
+          if (!Array.isArray(species)) continue;
+          totalUnits += Math.max(1, species.length);
+        }
+      }
+    }
+  }
+  if (totalUnits === 0) {
+    throw new Error("genus-slot arc computation: zero genera found in live Plantae data — cannot size PLANT_ARC");
+  }
+  PLANT_ARC = totalUnits * GENUS_SLOT_UNIT;
+  ARC_START = -Math.PI/2 - PLANT_ARC/2;
+  const GAP = 1.5 * Math.PI/180;  // unchanged convention — see the original disjoint-arcs comment above
+  FUNGI_ARC = 2*Math.PI - PLANT_ARC - 2*GAP;
+  if (FUNGI_ARC <= 0) {
+    throw new Error(`genus-slot arc computation: PLANT_ARC (${(PLANT_ARC*180/Math.PI).toFixed(1)}°, ${totalUnits} genus-slot-units) leaves no room for the fungi fan — GENUS_SLOT_UNIT needs reducing`);
+  }
+  FUNGI_ARC_START = Math.PI/2 - FUNGI_ARC/2;
+}
+
 const svg = d3.select("#tree");
 const g = svg.append("g");         // world group (zoom/pan)
 const linkG = g.append("g");       // plant fan links
@@ -354,10 +406,17 @@ svg.on("click", () => clearFocus());
 // Plant range:  [-193.5°, 13.5°]  (unwrapped)      →  wraps to [166.5°,360°)∪[0°,13.5°]
 // Fungi range:  [15°, 165°]
 // → disjoint, with a 1.5° gap on each side (13.5°–15° and 165°–166.5°).
-const PLANT_ARC = Math.PI * 1.15;                    // plant canopy spread (unchanged, ~207°)
-const ARC_START = -Math.PI/2 - PLANT_ARC/2;          // plant fan: centred on straight-up (unchanged)
-const FUNGI_ARC = Math.PI * (150/180);                // fungi fan spread — its own, narrower arc (150°)
-const FUNGI_ARC_START = Math.PI/2 - FUNGI_ARC/2;     // fungi fan: centred on straight-down
+// PLANT_ARC/ARC_START/FUNGI_ARC/FUNGI_ARC_START are `let`, not `const`, as of
+// 9 July (v2): the values below are the pre-data-load DEFAULTS only. Once the
+// taxonomy data arrives, _computePlantArcFromGenusSlots() (see below) resizes
+// PLANT_ARC to fit the genus tier's real per-species slot needs (the budget
+// constraint from the earlier 9 July pass was explicitly lifted for this
+// work) and shrinks FUNGI_ARC to keep the two fans non-overlapping on the
+// same circle — see that function for the full rationale and numbers.
+let PLANT_ARC = Math.PI * 1.15;                    // plant canopy spread — default before data loads (~207°)
+let ARC_START = -Math.PI/2 - PLANT_ARC/2;          // plant fan: centred on straight-up (recomputed alongside PLANT_ARC)
+let FUNGI_ARC = Math.PI * (150/180);                // fungi fan spread — default before data loads (150°)
+let FUNGI_ARC_START = Math.PI/2 - FUNGI_ARC/2;     // fungi fan: centred on straight-down (recomputed alongside FUNGI_ARC)
 const RING = 200;                           // radial distance per depth level (family/genus/species) — was 150; widened to use canvas space beyond the old tree edge
 
 // Plant fan only: class/order gather into a tight "trunk" near the root —
@@ -533,16 +592,81 @@ function layout(root, arc, arcStart, gatherTrunk){
   }
 
   // ---------------------------------------------------------------------
+  // GENUS-TIER SLOT-BASED LAYOUT (plant fan only, confirmed 9 July — v2,
+  // supersedes the same-day min-gap fix below).
+  // The min-gap approach (PAVA, matching order tier's pattern) hit a hard
+  // ceiling: genus spacing is uniform EVERYWHERE in the live data (no
+  // "mostly fine, some dense spots" pattern to exploit, unlike order
+  // tier), so any minimum large enough to matter pooled the ENTIRE genus
+  // tier into one cascading block — in effect a uniform reflow, which is
+  // exactly what this work was told not to do. That pass stayed within
+  // the then-locked 207° PLANT_ARC and could only manage a ~15% arc-length
+  // improvement — not enough to stop real overlap. The budget constraint
+  // is now lifted, so genus position is computed directly from cumulative
+  // SLOT WIDTH instead of nudging a d3.cluster-derived starting point:
+  // each genus gets a slot of GENUS_SLOT_UNIT * max(1, species_count) —
+  // same unit and same total used to size PLANT_ARC itself in
+  // _computePlantArcFromGenusSlots(), so slots exactly tile the arc with
+  // no leftover and no overflow — walked in the SAME class->order->family
+  // document order buildTree() uses (a manual depth-first walk, not
+  // root.each(), which is breadth-first and would scramble that order).
+  // Each genus is centred within its own slot; its species are fanned
+  // entirely WITHIN that same slot (see the species-positioning block
+  // below) — by construction, no genus's species fan can ever reach into
+  // a neighbouring genus's slot. That eliminates the reported crossing,
+  // it doesn't just reduce it.
+  // Overwrites the general loop's cluster-x-derived d.ang for genus nodes
+  // only (same established pattern as class/order tier's own overrides).
+  // Does NOT touch d.rad (still depth*RING = 800) or any other rank/tier.
+  // ---------------------------------------------------------------------
+  if (gatherTrunk) {
+    const GENUS_SLOT_UNIT = 0.65 * Math.PI / 180;  // must match _computePlantArcFromGenusSlots()
+    let cursor = arcStart;
+    let genusCount = 0;
+    const _walkGenusSlots = (node) => {
+      if (node.data.rank === "genus") {
+        const species = node.children || node._children || [];
+        const slotWidth = GENUS_SLOT_UNIT * Math.max(1, species.length);
+        node.ang = cursor + slotWidth / 2;
+        node._slotStart = cursor;
+        node._slotWidth = slotWidth;
+        cursor += slotWidth;
+        genusCount++;
+        const [px, py] = project(node.ang, node.rad);
+        node.px = px; node.py = py;
+        return;
+      }
+      (node.children || node._children || []).forEach(_walkGenusSlots);
+    };
+    _walkGenusSlots(root);
+    if (genusCount === 0) {
+      throw new Error("genus-tier slot layout: no genus nodes reached by the document-order walk — plant fan should never be empty here");
+    }
+  }
+
+  // ---------------------------------------------------------------------
   // SPECIES POSITIONING — the one and only rule for species-rank nodes.
   // Runs after the pass above, so every species' parent genus already has
-  // its final ang/rad. A species always renders at its genus's angle
-  // (fanned by a small offset if the genus has more than one species) and
-  // at a single FIXED radius — FAMILY_RADIUS + 2*RING (5*RING total) —
-  // not derived from the genus's own radius. Genus sits at 4*RING, so this
-  // is always one full RING step further out than genus: clearly further
+  // its final ang/rad (and, for the plant fan, its _slotStart/_slotWidth).
+  // At a single FIXED radius — FAMILY_RADIUS + 2*RING (5*RING total) — not
+  // derived from the genus's own radius. Genus sits at 4*RING, so this is
+  // always one full RING step further out than genus: clearly further
   // out, never inward, never piled at the genus's point, and immune to any
   // future per-genus radius drift since it no longer reads d.parent.rad.
   // This is the only code in the file that sets a species' ang/rad/px/py.
+  //
+  // Two formulas, branched on gatherTrunk (i.e. which fan is being laid
+  // out), NOT two separate code paths through layout() — the same
+  // root.each() call and the same function drive both fans, exactly as
+  // before:
+  //  - plant fan: species-tier slot-based fan (confirmed 9 July v2) —
+  //    evenly fills the genus's own [_slotStart, _slotStart+_slotWidth]
+  //    window from the block above, so a genus's species can never spill
+  //    into a neighbouring genus's slot.
+  //  - fungi fan: the ORIGINAL fixed-FAN formula (confirmed 9 July v1),
+  //    completely unchanged, byte-for-byte — the slot rework is plant-fan
+  //    scope only; fungi's own genus/species positions and their own
+  //    crowding (if any) are untouched and unverified by this pass.
   //
   // Walks from the GENUS side (d.children || d._children) rather than
   // relying on root.each() to organically reach species nodes — genus is
@@ -550,22 +674,74 @@ function layout(root, arc, arcStart, gatherTrunk){
   // COLLAPSED genus's species live in ._children, invisible to a plain
   // root.each() species-side walk. Confirmed 9 July: needed so persistent
   // species-links (see renderSpeciesLinks()) have a valid position for
-  // every species even while its genus dot is collapsed — same fan-offset
-  // formula as before, just computed for every genus regardless of
-  // expand state, not only expanded ones.
+  // every species even while its genus dot is collapsed.
   // ---------------------------------------------------------------------
   root.each(d => {
     if (d.data.rank !== "genus") return;
     const species = d.children || d._children || [];
     const n = species.length;
-    const FAN = 0.12; // total angular spread (radians) across sibling species
-    species.forEach((sp, i) => {
-      sp.ang = d.ang + (n > 1 ? (i - (n - 1) / 2) * (FAN / (n - 1)) : 0);
-      sp.rad = FAMILY_RADIUS + 2 * RING;
-      const [px, py] = project(sp.ang, sp.rad);
-      sp.px = px; sp.py = py;
-    });
+    if (gatherTrunk) {
+      // plant fan: fill the genus's own slot, species centred within their
+      // own 1/n-th share of it — guarantees containment within the slot.
+      species.forEach((sp, i) => {
+        sp.ang = d._slotStart + d._slotWidth * (i + 0.5) / n;
+        sp.rad = FAMILY_RADIUS + 2 * RING;
+        const [px, py] = project(sp.ang, sp.rad);
+        sp.px = px; sp.py = py;
+      });
+    } else {
+      // fungi fan: unchanged, original fixed-total-spread formula.
+      const FAN = 0.12; // total angular spread (radians) across sibling species
+      species.forEach((sp, i) => {
+        sp.ang = d.ang + (n > 1 ? (i - (n - 1) / 2) * (FAN / (n - 1)) : 0);
+        sp.rad = FAMILY_RADIUS + 2 * RING;
+        const [px, py] = project(sp.ang, sp.rad);
+        sp.px = px; sp.py = py;
+      });
+    }
   });
+
+  // ---------------------------------------------------------------------
+  // FAMILY-TIER RECENTER (plant fan only, confirmed 9 July — v3).
+  // Runs after genus slots and species positions above are both final.
+  // Checked against live data before writing this: genus.ang already
+  // equals the exact midpoint of its own species' angle span (0.000000°
+  // offset, every genus, by construction of the slot formula) — the
+  // genus<->species relationship needed no fix. The real mismatch is one
+  // level up: FAMILY still sits wherever the general loop's cluster-x
+  // formula placed it (mean of PRE-slot leaf positions, meaningless now
+  // that genus abandoned cluster-x for slot-based placement) while its
+  // genus children moved to their new slot positions. Confirmed against
+  // the live tree: 81 of 84 plant families are off by more than 1° from
+  // their own genus children's span midpoint, up to -27°
+  // (Ranunculaceae/Papaveraceae/Fabaceae; Ericaceae itself is -11.36°) —
+  // this, not genus<->species, is what makes family->genus links sweep
+  // across neighbouring genera and read as crossing.
+  // SCOPE: FAMILY ONLY — deliberately does NOT propagate to order/class,
+  // despite "recenter" suggesting a full post-order pass. Checked and
+  // confirmed: order and class have their OWN deliberate, hand-tuned 8
+  // July positions — class is evenly redistributed between two locked
+  // anchors (Magnoliopsida/Bryopsida), order is minimum-gap PAVA — neither
+  // was ever "mean of its children" by design. Recentering them would
+  // silently overwrite that confirmed-working output; the ~18°/~100°
+  // "offsets" measured there during recon are evidence those fixes are
+  // doing their job, not a bug. Reported, not overridden.
+  // Does NOT touch d.rad (still depth*RING = 600) or any genus/species
+  // slot value set above.
+  // ---------------------------------------------------------------------
+  if (gatherTrunk) {
+    root.each(d => {
+      if (d.data.rank !== "family") return;
+      const genera = d.children || d._children || [];
+      if (genera.length === 0) {
+        throw new Error(`family-tier recenter: family "${d.data.name}" has no genus children — cannot recenter`);
+      }
+      const angs = genera.map(g => g.ang);
+      d.ang = (Math.min(...angs) + Math.max(...angs)) / 2;
+      const [px, py] = project(d.ang, d.rad);
+      d.px = px; d.py = py;
+    });
+  }
 }
 
 // organic radial limb: quadratic through a mid-radius control point
@@ -1121,6 +1297,11 @@ async function loadAndRender(){
     RAW = data.RAW || { Plantae: {} };
     FUNGI = data.FUNGI || {};
     UNPLACED = data.UNPLACED || [];
+
+    // Must run after RAW is populated (reads it directly) and before the
+    // first layout()/update() call for either fan (both read PLANT_ARC/
+    // ARC_START/FUNGI_ARC/FUNGI_ARC_START) — see function doc for rationale.
+    _computePlantArcFromGenusSlots();
 
     rootH = d3.hierarchy(buildTree());
     rootH.each(d => { if (d.data.rank === "genus" && d.children) { d._children = d.children; d.children = null; } });

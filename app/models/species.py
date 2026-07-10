@@ -65,6 +65,38 @@ class CulinaryInfoHistory(Base):
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
 
+class SpeciesEdibilityHistory(Base):
+    """
+    Audit trail for edits to the species-level edibility verdict fields.
+    `field` is 'edibility_status' today; left as a free string (not an enum)
+    so 'edibility_verified' can log through the same table later without a
+    schema change. Append-only — never delete.
+
+    Distinct from CulinaryInfoHistory: that table tracks culinary_info
+    columns and is keyed off culinary_info_id (so it needs a culinary_info
+    row to exist first). This tracks Species columns directly, keyed off
+    species_id, since edibility_status can be set before any culinary_info
+    row exists for a species.
+
+    Added migration 0046 — forward-only, no backfill of prior edibility_status
+    changes (those predate this table and live only as unstructured
+    CHANGELOG/culinary_info_history entries from one-off curator sessions).
+    """
+
+    __tablename__ = "species_edibility_history"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    species_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("species.id"), nullable=False, index=True
+    )
+    field: Mapped[str] = mapped_column(String(30), nullable=False)  # 'edibility_status' today
+    old_value: Mapped[Optional[str]] = mapped_column(Text)
+    new_value: Mapped[Optional[str]] = mapped_column(Text)
+    changed_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    changed_by: Mapped[str] = mapped_column(String(100), default="human")
+    note: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+
+
 class SpeciesAIDraft(Base):
     """
     AI-generated draft for a species field — sits in the review queue until

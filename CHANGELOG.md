@@ -1,7 +1,86 @@
 ## Current State
 
-Session summary:
-Taxonomy tree polish pass: fixed class/order label crowding (angle-only, locked radii), extended click-highlighting to show full ancestor lineage plus a sibling intermediate-brightness tier (including down sibling subtrees), made species-tier links persistently visible at low opacity, added rank-based colour coding to labels across both plant and fungi fans, and closed out a recurring D3 transition bug by adding a standing rendering-discipline section to CLAUDE.md.
+## Current State — 10 July 2026
+
+Fixes session across three areas: species-card save integrity, safety/edibility 
+editing, and taxonomy tree species-link crossing.
+
+SPECIES CARD — save integrity + SW cache:
+- Tansy (Tanacetum vulgare, sp 194) investigated for a "saved but not showing" 
+  report. Write integrity was CLEAN — human edit landed correctly (history 2780, 
+  changed_by='human'), matched live, no race, prefix is stored not rendered. Root 
+  cause was the service worker: SPECIES_CACHE (foragingid-species) is deliberately 
+  version-independent, cache-first, 7-day TTL, with NO invalidation hook in the 
+  save flow — so every species-card edit showed stale until hard-reset.
+- FIX shipped: extended sw.js 'clear-species-cache' message handler to accept an 
+  optional targeted url (single-entry delete); wired species.html saveEditMode() to 
+  invalidate the current species' /profile cache entry after save, before 
+  loadProfile() re-fetches. offline.js's existing whole-cache-clear caller unchanged.
+  NOTE: needs Melvin's normal-reload verification (edit field, save, F5, confirm 
+  fresh) — not yet confirmed live.
+
+POLYGALA ALPESTRIS (sp 696, "Mountain milkwort") — content write:
+- edible_parts + preparation_warnings written (human-dictated, verbatim, 
+  old_value=NULL confirmed true-empty, changed_by='human', read-back verified). 
+  Snapshot db_20260709_210257.
+- edibility_status: unknown → edible, on explicit confirmation only (separate 
+  snapshot db_20260709_210551). edibility_verified left 0 deliberately.
+- OPEN CONTENT ITEM: edible_parts text names "Polygala amara" (not in DB) and 
+  "Polygala vulgaris" (a different species, sp 221) in a parenthetical now attached 
+  to alpestris's card. Left as-is pending Melvin's decision on whether to trim it.
+
+SAFETY/EDIBILITY EDITING — bug found, two fixes queued:
+- Root cause of "can't edit safety warnings": read-view SAFETY branching only emits 
+  an editable [data-field-key] element when species is hazardous OR a warning field 
+  has content. Non-hazardous + empty species (unknown status, severity none) expose 
+  no edit target at all — not a lock, a render gap.
+- PROMPT B (safety fields always editable in edit mode) — WRITTEN, RUNNING as of 
+  session end. Frontend-only; both fields already allowlisted in the existing 
+  culinary field endpoint. Needs Melvin's live verify.
+- PROMPT C (edibility_status editing with confirm dialog) — WRITTEN, NOT RUN. To 
+  check tomorrow. Adds migration 0046 species_edibility_history (field/old/new/
+  changed_by/note, forward-only), status-only mode on existing PATCH 
+  /api/edibility/status/{id} (verified: Optional[bool]=None, only writes verified 
+  when not None), retrofits history logging to both /status/{id} and /bulk-status, 
+  confirm dialog on the badge with current→new + relax-warning + optional note + 
+  cache invalidation. Toxic/caution route through the coupled (verified:true) path 
+  by design — status-only toxic would create a deadly verdict the review queue never 
+  flags (queue catches caution+unverified but not toxic+unverified). Recon confirmed 
+  decoupling status from verified is safe (all 9 read sites walked).
+
+TAXONOMY TREE (frontend/taxonomy.html) — species-link crossing RESOLVED:
+- Budget lifted this session (PLANT_ARC no longer fixed at 207°). Replaced last 
+  session's genus/species min-gap (PAVA) blocks — which hit a hard ceiling because 
+  genus spacing is uniform tree-wide with no slack — with proportional angular SLOTS: 
+  genus slot = GENUS_SLOT_UNIT(0.65°) × max(1, species_count), species fanned strictly 
+  within own slot. Removed dead _enforceMinAngularGap helper.
+- Final arcs: PLANT_ARC 297.700°, FUNGI_ARC 59.300° (+ 2×1.5° gap = 360.000° exact). 
+  FUNGI_ARC now computed, not the old fixed 150°. Fungi internal crowding at its new 
+  width NOT yet reviewed — flagged as separate future pass.
+- Crossing had a second cause one tier up: family nodes sat at stale pre-slot 
+  cluster angles (81/84 families off >1°, up to −27°) while genera moved to slots. 
+  Genus↔species was already exact by construction. FIX: family-only bottom-up 
+  recenter (family.ang = midpoint of genus children's span), recompute px/py. 
+  Order/class deliberately EXCLUDED — recentering them would clobber the 8-July 
+  hand-tuning (locked-anchor class redistribution, order PAVA min-gap); Code hit 
+  the guard, stopped, reported, did not override.
+- Radii unchanged throughout (RING=200, TRUNK_RING=230, FAMILY_RADIUS=600, 
+  species=1000). Verified live at rest + on family/order/class/species click — all 
+  read clean, no crossing. Melvin sitting with the shifted genus layout before 
+  deciding if the slot spread is right.
+
+Pending / next:
+- Verify SW cache fix + Prompt B live (normal-reload checks)
+- Run Prompt C tomorrow (edibility_status edit UI) — check output before verifying
+- Decide Polygala alpestris "Polygala amara/vulgaris" parenthetical
+- Structural gap (logged, not urgent): species.edibility_status has no history 
+  table today — Prompt C's migration 0046 addresses this going forward
+- Deferred, not urgent: GENUS_SLOT_UNIT tuning if genus spread feels off after 
+  living with it; genus/species label crowding in big families (needs radius-lock 
+  lift or zoom-gated genus labels); fungi-fan internal crowding at new 59.3° width
+- Pre-existing (predates this work, not introduced): "flag for review" button shows 
+  misleading state for 55/65 verified species (edibility_human_verified depends on a 
+  history row nothing currently writes)
 
 ## Current State — 8 July 2026
 
@@ -89,6 +168,13 @@ Still open:
 - Enrichment gap remediation — 9 AI drafts pending approval, 6 species never scanned, 79 no-PFAF species need alt-source decision
 
 ## History
+
+### 2026-07-10 12:45
+**Snapshot** — End of session — Session ended from Settings page
+DB: `snapshots/db_20260710_124543.sqlite`
+
+### 2026-07-10 12:45
+**Session ended** — Session ended from Settings page
 
 ### 2026-07-09 21:35
 **Snapshot** — Manual snapshot

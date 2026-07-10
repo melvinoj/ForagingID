@@ -1779,9 +1779,19 @@ function renderProfile(data, observations) {
       inedible: '✗ not edible', unknown: 'unknown',
     };
     const edibLabel = _EDIB_LABELS[sp.edibility_status] || _esc(sp.edibility_status);
-    pills.push(`<span class="edibility-pill ${cls}">${edibLabel}</span>`);
+    pills.push(`<span class="edibility-pill ${cls}" id="edibility-status-pill" style="cursor:pointer" title="Click to change edibility status">${edibLabel}</span>`);
   }
   document.getElementById('prof-pills').innerHTML = pills.join('');
+  // Status-change dialog trigger, attached as a real function reference
+  // (not an inline onclick string) so it can't be broken by HTML-attribute
+  // quoting from scientific names/labels — innerHTML above discards any
+  // closures, so this must run after that assignment, not before.
+  {
+    const _edibPillEl = document.getElementById('edibility-status-pill');
+    if (_edibPillEl) {
+      _edibPillEl.onclick = () => openEdibilityStatusDialog(sp.id, sp.edibility_status);
+    }
+  }
 
   // Compact phenology display
   const phenoEl = document.getElementById('prof-phenology');
@@ -2761,6 +2771,149 @@ function cancelEditMode(reload) {
       el.dataset.fieldOrig = val;
       delete el.dataset.editHost;
     });
+  }
+}
+
+// ── Edibility status change dialog ─────────────────────────────────────────
+// Separate, deliberate affordance from toggleEditMode()'s generic sweep —
+// the edibility verdict is the single safety-critical field on this card
+// (see _EDIBILITY_LOCKED above), so it gets its own explicit confirm step
+// rather than living in a dropdown/textarea a misclick could change.
+
+let _edibDialogSpeciesId = null;
+let _edibDialogCurrentStatus = null;
+let _edibDialogChosenStatus = null;
+
+// Higher = more cautious/restrictive. Used ONLY to decide whether to show
+// the "you're relaxing the safety verdict" inline warning in the dialog —
+// does not affect how any status is written (that's the fixed status-only
+// vs coupled-verified split below, independent of this ranking).
+const _EDIB_SEVERITY_RANK = { toxic: 3, inedible: 2, caution: 1, unknown: 0, edible: -1 };
+
+// Status choices sent STATUS-ONLY (verified omitted from the request body,
+// so PATCH /api/edibility/status/{id} leaves edibility_verified/_by
+// untouched — see edibility.py). 'toxic' and 'caution' are deliberately
+// NOT in this set — they are RISK-INCREASING directions and are always
+// sent with verified:true (the existing coupled path), never status-only.
+// Rationale: the review-queue query (app/api/edibility.py ~87-95) flags
+// caution+unverified for review, but has no equivalent clause for
+// toxic+unverified. A status-only toxic write would therefore create a
+// deadly verdict that never surfaces in the review queue at all. Coupling
+// verified=true on the cautious direction avoids that by construction,
+// without touching the queue query itself (out of scope — 9 July recon).
+// Do not "simplify" this by adding toxic/caution here to match the other
+// three — that would reopen exactly the gap this set exists to close.
+const _EDIB_STATUS_ONLY = new Set(['edible', 'inedible', 'unknown']);
+
+function openEdibilityStatusDialog(speciesId, currentStatus) {
+  _edibDialogSpeciesId = speciesId;
+  _edibDialogCurrentStatus = (currentStatus || 'unknown').toLowerCase();
+  _edibDialogChosenStatus = null;
+
+  const dlg = document.getElementById('edib-status-dialog');
+  const curEl = document.getElementById('edib-status-dialog-current');
+  const choicesEl = document.getElementById('edib-status-dialog-choices');
+  const warnEl = document.getElementById('edib-status-dialog-warning');
+  const noteEl = document.getElementById('edib-status-dialog-note');
+  const confirmBtn = document.getElementById('edib-status-dialog-confirm');
+  if (!dlg || !curEl || !choicesEl || !warnEl || !noteEl || !confirmBtn) return;
+
+  curEl.textContent = `Current: ${_edibDialogCurrentStatus}`;
+  warnEl.style.display = 'none';
+  warnEl.textContent = '';
+  noteEl.value = '';
+  confirmBtn.disabled = true;
+  confirmBtn.style.opacity = '0.5';
+
+  const _STATUS_ORDER = ['edible', 'caution', 'toxic', 'inedible', 'unknown'];
+  choicesEl.innerHTML = '';
+  _STATUS_ORDER.forEach(s => {
+    const btn = document.createElement('button');
+    btn.textContent = s;
+    btn.style.cssText = 'padding:7px 14px;border-radius:16px;border:1px solid #ccc;'
+      + 'background:white;cursor:pointer;font-size:0.82rem;text-transform:capitalize;'
+      + (s === _edibDialogCurrentStatus ? 'opacity:0.5' : '');
+    btn.onclick = () => _edibDialogChoose(s, btn);
+    choicesEl.appendChild(btn);
+  });
+
+  dlg.classList.add('show');
+}
+
+function _edibDialogChoose(status, btnEl) {
+  _edibDialogChosenStatus = status;
+  document.querySelectorAll('#edib-status-dialog-choices button').forEach(b => {
+    b.style.borderColor = '#ccc'; b.style.background = 'white'; b.style.color = 'inherit';
+  });
+  btnEl.style.borderColor = '#2d5016'; btnEl.style.background = '#2d5016'; btnEl.style.color = 'white';
+
+  const warnEl = document.getElementById('edib-status-dialog-warning');
+  const wasMoreCautious = (_EDIB_SEVERITY_RANK[_edibDialogCurrentStatus] ?? 0) > (_EDIB_SEVERITY_RANK[status] ?? 0);
+  if (warnEl) {
+    if (wasMoreCautious) {
+      warnEl.textContent = "⚠ You're relaxing the safety verdict — confirm this is intentional.";
+      warnEl.style.display = 'block';
+    } else {
+      warnEl.style.display = 'none';
+    }
+  }
+
+  const confirmBtn = document.getElementById('edib-status-dialog-confirm');
+  if (confirmBtn) {
+    const same = (status === _edibDialogCurrentStatus);
+    confirmBtn.disabled = same;
+    confirmBtn.style.opacity = same ? '0.5' : '1';
+  }
+}
+
+function hideEdibStatusDialog() {
+  const dlg = document.getElementById('edib-status-dialog');
+  if (dlg) dlg.classList.remove('show');
+  _edibDialogSpeciesId = null;
+  _edibDialogChosenStatus = null;
+}
+
+async function confirmEdibStatusChange() {
+  if (!_edibDialogSpeciesId || !_edibDialogChosenStatus) return;
+  const status = _edibDialogChosenStatus;
+  const noteEl = document.getElementById('edib-status-dialog-note');
+  const note = noteEl ? noteEl.value.trim() : '';
+  const confirmBtn = document.getElementById('edib-status-dialog-confirm');
+  if (confirmBtn) confirmBtn.disabled = true;
+
+  const body = { edibility_status: status };
+  if (note) body.note = note;
+  // edible/inedible/unknown -> verified omitted entirely (status-only mode).
+  // toxic/caution -> verified:true, the existing coupled path. See
+  // _EDIB_STATUS_ONLY above for why this split exists and must not change.
+  if (!_EDIB_STATUS_ONLY.has(status)) {
+    body.verified = true;
+  }
+
+  try {
+    const r = await fetch(`/api/edibility/status/${_edibDialogSpeciesId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    if (!r.ok) throw new Error((await r.json().catch(() => ({}))).detail || ('HTTP ' + r.status));
+
+    hideEdibStatusDialog();
+    toast(`✓ Edibility set to ${status}`);
+
+    // Invalidate the cached profile BEFORE reloading — same fix as
+    // saveEditMode()'s save path (this session, earlier): the SW's
+    // SPECIES_CACHE is cache-first for GET /api/species/*/profile, so a
+    // normal reload right after this write can be served the stale
+    // pre-write cached response even though the write itself landed. Must
+    // await this, not fire-and-forget, or the race reopens.
+    if (_profCurrentSciName) {
+      await _invalidateSpeciesCacheEntry(_profCurrentSciName);
+      loadProfile(_profCurrentSciName);
+    }
+  } catch (e) {
+    if (confirmBtn) confirmBtn.disabled = false;
+    toast('❌ ' + (e.message || 'Failed to save edibility status'));
   }
 }
 
@@ -4456,6 +4609,44 @@ async function repopulateSection(section) {
   </div>
 </div>
 <style>#delete-dialog.show { display: flex !important; }</style>
+
+<!-- ── Edibility status change dialog (species-card verdict edit) ─────────
+     Separate, deliberate affordance from the generic edit-mode sweep —
+     attached only to the edibility pill's click, own confirm/cancel, own
+     endpoint call. See openEdibilityStatusDialog()/confirmEdibStatusChange()
+     below for the status-only vs coupled-verified branching. -->
+<div id="edib-status-dialog"
+     style="display:none;position:fixed;inset:0;z-index:9200;background:rgba(0,0,0,.55);align-items:center;justify-content:center"
+     onclick="if(event.target===this)hideEdibStatusDialog()">
+  <div style="background:white;border-radius:12px;padding:24px 20px;max-width:380px;width:calc(100% - 40px);
+              box-shadow:0 8px 32px rgba(0,0,0,.3)">
+    <h3 style="font-size:1rem;margin-bottom:8px;color:#2d5016">Change edibility status</h3>
+    <p id="edib-status-dialog-current" style="font-size:0.85rem;color:#666;margin-bottom:14px"></p>
+    <div id="edib-status-dialog-choices" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px"></div>
+    <div id="edib-status-dialog-warning"
+         style="display:none;font-size:0.82rem;color:#92400e;background:#fef3c7;
+                border:1px solid #fde68a;border-radius:6px;padding:8px 10px;margin-bottom:12px"></div>
+    <textarea id="edib-status-dialog-note"
+      placeholder="Optional note (why this change?)"
+      style="width:100%;padding:7px 10px;font-size:0.83rem;border:1px solid #ccc;border-radius:6px;
+             resize:vertical;min-height:48px;margin-bottom:16px;font-family:inherit"></textarea>
+    <div style="display:flex;gap:10px;justify-content:flex-end">
+      <button onclick="hideEdibStatusDialog()"
+        style="padding:9px 18px;border-radius:6px;border:1px solid #ccc;background:white;cursor:pointer;font-size:0.85rem">
+        Cancel
+      </button>
+      <button id="edib-status-dialog-confirm" onclick="confirmEdibStatusChange()" disabled
+        style="padding:9px 18px;border-radius:6px;border:1px solid #2d5016;background:#2d5016;
+               color:white;cursor:pointer;font-size:0.85rem;font-weight:600;opacity:0.5">
+        Confirm
+      </button>
+    </div>
+  </div>
+</div>
+<style>
+#edib-status-dialog.show { display: flex !important; }
+#edib-status-dialog-confirm:disabled { cursor: not-allowed; }
+</style>
 <style>
 #sp-toast { position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(12px);
   background:#2d5016;color:#fff;padding:8px 18px;border-radius:20px;font-size:0.85rem;

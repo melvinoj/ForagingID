@@ -27,7 +27,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.models.culinary import CulinaryInfo
 from app.models.observation import Observation
-from app.models.species import Species, SpeciesEdibilityCondition, SpeciesLookalike
+from app.models.species import Species, SpeciesEdibilityCondition, SpeciesLookalike, SpeciesEdibilityHistory
 
 log = logging.getLogger(__name__)
 
@@ -263,7 +263,8 @@ async def list_edibility_species(db: AsyncSession = Depends(get_db)):
 
 class EdibilityStatusIn(BaseModel):
     edibility_status: str           # edible|caution|toxic|inedible|unknown
-    verified: bool = True
+    verified: Optional[bool] = None  # None = leave edibility_verified/verified_by untouched (status-only write)
+    note: Optional[str] = None       # optional curator note, logged to species_edibility_history
 
 
 async def _confirmed_obs_counts(db: AsyncSession) -> dict:
@@ -337,6 +338,9 @@ async def bulk_set_edibility_status(
     Used by the Edibility Review tab's "Confirm all suggested" bulk action.
     Silently skips invalid species_ids. Returns count of rows updated.
     After commit, fires AI draft generation for each confirmed (non-toxic) species.
+    Logs one species_edibility_history row per update (changed_by='human',
+    note=None) — verified behaviour here is unchanged; this only adds the
+    audit log that this endpoint never had before.
     """
     from app.services.enrichment import trigger_ai_drafts_for_species
 
@@ -357,9 +361,18 @@ async def bulk_set_edibility_status(
         sp = await db.scalar(select(Species).where(Species.id == sid))
         if sp is None:
             continue
+        old_status = sp.edibility_status
         sp.edibility_status = status
         sp.edibility_verified = status != "unknown"
         sp.edibility_verified_by = "human" if status != "unknown" else None
+        db.add(SpeciesEdibilityHistory(
+            species_id=sid,
+            field="edibility_status",
+            old_value=old_status,
+            new_value=status,
+            changed_by="human",
+            note=None,
+        ))
         updated += 1
         if status not in _NO_DRAFT and status not in _UNKNOWN_STATES:
             confirmed_names.append(sp.scientific_name)
@@ -377,8 +390,21 @@ async def set_edibility_status(
     db: AsyncSession = Depends(get_db),
 ):
     """
-    A6 — persist a curator's edibility-status correction. Sets edibility_status
-    and marks edibility_verified so the species leaves the unknown queue.
+    A6 — persist a curator's edibility-status correction.
+
+    verified is optional: None means a status-only write that leaves
+    edibility_verified/edibility_verified_by exactly as they already were
+    (added for the species-card status dialog's status-only path — 'edible'/
+    'inedible'/'unknown'). When verified is explicitly True/False (the
+    existing review.html caller always sends True), it's written together
+    with status, same coupled behaviour as before.
+
+    Every write is logged to species_edibility_history (old_value/new_value
+    on edibility_status), then re-read from the DB via db.refresh() — not
+    the in-memory object — to confirm the write actually persisted before
+    reporting success. A 500 here means don't trust the response; it does
+    NOT mean "probably fine".
+
     After commit, fires AI draft generation if the new status is confirmed edible/caution.
     """
     from app.services.enrichment import trigger_ai_drafts_for_species
@@ -391,12 +417,33 @@ async def set_edibility_status(
     if not sp:
         raise HTTPException(404, detail="Species not found")
 
+    old_status = sp.edibility_status
+
     sp.edibility_status = status
-    # A correction is a human verification (unless they explicitly set it back to unknown).
-    sp.edibility_verified = bool(payload.verified) and status != "unknown"
-    sp.edibility_verified_by = "human" if sp.edibility_verified else None
+    # verified is None -> status-only write; leave edibility_verified/_by untouched.
+    if payload.verified is not None:
+        sp.edibility_verified = bool(payload.verified) and status != "unknown"
+        sp.edibility_verified_by = "human" if sp.edibility_verified else None
+
+    db.add(SpeciesEdibilityHistory(
+        species_id=species_id,
+        field="edibility_status",
+        old_value=old_status,
+        new_value=status,
+        changed_by="human",
+        note=payload.note,
+    ))
+
     scientific_name = sp.scientific_name
     await db.commit()
+
+    # Loud-fail on an unconfirmed write.
+    await db.refresh(sp)
+    if sp.edibility_status != status:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Write did not persist: expected edibility_status={status!r}, found {sp.edibility_status!r}",
+        )
 
     # Fire-and-forget: generate AI drafts when edibility is confirmed as non-toxic
     _NO_DRAFT = ("toxic", "inedible", "not_edible")

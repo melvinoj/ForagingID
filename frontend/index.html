@@ -3061,9 +3061,12 @@ function _applyLayer() {
   const heatSection = document.getElementById('cs-heatmap');
   if (heatSection) heatSection.style.display = showHeat ? '' : 'none';
 
-  // Counts pill: Pins/Clusters views only, hidden in Heatmap (Step 7)
+  // Counts pill: shown in ALL three views (Pins/Clusters/Heatmap). The in-view
+  // sightings/species count is computed in renderMarkers() on every pan/zoom via
+  // loadFeatures(), independent of currentLayer, so it populates identically in
+  // heatmap — only the visibility was ever gated, not the count.
   const pill = document.getElementById('counts-pill');
-  if (pill) pill.classList.toggle('visible', !showHeat);
+  if (pill) pill.classList.add('visible');
 }
 
 function updateHeatmapOptions() {

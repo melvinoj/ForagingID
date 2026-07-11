@@ -37,6 +37,64 @@ router = APIRouter(tags=["edibility"])
 _VALID_EDIBILITY = {"edible", "caution", "toxic", "inedible", "unknown"}
 _UNKNOWN_STATES = ["unknown", "unclear"]
 
+# Severity ladder for the human-only-relax guard (RULE 2). 'inedible' sits at
+# the toxic end (level 2). 'unknown'/'unclear'/NULL are NOT on the ladder —
+# they mean "no established verdict" (severity None).
+_EDIBILITY_SEVERITY = {"edible": 0, "caution": 1, "toxic": 2, "inedible": 2}
+
+
+def _edibility_severity(status: Optional[str]) -> Optional[int]:
+    """Severity level of a status, or None when it is not an established verdict."""
+    return _EDIBILITY_SEVERITY.get((status or "").strip().lower())
+
+
+def _enforce_edibility_write_rules(old_status: Optional[str], new_status: str,
+                                   verified: Optional[bool], changed_by: Optional[str]) -> None:
+    """
+    Server-side safety gate applied to EVERY species.edibility_status write —
+    the PATCH endpoint and /bulk-status both call this identically, so the bulk
+    path is not a coupling/relax bypass. Raises HTTPException(400) on violation;
+    returns None when the write is permitted. Enforced regardless of frontend.
+
+    RULE 1 — COUPLING: a write that sets edibility_status to 'toxic' or 'caution'
+    MUST carry verified=True. The review queue surfaces caution+unverified but
+    NEVER toxic+unverified (see edibility.py:88-93), so an uncoupled toxic write
+    is a deadly verdict nothing flags. A status-only (verified=None) or
+    verified=False write to toxic/caution is rejected.
+
+    RULE 2 — HUMAN-ONLY RELAX (model b): severity edible(0) < caution(1) <
+    toxic/inedible(2); unknown/unclear/NULL = no verdict. Moving an EXISTING
+    established verdict to a strictly LOWER severity (a relax) must be
+    changed_by='human'. A tighten (>= severity) is allowed for any caller.
+    Populating a no-verdict state (prior is NULL/unknown/unclear) is allowed for
+    any caller — it is not a relax (still subject to RULE 1).
+    NOTE (flagged, deliberate per the letter of model b): clearing an
+    established verdict TO unknown/unclear is off-ladder, so it is NOT treated
+    as a relax here — such a species simply re-enters the unknown review queue
+    rather than silently dropping its warning.
+    """
+    new_norm = (new_status or "").strip().lower()
+
+    # RULE 1 — coupling
+    if new_norm in ("toxic", "caution") and verified is not True:
+        raise HTTPException(
+            400,
+            detail="toxic/caution edibility changes must go through the confirm-and-verify path (verified=True required)",
+        )
+
+    # RULE 2 — human-only relax
+    old_sev = _edibility_severity(old_status)
+    new_sev = _edibility_severity(new_norm)
+    if old_sev is not None and new_sev is not None and new_sev < old_sev:
+        if (changed_by or "").strip().lower() != "human":
+            raise HTTPException(
+                400,
+                detail=(
+                    f"relaxing an established '{old_status}' verdict to '{new_norm}' "
+                    "must be done by a human curator (changed_by='human')"
+                ),
+            )
+
 # Guards against overlapping background rescans.
 _rescan_state: dict = {"running": False, "queued": 0, "done": 0, "resolved": 0}
 
@@ -265,6 +323,10 @@ class EdibilityStatusIn(BaseModel):
     edibility_status: str           # edible|caution|toxic|inedible|unknown
     verified: Optional[bool] = None  # None = leave edibility_verified/verified_by untouched (status-only write)
     note: Optional[str] = None       # optional curator note, logged to species_edibility_history
+    changed_by: str                  # REQUIRED caller identity — gates RULE 2 (human-only relax) and
+                                     # stamps the history row. No default: an omitted value is a 422,
+                                     # never a silent "human". Every caller (species.html dialog,
+                                     # review.html per-card + bulk) sends changed_by:'human' explicitly.
 
 
 async def _confirmed_obs_counts(db: AsyncSession) -> dict:
@@ -338,9 +400,11 @@ async def bulk_set_edibility_status(
     Used by the Edibility Review tab's "Confirm all suggested" bulk action.
     Silently skips invalid species_ids. Returns count of rows updated.
     After commit, fires AI draft generation for each confirmed (non-toxic) species.
-    Logs one species_edibility_history row per update (changed_by='human',
-    note=None) — verified behaviour here is unchanged; this only adds the
-    audit log that this endpoint never had before.
+    Logs one species_edibility_history row per update (changed_by from the item,
+    default 'human'; note=None). Each item passes the shared safety gate
+    (_enforce_edibility_write_rules) identically to the PATCH endpoint — a
+    RULE 1/RULE 2 violation is surfaced in errors[] and that item is skipped,
+    so /bulk-status is not a coupling/relax bypass.
     """
     from app.services.enrichment import trigger_ai_drafts_for_species
 
@@ -362,6 +426,23 @@ async def bulk_set_edibility_status(
         if sp is None:
             continue
         old_status = sp.edibility_status
+        # changed_by is REQUIRED per item — no silent "human" default (mirrors
+        # EdibilityStatusIn making it mandatory). A missing/blank value is
+        # collected into errors[] and the item is skipped, not defaulted.
+        changed_by = str(item.get("changed_by", "")).strip()
+        if not changed_by:
+            errors.append(f"species_id {sid}: changed_by required (no default)")
+            continue
+        # bulk always couples verified (status != "unknown"), so this is the
+        # effective verified value the guard must see. Same helper as the PATCH
+        # path — a rule violation here is surfaced via errors[] (bulk's existing
+        # skip-and-collect contract) and the offending item is not written, so
+        # /bulk-status is not a coupling/relax bypass.
+        try:
+            _enforce_edibility_write_rules(old_status, status, status != "unknown", changed_by)
+        except HTTPException as e:
+            errors.append(f"species_id {sid}: {e.detail}")
+            continue
         sp.edibility_status = status
         sp.edibility_verified = status != "unknown"
         sp.edibility_verified_by = "human" if status != "unknown" else None
@@ -370,7 +451,7 @@ async def bulk_set_edibility_status(
             field="edibility_status",
             old_value=old_status,
             new_value=status,
-            changed_by="human",
+            changed_by=changed_by,
             note=None,
         ))
         updated += 1
@@ -419,6 +500,10 @@ async def set_edibility_status(
 
     old_status = sp.edibility_status
 
+    # Server-side safety gate (RULE 1 coupling + RULE 2 human-only relax) — same
+    # helper as /bulk-status, so neither path is a bypass. Raises 400 on violation.
+    _enforce_edibility_write_rules(old_status, status, payload.verified, payload.changed_by)
+
     sp.edibility_status = status
     # verified is None -> status-only write; leave edibility_verified/_by untouched.
     if payload.verified is not None:
@@ -430,7 +515,7 @@ async def set_edibility_status(
         field="edibility_status",
         old_value=old_status,
         new_value=status,
-        changed_by="human",
+        changed_by=payload.changed_by,
         note=payload.note,
     ))
 

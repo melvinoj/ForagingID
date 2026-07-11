@@ -370,9 +370,15 @@ const linkG = g.append("g");       // plant fan links
 // on top, matching the existing links-under-nodes stacking per fan.
 const speciesLinkG = g.append("g");
 const nodeG = g.append("g");       // plant fan nodes
+// SHOW_ALL_SPECIES_LABELS: persistent species-tier label layer, same
+// independence from expand/collapse as speciesLinkG above (see
+// renderSpeciesLabels()). Appended after nodeG so it draws on top of node
+// circles/existing labels.
+const speciesLabelG = g.append("g");
 const fungiLinkG = g.append("g");  // fungi fan links (separate group — no shared parent with plant fan)
 const fungiSpeciesLinkG = g.append("g");  // fungi fan persistent species links — same reasoning as speciesLinkG
 const fungiNodeG = g.append("g");  // fungi fan nodes
+const fungiSpeciesLabelG = g.append("g");  // fungi fan persistent species labels — same reasoning as speciesLabelG
 const bucketG = g.append("g");
 let W = window.innerWidth, H = window.innerHeight;
 
@@ -428,6 +434,13 @@ const RING = 200;                           // radial distance per depth level (
 const TRUNK_RING = 230;     // radial distance per trunk tier (class, order) — was 90; widened so ~30 order labels (and 6 class labels) get enough arc-length to stay legible. Now bigger than the RING step itself, so class↔order separation (230) exceeds order↔family separation (600-460=140) — deliberate, legibility at these two crowded tiers takes priority over even spacing.
 const TRUNK_GATHER = 0.32;  // 0=all trunk nodes collapse to the centre line, 1=full spoke spread — tune to taste
 const FAMILY_RADIUS = 3 * RING;  // family tier's fixed radius (depth 3 × RING) — named so species positioning below can anchor to it directly instead of re-deriving from genus
+
+// EXPERIMENT (trivially revertible — set false to restore byte-for-byte
+// prior behaviour): render every species label persistently, independent of
+// genus expand/collapse, via a parallel layer (renderSpeciesLabels(), mirrors
+// renderSpeciesLinks()). Does not touch _applyFocusStyles(), the g.node join,
+// updateLabelVisibility(), or any radius/angle constant.
+const SHOW_ALL_SPECIES_LABELS = true;
 
 let rootH;       // plant fan root (d3.hierarchy) — unchanged variable, unchanged meaning
 let fungiRootH;  // fungi fan root (d3.hierarchy) — separate tree, separate root
@@ -782,10 +795,49 @@ function renderSpeciesLinks(root, gatherTrunk){
       .attr("d", d => limb(d.source, d.target))
       .attr("stroke-width", strokeFor)
       .attr("stroke", d => d.target.data.fungi ? "var(--fungi-dim)" : null)
-      .style("opacity", DIM_OPACITY)  // ambient rest state — _applyFocusStyles() takes over on any focus change
+      .style("opacity", SPECIES_LINK_REST_OPACITY)  // ambient rest state — _applyFocusStyles() takes over on any focus change
     .merge(link).transition("speciesLinkMove").duration(450)
       .attr("d", d => limb(d.source, d.target));
   link.exit().remove();  // should not fire in practice — species list is static after load
+}
+
+// SHOW_ALL_SPECIES_LABELS experiment: persistent species-tier label layer,
+// mirroring renderSpeciesLinks() immediately above as closely as possible —
+// same collection logic (every genus's species, from d.children||d._children
+// so collapsed genera still contribute), same call site/cadence in update()
+// (so it re-syncs whenever the link layer does), same pre-computed px/py/ang
+// that layout() already produces for every species regardless of collapse
+// state. Deliberately does NOT go through _applyFocusStyles(), the g.node
+// join, or updateLabelVisibility() — a separate layer, so none of those are
+// touched. No transition on reposition (snap), per spec — unlike the
+// speciesLinkMove transition above. Text content/rotation/text-anchor math
+// copied verbatim from the main label pass in update() (~line 886), just
+// flattened to include the translate(px,py) a g.node's own transform would
+// otherwise have supplied.
+function renderSpeciesLabels(root, gatherTrunk){
+  const sel = gatherTrunk ? speciesLabelG : fungiSpeciesLabelG;
+  if (!SHOW_ALL_SPECIES_LABELS) { sel.selectAll("text.node-label").remove(); return; }
+  const speciesNodes = [];
+  root.each(d => {
+    if (d.data.rank !== "genus") return;
+    (d.children || d._children || []).forEach(sp => speciesNodes.push(sp));
+  });
+  const label = sel.selectAll("text.node-label").data(speciesNodes, d => d.data.name + d.depth);
+  label.enter().append("text").attr("class",d=>"node-label rank-"+d.data.rank)
+      .attr("dy","0.32em")
+      .text(d=>d.data.name.split(" ").slice(1).join(" "))
+      .style("opacity",1)
+    .merge(label)
+      .attr("transform", d=>{
+        const deg = d.ang * 180/Math.PI;
+        const off = radiusFor(d)+6;
+        return `translate(${d.px},${d.py}) rotate(${deg}) translate(${off},0) ${ (deg>90||deg<-90) ? "rotate(180)" : "" }`;
+      })
+      .attr("text-anchor", d=>{
+        const deg = d.ang*180/Math.PI;
+        return (deg>90||deg<-90) ? "end" : "start";
+      });
+  label.exit().remove();  // should not fire in practice — species list is static after load
 }
 
 // root/arc/arcStart/gatherTrunk/linkSel/nodeSel are parameterised so the exact
@@ -798,6 +850,7 @@ function renderSpeciesLinks(root, gatherTrunk){
 function update(source, root, arc, arcStart, gatherTrunk, linkSel, nodeSel){
   layout(root, arc, arcStart, gatherTrunk);
   renderSpeciesLinks(root, gatherTrunk);
+  renderSpeciesLabels(root, gatherTrunk);
   const nodes = root.descendants();
   // genus->species edges are handled exclusively by renderSpeciesLinks()
   // above (persistent, not collapse-gated) — excluded here so they're
@@ -1075,6 +1128,15 @@ function _isDescendantOrSelf(node, ancestor){
 // and ancestors.
 const FULL_OPACITY = 1, DIM_OPACITY = 0.15;
 const SIBLING_OPACITY = (FULL_OPACITY + DIM_OPACITY) / 2;
+// Ambient at-rest opacity for the persistent species-link layer ONLY — a
+// dedicated constant (not DIM_OPACITY, which is shared tree-wide) so the
+// genus->species connectors can sit slightly brighter at rest without
+// touching any other tier's dimming or the SIBLING_OPACITY derivation.
+// Used in exactly two places: renderSpeciesLinks()'s enter (governs initial
+// load) and the !focusedNode rest-branch of speciesLinkOpacity() below
+// (governs rest after any focus/clear). Focus BRIGHTENING is unchanged —
+// links still jump to FULL_OPACITY/SIBLING_OPACITY when targeted.
+const SPECIES_LINK_REST_OPACITY = 0.25;  // was DIM_OPACITY (0.15); +0.1 step
 function _applyFocusStyles(){
   const inFocus = d => !focusedNode || _isDescendantOrSelf(d, focusedNode) || _isDescendantOrSelf(focusedNode, d);
   // "d is at-or-under some OTHER direct child of focusedNode's parent" —
@@ -1089,11 +1151,11 @@ function _applyFocusStyles(){
   // Species-links have a different REST value: every other tier's "no
   // focus at all" state is FULL_OPACITY (inFocus() returns true for
   // everyone when focusedNode is null — "show everything at rest"), but
-  // species-links are meant to sit at the ambient DIM_OPACITY even at
-  // rest, per spec — only actual bright/intermediate targeting should
+  // species-links are meant to sit at the ambient SPECIES_LINK_REST_OPACITY
+  // even at rest, per spec — only actual bright/intermediate targeting should
   // raise them above that. Same bright/intermediate logic otherwise.
   const speciesLinkOpacity = d => {
-    if (!focusedNode) return DIM_OPACITY;
+    if (!focusedNode) return SPECIES_LINK_REST_OPACITY;
     return inFocus(d) ? FULL_OPACITY : (isInSiblingSubtree(d) ? SIBLING_OPACITY : DIM_OPACITY);
   };
   [nodeG, fungiNodeG].forEach(sel => {
@@ -1150,10 +1212,17 @@ function setFocus(d){
 // must retract the PREVIOUS expansion too, not leave it sitting there).
 function _collapseExpanded(){
   if (!expandedRoot) return;
-  if (expandedRoot.children) {
-    expandedRoot._children = expandedRoot.children;
-    expandedRoot.children = null;
-  }
+  // Restore expandedRoot's subtree to the canonical REST state (every genus
+  // re-collapsed at species; genera themselves left visible) instead of
+  // nulling expandedRoot.children. The old null collapsed the clicked family
+  // ONE LEVEL below rest — its genera became unreachable to .children walks,
+  // so genus dots/labels exited while links were left stranded (case A
+  // over-collapse residue). This mirrors init's rest-collapse rule
+  // (rootH.each / fungiRootH.each) verbatim, applied to this subtree only, so
+  // the clicked family ends identical to its siblings and no layer strands.
+  expandedRoot.each(d => {
+    if (d.data.rank === "genus" && d.children) { d._children = d.children; d.children = null; }
+  });
   // Which fan expandedRoot belongs to determines which fixed set of render
   // params (root/arc/arcStart/gatherTrunk/groups) update() needs — same
   // fungi:true flag colourFor()/link-stroke already key off.

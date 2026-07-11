@@ -1,5 +1,36 @@
 ## Current State
 
+Current State (11 July 2026): Taxonomy tree experiment, Animalia junk cleanup, and the full edibility-status editing safety chain (Prompt C) all landed and verified. Map regressions resolved (mostly non-issues). Edibility write path now has server-side coupling, human-relax lock, and required changed_by. Pending/next: parked items only (see below) — no active prompt queue.
+This session:
+Taxonomy tree (frontend/taxonomy.html):
+
+Added SHOW_ALL_SPECIES_LABELS (true): parallel always-on species-label layer mirroring the persistent-species-link layer, independent of focus/collapse path. All species names render at rest; overlap/illegibility intended. Revert = flag false.
+Species-link rest opacity 0.15→0.25 via new SPECIES_LINK_REST_OPACITY constant, applied at both render and _applyFocusStyles rest-branch. Highlight/focus brightening untouched.
+Fixed pre-existing over-collapse residue in _collapseExpanded(): was nulling expandedRoot.children (one level below rest), stranding links. Now re-collapses genera to rest state matching init. Also fixed class/order defocus over-collapse (same bug, three paths now consistent).
+
+Animalia junk cleanup (verified): Deleted 23 junk species (22 animals + 1 scaffold) via kingdom='Animalia', 112 observations, dependent rows (culinary_info 23, enrichment_sources 96, species_ai_drafts 5). All four pre-delete safety gates passed (zero non-unknown verdicts, zero landscape, no species_primary leak). Write-verified by re-query: species 658→635, obs 13757→13645, neighbours intact, no spill. Snapshot note: no fresh 11 July snapshot was created — Jul 10 12:45 snapshot validated as complete restore point.
+Prompt B: verified live and working (safety fields editable on non-hazardous species).
+Prompt C — edibility status editing (complete):
+
+Step 1: server-side enforcement on both PATCH /status and /bulk-status — RULE 1 (toxic/caution require verified:true; queue never flags toxic+unverified) and RULE 2 (relaxing an established verdict is human-only; tighten/populate open). Write-verified by ID.
+Migration 0046 (species_edibility_history) confirmed applied, head 0046.
+Step 2: species-card confirm dialog wired (was ~95% pre-built) — status-only for edible/inedible/unknown, coupled verified:true for toxic/caution, relax warning, note field, changed_by:'human', cache-invalidate before reload. Verified live on species 696.
+changed_by default removed (now required, no permissive "human" default) — closes omitted-identity relax hole. Fixed two review.html callers to send changed_by:'human' first, then tightened server (EdibilityStatusIn required + bulk reject-into-errors). Verified: omitted→422, non-human relax→400, review.html callers still write.
+
+Map (frontend/index.html):
+
+Counts pill now shows in all three views (was hidden in Heatmap by design) — per request.
+Outdoors base layer: transient tile hiccup, self-resolved on reload; code/key/tiles all healthy. No fix.
+Two red console errors traced to a third-party Chrome extension (/site_integration, /writing, UserAuthError), not the app. Ignore.
+SW cache fix (species targeted invalidation) verified via normal-reload dialog check.
+
+Parked (not this session):
+
+species_id 244 dangling FK orphans (24 enrichment_sources + 5 species_ai_drafts) — pre-existing prior-session artifact, needs a cleanup sweep.
+Phase 14 changed_by hardening — narrowed: default hole now closed; remaining piece is changed_by becoming authenticated identity rather than trusted payload value (only meaningful at multi-tenancy).
+Polygala amara/vulgaris parenthetical decision on species 696's edible_parts.
+find.py:142 / edibility.py:220 unverified-edible-appears-forageable gap (decision 2 from this session — smaller severity, deferred).
+
 ## Current State — 10 July 2026
 
 Fixes session across three areas: species-card save integrity, safety/edibility 
@@ -168,6 +199,13 @@ Still open:
 - Enrichment gap remediation — 9 AI drafts pending approval, 6 species never scanned, 79 no-PFAF species need alt-source decision
 
 ## History
+
+### 2026-07-11 14:35
+**Snapshot** — End of session — Session ended from Settings page
+DB: `snapshots/db_20260711_143540.sqlite`
+
+### 2026-07-11 14:35
+**Session ended** — Session ended from Settings page
 
 ### 2026-07-10 12:45
 **Snapshot** — End of session — Session ended from Settings page

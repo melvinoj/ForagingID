@@ -5113,7 +5113,7 @@ async function edibSetStatus(spId, status, btnEl) {
     const r = await fetch(`/api/edibility/status/${spId}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ edibility_status: status, verified: true }),
+      body: JSON.stringify({ edibility_status: status, verified: true, changed_by: 'human' }),
     });
     if (!r.ok) throw new Error('HTTP ' + r.status);
     const d = await r.json();
@@ -5167,7 +5167,7 @@ async function edibBulkConfirm() {
   _edibSelected.forEach(spId => {
     const sp = _edibQueue.find(s => s.id === spId);
     if (sp && sp.suggested_status) {
-      updates.push({ species_id: spId, edibility_status: sp.suggested_status });
+      updates.push({ species_id: spId, edibility_status: sp.suggested_status, changed_by: 'human' });
     }
   });
   if (!updates.length) { toast('No suggested-status cards selected'); return; }

@@ -2881,7 +2881,11 @@ async function confirmEdibStatusChange() {
   const confirmBtn = document.getElementById('edib-status-dialog-confirm');
   if (confirmBtn) confirmBtn.disabled = true;
 
-  const body = { edibility_status: status };
+  // changed_by:'human' — gates RULE 2 (human-only relax) in edibility.py and
+  // stamps the species_edibility_history row. The endpoint defaults changed_by
+  // to "human", but this UI is a human curator action so send it explicitly
+  // rather than lean on the default.
+  const body = { edibility_status: status, changed_by: 'human' };
   if (note) body.note = note;
   // edible/inedible/unknown -> verified omitted entirely (status-only mode).
   // toxic/caution -> verified:true, the existing coupled path. See

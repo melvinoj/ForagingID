@@ -15,3 +15,5 @@ class SavedWalk(Base):
     route_geojson  = Column(Text, nullable=True)     # ORS GeoJSON or null for straight-line
     distance_m     = Column(Float, default=0.0)
     duration_min   = Column(Integer, default=0)
+    # Ownership (multi-tenancy groundwork) — nullable, no FK yet; backfilled to curator (user_id=1)
+    user_id        = Column(Integer, nullable=True)

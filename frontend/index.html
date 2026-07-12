@@ -1381,6 +1381,15 @@
       0%   { transform: scale(1);   opacity: .7; }
       100% { transform: scale(4.2); opacity: 0; }
     }
+    /* Deep-link target marker (?lat&lng&z) — standalone, independent of the
+       geojson pin layer, so it shows for ANY observation regardless of review
+       status. Deliberately distinct from the blue "locate me" dot. */
+    .fid-deeplink-icon { background: transparent; border: none; }
+    .fid-deeplink-pin {
+      position: absolute; top: 50%; left: 50%; width: 18px; height: 18px;
+      margin: -9px 0 0 -9px; background: #e23b3b; border: 3px solid #fff;
+      border-radius: 50%; box-shadow: 0 0 0 2px rgba(226,59,59,.45), 0 1px 5px rgba(0,0,0,.5);
+    }
 
     /* Location toast — same visual pattern as #geo-toast */
     #locate-toast {
@@ -2698,6 +2707,12 @@ document.addEventListener('keydown', (ev) => {
 
 // ── Feature 1: Map position memory ───────────────────────────────────────
 (function() {
+  // Skip the remembered-viewport restore when arriving via a ?lat&lng deep-link —
+  // _initLatLngDeepLink() owns the initial view in that case, so the two don't fight.
+  try {
+    const _q = new URLSearchParams(location.search);
+    if (isFinite(parseFloat(_q.get('lat'))) && isFinite(parseFloat(_q.get('lng')))) return;
+  } catch (_) {}
   try {
     const _pos = JSON.parse(localStorage.getItem('fid_map_pos') || 'null');
     if (_pos && isFinite(_pos.lat) && isFinite(_pos.lng) && isFinite(_pos.z)) {
@@ -4021,6 +4036,39 @@ async function _initHighlight() {
     _highlightTimer = null;
     renderMarkers();
   }, 5000);
+}
+
+// Generic deep-link centre + standalone target marker (?lat=..&lng=..&z=..[&obs=..]).
+// Unlike ?highlight (which resolves the obs through the /api/map/geojson pin layer
+// and therefore CANNOT show needs_review / unapproved observations), this drops a
+// marker at the exact coords independent of any layer — so a review card's ↗ works
+// for any observation regardless of review_status. Reusable from species cards,
+// encounters, etc. Full-precision lat/lng come straight from the source record.
+let _deepLinkMarker = null;
+function _initLatLngDeepLink() {
+  const q = new URLSearchParams(location.search);
+  const lat = parseFloat(q.get('lat'));
+  const lng = parseFloat(q.get('lng'));
+  if (!isFinite(lat) || !isFinite(lng)) return;
+  let z = parseInt(q.get('z'), 10);
+  if (!isFinite(z)) z = 17;
+  const obsId = parseInt(q.get('obs'), 10);  // parsed as int → safe to interpolate
+
+  // Authoritative initial view (the position-memory restore is skipped when these
+  // params are present, so nothing overrides this).
+  map.setView([lat, lng], z);
+
+  const icon = L.divIcon({
+    className: 'fid-deeplink-icon',
+    html: '<div class="fid-deeplink-pin"></div>',
+    iconSize: [22, 22], iconAnchor: [11, 11],
+  });
+  if (_deepLinkMarker) map.removeLayer(_deepLinkMarker);
+  _deepLinkMarker = L.marker([lat, lng], {
+    icon: icon, zIndexOffset: 1200, keyboard: false,
+    title: isFinite(obsId) ? ('Observation #' + obsId) : 'Target location',
+  }).addTo(map);
+  if (isFinite(obsId)) _deepLinkMarker.bindPopup('Observation #' + obsId).openPopup();
 }
 
 // Deep-link species filter (?species=<scientific_name>) from a species card map
@@ -7880,6 +7928,7 @@ async function _submitNote(lat, lng) {
 // ── Init ──────────────────────────────────────────────────────────────────
 _readFiltersFromUrl();                   // restore filterState from query string (Fix #1)
 _initSelectMode();                       // enter /lists select mode if ?select=1
+_initLatLngDeepLink();                   // ?lat&lng&z centre + standalone marker (any review_status)
 loadHeat();                              // whole-archive heat + stats-bar totals
 loadFeatures().then(_initHighlight).then(_initSpeciesFilter);  // bbox pins, then deep-link highlight / species filter
 loadSpeciesFilter();

@@ -18,6 +18,8 @@ class RecordedWalk(Base):
     track_points_json = Column(Text, nullable=False, default="[]")
     audio_note_path   = Column(String(500), nullable=True)
     created_at        = Column(DateTime(timezone=True), server_default=func.now())
+    # Ownership (multi-tenancy groundwork) — nullable, no FK yet; backfilled to curator (user_id=1)
+    user_id           = Column(Integer, nullable=True)
 
 
 class RecordedWalkObservation(Base):

@@ -1663,7 +1663,10 @@ async def correct_culinary_field(
         old_value=old_value,
         new_value=new_value,
         changed_at=datetime.utcnow(),
-        changed_by=body.changed_by,
+        # Provenance is server-derived, never client-supplied. The is_guest 403
+        # guard above means anything reaching here is the curator → 'human'.
+        # body.changed_by is now accepted-but-ignored.
+        changed_by="human",
     )
     db.add(history_row)
 
@@ -2346,7 +2349,8 @@ async def approve_ai_draft(
     draft.status = "edited_approved" if is_edited else "approved"
     draft.final_text = body.edited_text if is_edited else None
     draft.approved_at = datetime.utcnow()
-    draft.approved_by = body.approved_by
+    # Server-derived provenance (is_guest 403 guard above → curator). body.approved_by ignored.
+    draft.approved_by = "human"
 
     # Apply to culinary_info
     ci = await db.scalar(select(CulinaryInfo).where(CulinaryInfo.species_id == sp.id))
@@ -2385,7 +2389,7 @@ async def approve_ai_draft(
             old_value=None,
             new_value=approved_text,
             changed_at=datetime.utcnow(),
-            changed_by=f"ai_approved:{body.approved_by}",
+            changed_by=f"ai_approved:human",
         ))
 
     # For recipe approvals: also write to species_recipes bank

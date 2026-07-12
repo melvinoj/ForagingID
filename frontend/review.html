@@ -1757,7 +1757,7 @@ function _makeCardHtml(obs) {
       ? new Date(obs.photo_taken_at).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'})
       : 'Date unknown';
     const geo = obs.latitude
-      ? `<a href="/?highlight=${obs.id}" title="View on map" style="color:inherit;text-decoration:none">📍 ${obs.latitude.toFixed(4)}, ${obs.longitude.toFixed(4)} ↗</a>`
+      ? `<a href="/?lat=${obs.latitude}&lng=${obs.longitude}&z=17&obs=${obs.id}" title="View on map" style="color:inherit;text-decoration:none">📍 ${obs.latitude.toFixed(4)}, ${obs.longitude.toFixed(4)} ↗</a>`
       : '📍 No GPS';
     const thumbName = obs.thumbnail_path ? obs.thumbnail_path.split('/').pop() : null;
     // Wrap in .thumb-wrap so the Web Share overlay button can be positioned absolutely.

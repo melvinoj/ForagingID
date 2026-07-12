@@ -147,6 +147,11 @@ class Observation(Base):
     # and must never be abandoned if the scan folder is re-linked.
     upload_source: Mapped[Optional[str]] = mapped_column(String(20))
 
+    # --- Ownership (multi-tenancy groundwork) ---
+    # Nullable, no FK yet (added in a later supervised migration). Existing rows
+    # backfilled to the curator (user_id=1).
+    user_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+
     # Relationships
     location: Mapped[Optional["Location"]] = relationship(
         "Location", back_populates="observation", foreign_keys="[Location.observation_id]", uselist=False

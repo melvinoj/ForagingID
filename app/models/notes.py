@@ -14,3 +14,5 @@ class MapNote(Base):
     text: Mapped[str] = mapped_column(Text, nullable=False)
     species_tags: Mapped[Optional[str]] = mapped_column(Text)  # JSON array of scientific names
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    # Ownership (multi-tenancy groundwork) — nullable, no FK yet; backfilled to curator (user_id=1)
+    user_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)

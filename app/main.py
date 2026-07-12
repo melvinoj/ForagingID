@@ -52,6 +52,7 @@ from app.models import workshop as _workshop_models  # noqa: F401 — ensures Wo
 from app.models.observation import DeletedHash as _DeletedHash  # noqa: F401 — ensures deleted_hashes is in Base.metadata
 from app.models.species import SpeciesSynonym as _SpeciesSynonym  # noqa: F401 — ensures species_synonyms is in Base.metadata
 from app.models.species import SpeciesEdibilityHistory as _SpeciesEdibilityHistory  # noqa: F401 — ensures species_edibility_history is in Base.metadata
+from app.models import user as _user_models  # noqa: F401 — ensures User (users) is in Base.metadata
 
 log = logging.getLogger(__name__)
 

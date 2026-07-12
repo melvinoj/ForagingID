@@ -28,6 +28,7 @@ from app.database import get_db
 from app.models.culinary import CulinaryInfo
 from app.models.observation import Observation
 from app.models.species import Species, SpeciesEdibilityCondition, SpeciesLookalike, SpeciesEdibilityHistory
+from app.api.identity import Identity, get_identity
 
 log = logging.getLogger(__name__)
 
@@ -323,10 +324,11 @@ class EdibilityStatusIn(BaseModel):
     edibility_status: str           # edible|caution|toxic|inedible|unknown
     verified: Optional[bool] = None  # None = leave edibility_verified/verified_by untouched (status-only write)
     note: Optional[str] = None       # optional curator note, logged to species_edibility_history
-    changed_by: str                  # REQUIRED caller identity — gates RULE 2 (human-only relax) and
-                                     # stamps the history row. No default: an omitted value is a 422,
-                                     # never a silent "human". Every caller (species.html dialog,
-                                     # review.html per-card + bulk) sends changed_by:'human' explicitly.
+    changed_by: Optional[str] = None  # ACCEPTED-BUT-IGNORED. Provenance is now server-derived
+                                     # ('human', gated by the is_guest 403 guard on the handler) —
+                                     # never trusted from the client. Optional so omission no longer
+                                     # 422s. Left in the model for backward compatibility with
+                                     # existing callers that still send changed_by:'human'.
 
 
 async def _confirmed_obs_counts(db: AsyncSession) -> dict:
@@ -394,6 +396,7 @@ async def bulk_set_edibility_status(
     payload: BulkEdibilityIn,
     background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
+    identity: Identity = Depends(get_identity),
 ):
     """
     Set edibility_status + edibility_verified for multiple species at once.
@@ -406,6 +409,8 @@ async def bulk_set_edibility_status(
     RULE 1/RULE 2 violation is surfaced in errors[] and that item is skipped,
     so /bulk-status is not a coupling/relax bypass.
     """
+    if identity.is_guest:
+        raise HTTPException(403, "Curator only")
     from app.services.enrichment import trigger_ai_drafts_for_species
 
     updated = 0
@@ -426,13 +431,10 @@ async def bulk_set_edibility_status(
         if sp is None:
             continue
         old_status = sp.edibility_status
-        # changed_by is REQUIRED per item — no silent "human" default (mirrors
-        # EdibilityStatusIn making it mandatory). A missing/blank value is
-        # collected into errors[] and the item is skipped, not defaulted.
-        changed_by = str(item.get("changed_by", "")).strip()
-        if not changed_by:
-            errors.append(f"species_id {sid}: changed_by required (no default)")
-            continue
+        # Provenance is server-derived ('human'), never from the item. The
+        # is_guest 403 guard above means any caller reaching here is the curator,
+        # so each write is stamped 'human'; item["changed_by"] is ignored.
+        changed_by = "human"
         # bulk always couples verified (status != "unknown"), so this is the
         # effective verified value the guard must see. Same helper as the PATCH
         # path — a rule violation here is surfaced via errors[] (bulk's existing
@@ -469,6 +471,7 @@ async def set_edibility_status(
     payload: EdibilityStatusIn,
     background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
+    identity: Identity = Depends(get_identity),
 ):
     """
     A6 — persist a curator's edibility-status correction.
@@ -488,6 +491,8 @@ async def set_edibility_status(
 
     After commit, fires AI draft generation if the new status is confirmed edible/caution.
     """
+    if identity.is_guest:
+        raise HTTPException(403, "Curator only")
     from app.services.enrichment import trigger_ai_drafts_for_species
 
     status = (payload.edibility_status or "").strip().lower()
@@ -502,7 +507,9 @@ async def set_edibility_status(
 
     # Server-side safety gate (RULE 1 coupling + RULE 2 human-only relax) — same
     # helper as /bulk-status, so neither path is a bypass. Raises 400 on violation.
-    _enforce_edibility_write_rules(old_status, status, payload.verified, payload.changed_by)
+    # Provenance is server-derived ('human') — the is_guest guard above means any
+    # caller reaching here is the curator; payload.changed_by is ignored.
+    _enforce_edibility_write_rules(old_status, status, payload.verified, "human")
 
     sp.edibility_status = status
     # verified is None -> status-only write; leave edibility_verified/_by untouched.
@@ -515,7 +522,7 @@ async def set_edibility_status(
         field="edibility_status",
         old_value=old_status,
         new_value=status,
-        changed_by=payload.changed_by,
+        changed_by="human",
         note=payload.note,
     ))
 

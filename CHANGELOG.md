@@ -2,7 +2,16 @@
 
 ## Current State
 
-Dialect-guarded the four SQLite-only startup spots in database.py (FK-pragma listener, WAL/synchronous block, datetime('now') backfill, INSERT OR IGNORE seed) — all conditional on engine.dialect.name=='sqlite', Postgres branches added, SQLite behaviour byte-identical, bare except narrowed to OperationalError. New finding (not yet fixed): connect_args at engine creation are pysqlite-only and will block a Postgres connection earlier than these four spots — flagged for the Wave 4 Postgres dry-run.
+GPX export creator string fixed (ForagingID → LandMemory, index.html:6773); stray .envy (redundant PlantNet key copy) deleted after confirming .env holds the live key and .envy was untracked/gitignored.
+That closes the Phase 13 drip queue. Five prompts landed today: species-244 cleanup, doctrine migration, users table, ownership backfill, provenance de-forgery, Postgres dialect guards, hygiene — plus the map deep-link fix slotted in. Everything additive, snapshotted, read-back verified.
+What's carried forward, unchanged from before, for whenever you pick this back up:
+
+Connect_args Postgres blocker (new finding from Prompt 4) — pysqlite-only args at engine creation, next natural item for the Wave 4 dry-run.
+ANTIGRAVITY.md project-UI detach — still owed, your side only.
+LAN-guest-as-curator — deferred, closes with token-based guest detection.
+Live tunnel-guest 403 test — owed on your next tunnel session.
+create_all/Alembic dual-mechanism — Phase 14 cleanup note.
+Vestigial ignored body fields — low-priority cleanup, whenever.
 
 ## Current State — 10 July 2026
 
@@ -172,6 +181,13 @@ Still open:
 - Enrichment gap remediation — 9 AI drafts pending approval, 6 species never scanned, 79 no-PFAF species need alt-source decision
 
 ## History
+
+### 2026-07-12 16:46
+**Snapshot** — End of session — Session ended from Settings page
+DB: `snapshots/db_20260712_164618.sqlite`
+
+### 2026-07-12 16:46
+**Session ended** — Session ended from Settings page
 
 ### 2026-07-12 16:41
 **Snapshot** — End of session — Session ended from Settings page

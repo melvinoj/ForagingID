@@ -7,7 +7,7 @@
   <link rel="apple-touch-icon" href="/static/icons/icon-192.png">
   <link rel="icon" type="image/svg+xml" href="/static/icons/dandelion-icon.svg">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>ForagingID — Species</title>
+  <title>LandMemory — Species</title>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <link rel="stylesheet" href="/static/css/tokens.css">
   <link rel="stylesheet" href="/static/css/site-header.css">
@@ -1339,7 +1339,7 @@
   <div class="species-disclaimer">
     <p>* Edibility and medicinal information is for educational reference only. Always verify identification with multiple authoritative sources before consuming any wild plant or fungi. Never rely on app identification alone — some wild plants can cause serious harm or death.</p>
     <p>Culinary, medicinal, and identification content may be AI-assisted. Human-created and/or reviewed content is indicated where shown.</p>
-    <p>ForagingID is an educational observation tool, not a safety-certified identification system.</p>
+    <p>LandMemory is an educational observation tool, not a safety-certified identification system.</p>
   </div>
 
   <!-- Floating edit-mode save bar -->
@@ -1658,7 +1658,7 @@ function toggleDeNames() {
 
 async function loadProfile(name) {
   _profCurrentSciName = name;   // track for rename form
-  document.title = `${name} — ForagingID`;
+  document.title = `${name} — LandMemory`;
 
   // Set the name immediately — before any async calls — so it's always
   // visible even if the API is slow or renderProfile hits an error before

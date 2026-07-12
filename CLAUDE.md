@@ -232,3 +232,42 @@ Note: points 2-4 are general discipline, not D3-specific — apply them to any c
 
 If user puts a ? means i want to to look at all angles and critique what I suggest too - finding the best option - not pleasing me.
 I may have ideas, but i want you to critique if necessary, not just implement what i say just because i said it.
+
+## Source of Truth (build state)
+
+CHANGELOG.md is the operational source of truth for what's built and outstanding. The roadmap docx is phase/planning reference only. If they conflict, CHANGELOG wins. Do not infer build state from any other doc.
+
+## Write Protocol — every DB write, no exceptions
+
+1. DB snapshot before any write. Always.
+2. Read-only diagnostic first — confirm current state before writing.
+3. One task at a time; confirm clean before the next.
+4. Read-back after every write by re-querying specific rows by ID — print every field, not aggregate counts or reported summaries. "Committed to git" is not verification.
+5. Never fabricate content for any field, especially safety fields. If a field was previously empty, set old_value=NULL — never invent placeholder text.
+
+## Data Model — critical rules
+
+Edibility:
+- species.edibility_status (edible/caution/toxic/inedible/unknown) is the ONLY field any display or handout reads for the edibility verdict.
+- species.edibility_verified is a LOCK FLAG meaning "verdict human-confirmed" — never read it as an edible/safe signal, never set it without explicit instruction.
+- Edibility verdicts always require manual curator confirmation — never auto-set, except toxic (which fails safe).
+- "inedible" != "toxic": inedible species may still be safe for non-culinary use.
+
+Human lock:
+- changed_by='human' is the human-lock marker; the enrichment pipeline guards against overwriting fields carrying a human history row.
+- Always write a history row with changed_by='human' when writing curator-authored content. old_value must be NULL if the field was previously empty.
+
+Species lookup:
+- Use name_key (via normalize_taxon_key()) for all species lookups, not scientific_name.
+- species_resources is string-keyed by species_name, not species_id — merges orphan these; do not attempt merges.
+
+Uploads:
+- uploads/ is the primary image store. Never bulk-delete from it. Never move it without a corresponding DB path update for all affected observations.
+
+## Safety Doctrine
+
+- Fails safe toward the more conservative verdict — never silently overwrite a human-locked verdict. Automated tightening is allowed; relaxing a verdict is human-only.
+- preparation_warnings and look_alike_warnings are orthogonal to the edibility verdict — both must be present for hazardous species regardless of verdict.
+- Deadly species (Conium maculatum, Aconitum napellus, Taxus baccata, Helleborus foetidus): single red-skull safety surface. Do not alter their safety data without explicit instruction.
+- Conium maculatum look_alike_warnings is deliberately empty — do not write to it without explicit instruction.
+- Safety warning text is curator-authored (Melvin-verbatim) only. Never generate, infer, or paraphrase safety warning text.

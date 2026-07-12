@@ -51,7 +51,7 @@
     titleWrap.id = 'nav-drawer-title-wrap';
     var title = document.createElement('span');
     title.id = 'nav-drawer-title';
-    title.textContent = 'ForagingID';
+    title.textContent = 'LandMemory';
     var guestBadge = document.createElement('span');
     guestBadge.id = 'nav-guest-badge';
     guestBadge.textContent = '👁 Guest view';

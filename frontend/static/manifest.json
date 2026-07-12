@@ -1,6 +1,6 @@
 {
-  "name": "ForagingID",
-  "short_name": "ForagingID",
+  "name": "LandMemory",
+  "short_name": "LandMemory",
   "description": "Local-first plant & fungi foraging map, identification and field guide.",
   "start_url": "/",
   "scope": "/",

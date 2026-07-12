@@ -1386,7 +1386,7 @@
     html += '</div>';
     html += '<div class="pc-readonly-note">Species name, photo, recipe and notes are drawn read-only from the shared species record. ' +
             'Your encounters are personal to you.</div>';
-    html += '<div class="pc-credit">ForagingID · Melvin Jarman</div>';
+    html += '<div class="pc-credit">LandMemory · Melvin Jarman</div>';
     return html;
   }
 

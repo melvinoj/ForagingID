@@ -2,28 +2,7 @@
 
 ## Current State
 
-I can't end the session — that's the End Session button in your Settings (http://127.0.0.1:8000/settings) or Code's POST /api/dev/end-session; running it from here isn't something I do. Here's the summary text, ready to paste into the End Session field:
-Current State — 12 July 2026
-Phase 13 additive multi-tenant groundwork underway (supervised, one prompt at a time). This session:
-
-species_id 244 dangling FK orphans cleared — 24 enrichment_sources + 5 species_ai_drafts rows deleted (snapshot-before-write, read-back 0/0, neighbours 243/245 intact).
-Doctrine migrated to CLAUDE.md — Source of Truth, Write Protocol, Data Model, Safety Doctrine appended; ANTIGRAVITY.md git-removed. (Project-UI detach still owed — see pending.)
-users principal table — Alembic 0047, guarded-create per repo precedent; seeded curator id=1 + participant id=2; additive, no FK.
-Ownership columns — nullable user_id added to observations (13,645), map_notes (3), recorded_walks (7), saved_walks (1) via Alembic 0048 (batch-guarded); all backfilled to curator id=1; verified by re-SELECT, totals unchanged, no FK/NOT NULL.
-Provenance de-forgery — changed_by/approved_by now server-derived ('human' only for non-guest identity) across correct_culinary_field, approve_ai_draft, set_edibility_status, bulk_set_edibility_status; added missing is_guest guard to both edibility write paths; EdibilityStatusIn.changed_by made Optional. Verified via curator same-value test (history stamped 'human' from omitted body, no verdict mutation) + two human-lock spot-checks unchanged.
-
-Pending / next:
-
-Map coordinate-arrow deep-link fix (recon prompt issued, awaiting Code output) — return-to-exact-location, must drop standalone marker independent of approved-pins layer since needs_review obs aren't on it.
-Then Phase 13 audit queue: Prompt 4 (engine-conditional SQLite-only startup spots + init_db raw SQL), Prompt 5 (GPX creator string + delete stray .envy).
-
-Parked (survive reset):
-
-Detach ANTIGRAVITY.md from the Claude.ai project UI — repo removal doesn't detach the auto-loaded project copy.
-LAN-guest-classified-as-curator (audit §B, host-based identity) — provenance fix reduces but doesn't eliminate; closes when guest detection moves onto token identity.
-Live tunnel-guest 403 test — structurally confirmed, end-to-end over-tunnel check owed on next tunnel session.
-create_all/Alembic dual-mechanism guard now load-bearing on every model-add migration — Phase 14 cleanup (one source of schema truth post-cutover).
-Vestigial accepted-but-ignored body fields (FieldCorrection.changed_by, DraftEditApprove.approved_by, EdibilityStatusIn.changed_by) — remove later.
+Dialect-guarded the four SQLite-only startup spots in database.py (FK-pragma listener, WAL/synchronous block, datetime('now') backfill, INSERT OR IGNORE seed) — all conditional on engine.dialect.name=='sqlite', Postgres branches added, SQLite behaviour byte-identical, bare except narrowed to OperationalError. New finding (not yet fixed): connect_args at engine creation are pysqlite-only and will block a Postgres connection earlier than these four spots — flagged for the Wave 4 Postgres dry-run.
 
 ## Current State — 10 July 2026
 
@@ -193,6 +172,13 @@ Still open:
 - Enrichment gap remediation — 9 AI drafts pending approval, 6 species never scanned, 79 no-PFAF species need alt-source decision
 
 ## History
+
+### 2026-07-12 16:41
+**Snapshot** — End of session — Session ended from Settings page
+DB: `snapshots/db_20260712_164106.sqlite`
+
+### 2026-07-12 16:41
+**Session ended** — Session ended from Settings page
 
 ### 2026-07-12 16:32
 **Snapshot** — End of session — Session ended from Settings page

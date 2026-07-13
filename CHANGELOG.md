@@ -2,16 +2,24 @@
 
 ## Current State
 
-GPX export creator string fixed (ForagingID → LandMemory, index.html:6773); stray .envy (redundant PlantNet key copy) deleted after confirming .env holds the live key and .envy was untracked/gitignored.
-That closes the Phase 13 drip queue. Five prompts landed today: species-244 cleanup, doctrine migration, users table, ownership backfill, provenance de-forgery, Postgres dialect guards, hygiene — plus the map deep-link fix slotted in. Everything additive, snapshotted, read-back verified.
-What's carried forward, unchanged from before, for whenever you pick this back up:
+Current State — 13 July 2026
+Phase 13 additive groundwork continuing; step 1 of the "app-feel" polish landed (PWA path chosen over app-store — PWA-install only for now, Android store parked: $25 one-off is fine but the 12-tester/14-day closed-test gate isn't worth it pre-distribution).
+This session:
 
-Connect_args Postgres blocker (new finding from Prompt 4) — pysqlite-only args at engine creation, next natural item for the Wave 4 dry-run.
-ANTIGRAVITY.md project-UI detach — still owed, your side only.
-LAN-guest-as-curator — deferred, closes with token-based guest detection.
-Live tunnel-guest 403 test — owed on your next tunnel session.
-create_all/Alembic dual-mechanism — Phase 14 cleanup note.
-Vestigial ignored body fields — low-priority cleanup, whenever.
+PWA home-screen identity — added 5 identity/standalone meta tags (application-name, apple-mobile-web-app-title, apple-mobile-web-app-capable, mobile-web-app-capable, apple-mobile-web-app-status-bar-style=black) = "LandMemory" to the 9 PWA-instrumented pages (index, landing, review, species, scan, lists, settings, about, workshops). Manifest already met all criteria (name/short_name LandMemory, standalone, 192+512 any-maskable icons, theme #2d5a1b) — left untouched. Frontend is per-page static HTML, no shared head partial, so tags applied to each of the 9 files; verified 9/9 per tag.
+
+Pending / next:
+
+On-device Pixel-over-LAN install test (checklist ready: install sheet shows leaf + "LandMemory", home-screen label clean, launches standalone, dark status bar).
+Bring encounters + seasons (core nav pages) to PWA-block parity — currently missing manifest link / theme-color / apple-touch-icon / identity tags entirely. taxonomy lower priority (prototype); print/scratch stay excluded.
+
+Parked (unchanged, survive reset):
+
+Maskable-icon safe-zone padding — same PNG serves any+maskable; needs ~20% padding or Android may crop the leaf (design task, Recraft/Inkscape).
+OG/Twitter tags — skipped, near-zero value for LAN-only.
+Detach ANTIGRAVITY.md from Claude.ai project UI (your side).
+connect_args pysqlite-only Postgres blocker (Wave 4 dry-run).
+LAN-guest-as-curator; live tunnel-guest 403 test; create_all/Alembic guard; vestigial ignored body fields.
 
 ## Current State — 10 July 2026
 
@@ -181,6 +189,13 @@ Still open:
 - Enrichment gap remediation — 9 AI drafts pending approval, 6 species never scanned, 79 no-PFAF species need alt-source decision
 
 ## History
+
+### 2026-07-13 21:12
+**Snapshot** — End of session — Session ended from Settings page
+DB: `snapshots/db_20260713_211208.sqlite`
+
+### 2026-07-13 21:12
+**Session ended** — Session ended from Settings page
 
 ### 2026-07-12 16:46
 **Snapshot** — End of session — Session ended from Settings page

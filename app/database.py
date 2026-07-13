@@ -11,14 +11,26 @@ class Base(DeclarativeBase):
     pass
 
 
-engine = create_async_engine(
-    settings.database_url,
-    echo=settings.debug,
-    connect_args={
+# connect_args below are pysqlite/aiosqlite-specific (check_same_thread is a
+# sqlite3.connect kwarg; timeout is SQLite's busy-timeout) and are invalid for
+# other dialects — e.g. asyncpg raises on an unexpected check_same_thread kwarg.
+# Scope them to the sqlite backend so a future Postgres URL (Phase 14) skips
+# them. SQLite path is unchanged: same args, same values.
+_is_sqlite = sqlalchemy.make_url(settings.database_url).get_backend_name() == "sqlite"
+_connect_args = (
+    {
         "check_same_thread": False,
         # 10-second busy timeout so concurrent requests wait rather than crash.
         "timeout": 10,
-    },
+    }
+    if _is_sqlite
+    else {}
+)
+
+engine = create_async_engine(
+    settings.database_url,
+    echo=settings.debug,
+    connect_args=_connect_args,
 )
 
 

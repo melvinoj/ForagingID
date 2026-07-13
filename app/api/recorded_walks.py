@@ -162,6 +162,7 @@ async def create_recorded_walk(
         duration_s        = body.duration_s,
         track_points_json = json.dumps([p.model_dump() for p in body.track_points]),
         audio_note_path   = body.audio_note_path,
+        user_id           = identity.user_id,
     )
     db.add(walk)
     await db.flush()  # get walk.id

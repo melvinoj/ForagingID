@@ -21,6 +21,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.database import get_db
+from app.api.identity import Identity, get_identity
 from app.models.walk import SavedWalk
 
 log = logging.getLogger(__name__)
@@ -89,7 +90,11 @@ class SaveWalkRequest(BaseModel):
 
 
 @router.post("/saves")
-async def save_walk(body: SaveWalkRequest, db: AsyncSession = Depends(get_db)):
+async def save_walk(
+    body: SaveWalkRequest,
+    db: AsyncSession = Depends(get_db),
+    identity: Identity = Depends(get_identity),
+):
     walk = SavedWalk(
         name=body.name,
         obs_ids_json=json.dumps(body.obs_ids),
@@ -97,6 +102,7 @@ async def save_walk(body: SaveWalkRequest, db: AsyncSession = Depends(get_db)):
         route_geojson=json.dumps(body.route_geojson) if body.route_geojson else None,
         distance_m=body.distance_m,
         duration_min=body.duration_min,
+        user_id=identity.user_id,
     )
     db.add(walk)
     await db.commit()

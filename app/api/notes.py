@@ -57,6 +57,7 @@ async def create_note(
         longitude=body.longitude,
         text=body.text.strip(),
         species_tags=_json.dumps(body.species_tags),
+        user_id=identity.user_id,
     )
     db.add(note)
     await db.commit()

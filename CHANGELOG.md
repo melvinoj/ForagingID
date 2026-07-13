@@ -3,23 +3,26 @@
 ## Current State
 
 Current State — 13 July 2026
-Phase 13 additive groundwork continuing; step 1 of the "app-feel" polish landed (PWA path chosen over app-store — PWA-install only for now, Android store parked: $25 one-off is fine but the 12-tester/14-day closed-test gate isn't worth it pre-distribution).
+Phase 13 additive groundwork session across three areas: PWA parity, Postgres de-risk, and user_id write-stamping. Plus Pixel-over-LAN PWA install verified live.
 This session:
 
-PWA home-screen identity — added 5 identity/standalone meta tags (application-name, apple-mobile-web-app-title, apple-mobile-web-app-capable, mobile-web-app-capable, apple-mobile-web-app-status-bar-style=black) = "LandMemory" to the 9 PWA-instrumented pages (index, landing, review, species, scan, lists, settings, about, workshops). Manifest already met all criteria (name/short_name LandMemory, standalone, 192+512 any-maskable icons, theme #2d5a1b) — left untouched. Frontend is per-page static HTML, no shared head partial, so tags applied to each of the 9 files; verified 9/9 per tag.
+Encounters + Seasons PWA-block parity — both files were missing all 8 PWA tags (manifest link, theme-color, apple-touch-icon, and 5 identity/standalone meta tags). Added matching the index.html reference exactly; per-file-local indentation preserved; verified per-tag, one occurrence each, pre-existing SVG favicon not duplicated. All 11 real nav pages (index, landing, review, species, scan, lists, settings, about, workshops, encounters, seasons) now PWA-block-consistent. taxonomy/print/scratch out of scope, untouched.
+connect_args dialect-guarded at engine creation (app/database.py) — SQLite-only kwargs (check_same_thread, timeout) now scoped behind make_url().get_backend_name() == "sqlite"; non-sqlite URLs get empty connect_args. SQLite path verified live unchanged (identical args, FK PRAGMA still firing, SELECT 1 clean); Postgres branch logic-verified only (no live PG — expected, Phase-14 groundwork). Clears the last known engine-creation Postgres blocker.
+user_id stamping wired into three write paths — recorded_walks.py (the load-bearing fix; guest-writable via main.py whitelist), notes.py (map_notes), walk.py (saved_walks); all three previously inserted NULL. recorded_walks/notes already took get_identity; walk.py had no identity import — added import + dependency matching encounters/recorded_walks, then set user_id=identity.user_id on all three. Verified by real curator POST + fresh re-SELECT by id on each: all landed user_id=1 (was NULL). Verification junk rows deleted afterward (no orphaned children for walk 8). observations/scan pipeline, get_identity, and all 403 gates untouched.
+PWA install verified on Pixel over LAN — page loads at 192.168.0.248:8000, install sheet shows leaf + "LandMemory", launches standalone, dark status bar confirmed. (Root cause of earlier failure: server was bound to 127.0.0.1; restarted with --host 0.0.0.0 → *:8000.)
 
 Pending / next:
 
-On-device Pixel-over-LAN install test (checklist ready: install sheet shows leaf + "LandMemory", home-screen label clean, launches standalone, dark status bar).
-Bring encounters + seasons (core nav pages) to PWA-block parity — currently missing manifest link / theme-color / apple-touch-icon / identity tags entirely. taxonomy lower priority (prototype); print/scratch stay excluded.
+Bring recorded_walks whitelist-vs-gate contradiction into the LAN-guest decision: recorded_walks.py's if identity.is_guest: raise 403 gate blocks participant tokens (is_guest=True) despite recorded-walks being in the main.py guest-write whitelist — a tokened LEO participant can't create a recorded walk today. Sharpened form of the parked LAN-guest-as-curator identity gap; still needs the missing fact (how LEO participants connect: tunnel vs LAN).
+CLAUDE.md venv path is stale: documents source venv/bin/activate; real venv is ~/foragingid-venv. One-line fix. Also standardise server launch on the full --host 0.0.0.0 command — omitting it silently rebinds to loopback (hit twice this session).
+Live tunnel-guest 403 verification (needs tunnel up — operational, not a code prompt).
 
 Parked (unchanged, survive reset):
 
-Maskable-icon safe-zone padding — same PNG serves any+maskable; needs ~20% padding or Android may crop the leaf (design task, Recraft/Inkscape).
+Maskable-icon safe-zone padding (~20% padding needed or Android may crop the leaf — Recraft/Inkscape).
 OG/Twitter tags — skipped, near-zero value for LAN-only.
 Detach ANTIGRAVITY.md from Claude.ai project UI (your side).
-connect_args pysqlite-only Postgres blocker (Wave 4 dry-run).
-LAN-guest-as-curator; live tunnel-guest 403 test; create_all/Alembic guard; vestigial ignored body fields.
+create_all/Alembic dual-mechanism guard; vestigial accepted-but-ignored body fields on write endpoints.
 
 ## Current State — 10 July 2026
 
@@ -189,6 +192,13 @@ Still open:
 - Enrichment gap remediation — 9 AI drafts pending approval, 6 species never scanned, 79 no-PFAF species need alt-source decision
 
 ## History
+
+### 2026-07-13 22:36
+**Snapshot** — End of session — Session ended from Settings page
+DB: `snapshots/db_20260713_223620.sqlite`
+
+### 2026-07-13 22:36
+**Session ended** — Session ended from Settings page
 
 ### 2026-07-13 21:12
 **Snapshot** — End of session — Session ended from Settings page

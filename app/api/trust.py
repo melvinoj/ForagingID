@@ -462,11 +462,16 @@ async def bulk_reassign(
         )
 
     # Reassign all matching observations
-    from app.services.species_link import set_observation_species
+    from app.services.species_link import set_observation_species, strip_candidate_from_obs
     reassigned = 0
     for obs in obs_rows:
         old_name = obs.species_primary
         await set_observation_species(db, obs, payload.target_species)
+        # Drop the moved-off name from this obs's candidate cache (audit trail
+        # kept in SpeciesCandidate). Guarded so a no-op reassign never strips
+        # the current name.
+        if old_name and old_name != payload.target_species:
+            strip_candidate_from_obs(obs, old_name)
         db.add(ObservationEdit(
             observation_id=obs.id,
             field_name="species_primary",

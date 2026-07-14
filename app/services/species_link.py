@@ -13,6 +13,7 @@ whose Species row is created later by background enrichment), species_id stays
 NULL — that is the correct state at write time.
 """
 
+import json
 from datetime import datetime
 from typing import Optional
 
@@ -22,6 +23,37 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.observation import Observation
 from app.models.species import Species
 from app.services.taxonomy import normalize_taxon_key
+
+
+def strip_candidate_from_obs(obs: Observation, old_name: Optional[str]) -> bool:
+    """Remove ONLY the moved-off name's entry from this observation's
+    species_candidates_json, leaving every other candidate intact.
+
+    Call this after moving an observation off ``old_name`` so the cache reflects
+    current reality. The original-AI-guess audit trail lives separately in the
+    SpeciesCandidate table (scan.py), so this only drops the redundant drifting
+    copy in the JSON — it never touches SpeciesCandidate.
+
+    Sync (mutates the obs object only; caller commits). No-op — returns False —
+    when old_name is falsy, the cache is empty, or the JSON is malformed. Callers
+    guard on old_name != new_name so the current primary is never stripped.
+    """
+    if not old_name or not obs.species_candidates_json:
+        return False
+    try:
+        cands = json.loads(obs.species_candidates_json)
+    except (ValueError, TypeError):
+        return False
+    if not isinstance(cands, list):
+        return False
+    filtered = [
+        c for c in cands
+        if not (isinstance(c, dict) and c.get("scientific_name") == old_name)
+    ]
+    if len(filtered) != len(cands):
+        obs.species_candidates_json = json.dumps(filtered)
+        return True
+    return False
 
 
 async def resolve_species_id(

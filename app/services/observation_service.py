@@ -60,6 +60,12 @@ async def update_observation_status(
         if prev_species != species_name:
             _log_edit(session, obs, "species_primary", prev_species, species_name, edited_by)
             await set_observation_species(session, obs, species_name)
+            # Drop the moved-off name from the candidate cache so it reflects
+            # current reality (no-op when prev_species is empty, i.e. a
+            # promotion rather than a move-off). Audit trail is preserved in the
+            # SpeciesCandidate table.
+            from app.services.species_link import strip_candidate_from_obs
+            strip_candidate_from_obs(obs, prev_species)
 
     # 2. Update review status
     if prev_status != review_status:

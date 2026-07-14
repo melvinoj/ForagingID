@@ -497,7 +497,10 @@ async def correct_species(
     - Sets review_status = 'manually_verified'.
     - Sets human_corrected = True so the map and DB can distinguish
       human identifications from AI identifications.
-    - Preserves species_candidates_json (original AI candidates intact).
+    - Strips the moved-off (previous) name from species_candidates_json so the
+      cache reflects current reality; all other candidates stay intact. The
+      original-AI-guess audit trail is preserved separately in the
+      SpeciesCandidate table.
     """
     obs = await db.get(Observation, observation_id)
     if not obs:

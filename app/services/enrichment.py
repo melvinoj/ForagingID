@@ -337,7 +337,10 @@ async def handle_species_rename(
     The caller is responsible for committing and then triggering re-enrichment
     (call enrich_species with re_enrich=True, fill_empty_only=False).
     """
-    from app.models.culinary import CulinaryInfo, CulinaryInfoHistory
+    # CulinaryInfoHistory lives in app.models.species (already imported at module
+    # level), NOT app.models.culinary — importing it from culinary raises
+    # ImportError and 500s every rename/reassign. Only CulinaryInfo is here.
+    from app.models.culinary import CulinaryInfo
     from app.models.species import SpeciesAIDraft, SpeciesRecipe
     from sqlalchemy import update as sqla_update
 

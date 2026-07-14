@@ -456,9 +456,10 @@ async def bulk_reassign(
     if source_sp:
         await handle_species_rename(
             db,
-            species=source_sp,
-            new_name=payload.target_species,
-            is_rename=False,
+            source_sp,                    # sp (positional)
+            payload.source_species,       # old_name — required; used for the audit row
+            payload.target_species,       # new_name
+            is_rename=False,              # merge/reassign — preserve target-curated edibility
         )
 
     # Reassign all matching observations

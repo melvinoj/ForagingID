@@ -2,27 +2,33 @@
 
 ## Current State
 
-Current State — 13 July 2026
-Phase 13 additive groundwork session across three areas: PWA parity, Postgres de-risk, and user_id write-stamping. Plus Pixel-over-LAN PWA install verified live.
+Current State — 14 July 2026
+Long Phase-13 session: PWA parity, Postgres de-risk, user_id write-stamping, Pixel LAN install verified, and a complete root-cause arc on species-card phantoms (diagnose → fix source → trim damage). Two dead endpoints revived as fallout.
 This session:
 
-Encounters + Seasons PWA-block parity — both files were missing all 8 PWA tags (manifest link, theme-color, apple-touch-icon, and 5 identity/standalone meta tags). Added matching the index.html reference exactly; per-file-local indentation preserved; verified per-tag, one occurrence each, pre-existing SVG favicon not duplicated. All 11 real nav pages (index, landing, review, species, scan, lists, settings, about, workshops, encounters, seasons) now PWA-block-consistent. taxonomy/print/scratch out of scope, untouched.
-connect_args dialect-guarded at engine creation (app/database.py) — SQLite-only kwargs (check_same_thread, timeout) now scoped behind make_url().get_backend_name() == "sqlite"; non-sqlite URLs get empty connect_args. SQLite path verified live unchanged (identical args, FK PRAGMA still firing, SELECT 1 clean); Postgres branch logic-verified only (no live PG — expected, Phase-14 groundwork). Clears the last known engine-creation Postgres blocker.
-user_id stamping wired into three write paths — recorded_walks.py (the load-bearing fix; guest-writable via main.py whitelist), notes.py (map_notes), walk.py (saved_walks); all three previously inserted NULL. recorded_walks/notes already took get_identity; walk.py had no identity import — added import + dependency matching encounters/recorded_walks, then set user_id=identity.user_id on all three. Verified by real curator POST + fresh re-SELECT by id on each: all landed user_id=1 (was NULL). Verification junk rows deleted afterward (no orphaned children for walk 8). observations/scan pipeline, get_identity, and all 403 gates untouched.
-PWA install verified on Pixel over LAN — page loads at 192.168.0.248:8000, install sheet shows leaf + "LandMemory", launches standalone, dark status bar confirmed. (Root cause of earlier failure: server was bound to 127.0.0.1; restarted with --host 0.0.0.0 → *:8000.)
+Encounters + Seasons PWA-block parity — both files were missing all 8 PWA tags; added matching the index.html reference exactly, per-file-local indentation, verified per-tag with no duplication. All 11 real nav pages now PWA-block-consistent.
+connect_args dialect-guarded at engine creation (app/database.py) — SQLite-only kwargs (check_same_thread, timeout) scoped behind make_url().get_backend_name() == "sqlite"; non-sqlite gets empty connect_args. SQLite path verified live unchanged (FK PRAGMA firing, SELECT 1 clean); Postgres branch logic-only. Clears the last engine-creation Postgres blocker.
+user_id stamping wired into recorded_walks.py, notes.py, walk.py — all three previously wrote NULL; now stamp identity.user_id. Real curator POST + fresh re-SELECT verified user_id=1 on each; verification rows deleted. observations/scan pipeline and get_identity untouched.
+PWA install confirmed on Pixel over LAN — page loads at 192.168.0.248:8000, install sheet shows leaf + "LandMemory", standalone launch, dark status bar. (Earlier failure was server bound to 127.0.0.1; restarted with --host 0.0.0.0 → *:8000.)
+Taxonomy popup + tooltip now honest about collection state — added read-only obs_state (confirmed/in_review/none) to the taxonomy-tree endpoint via OR-both-linkage-columns + map's exact confirmed tuple. Popup: confirmed→"species card"+View card; in_review→"card pending review"+card link; none→"placeholder", no link, no card content. Tooltip gated on same obs_state; ALL-CAPS "confirmed · EXACT lineage" replaced with lowercase human labels; unbacked "EXACT" lineage claim dropped (no client-side match data). Geometry/constants untouched.
+Phantom root-cause fixed at source — phantoms were NOT losing candidates; all four card-creation sites are observation-backed at birth. Cards orphan later when an observation is re-identified/deleted and nothing GCs the old name's card. Fixed with orphan-GC + stale-candidate-strip at the shared chokepoint (set_observation_species) plus the delete path — covers all move-off paths (retry-confirm, correct_species, trust-accept, bulk-reassign, delete, rename). GC keys on zero-observation only (both columns), never on confirmed-status, so in_review cards the popup needs are never marked. Marker: nullable species.orphaned_at (Alembic 0049), reversible/self-healing. candidates_json strip made uniform across all move-off paths via shared helper strip_candidate_from_obs (SpeciesCandidate audit table preserves original AI guesses). All verified by throwaway re-ID + fresh re-SELECT, test rows cleaned.
+Two dead endpoints revived (pre-existing bugs surfaced during the GC work): (1) bulk_reassign 500'd on a malformed handle_species_rename call (species= kwarg doesn't exist; old_name missing) — fixed to real signature. (2) handle_species_rename itself imported CulinaryInfoHistory from the wrong module (app.models.culinary; it lives in app.models.species) → ImportError broke bulk_reassign AND the real species-rename path — fixed. Revived bulk_reassign is now leak-proof by construction (chokepoint GC/strip fire on its moves). Verified by real reassign + re-SELECT; target row proven untouched (edibility_verified preserved, updated_at unchanged).
+Phantom backlog hard-deleted — 49 of 50 phantoms removed (all except id 653 Oenanthe crocata, retained as human-verified toxic/deadly hazard-reference card). Snapshot first; full FK-child map discovered by scanning (12 direct children + two-column species_lookalikes + species_synonyms canonical + grandchildren + string-keyed species_resources); safety cross-checks all zero (no encounters, no lookalike-of-kept, no synonym-canonical, no kept-recipe→deleted-draft); children-before-parents in one transaction with foreign_keys=ON. Verified: species 644→595 (−49), zero orphaned children anywhere, 653 intact, obs_state none 50→1 with confirmed/in_review unchanged. Deleted cards recreate observation-backed if photographed later.
 
 Pending / next:
 
-Bring recorded_walks whitelist-vs-gate contradiction into the LAN-guest decision: recorded_walks.py's if identity.is_guest: raise 403 gate blocks participant tokens (is_guest=True) despite recorded-walks being in the main.py guest-write whitelist — a tokened LEO participant can't create a recorded walk today. Sharpened form of the parked LAN-guest-as-curator identity gap; still needs the missing fact (how LEO participants connect: tunnel vs LAN).
-CLAUDE.md venv path is stale: documents source venv/bin/activate; real venv is ~/foragingid-venv. One-line fix. Also standardise server launch on the full --host 0.0.0.0 command — omitting it silently rebinds to loopback (hit twice this session).
-Live tunnel-guest 403 verification (needs tunnel up — operational, not a code prompt).
+recorded_walks whitelist-vs-gate contradiction — recorded_walks.py's if identity.is_guest: raise 403 blocks participant tokens (is_guest=True) despite recorded-walks being in the main.py guest-write whitelist; a tokened LEO participant can't create a recorded walk today. Sharpened form of the parked LAN-guest-as-curator identity gap; needs the missing fact (how LEO participants connect: tunnel vs LAN).
+CLAUDE.md venv path stale — documents source venv/bin/activate; real venv is ~/foragingid-venv. One-line fix. Also standardise server launch on the full --host 0.0.0.0 command — omitting it silently rebinds to loopback (hit twice this session).
+bulk_reassign doesn't re-enrich the target after merge — handle_species_rename docstring says callers should; this one never has (pre-existing, out of scope). A merged species may carry stale enrichment until re-triggered. Low priority.
+Species-rename was silently broken until this session (the CulinaryInfoHistory import bug) — any past "rename didn't work" is now explained and fixed.
+Live tunnel-guest 403 verification (needs tunnel up — operational).
 
-Parked (unchanged, survive reset):
+Parked (unchanged):
 
-Maskable-icon safe-zone padding (~20% padding needed or Android may crop the leaf — Recraft/Inkscape).
-OG/Twitter tags — skipped, near-zero value for LAN-only.
+Maskable-icon safe-zone padding (~20% or Android may crop the leaf).
 Detach ANTIGRAVITY.md from Claude.ai project UI (your side).
-create_all/Alembic dual-mechanism guard; vestigial accepted-but-ignored body fields on write endpoints.
+create_all/Alembic dual-mechanism guard; vestigial accepted-but-ignored body fields.
+Phantom source now fixed, but note the mechanism can still produce orphans that the GC marks (orphaned_at) rather than deletes — a periodic hard-purge of orphaned_at rows (excluding any that gain human/safety content) may be worth a future housekeeping pass.
 
 ## Current State — 10 July 2026
 
@@ -192,6 +198,13 @@ Still open:
 - Enrichment gap remediation — 9 AI drafts pending approval, 6 species never scanned, 79 no-PFAF species need alt-source decision
 
 ## History
+
+### 2026-07-14 16:39
+**Snapshot** — End of session — Session ended from Settings page
+DB: `snapshots/db_20260714_163940.sqlite`
+
+### 2026-07-14 16:39
+**Session ended** — Session ended from Settings page
 
 ### 2026-07-14 16:34
 **Snapshot** — Manual snapshot

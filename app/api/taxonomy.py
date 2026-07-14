@@ -27,10 +27,88 @@ from sqlalchemy import select
 
 from app.database import AsyncSessionLocal
 from app.models.species import Species
+from app.models.observation import Observation
 
 router = APIRouter(tags=["taxonomy"])
 
 _PLACEABLE_KINGDOMS = {"plantae", "fungi"}
+
+# Must match the map's confirmed definition exactly (app/api/map.py
+# _CONFIRMED_STATUSES) so a species' obs_state='confirmed' here means the same
+# thing as "surfaces on the map". Do not fork this definition.
+_CONFIRMED_STATUSES = ("approved", "manually_verified")
+
+
+async def _compute_obs_state(session) -> dict[str, str]:
+    """Return {scientific_name: 'confirmed' | 'in_review' | 'none'} for every
+    species. Read-only, SELECT-derived — no writes, no schema change.
+
+    A species counts as having an observation when EITHER linkage column points
+    at it (they desync): observations.species_id = species.id OR
+    observations.species_primary = species.scientific_name. 'confirmed' uses the
+    map's exact status tuple; 'in_review' = has an observation but none confirmed;
+    'none' = no observation references it by either column (true phantom).
+    """
+    species_rows = (
+        await session.execute(select(Species.id, Species.scientific_name))
+    ).all()
+
+    # Confirmed linkage sets (both columns), map-exact status filter.
+    confirmed_ids = set(
+        (await session.execute(
+            select(Observation.species_id)
+            .where(
+                Observation.species_id.isnot(None),
+                Observation.review_status.in_(_CONFIRMED_STATUSES),
+                Observation.identification_status == "identified",
+            )
+            .distinct()
+        )).scalars().all()
+    )
+    confirmed_names = set(
+        (await session.execute(
+            select(Observation.species_primary)
+            .where(
+                Observation.species_primary.isnot(None),
+                Observation.review_status.in_(_CONFIRMED_STATUSES),
+                Observation.identification_status == "identified",
+            )
+            .distinct()
+        )).scalars().all()
+    )
+
+    # Any-observation linkage sets (both columns), no status filter.
+    any_ids = set(
+        (await session.execute(
+            select(Observation.species_id)
+            .where(Observation.species_id.isnot(None))
+            .distinct()
+        )).scalars().all()
+    )
+    any_names = set(
+        (await session.execute(
+            select(Observation.species_primary)
+            .where(Observation.species_primary.isnot(None))
+            .distinct()
+        )).scalars().all()
+    )
+
+    # Priority so a duplicate scientific_name never downgrades a stronger state.
+    _RANK = {"none": 0, "in_review": 1, "confirmed": 2}
+    state_map: dict[str, str] = {}
+    for sid, sci_name in species_rows:
+        if not sci_name:
+            continue
+        if sid in confirmed_ids or sci_name in confirmed_names:
+            state = "confirmed"
+        elif sid in any_ids or sci_name in any_names:
+            state = "in_review"
+        else:
+            state = "none"
+        prev = state_map.get(sci_name)
+        if prev is None or _RANK[state] > _RANK[prev]:
+            state_map[sci_name] = state
+    return state_map
 
 _UNPLACED_REASONS = {
     "FUZZY": "fuzzy match",
@@ -56,6 +134,10 @@ async def get_taxonomy_tree():
                 )
             )
         ).all()
+
+        # obs_state per species — read-only, keyed by scientific_name so the
+        # frontend popup can look it up without touching the tree geometry.
+        obs_state = await _compute_obs_state(session)
 
     # class_ -> order_ -> family -> genus -> [species...] (same shape for both kingdoms)
     raw_plantae: dict = defaultdict(lambda: defaultdict(lambda: defaultdict(lambda: defaultdict(list))))
@@ -115,4 +197,5 @@ async def get_taxonomy_tree():
         "RAW": {"Plantae": _flatten(raw_plantae)},
         "FUNGI": _flatten(fungi),
         "UNPLACED": unplaced,
+        "OBS_STATE": obs_state,
     }

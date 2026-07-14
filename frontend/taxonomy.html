@@ -159,6 +159,8 @@
   }
   .species-popup-thumb.visible { display: block; }
   .species-popup-name { font-style: italic; color: var(--ink); margin-bottom: 8px; }
+  .species-popup-note { display: none; color: var(--ink-dim); font-size: 11px; line-height: 1.4; margin-bottom: 8px; }
+  .species-popup-note.visible { display: block; }
   .species-popup-link { display: inline-block; color: var(--leaf-bright); font-size: 11px; font-weight: 600; text-decoration: none; }
   .species-popup-link:hover { text-decoration: underline; }
 
@@ -215,6 +217,7 @@
     <button class="species-popup-close" onclick="closeSpeciesPopup()" aria-label="Close">✕</button>
     <img class="species-popup-thumb" id="species-popup-thumb" alt="">
     <div class="species-popup-name" id="species-popup-name"></div>
+    <div class="species-popup-note" id="species-popup-note"></div>
     <a class="species-popup-link" id="species-popup-link" href="#">View card</a>
   </div>
 </div>
@@ -230,6 +233,10 @@
 let RAW = { Plantae: {} };
 let FUNGI = {};
 let UNPLACED = [];
+// { scientific_name: 'confirmed' | 'in_review' | 'none' } from the endpoint.
+// Read by openSpeciesPopup() to gate the popup on whether a species actually
+// has an observation. Kept as a flat lookup so the tree geometry is untouched.
+let OBS_STATE = {};
 
 // Type guard used by buildTree()/buildFungiTree() at every nesting level: a
 // stale cached response (older endpoint shape) can hand us a string or array
@@ -1257,28 +1264,50 @@ function clearFocus(){
 // click or a background click) closes the popup, so it never goes stale.
 async function openSpeciesPopup(d, e){
   const nameEl  = document.getElementById("species-popup-name");
+  const noteEl  = document.getElementById("species-popup-note");
   const linkEl  = document.getElementById("species-popup-link");
   const thumbEl = document.getElementById("species-popup-thumb");
   const popup   = document.getElementById("species-popup");
 
   thumbEl.classList.remove("visible");
   thumbEl.src = "";
+  noteEl.classList.remove("visible");
+  noteEl.textContent = "";
 
   const sciName = d.data.name;
+  // obs_state gates what the popup may offer. Undefined (e.g. a stale cached
+  // response predating the OBS_STATE field) defaults to 'confirmed' so a real
+  // card is never falsely hidden.
+  const state = sciName ? (OBS_STATE[sciName] || "confirmed") : null;
+
   if (!sciName) {
     nameEl.textContent = "Can't open card — species name unavailable";
     linkEl.style.display = "none";
   } else {
     nameEl.textContent = sciName;
-    linkEl.href = "/species?s=" + encodeURIComponent(sciName);
-    linkEl.style.display = "inline-block";
+    if (state === "none") {
+      // Phantom species — no observation, no card. Navigation only: tell the
+      // truth and offer no link (and skip card content below).
+      noteEl.textContent = "Not in your collection yet — no card created.";
+      noteEl.classList.add("visible");
+      linkEl.style.display = "none";
+    } else {
+      if (state === "in_review") {
+        noteEl.textContent = "In review — sighting awaiting confirmation";
+        noteEl.classList.add("visible");
+      }
+      linkEl.href = "/species?s=" + encodeURIComponent(sciName);
+      linkEl.style.display = "inline-block";
+    }
   }
 
   popup.style.left = (e.clientX + 14) + "px";
   popup.style.top  = (e.clientY + 14) + "px";
   popup.classList.add("visible");
 
-  if (!sciName) return;
+  // No card content for a phantom (state 'none') or a missing name — skip the
+  // thumbnail fetch entirely so 'none' shows no photo.
+  if (!sciName || state === "none") return;
 
   try {
     const resp = await fetch("/api/species/" + encodeURIComponent(sciName) + "/observations");
@@ -1303,7 +1332,14 @@ function showTip(e,d){
   let meta="";
   if (d.data.rank==="family") meta=`${(d.children||d._children||[]).length} genera`;
   else if (d.data.rank==="genus") meta=`${(d.children||d._children||[]).length} species`;
-  else if (d.data.rank==="species") meta="confirmed · EXACT lineage";
+  else if (d.data.rank==="species") {
+    // Real obs-state so hover agrees with the click popup. Fail open (missing →
+    // 'confirmed') to match the popup on a stale-cache load. No lineage/match
+    // claim here: match-type isn't sent per species to the client, and the
+    // hard-coded "EXACT" it replaced had no backing data client-side.
+    const st = OBS_STATE[d.data.name] || "confirmed";
+    meta = st === "none" ? "placeholder" : st === "in_review" ? "card pending review" : "species card";
+  }
   tip.html(`<div class="t-rank">${d.data.rank}</div><div class="t-name">${d.data.name}</div><div class="t-meta">${meta}</div>`)
      .style("left",(e.clientX+14)+"px").style("top",(e.clientY+14)+"px").style("opacity",1);
 }
@@ -1366,6 +1402,7 @@ async function loadAndRender(){
     RAW = data.RAW || { Plantae: {} };
     FUNGI = data.FUNGI || {};
     UNPLACED = data.UNPLACED || [];
+    OBS_STATE = data.OBS_STATE || {};
 
     // Must run after RAW is populated (reads it directly) and before the
     // first layout()/update() call for either fan (both read PLANT_ARC/

@@ -906,7 +906,20 @@ async def delete_observation(
 
     await db.execute(sql_delete(ObservationEdit).where(ObservationEdit.observation_id == observation_id))
     await db.execute(sql_delete(SpeciesCandidate).where(SpeciesCandidate.observation_id == observation_id))
+
+    # Capture the deleted obs's species link so we can orphan-GC its card after
+    # removal — the delete path bypasses set_observation_species.
+    _deleted_name = obs.species_primary
+    _deleted_species_id = obs.species_id
+
     await db.delete(obs)
+    await db.flush()  # obs row gone before the orphan check queries observations
+
+    # If no surviving observation references the name (either column), mark its
+    # card orphaned (never deletes; keyed on zero-observation only).
+    from app.services.species_link import gc_species_card_if_orphaned
+    await gc_species_card_if_orphaned(db, _deleted_name, _deleted_species_id)
+
     await db.commit()
 
     return {

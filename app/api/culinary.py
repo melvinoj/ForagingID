@@ -851,6 +851,27 @@ async def rename_species_by_name(
     # Get the species row (or create one if name only exists on observations)
     sp = await db.scalar(select(Species).where(Species.scientific_name == old_name))
     if sp is None:
+        # Guard B: only mint a card if old_name is actually on ≥1 observation.
+        # Renaming a name that exists on zero observations would create a card
+        # with no backing observation (an instant phantom), so bail out with the
+        # existing not_found shape instead.
+        has_obs = await db.scalar(
+            select(Observation.id).where(Observation.species_primary == old_name).limit(1)
+        )
+        if has_obs is None:
+            return {
+                "ok": True,
+                "old_name": old_name,
+                "new_name": new_name,
+                "enrichment_status": "not_found",
+                "not_found": True,
+                "not_found_message": (
+                    "No enrichment data found for this name — "
+                    "check spelling or try the Latin name"
+                ),
+                "protected_fields": [],
+            }
+
         # Species not in enrichment DB — create it under the new name directly
         sp = Species(scientific_name=new_name, name_key=normalize_taxon_key(new_name))
         if body.new_common_name:

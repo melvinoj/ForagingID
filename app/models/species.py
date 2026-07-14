@@ -227,6 +227,12 @@ class Species(Base):
         DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
     )
 
+    # Set when an observation moves off / is deleted and leaves this card with
+    # NO backing observation (true phantom — see species_link orphan-GC). A
+    # reversible marker, not a delete: re-identifying back onto the name clears
+    # it. Keyed on zero-observation only, NEVER on review status.
+    orphaned_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+
     # Relationships
     candidates: Mapped[list["SpeciesCandidate"]] = relationship(
         "SpeciesCandidate", back_populates="species"

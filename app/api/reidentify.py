@@ -637,6 +637,17 @@ async def retry_confirm(
     obs.human_corrected = True
     obs.reviewed_at = datetime.utcnow()
 
+    # Strip the moved-off name from this obs's candidate cache so the stale old
+    # primary stops lingering there (it is otherwise never rewritten on re-ID).
+    if old_species and old_species != new_species and obs.species_candidates_json:
+        try:
+            _cands = json.loads(obs.species_candidates_json)
+            _filtered = [c for c in _cands if c.get("scientific_name") != old_species]
+            if len(_filtered) != len(_cands):
+                obs.species_candidates_json = json.dumps(_filtered)
+        except (ValueError, TypeError, AttributeError):
+            pass  # malformed cache — leave as-is rather than fail the re-ID
+
     if old_species != new_species:
         _log_edit(db, obs, "species_primary", old_species, new_species)
     if old_id_status != "identified":

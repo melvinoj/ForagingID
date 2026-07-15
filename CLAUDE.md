@@ -269,5 +269,5 @@ Uploads:
 - Fails safe toward the more conservative verdict — never silently overwrite a human-locked verdict. Automated tightening is allowed; relaxing a verdict is human-only.
 - preparation_warnings and look_alike_warnings are orthogonal to the edibility verdict — both must be present for hazardous species regardless of verdict.
 - Deadly species (Conium maculatum, Aconitum napellus, Taxus baccata, Helleborus foetidus): single red-skull safety surface. Do not alter their safety data without explicit instruction.
-- Conium maculatum look_alike_warnings is deliberately empty — do not write to it without explicit instruction.
+- Conium maculatum look_alike_warnings is populated with human-authored text and is human-locked (verified 15 July 2026) — do not overwrite it without explicit instruction. Standing rule: all Apiaceae look-alike and edibility text is human-authored only, and must never be model-generated or model-edited.
 - Safety warning text is curator-authored (Melvin-verbatim) only. Never generate, infer, or paraphrase safety warning text.

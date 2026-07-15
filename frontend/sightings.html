@@ -20,8 +20,8 @@
 
     body {
       font-family: system-ui, sans-serif;
-      background: #eef0ea;
-      color: #232a24;
+      background: #2a3330;
+      color: #d8e4d8;
       min-height: 100dvh;
     }
 
@@ -56,22 +56,23 @@
     .band { margin-top: 6px; }
     .band-header {
       position: sticky; top: var(--toolbar-h, 52px); z-index: 10;
-      background: #eef0ea; padding: 12px 2px 8px;
-      font-size: 0.95rem; font-weight: 700; color: #3a4a34;
+      /* Must match body background so the sticky header occludes scrolling thumbs. */
+      background: #2a3330; padding: 12px 2px 8px;
+      font-size: 0.95rem; font-weight: 700; color: #8ab87a;
       letter-spacing: .01em;
-      border-bottom: 1px solid #d6dccb;
+      border-bottom: 1px solid #3d4a3f;
     }
-    .band-count { font-weight: 400; color: #8a9382; font-size: 0.82rem; margin-left: 6px; }
+    .band-count { font-weight: 400; color: #7a9a7a; font-size: 0.82rem; margin-left: 6px; }
     .masonry { columns: 220px; column-gap: 12px; padding-top: 10px; }
     .thumb {
       break-inside: avoid; margin: 0 0 12px; display: block; position: relative;
       border-radius: 7px; overflow: hidden; cursor: zoom-in;
-      background: #dfe3d8; box-shadow: 0 1px 4px rgba(0,0,0,.12);
+      background: #333f38; box-shadow: 0 1px 4px rgba(0,0,0,.12);
     }
     .thumb img { width: 100%; height: auto; display: block; }
     .thumb .no-thumb {
       width: 100%; aspect-ratio: 4/3; display: flex; align-items: center;
-      justify-content: center; color: #8a9382; font-size: 0.75rem; text-align: center;
+      justify-content: center; color: #7a9a7a; font-size: 0.75rem; text-align: center;
     }
     .state-badge {
       position: absolute; left: 6px; bottom: 6px;
@@ -84,7 +85,7 @@
     /* Neutral slate — a different kind of entry, not a lesser state or a warning. */
     .state-badge.scene     { background: rgba(71,85,105,.82); }
 
-    #status { text-align: center; padding: 22px; color: #6b7365; font-size: 0.85rem; }
+    #status { text-align: center; padding: 22px; color: #7a9a7a; font-size: 0.85rem; }
     #sentinel { height: 1px; }
 
     /* ── Lightbox (shared component styling — mirrors review.html) ────────── */
@@ -252,10 +253,11 @@ function displayName(obs) {
   return obs.species_primary || obs.species_suggested || 'Unidentified';
 }
 // State label (honest-label vocabulary). No edibility.
-// not_plant is checked first: it has already received a verdict (it is a scene,
-// not a plant awaiting review), so it must never fall through to "pending review".
+// obs_category is checked first: 'landscape' is a curator's verdict about what the
+// thing IS (set only via the Scene button, which writes a human edit row), and that
+// outranks review_status, which is only workflow state.
 function stateLabel(obs) {
-  if (obs.identification_status === 'not_plant') {
+  if (obs.obs_category === 'landscape') {
     return { cls: 'scene', text: 'scene' };
   }
   if (obs.review_status === 'approved' || obs.review_status === 'manually_verified') {
@@ -309,7 +311,9 @@ function renderItems(items) {
 
 // ── Data loading ─────────────────────────────────────────────────────────────
 function buildUrl() {
-  let url = `/api/observations?limit=${PAGE_SIZE}&offset=${_offset}&sort=${encodeURIComponent(state.sort)}`;
+  // exclude_not_plant is always on: not_plant is a pre-filter verdict with no
+  // curator intent behind it, and this is a browse gallery, not a triage queue.
+  let url = `/api/observations?limit=${PAGE_SIZE}&offset=${_offset}&sort=${encodeURIComponent(state.sort)}&exclude_not_plant=true`;
   if (state.review_status) url += `&review_status=${encodeURIComponent(state.review_status)}`;
   if (state.geotagged)     url += `&geotagged_only=true`;
   if (state.q.trim())      url += `&q=${encodeURIComponent(state.q.trim())}`;

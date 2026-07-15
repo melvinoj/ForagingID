@@ -460,8 +460,8 @@ function _fieldEntry(name, prof, baseByName, photos, showPhotos, ct) {
       <span class="fg-pill ${edClass(edib)}">${_esc(edLabel(edib))}</span>
       ${ct.season ? `<span class="fg-season">${_seasonText(sp)}</span>` : ''}
     </div>
-    ${ct.id_notes && idNote    ? `<div class="fg-id-primary">${_esc(idNote.slice(0,200))}${idNote.length>200?'…':''}</div>` : ''}
-    ${ct.id_notes && lookalike ? `<div class="fg-lookalike">⚠ ${_esc(lookalike.slice(0,130))}${lookalike.length>130?'…':''}</div>` : ''}
+    ${ct.id_notes && idNote    ? `<div class="fg-id-primary">${_esc(idNote)}</div>` : ''}
+    ${ct.id_notes && lookalike ? `<div class="fg-lookalike">⚠ ${_esc(lookalike)}</div>` : ''}
     ${partsText  ? `<div class="fg-note">${_esc(partsText)}</div>` : ''}
     ${ct.recipes && key ? `<div class="fg-recipe"><div class="rt">${_esc(key.title)}</div>${_mdLite(key.body)}</div>` : ''}
   </div>`;
@@ -522,9 +522,9 @@ function _workshopPage(name, prof, baseByName, photos, showPhotos, withFieldBloc
   let fieldBlockHtml = '';
   if (withFieldBlock) {
     const fgBits = [];
-    if (ct.id_notes && idn) fgBits.push(`<p>${_esc(idn.slice(0,220))}${idn.length>220?'…':''}</p>`);
+    if (ct.id_notes && idn) fgBits.push(`<p>${_esc(idn)}</p>`);
     const look = (cul.look_alike_warnings || '').trim();
-    if (ct.id_notes && look) fgBits.push(`<p class="ws-fl">⚠ ${_esc(look.slice(0,160))}${look.length>160?'…':''}</p>`);
+    if (ct.id_notes && look) fgBits.push(`<p class="ws-fl">⚠ ${_esc(look)}</p>`);
     const parts = [ct.culinary && cul.edible_parts, ct.culinary && cul.harvest_stage].filter(Boolean).join(' · ');
     if (parts) fgBits.push(`<p class="ws-fl">Edible parts — ${_esc(parts)}</p>`);
     if (fgBits.length) fieldBlockHtml = `<div class="ws-section-h">Field ID notes</div><div class="ws-forage">${fgBits.join('')}</div>`;

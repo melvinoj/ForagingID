@@ -256,6 +256,7 @@ async def list_observations(
     prefilter_category: Optional[str] = None,
     review_label: Optional[str] = None,
     q: Optional[str] = None,
+    exclude_not_plant: bool = False,
     sort: str = "date_desc",
     db: AsyncSession = Depends(get_db),
 ):
@@ -324,6 +325,11 @@ async def list_observations(
         stmt = stmt.where(Observation.prefilter_category == prefilter_category)
     if review_label:
         stmt = stmt.where(Observation.review_label == review_label)
+    # Drop pre-filter rejections. not_plant is set only by the automated pre-filter
+    # and carries no curator intent, so browse surfaces (Sightings) opt out of it.
+    # Off by default — no existing caller's result set changes.
+    if exclude_not_plant:
+        stmt = stmt.where(Observation.identification_status != "not_plant")
     # Free-text name search — case-insensitive substring across every name column:
     # the observation's own scientific + below-threshold suggested names, plus the
     # joined Species' ITIS-accepted scientific name and its English common-name list

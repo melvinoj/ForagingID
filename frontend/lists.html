@@ -1912,8 +1912,8 @@ function _fieldGuideBlock(cul) {
   const lookalike = (cul.look_alike_warnings || '').trim();
   const parts     = [cul.edible_parts, cul.harvest_stage].filter(Boolean).join(' · ');
   const bits = [];
-  if (idNote)    bits.push(`<p>${_esc(idNote.slice(0, 220))}${idNote.length > 220 ? '…' : ''}</p>`);
-  if (lookalike) bits.push(`<p class="ws-fl">⚠ ${_esc(lookalike.slice(0, 160))}${lookalike.length > 160 ? '…' : ''}</p>`);
+  if (idNote)    bits.push(`<p>${_esc(idNote)}</p>`);
+  if (lookalike) bits.push(`<p class="ws-fl">⚠ ${_esc(lookalike)}</p>`);
   if (parts)     bits.push(`<p class="ws-fl">Edible parts — ${_esc(parts)}</p>`);
   if (!bits.length) return '';
   return `<div class="ws-section-h">Field ID notes</div><div class="ws-forage">${bits.join('')}</div>`;
@@ -1963,8 +1963,8 @@ function _fieldEntry(name) {
       <span class="fg-pill ${edClass(edib)}">${_esc(edLabel(edib))}</span>
       ${ct.season ? `<span class="fg-season">${_seasonText(sp)}</span>` : ''}
     </div>
-    ${showId       ? `<div class="fg-id-primary">${_esc(idNote.slice(0, 200))}${idNote.length > 200 ? '…' : ''}</div>` : ''}
-    ${showLookalike ? `<div class="fg-lookalike">⚠ ${_esc(lookalike.slice(0, 130))}${lookalike.length > 130 ? '…' : ''}</div>` : ''}
+    ${showId       ? `<div class="fg-id-primary">${_esc(idNote)}</div>` : ''}
+    ${showLookalike ? `<div class="fg-lookalike">⚠ ${_esc(lookalike)}</div>` : ''}
     ${partsText    ? `<div class="fg-note">${_esc(partsText)}</div>` : ''}
     ${showRecipe   ? `<div class="fg-recipe"><div class="rt">${_esc(key.title)}</div>${_mdLite(key.body)}</div>` : ''}
   </div>`;

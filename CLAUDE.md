@@ -71,8 +71,8 @@ POST /api/dev/log
 | Frontend | Plain HTML/JS in `frontend/` |
 | Backend | Python FastAPI, `app/` |
 | DB | `data/foragingid.db` (SQLite) — **not** `app/foragingid.db` |
-| Venv | `venv/` |
-| Run | `source venv/bin/activate && uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload --reload-dir app` |
+| Venv | `~/foragingid-venv` |
+| Run | `source ~/foragingid-venv/bin/activate && uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload --reload-dir app` |
 | Port | 8000 (default) |
 
 **Key directories:**

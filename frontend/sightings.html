@@ -1,0 +1,457 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <link rel="manifest" href="/static/manifest.json">
+  <meta name="theme-color" content="#2d5a1b">
+  <link rel="apple-touch-icon" href="/static/icons/icon-192.png">
+  <meta name="application-name" content="LandMemory">
+  <meta name="apple-mobile-web-app-title" content="LandMemory">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black">
+  <link rel="icon" type="image/svg+xml" href="/static/icons/dandelion-icon.svg">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+  <title>LandMemory — Sightings</title>
+  <link rel="stylesheet" href="/static/css/tokens.css">
+  <link rel="stylesheet" href="/static/css/site-header.css">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: system-ui, sans-serif;
+      background: #eef0ea;
+      color: #232a24;
+      min-height: 100dvh;
+    }
+
+    /* ── Toolbar (sticky) ─────────────────────────────────────────────────── */
+    #toolbar {
+      position: sticky; top: 0; z-index: 20;
+      display: flex; flex-wrap: wrap; align-items: center; gap: 10px;
+      padding: 10px 14px 10px 64px;   /* left pad clears the fixed nav chip */
+      background: #2d5a1b; color: #fff;
+      box-shadow: 0 2px 8px rgba(0,0,0,.18);
+    }
+    #toolbar .tb-group { display: flex; align-items: center; gap: 6px; }
+    #toolbar select {
+      padding: 6px 8px; border: none; border-radius: 6px;
+      font-size: 0.85rem; background: #fff; color: #232a24;
+    }
+    .chip {
+      padding: 5px 12px; border: 1px solid rgba(255,255,255,.5);
+      border-radius: 999px; background: transparent; color: #fff;
+      font-size: 0.82rem; cursor: pointer; line-height: 1.4;
+    }
+    .chip.active { background: #fff; color: #2d5a1b; border-color: #fff; font-weight: 600; }
+    .tb-toggle { display: flex; align-items: center; gap: 5px; font-size: 0.82rem; cursor: pointer; }
+    #q-input {
+      padding: 6px 10px; border: none; border-radius: 6px;
+      font-size: 0.85rem; min-width: 160px; background: #fff; color: #232a24;
+    }
+    #tb-spacer { flex: 1; }
+
+    /* ── Bands + masonry ──────────────────────────────────────────────────── */
+    #bands { padding: 4px 14px 40px; }
+    .band { margin-top: 6px; }
+    .band-header {
+      position: sticky; top: var(--toolbar-h, 52px); z-index: 10;
+      background: #eef0ea; padding: 12px 2px 8px;
+      font-size: 0.95rem; font-weight: 700; color: #3a4a34;
+      letter-spacing: .01em;
+      border-bottom: 1px solid #d6dccb;
+    }
+    .band-count { font-weight: 400; color: #8a9382; font-size: 0.82rem; margin-left: 6px; }
+    .masonry { columns: 220px; column-gap: 12px; padding-top: 10px; }
+    .thumb {
+      break-inside: avoid; margin: 0 0 12px; display: block; position: relative;
+      border-radius: 7px; overflow: hidden; cursor: zoom-in;
+      background: #dfe3d8; box-shadow: 0 1px 4px rgba(0,0,0,.12);
+    }
+    .thumb img { width: 100%; height: auto; display: block; }
+    .thumb .no-thumb {
+      width: 100%; aspect-ratio: 4/3; display: flex; align-items: center;
+      justify-content: center; color: #8a9382; font-size: 0.75rem; text-align: center;
+    }
+    .state-badge {
+      position: absolute; left: 6px; bottom: 6px;
+      padding: 2px 7px; border-radius: 999px;
+      font-size: 0.68rem; line-height: 1.5; color: #fff;
+      background: rgba(20,30,18,.72); backdrop-filter: blur(2px);
+    }
+    .state-badge.confirmed { background: rgba(37,99,54,.82); }
+    .state-badge.pending   { background: rgba(120,90,20,.82); }
+    /* Neutral slate — a different kind of entry, not a lesser state or a warning. */
+    .state-badge.scene     { background: rgba(71,85,105,.82); }
+
+    #status { text-align: center; padding: 22px; color: #6b7365; font-size: 0.85rem; }
+    #sentinel { height: 1px; }
+
+    /* ── Lightbox (shared component styling — mirrors review.html) ────────── */
+    #lightbox {
+      position: fixed; inset: 0; z-index: 9999;
+      background: rgba(0,0,0,.92);
+      align-items: center; justify-content: center; gap: 8px;
+    }
+    #lightbox .lb-inner {
+      max-width: calc(100vw - 112px); max-height: 90vh;
+      display: flex; flex-direction: column; align-items: center;
+    }
+    #lightbox .lb-inner img {
+      max-width: 100%; max-height: calc(90vh - 44px);
+      object-fit: contain; border-radius: 4px;
+      box-shadow: 0 8px 40px rgba(0,0,0,.5); display: block; cursor: zoom-in;
+    }
+    #lightbox .lb-inner img.lb-zoomed { cursor: zoom-out; }
+    #lightbox .lb-footer {
+      color: rgba(255,255,255,.75); font-size: 0.8rem;
+      margin-top: 8px; display: flex; align-items: center;
+      justify-content: center; flex-wrap: wrap; width: 100%; gap: 14px;
+    }
+    #lb-species-link { color: #9fe08a; text-decoration: none; font-weight: 600; }
+    #lb-species-link:hover { text-decoration: underline; }
+    .lb-pin-btn {
+      background: rgba(255,255,255,.15); border: none; color: #fff;
+      border-radius: 6px; cursor: pointer; font-size: 0.95rem; padding: 3px 8px;
+    }
+    .lb-pin-btn:hover { background: rgba(255,255,255,.3); }
+    .lb-close {
+      position: fixed; top: 14px; right: 18px;
+      background: none; border: none; color: white;
+      font-size: 2rem; line-height: 1; cursor: pointer;
+      opacity: .7; z-index: 10000; padding: 4px 8px;
+    }
+    .lb-close:hover { opacity: 1; }
+    .lb-nav {
+      background: rgba(255,255,255,.15); border: none; color: white;
+      font-size: 2.4rem; cursor: pointer; border-radius: 50%;
+      width: 48px; height: 48px; flex-shrink: 0;
+      display: flex; align-items: center; justify-content: center;
+      line-height: 1; padding: 0; padding-bottom: 3px;
+    }
+    .lb-nav:hover { background: rgba(255,255,255,.28); }
+    @media (max-width: 600px) {
+      #lightbox .lb-inner { max-width: calc(100vw - 80px); }
+      .lb-nav { width: 36px; height: 36px; font-size: 1.8rem; }
+      .masonry { columns: 150px; column-gap: 8px; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ── Toolbar ──────────────────────────────────────────────────────────── -->
+<div id="toolbar">
+  <div class="tb-group">
+    <select id="sort-select" title="Sort order">
+      <option value="date_desc" selected>Newest first</option>
+      <option value="date_asc">Oldest first</option>
+      <option value="added_desc">Recently added</option>
+    </select>
+  </div>
+  <div class="tb-group" id="chip-group">
+    <button class="chip active" data-status="">All</button>
+    <button class="chip" data-status="approved">Confirmed</button>
+    <button class="chip" data-status="needs_review">Pending review</button>
+  </div>
+  <label class="tb-toggle"><input type="checkbox" id="geo-toggle"> Geotagged only</label>
+  <div id="tb-spacer"></div>
+  <input type="search" id="q-input" placeholder="Search name…" autocomplete="off">
+</div>
+
+<!-- ── Gallery ──────────────────────────────────────────────────────────── -->
+<div id="bands"></div>
+<div id="sentinel"></div>
+<div id="status"></div>
+
+<!-- ── Lightbox ─────────────────────────────────────────────────────────── -->
+<div id="lightbox" style="display:none" onclick="if(event.target===this)closeLightbox()">
+  <button class="lb-close" onclick="closeLightbox()" title="Close (Esc)">✕</button>
+  <button class="lb-nav" id="lb-prev" onclick="event.stopPropagation();_lbNav(-1)">‹</button>
+  <div class="lb-inner">
+    <img id="lb-img" src="" alt="" onclick="event.stopPropagation();_lbToggleZoom(this)">
+    <div class="lb-footer">
+      <span id="lb-caption"></span>
+      <a id="lb-species-link" href="#" style="display:none">species card →</a>
+      <button class="lb-pin-btn" id="lb-pin-btn" style="display:none"
+              onclick="event.stopPropagation();_lbGoToPin()" title="View on map">📍 View on map</button>
+      <span id="lb-counter"></span>
+    </div>
+  </div>
+  <button class="lb-nav" id="lb-next" onclick="event.stopPropagation();_lbNav(+1)">›</button>
+</div>
+
+<script src="/static/js/lightbox.js"></script>
+<script src="/static/js/pwa.js"></script>
+<script src="/static/js/offline.js"></script>
+<script src="/static/js/guest-mode.js"></script>
+<script src="/static/js/site-header.js"></script>
+
+<script>
+'use strict';
+// ── Sightings — read-only browse gallery over GET /api/observations ─────────
+// Not a review surface: no approve/reject/edit affordances anywhere here.
+
+const PAGE_SIZE = 100;
+const MONTHS = ['January','February','March','April','May','June',
+                'July','August','September','October','November','December'];
+
+// ── Query state (drives every fetch) ───────────────────────────────────────
+const state = {
+  sort: 'date_desc',
+  review_status: '',   // '' = All (no param) | 'approved' | 'needs_review'
+  geotagged: false,
+  q: '',
+};
+
+let _offset      = 0;
+let _loading     = false;
+let _done        = false;
+let _images      = [];          // every loaded observation, in server order
+const _byId      = {};          // id → observation
+let _lastBandKey = null;        // last band header emitted (cross-page continuity)
+let _curMasonry  = null;        // masonry container of the current (open) band
+
+function _esc(s) {
+  return String(s == null ? '' : s)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+
+// ── Band grouping ───────────────────────────────────────────────────────────
+// Shared day/month labelling: Today / Yesterday / "12 July 2026" (this year, per
+// day) / "June 2015" (older, per month). Unset/unparseable → "Date unknown".
+function bandForDate(raw) {
+  if (!raw) return { key: 'unknown', label: 'Date unknown' };
+  const d = new Date(raw);
+  if (isNaN(d)) return { key: 'unknown', label: 'Date unknown' };
+  const day = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const diff = Math.round((today - day) / 86400000);
+  const dayKey = `d:${day.getFullYear()}-${day.getMonth()}-${day.getDate()}`;
+  if (diff === 0) return { key: dayKey, label: 'Today' };
+  if (diff === 1) return { key: dayKey, label: 'Yesterday' };
+  if (day.getFullYear() === today.getFullYear()) {
+    return { key: dayKey, label: `${day.getDate()} ${MONTHS[day.getMonth()]} ${day.getFullYear()}` };
+  }
+  // Older than this year → month granularity, "June 2015" style.
+  return { key: `m:${day.getFullYear()}-${day.getMonth()}`,
+           label: `${MONTHS[day.getMonth()]} ${day.getFullYear()}` };
+}
+
+// date_desc / date_asc → band by photo_taken_at.
+// added_desc → band by created_at (ingest timestamp) using the same labelling.
+function bandFor(obs) {
+  if (state.sort === 'added_desc') {
+    return bandForDate(obs.created_at);
+  }
+  return bandForDate(obs.photo_taken_at);
+}
+
+// ── Per-observation display helpers ─────────────────────────────────────────
+function displayName(obs) {
+  return obs.species_primary || obs.species_suggested || 'Unidentified';
+}
+// State label (honest-label vocabulary). No edibility.
+// not_plant is checked first: it has already received a verdict (it is a scene,
+// not a plant awaiting review), so it must never fall through to "pending review".
+function stateLabel(obs) {
+  if (obs.identification_status === 'not_plant') {
+    return { cls: 'scene', text: 'scene' };
+  }
+  if (obs.review_status === 'approved' || obs.review_status === 'manually_verified') {
+    return { cls: 'confirmed', text: 'confirmed' };
+  }
+  return { cls: 'pending', text: 'pending review' };
+}
+function fmtDate(raw) {
+  if (!raw) return '';
+  const d = new Date(raw);
+  if (isNaN(d)) return '';
+  return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+}
+
+// ── Rendering ────────────────────────────────────────────────────────────────
+function makeThumb(obs) {
+  const thumbName = obs.thumbnail_path ? obs.thumbnail_path.split('/').pop() : null;
+  const badge = stateLabel(obs);
+  const inner = thumbName
+    ? `<img src="/thumbnails/${_esc(thumbName)}" alt="${_esc(displayName(obs))}" loading="lazy">`
+    : `<div class="no-thumb">no thumbnail</div>`;
+  const el = document.createElement('div');
+  el.className = 'thumb';
+  el.dataset.id = obs.id;
+  el.innerHTML = inner + `<span class="state-badge ${badge.cls}">${badge.text}</span>`;
+  el.addEventListener('click', () => openPhoto(obs.id));
+  return el;
+}
+
+function renderItems(items) {
+  const bandsEl = document.getElementById('bands');
+  items.forEach(obs => {
+    const band = bandFor(obs);
+    if (band.key !== _lastBandKey || !_curMasonry) {
+      const section = document.createElement('section');
+      section.className = 'band';
+      const header = document.createElement('div');
+      header.className = 'band-header';
+      header.textContent = band.label;
+      const masonry = document.createElement('div');
+      masonry.className = 'masonry';
+      section.appendChild(header);
+      section.appendChild(masonry);
+      bandsEl.appendChild(section);
+      _curMasonry = masonry;
+      _lastBandKey = band.key;
+    }
+    _curMasonry.appendChild(makeThumb(obs));
+  });
+}
+
+// ── Data loading ─────────────────────────────────────────────────────────────
+function buildUrl() {
+  let url = `/api/observations?limit=${PAGE_SIZE}&offset=${_offset}&sort=${encodeURIComponent(state.sort)}`;
+  if (state.review_status) url += `&review_status=${encodeURIComponent(state.review_status)}`;
+  if (state.geotagged)     url += `&geotagged_only=true`;
+  if (state.q.trim())      url += `&q=${encodeURIComponent(state.q.trim())}`;
+  return url;
+}
+
+async function loadMore() {
+  if (_loading || _done) return;
+  _loading = true;
+  document.getElementById('status').textContent = 'Loading…';
+  try {
+    const r = await fetch(buildUrl());
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const rows = await r.json();
+    rows.forEach(o => { _images.push(o); _byId[o.id] = o; });
+    renderItems(rows);
+    _offset += rows.length;
+    if (rows.length < PAGE_SIZE) _done = true;
+    document.getElementById('status').textContent =
+      _done ? (_images.length ? `${_images.length} sighting${_images.length === 1 ? '' : 's'}` : 'No sightings match.')
+            : '';
+  } catch (e) {
+    document.getElementById('status').textContent = 'Could not load sightings.';
+  } finally {
+    _loading = false;
+  }
+}
+
+function resetAndReload() {
+  _offset = 0; _loading = false; _done = false;
+  _images = [];
+  for (const k in _byId) delete _byId[k];
+  _lastBandKey = null; _curMasonry = null;
+  document.getElementById('bands').innerHTML = '';
+  document.getElementById('status').textContent = '';
+  loadMore();
+}
+
+// ── Lightbox wiring ──────────────────────────────────────────────────────────
+function openPhoto(id) {
+  const images = _images.map(o => ({
+    src: `/api/observations/${o.id}/photo`,
+    caption: [displayName(o), fmtDate(o.photo_taken_at)].filter(Boolean).join(' · '),
+    hasGPS: o.latitude != null && o.longitude != null,
+    id: o.id, lat: o.latitude, lng: o.longitude,
+  }));
+  const startIdx = Math.max(0, _images.findIndex(o => o.id === id));
+  openLightbox(images, startIdx);
+  _syncSpeciesLink();
+}
+
+// Pin button → centre the map on this observation's exact coords. Uses the map's
+// generic ?lat&lng&z&obs deep-link (index.html _initLatLngDeepLink), which drops
+// a standalone marker for ANY review_status — verified present in index.html.
+window._lbOnGoToPin = function (item) {
+  if (!item || item.lat == null || item.lng == null) return;
+  window.location.href = `/?lat=${item.lat}&lng=${item.lng}&z=17&obs=${item.id}`;
+};
+
+// The shared lightbox sets #lb-caption via textContent, so the species-card link
+// lives in a separate #lb-species-link element it never touches. We keep it in
+// sync by watching #lb-img's src (which changes on open AND on arrow-nav) and
+// mapping it back to the observation.
+function _syncSpeciesLink() {
+  const img  = document.getElementById('lb-img');
+  const link = document.getElementById('lb-species-link');
+  if (!img || !link) return;
+  const m = (img.getAttribute('src') || '').match(/\/api\/observations\/(\d+)\/photo/);
+  const obs = m ? _byId[m[1]] : null;
+  if (obs && obs.species_primary) {
+    link.href = `/species?s=${encodeURIComponent(obs.species_primary)}`;
+    link.textContent = `${obs.species_primary} — species card →`;
+    link.style.display = '';
+  } else {
+    link.style.display = 'none';
+  }
+}
+
+// ── Controls ─────────────────────────────────────────────────────────────────
+function wireControls() {
+  document.getElementById('sort-select').addEventListener('change', e => {
+    state.sort = e.target.value;
+    resetAndReload();
+  });
+  document.getElementById('chip-group').addEventListener('click', e => {
+    const chip = e.target.closest('.chip');
+    if (!chip) return;
+    document.querySelectorAll('#chip-group .chip').forEach(c => c.classList.remove('active'));
+    chip.classList.add('active');
+    state.review_status = chip.dataset.status || '';
+    resetAndReload();
+  });
+  document.getElementById('geo-toggle').addEventListener('change', e => {
+    state.geotagged = e.target.checked;
+    resetAndReload();
+  });
+  let qTimer = null;
+  document.getElementById('q-input').addEventListener('input', e => {
+    const v = e.target.value;
+    clearTimeout(qTimer);
+    qTimer = setTimeout(() => {
+      if (v.trim() === state.q.trim()) return;   // no-op when effective term unchanged
+      state.q = v;
+      resetAndReload();
+    }, 300);
+  });
+}
+
+// Keep band-header sticky offset aligned with the (wrapping) toolbar height.
+function wireToolbarOffset() {
+  const tb = document.getElementById('toolbar');
+  const apply = () =>
+    document.documentElement.style.setProperty('--toolbar-h', tb.offsetHeight + 'px');
+  apply();
+  if (window.ResizeObserver) new ResizeObserver(apply).observe(tb);
+  else window.addEventListener('resize', apply);
+}
+
+// Infinite scroll — fetch the next page when the sentinel nears the viewport.
+function wireInfiniteScroll() {
+  const sentinel = document.getElementById('sentinel');
+  const io = new IntersectionObserver(entries => {
+    if (entries.some(en => en.isIntersecting)) loadMore();
+  }, { rootMargin: '600px 0px' });
+  io.observe(sentinel);
+}
+
+// Keep the species-card link correct as the user arrows through the lightbox.
+function wireLightboxObserver() {
+  const img = document.getElementById('lb-img');
+  if (!img || !window.MutationObserver) return;
+  new MutationObserver(_syncSpeciesLink)
+    .observe(img, { attributes: true, attributeFilter: ['src'] });
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  wireControls();
+  wireToolbarOffset();
+  wireLightboxObserver();
+  wireInfiniteScroll();
+  loadMore();
+});
+</script>
+</body>
+</html>

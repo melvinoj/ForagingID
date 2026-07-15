@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import Optional, List
 from fastapi import APIRouter, BackgroundTasks, Depends, Query, HTTPException
 from fastapi.responses import FileResponse
-from sqlalchemy import select, func
+from sqlalchemy import select, func, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 from pydantic import BaseModel, Field
 from datetime import datetime
@@ -27,6 +27,7 @@ class ObservationOut(BaseModel):
     latitude: Optional[float]
     longitude: Optional[float]
     photo_taken_at: Optional[datetime]
+    created_at: Optional[datetime]   # ingest timestamp — used for "Recently added" banding
     camera_make: Optional[str]
     camera_model: Optional[str]
     is_plant_likely: Optional[bool]
@@ -254,6 +255,7 @@ async def list_observations(
     obs_category: Optional[str] = None,
     prefilter_category: Optional[str] = None,
     review_label: Optional[str] = None,
+    q: Optional[str] = None,
     sort: str = "date_desc",
     db: AsyncSession = Depends(get_db),
 ):
@@ -322,6 +324,24 @@ async def list_observations(
         stmt = stmt.where(Observation.prefilter_category == prefilter_category)
     if review_label:
         stmt = stmt.where(Observation.review_label == review_label)
+    # Free-text name search — case-insensitive substring across every name column:
+    # the observation's own scientific + below-threshold suggested names, plus the
+    # joined Species' ITIS-accepted scientific name and its English common-name list
+    # (common_names is a JSON array stored as text, so a fragment matches inside it).
+    # ilike follows the existing text-search convention (find.py, culinary.py); on
+    # SQLite it compiles to lower(col) LIKE lower(term) → ASCII case-insensitive.
+    # itis_name_match is intentionally excluded — it is a match-status enum
+    # ("accepted"/"synonym"/"no_match"), not a name. Blank/whitespace q is a no-op.
+    if q and q.strip():
+        term = f"%{q.strip()}%"
+        stmt = stmt.where(
+            or_(
+                Observation.species_primary.ilike(term),
+                Observation.species_suggested.ilike(term),
+                Species.itis_accepted_name.ilike(term),
+                Species.common_names.ilike(term),
+            )
+        )
     # Server-side sort so ordering is global across pages, not just within the
     # current page. top_score is the normalised (0-1) confidence of the top candidate.
     sort_map = {

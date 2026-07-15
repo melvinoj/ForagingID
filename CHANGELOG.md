@@ -2,33 +2,27 @@
 
 ## Current State
 
-Current State — 14 July 2026
-Long Phase-13 session: PWA parity, Postgres de-risk, user_id write-stamping, Pixel LAN install verified, and a complete root-cause arc on species-card phantoms (diagnose → fix source → trim damage). Two dead endpoints revived as fallout.
+Current State — 15 July 2026
+Short focused session: built the Sightings page (/sightings) end-to-end — a read-only photo-archive browse surface over the existing observation set. Frontend-led, one small additive backend param, one additive schema-free field. Recon-before-build paid off: the page needed no new endpoint.
 This session:
 
-Encounters + Seasons PWA-block parity — both files were missing all 8 PWA tags; added matching the index.html reference exactly, per-file-local indentation, verified per-tag with no duplication. All 11 real nav pages now PWA-block-consistent.
-connect_args dialect-guarded at engine creation (app/database.py) — SQLite-only kwargs (check_same_thread, timeout) scoped behind make_url().get_backend_name() == "sqlite"; non-sqlite gets empty connect_args. SQLite path verified live unchanged (FK PRAGMA firing, SELECT 1 clean); Postgres branch logic-only. Clears the last engine-creation Postgres blocker.
-user_id stamping wired into recorded_walks.py, notes.py, walk.py — all three previously wrote NULL; now stamp identity.user_id. Real curator POST + fresh re-SELECT verified user_id=1 on each; verification rows deleted. observations/scan pipeline and get_identity untouched.
-PWA install confirmed on Pixel over LAN — page loads at 192.168.0.248:8000, install sheet shows leaf + "LandMemory", standalone launch, dark status bar. (Earlier failure was server bound to 127.0.0.1; restarted with --host 0.0.0.0 → *:8000.)
-Taxonomy popup + tooltip now honest about collection state — added read-only obs_state (confirmed/in_review/none) to the taxonomy-tree endpoint via OR-both-linkage-columns + map's exact confirmed tuple. Popup: confirmed→"species card"+View card; in_review→"card pending review"+card link; none→"placeholder", no link, no card content. Tooltip gated on same obs_state; ALL-CAPS "confirmed · EXACT lineage" replaced with lowercase human labels; unbacked "EXACT" lineage claim dropped (no client-side match data). Geometry/constants untouched.
-Phantom root-cause fixed at source — phantoms were NOT losing candidates; all four card-creation sites are observation-backed at birth. Cards orphan later when an observation is re-identified/deleted and nothing GCs the old name's card. Fixed with orphan-GC + stale-candidate-strip at the shared chokepoint (set_observation_species) plus the delete path — covers all move-off paths (retry-confirm, correct_species, trust-accept, bulk-reassign, delete, rename). GC keys on zero-observation only (both columns), never on confirmed-status, so in_review cards the popup needs are never marked. Marker: nullable species.orphaned_at (Alembic 0049), reversible/self-healing. candidates_json strip made uniform across all move-off paths via shared helper strip_candidate_from_obs (SpeciesCandidate audit table preserves original AI guesses). All verified by throwaway re-ID + fresh re-SELECT, test rows cleaned.
-Two dead endpoints revived (pre-existing bugs surfaced during the GC work): (1) bulk_reassign 500'd on a malformed handle_species_rename call (species= kwarg doesn't exist; old_name missing) — fixed to real signature. (2) handle_species_rename itself imported CulinaryInfoHistory from the wrong module (app.models.culinary; it lives in app.models.species) → ImportError broke bulk_reassign AND the real species-rename path — fixed. Revived bulk_reassign is now leak-proof by construction (chokepoint GC/strip fire on its moves). Verified by real reassign + re-SELECT; target row proven untouched (edibility_verified preserved, updated_at unchanged).
-Phantom backlog hard-deleted — 49 of 50 phantoms removed (all except id 653 Oenanthe crocata, retained as human-verified toxic/deadly hazard-reference card). Snapshot first; full FK-child map discovered by scanning (12 direct children + two-column species_lookalikes + species_synonyms canonical + grandchildren + string-keyed species_resources); safety cross-checks all zero (no encounters, no lookalike-of-kept, no synonym-canonical, no kept-recipe→deleted-draft); children-before-parents in one transaction with foreign_keys=ON. Verified: species 644→595 (−49), zero orphaned children anywhere, 653 intact, obs_state none 50→1 with confirmed/in_review unchanged. Deleted cards recreate observation-backed if photographed later.
+q free-text name search added to GET /api/observations — optional param, ilike '%term%' OR'd across four real name columns: observations.species_primary, observations.species_suggested, species.itis_accepted_name, species.common_names (JSON-as-text). Deliberately excludes itis_name_match — recon established it is a match-status enum (accepted/synonym/no_match), not a name; the ITIS join brings in no common name at all. Blank/whitespace q is an exact no-op. ANDs with existing filters; pagination, sorting, ObservationOut and the default rejected-exclusion untouched. Verified live: baseline 500 = blank-q 500; q=Prunus 35; q=nettle 31 reaching Campanula trachelium ("Nettle-leaved bellflower") — proving common_names is genuinely searched, not just the scientific columns; nonsense → 0, not an error. AND-composition proven non-trivial (Prunus: 34 approved + 1 manually_verified + 6 rejected; &needs_review→0, &rejected→6).
+/sightings page built (frontend/sightings.html + route in main.py) — date-banded masonry, sticky band headers, infinite scroll at limit=100/offset. Sort: Newest first (date_desc, capture date, default) / Oldest first / Recently added. Single-select chips All / Confirmed / Pending review, Geotagged-only toggle, debounced search → q. Consumes GET /api/observations only. No approve/reject/edit affordances — browse surface, explicitly not a review surface. No edibility indicator anywhere, and none joined in.
+Nav via NAV_LINKS in site-header.js — nav is centralised; one array entry propagates to all pages. No per-page nav markup exists any more; editing pages individually would have been the wrong mechanism.
+Lightbox reused, and _lbOnGoToPin fired for the first time in the app — openLightbox() with the loaded image set, full-size via /api/observations/{id}/photo. hasGPS set per geotagged row; pin jumps to the map's existing ?lat=&lng=&z=17&obs= deep-link (_initLatLngDeepLink, index.html:4046), which drops a standalone marker for any review_status. Confirmed working live by Melvin. Note: review.html's openCardPhoto never sets hasGPS, so its pin has never shown — pre-existing, untouched. Species-card link sits in a separate #lb-species-link element (the shared lightbox sets #lb-caption via textContent), kept in sync by a MutationObserver on #lb-img, linking /species?s=<species_primary>.
+Honest three-state label — scene / confirmed / pending review. not_plant rows were falling through stateLabel's else-branch and rendering "pending review", asserting they awaited a verdict already given. identification_status === 'not_plant' now checked first → "scene", neutral slate badge (distinct from confirmed-green and pending-amber, deliberately not a warning colour). Precedence rationale: identification_status is a verdict about what the thing is; review_status is a workflow state — orthogonal, and the verdict wins. Zero not_plant+approved rows exist today; the ordering is a correctness guarantee regardless of data.
+1,262 not_plant rows deliberately retained on the page, not filtered. Decision reversed mid-session: these are georeferenced scene photos (e.g. the Feldberg Naturschutzgebiet sign, P1-ingested, GPS corroborating the surrounding observations). "Pre-filter said not-a-plant" ≠ "not worth seeing". This quietly settles what Sightings is: a photo archive of place, not a species-observation browser — closer to the platform's stated positioning than a filtered species grid, and it avoids the page growing a species-shaped assumption later.
+Number gap closed: 3,408 (All) − 2,146 (recon's both-exclusions count) = 1,262 not_plant, exactly. /api/observations excludes only rejected by default. No unexplained third bucket. The 13,762 total is mostly dedup hashes; ~2,146–3,408 is the real browsable archive.
+created_at added to ObservationOut (one line; from_attributes populates it from the ORM — no mapping site, purely additive, both consumers are FastAPI serializers, nothing iterates fields). Non-NULL across all 3,408 browsable rows. added_desc now bands by real ingest date; day/month labelling extracted to a shared bandForDate(raw) helper so capture-date and added-date paths use one implementation. Capture-date banding and NULL→"Date unknown" behaviour unchanged; added_desc falls back identically.
+CLAUDE.md venv path corrected — venv/ → ~/foragingid-venv in both the Venv and Run cells. The run command already carried --host 0.0.0.0 from a prior session; left as-is rather than claim an unmade change.
 
 Pending / next:
 
-recorded_walks whitelist-vs-gate contradiction — recorded_walks.py's if identity.is_guest: raise 403 blocks participant tokens (is_guest=True) despite recorded-walks being in the main.py guest-write whitelist; a tokened LEO participant can't create a recorded walk today. Sharpened form of the parked LAN-guest-as-curator identity gap; needs the missing fact (how LEO participants connect: tunnel vs LAN).
-CLAUDE.md venv path stale — documents source venv/bin/activate; real venv is ~/foragingid-venv. One-line fix. Also standardise server launch on the full --host 0.0.0.0 command — omitting it silently rebinds to loopback (hit twice this session).
-bulk_reassign doesn't re-enrich the target after merge — handle_species_rename docstring says callers should; this one never has (pre-existing, out of scope). A merged species may carry stale enrichment until re-triggered. Low priority.
-Species-rename was silently broken until this session (the CulinaryInfoHistory import bug) — any past "rename didn't work" is now explained and fixed.
+Visual check on the scene badge (slate) still owed — everything else on Sightings confirmed live by Melvin (pin, gallery).
+recorded_walks whitelist-vs-gate contradiction — if identity.is_guest: raise 403 blocks participant tokens despite the main.py guest-write whitelist. Still needs the missing fact: how LEO participants connect (tunnel vs LAN).
+bulk_reassign doesn't re-enrich the target after merge (pre-existing, low priority).
 Live tunnel-guest 403 verification (needs tunnel up — operational).
-
-Parked (unchanged):
-
-Maskable-icon safe-zone padding (~20% or Android may crop the leaf).
-Detach ANTIGRAVITY.md from Claude.ai project UI (your side).
-create_all/Alembic dual-mechanism guard; vestigial accepted-but-ignored body fields.
-Phantom source now fixed, but note the mechanism can still produce orphans that the GC marks (orphaned_at) rather than deletes — a periodic hard-purge of orphaned_at rows (excluding any that gain human/safety content) may be worth a future housekeeping pass.
+q doesn't escape LIKE wildcards (%/_) in the user's term — consistent with existing find.py/culinary.py precedent, parameterised, worst case broadens a match. Parked unless exact-fragment semantics are ever needed.
 
 ## Current State — 10 July 2026
 
@@ -198,6 +192,44 @@ Still open:
 - Enrichment gap remediation — 9 AI drafts pending approval, 6 species never scanned, 79 no-PFAF species need alt-source decision
 
 ## History
+
+### 2026-07-15 04:32
+**Snapshot** — End of session — Session ended from Settings page
+DB: `snapshots/db_20260715_043230.sqlite`
+
+### 2026-07-15 04:32
+**Session ended** — Session ended from Settings page
+
+### 2026-07-14 23:38
+**Real date bands for Recently added; fix stale venv path in CLAUDE.md**
+
+**Built:**
+- ObservationOut.created_at added (from_attributes, additive)
+- sightings.html added_desc now bands by created_at via extracted shared bandForDate() helper (Today/Yesterday/day/month), Date unknown fallback
+**Fixed:**
+- CLAUDE.md Project Overview venv path corrected venv/ -> ~/foragingid-venv (both Venv row and Run command)
+**Files:** `app/api/observations.py`, `frontend/sightings.html`, `CLAUDE.md`
+
+### 2026-07-14 22:39
+**Build read-only Sightings browse gallery (frontend only)**
+
+**Built:**
+- frontend/sightings.html: date-banded CSS-columns masonry gallery over GET /api/observations; sort (newest/oldest/recently-added), single-select status chips (All/Confirmed/Pending review), geotagged toggle, debounced name search; infinite scroll (limit=100, offset paging); per-thumb confirmed/pending-review badge from review_status only (no edibility); shared lightbox with GPS-pin map deep-link and species-card link
+- Route /sightings in main.py
+- Sightings nav entry in site-header.js NAV_LINKS (propagates to all pages)
+**Files:** `frontend/sightings.html`, `app/main.py`, `frontend/static/js/site-header.js`
+**Pending:**
+- added_desc bands by ingest order under a single Recently added header — true created_at date-bands blocked: ObservationOut exposes no created_at (would need 1-line backend field)
+- Melvin to visually verify masonry/sticky bands/lightbox zoom/pin-jump in his browser
+
+### 2026-07-14 22:04
+**Add free-text name search param q to GET /api/observations**
+
+**Built:**
+- q param: case-insensitive substring name search across species_primary, species_suggested, Species.itis_accepted_name, Species.common_names via ilike; composes (AND) with existing filters; blank/whitespace treated as absent
+**Files:** `app/api/observations.py`
+**Pending:**
+- Sightings page (not started)
 
 ### 2026-07-14 16:39
 **Snapshot** — End of session — Session ended from Settings page

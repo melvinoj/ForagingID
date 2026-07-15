@@ -13,7 +13,7 @@ Upload flow (browser → POST /api/scan):
                   Observation record, trigger identification as background task
   6. Return {observation_id, passed:true, prefilter, ...}; client polls for ID result
   7. After identification:
-     - File upload: ALWAYS needs_review unless dual-agree ≥ upload_auto_approve_threshold setting
+     - File upload: ALWAYS needs_review — never auto-approved, regardless of confidence
      - If species found and not in DB → create species card + flag for enrichment
 
 Path integrity:
@@ -1282,8 +1282,15 @@ async def _identify_scanned(
             _inat_top_name  = inat_hits[0].scientific_name if inat_hits else None
             _inat_top_score = inat_hits[0].score if inat_hits else 0.0
 
+            # `not force_review` is the veto and must stay part of this condition:
+            # force_review already subsumes is_phone and is_fungi (set at the top of
+            # the session block, and again on fungi auto-detection above), so a
+            # manual upload, a fungus, or an explicit override-prefilter caller can
+            # never reach auto-approve no matter how confidently the APIs agree.
+            # P1 (syncthing) passes force_review=False and is unaffected.
             _dual_agree = (
-                use_pn
+                not force_review
+                and use_pn
                 and use_inat
                 and _pn_top_name is not None
                 and _inat_top_name is not None

@@ -2,27 +2,41 @@
 
 ## Current State
 
-Current State — 15 July 2026
-Short focused session: built the Sightings page (/sightings) end-to-end — a read-only photo-archive browse surface over the existing observation set. Frontend-led, one small additive backend param, one additive schema-free field. Recon-before-build paid off: the page needed no new endpoint.
 This session:
 
-q free-text name search added to GET /api/observations — optional param, ilike '%term%' OR'd across four real name columns: observations.species_primary, observations.species_suggested, species.itis_accepted_name, species.common_names (JSON-as-text). Deliberately excludes itis_name_match — recon established it is a match-status enum (accepted/synonym/no_match), not a name; the ITIS join brings in no common name at all. Blank/whitespace q is an exact no-op. ANDs with existing filters; pagination, sorting, ObservationOut and the default rejected-exclusion untouched. Verified live: baseline 500 = blank-q 500; q=Prunus 35; q=nettle 31 reaching Campanula trachelium ("Nettle-leaved bellflower") — proving common_names is genuinely searched, not just the scientific columns; nonsense → 0, not an error. AND-composition proven non-trivial (Prunus: 34 approved + 1 manually_verified + 6 rejected; &needs_review→0, &rejected→6).
-/sightings page built (frontend/sightings.html + route in main.py) — date-banded masonry, sticky band headers, infinite scroll at limit=100/offset. Sort: Newest first (date_desc, capture date, default) / Oldest first / Recently added. Single-select chips All / Confirmed / Pending review, Geotagged-only toggle, debounced search → q. Consumes GET /api/observations only. No approve/reject/edit affordances — browse surface, explicitly not a review surface. No edibility indicator anywhere, and none joined in.
-Nav via NAV_LINKS in site-header.js — nav is centralised; one array entry propagates to all pages. No per-page nav markup exists any more; editing pages individually would have been the wrong mechanism.
-Lightbox reused, and _lbOnGoToPin fired for the first time in the app — openLightbox() with the loaded image set, full-size via /api/observations/{id}/photo. hasGPS set per geotagged row; pin jumps to the map's existing ?lat=&lng=&z=17&obs= deep-link (_initLatLngDeepLink, index.html:4046), which drops a standalone marker for any review_status. Confirmed working live by Melvin. Note: review.html's openCardPhoto never sets hasGPS, so its pin has never shown — pre-existing, untouched. Species-card link sits in a separate #lb-species-link element (the shared lightbox sets #lb-caption via textContent), kept in sync by a MutationObserver on #lb-img, linking /species?s=<species_primary>.
-Honest three-state label — scene / confirmed / pending review. not_plant rows were falling through stateLabel's else-branch and rendering "pending review", asserting they awaited a verdict already given. identification_status === 'not_plant' now checked first → "scene", neutral slate badge (distinct from confirmed-green and pending-amber, deliberately not a warning colour). Precedence rationale: identification_status is a verdict about what the thing is; review_status is a workflow state — orthogonal, and the verdict wins. Zero not_plant+approved rows exist today; the ordering is a correctness guarantee regardless of data.
-1,262 not_plant rows deliberately retained on the page, not filtered. Decision reversed mid-session: these are georeferenced scene photos (e.g. the Feldberg Naturschutzgebiet sign, P1-ingested, GPS corroborating the surrounding observations). "Pre-filter said not-a-plant" ≠ "not worth seeing". This quietly settles what Sightings is: a photo archive of place, not a species-observation browser — closer to the platform's stated positioning than a filtered species grid, and it avoids the page growing a species-shaped assumption later.
-Number gap closed: 3,408 (All) − 2,146 (recon's both-exclusions count) = 1,262 not_plant, exactly. /api/observations excludes only rejected by default. No unexplained third bucket. The 13,762 total is mostly dedup hashes; ~2,146–3,408 is the real browsable archive.
-created_at added to ObservationOut (one line; from_attributes populates it from the ORM — no mapping site, purely additive, both consumers are FastAPI serializers, nothing iterates fields). Non-NULL across all 3,408 browsable rows. added_desc now bands by real ingest date; day/month labelling extracted to a shared bandForDate(raw) helper so capture-date and added-date paths use one implementation. Capture-date banding and NULL→"Date unknown" behaviour unchanged; added_desc falls back identically.
-CLAUDE.md venv path corrected — venv/ → ~/foragingid-venv in both the Venv and Run cells. The run command already carried --host 0.0.0.0 from a prior session; left as-is rather than claim an unmade change.
+/sightings page built — read-only photo-archive browse surface. Date-banded masonry, sticky band headers, infinite scroll (limit=100/offset), date_desc (capture, default) / date_asc / added_desc. Chips All / Confirmed / Pending review, Geotagged-only, debounced search. Consumes GET /api/observations only — recon established no new endpoint was needed. No write affordances; explicitly not a review surface. No edibility indicator, none joined in. Nav via one NAV_LINKS entry in site-header.js (nav is centralised — no per-page markup exists). Lightbox reused; _lbOnGoToPin fired for the first time in the app — map deep-link ?lat&lng&z&obs confirmed working end-to-end by Melvin.
+q free-text name search added to /api/observations — ilike '%term%' OR'd across species_primary, species_suggested, itis_accepted_name, common_names. Recon corrected a wrong premise of mine: itis_name_match is a match-status enum, not a name — excluded. Blank is a no-op. Verified live (q=nettle → 31, reaching Campanula trachelium via common_names).
+created_at added to ObservationOut (additive, from_attributes, no mapping site) → added_desc bands by real ingest date. Day/month labelling extracted to shared bandForDate().
+Scene state fixed — keyed to the right field. Recon established identification_status='not_plant' carries zero curator intent: all 1,262 are pre-filter dumps, identical on every field, never human-touched. The real curator state is obs_category='landscape' (53 rows, human-edit-backed, set only via the 🏞 Scene button). stateLabel() now checks obs_category==='landscape' first → scene; the not_plant branch removed. exclude_not_plant param added to /api/observations (default false — no caller affected); Sightings always passes it. 3,408 → 2,146, difference exactly 1,262. 45 scene / 2,076 confirmed / 25 pending.
+The Naturschutzgebiet sign is id 21967 — below_threshold, needs_review, guessed Abies sibirica at 1.1%. Never marked, zero human edits. Renders "pending review", which is honest; press Scene and it flips.
+Sightings dark theme. Recon found the premise wrong: there is no theming mechanism. tokens.css is a single light palette; every "dark" page hardcodes #2a3330/#d8e4d8 in its own inline style. Sightings was the only page following the tokens. Matched the reference pages verbatim (option A). Option B — real dark tokens in tokens.css — agreed as the right fix, deferred: site-wide, touches every page.
+ALL truncation removed from print surfaces — 6 sites across print.html (463/525 id_notes, 464/527 look-alike) and lists.html (1915/1916/1966/1967). Full text renders everywhere; verified byte-exact through the real code paths. No container clips (overflow:hidden on .fg-entry is float containment on an auto-height block, not clipping). Origin recovered via reflog pickaxe (root commit 2ad8a55 is a history reset and hides blame): born in 9cf933a 01 June, copied into print.html at birth in cb79a73 02 June. Both auto-generated End Session commits — no decision was ever made, a preview-sizing habit was copy-pasted onto the artifact carried into a wood. Longest id_notes was 1,918 chars capped at 200 — 91% discarded. Top three are all [iNaturalist]-prefixed encyclopedia prose; the cap was hiding an import-quality problem.
+Myrrhis odorata (521) look-alike warning written — human-authored, approved verbatim by Melvin, snapshot db_20260715_043815.sqlite, changed_by='human', history row 2789, old_value NULL truthfully. Byte-for-byte verified (490 chars, 2× U+2014 intact). Closes the print false-negative: it previously rendered "No specific look-alike warnings on record" on an edible classic-hemlock-confusion species.
+CLAUDE.md corrected — venv path (venv/ → ~/foragingid-venv); Conium doctrine line rewritten (it claimed look_alike_warnings was deliberately empty; it holds substantial curator text), now states the human-authored-only rule explicitly.
+⚠️ CRITICAL FIX — force_review / is_phone auto-approve bypass, broken since 2026-05-27. _dual_agree (scan.py:1285) never consulted either flag; both were read only at 1314, inside the else branch where the row was already heading to review. Not a regression — not force_review has never existed in any commit. Born in 951ed2e as an elif, i.e. a fall-through, never a veto; a later refactor preserved the bug exactly. The docstring ("force_review=True → needs_review regardless of confidence") and CLAUDE.md's P2 rule ("file_upload ALWAYS needs_review") were false the moment they were written. Fixed: not force_review added to the condition (it already subsumes is_phone and is_fungi — both assigned before 1285). Snapshot db_20260715_063835.sqlite. Verified behaviourally against the real function with stubbed APIs at 0.95 dual agreement: P1 auto-approve provably intact (is_phone means manual upload — syncthing isn't in the tuple); P2, fungi (both obs_category and iNat iconic_taxon_name routes), and override-prefilter all now vetoed. Test rows cleaned in FK order and proved gone; full integrity match against pre-test snapshot.
+Fungi was protected by accident, not by code. is_fungi was broken identically; zero fungi ever auto-approved only because PlantNet has no fungi coverage so _dual_agree couldn't be satisfied. Adding any fungi-capable second source (e.g. Mushroom Observer) would have failed the edibility-safety rule silently, with mushrooms. Now enforced by code.
+Damage assessment: 3 rows — 17052 Prunella vulgaris, 17737 Genista sagittalis, 18709 Linaria purpurea, all file_upload, all currently on the map. 2 machine-approved and never seen; 18709 was subsequently human-confirmed. Fingerprint coverage total (all 2,013 approved+identified rows have processing_logs), so the count is exact, not a floor. Untouched — separate pass.
+override-prefilter has never been used — zero prior invocations. The 141-keeper batch would have been its first ever load, on 141 known pre-filter failures. That's why this surfaced now rather than months ago.
 
 Pending / next:
 
-Visual check on the scene badge (slate) still owed — everything else on Sightings confirmed live by Melvin (pin, gallery).
-recorded_walks whitelist-vs-gate contradiction — if identity.is_guest: raise 403 blocks participant tokens despite the main.py guest-write whitelist. Still needs the missing fact: how LEO participants connect (tunnel vs LAN).
-bulk_reassign doesn't re-enrich the target after merge (pre-existing, low priority).
-Live tunnel-guest 403 verification (needs tunnel up — operational).
-q doesn't escape LIKE wildcards (%/_) in the user's term — consistent with existing find.py/culinary.py precedent, parameterised, worst case broadens a match. Parked unless exact-fragment semantics are ever needed.
+3 damaged rows (17052, 17737, 18709) — send back to review or confirm. Small, real, on the map now.
+141-keeper batch — validated clean (all exist, non-rejected, not_plant, correct band; 137 file_upload + 4 syncthing; zero dupes). Chokepoint now safe. Melvin's triage calls captured; 13623, 13368, 20066 excluded and require DELETE with hash blacklist (private photos — reject leaves the hash clean and a DIGIERA rescan re-ingests them).
+~950 rejections — delete-by-omission list compiled at 6am; do fresh. Sequence agreed: mark keepers → rebuild survivors-only contact sheets → Melvin confirms → then reject. Contact sheets live at ~/Documents/ForagingID/triage/ (25 sheets, 17MB).
+#21212 / #21215 / #21216 — thumbnail is the only surviving copy on disk. Never reject.
+Reject destroys the only copy. delete_observation_file() unlinks original + thumbnail 30s after reject; uploads/ is the primary store by design, no second copy. ~/Documents/PhoneForaging/ not on disk, DIGIERA unmounted. Backed up on phone/DIGIERA, but the DB copy is gone. Design hazard — worth revisiting before anyone but Melvin touches a reject button.
+Review queue Pending tab is 99.3% pre-filter junk (1,262 of 1,271) — why it's never been worked.
+Pre-filter dumps real plants — 21949/22043 are fireweed, binned as person_animal (bumblebee in frame). False-negative rate is not zero.
+recorded_walks whitelist-vs-gate contradiction; live tunnel-guest 403 test; bulk_reassign doesn't re-enrich after merge.
+
+Parked:
+
+Option B dark tokens in tokens.css — the real theming fix, site-wide.
+Shared render helper for safety text — the truncation appeared in 3 files because it was copy-pasted; a helper closes it at source. Real blast radius across print/lists/species. Phase 13 backlog.
+Map popup safety excerpts — Melvin's call: don't truncate, replace with "Warnings for this species — see full card".
+[iNaturalist] id_notes are encyclopedia prose, not field-ID text — content problem the cap was masking.
+Truncation still live and unaddressed on review history table (layout-protecting, needs reflow not deletion), map/encounters card line-clamps, recipe previews.
+create_all/Alembic dual-mechanism guard; vestigial ignored body fields; maskable icon safe-zone padding; periodic orphaned_at purge; EUIPO/UKIPO search (classes 9 & 42), September.
 
 ## Current State — 10 July 2026
 
@@ -192,6 +206,13 @@ Still open:
 - Enrichment gap remediation — 9 AI drafts pending approval, 6 species never scanned, 79 no-PFAF species need alt-source decision
 
 ## History
+
+### 2026-07-15 09:25
+**Snapshot** — End of session — Session ended from Settings page
+DB: `snapshots/db_20260715_092525.sqlite`
+
+### 2026-07-15 09:25
+**Session ended** — Session ended from Settings page
 
 ### 2026-07-15 06:38
 **Snapshot** — Manual snapshot

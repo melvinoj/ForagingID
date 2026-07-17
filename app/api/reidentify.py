@@ -33,7 +33,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.database import get_db
-from app.integrations.inaturalist import score_image as inat_score, taxa_autocomplete as inat_taxa
+from app.integrations.inaturalist import (
+    score_image as inat_score,
+    taxa_autocomplete as inat_taxa,
+    last_inat_status,
+)
 from app.integrations import mushroom_observer as mo
 from app.integrations.plantnet import PlantNetError, identify_image as plantnet_identify
 from app.models.observation import Observation, ObservationEdit
@@ -43,6 +47,102 @@ from app.services.write_lock import db_write_lock
 from app.models.processing import ProcessingLog
 
 router = APIRouter(tags=["reidentify"])
+
+# ---------------------------------------------------------------------------
+# Provider outcome reporting
+# ---------------------------------------------------------------------------
+# Both integrations already know exactly why a call produced nothing, and both
+# used to throw that away at this layer:
+#
+#   inaturalist.score_image() classifies eight states via record_inat_status()
+#   and then returns [] for every one of them. Reading [] alone cannot tell a
+#   genuine zero-candidate response ('ok_empty') from an expired token, a rate
+#   limit, or a dead network.
+#
+#   plantnet.identify_image() raises PlantNetError carrying .is_connection_error
+#   and .status_code — the fields that exist precisely to separate a transport
+#   failure from an API-level one.
+#
+# So these helpers map a *recorded* state to text. They never infer a cause from
+# an empty list. When the state is not one we have a phrasing for, the message
+# says the state verbatim rather than guessing a plausible reason — an honest
+# "unknown" beats a confident wrong answer, which is what sent a valid token to
+# be refreshed on 15 July.
+#
+# Transport reporting only: no message here may comment on identification
+# correctness or edibility.
+
+# state -> (is_failure, message). is_failure=False means the call worked and the
+# absence of candidates is a real result about the photo, not a fault.
+_INAT_STATE_MESSAGE = {
+    "ok":            (False, None),
+    "ok_empty":      (False, "iNaturalist: responded, no candidates for this photo"),
+    "token_expired": (True,  "iNaturalist: token expired or invalid (HTTP 401) — "
+                             "refresh at inaturalist.org/users/api_token"),
+    "rate_limited":  (True,  "iNaturalist: rate limited (HTTP 429) — retry shortly"),
+    "unreachable":   (True,  "iNaturalist: network unreachable — request never completed"),
+    "file_error":    (True,  "iNaturalist: photo file could not be read"),
+    "no_token":      (True,  "iNaturalist: no API token configured — set "
+                             "INATURALIST_API_TOKEN in .env"),
+}
+
+
+def _inat_warning(candidates: list, token: Optional[str]) -> Optional[str]:
+    """
+    Report the recorded outcome of the last iNat call. Returns None when there
+    is nothing to warn about (candidates returned, or a clean empty response
+    already reported by its own message).
+
+    Reads last_inat_status() — the same in-process tracker scan.py:1079 uses and
+    /api/me exposes. Called immediately after the awaited score_image() so the
+    recorded state belongs to that call.
+    """
+    if not token:
+        return _INAT_STATE_MESSAGE["no_token"][1]
+    if candidates:
+        return None
+    st = last_inat_status() or {}
+    state = st.get("state") or "unknown"
+    detail = (st.get("detail") or "").strip()
+    known = _INAT_STATE_MESSAGE.get(state)
+    if known is not None:
+        msg = known[1]
+        if msg is None:
+            # state='ok' with no candidates: the tracker says the call succeeded
+            # but nothing came back and ok_empty was not recorded. Report the
+            # discrepancy plainly rather than picking a side.
+            return "iNaturalist: no candidates returned (call reported ok)"
+        return f"{msg} [{detail}]" if detail and state != "no_token" else msg
+    return (f"iNaturalist: no candidates — last call state '{state}'"
+            + (f" [{detail}]" if detail else ""))
+
+
+def _plantnet_warning(result: object, error: Optional[PlantNetError],
+                      api_key: Optional[str]) -> Optional[str]:
+    """
+    Report the recorded outcome of the PlantNet call from the exception the
+    integration raised, preserving the network-vs-API distinction that a bare
+    `except Exception: return None` used to erase.
+    """
+    if not api_key:
+        return "PlantNet: no API key configured (set PLANTNET_API_KEY in .env)"
+    if error is not None:
+        if getattr(error, "is_connection_error", False):
+            return f"PlantNet: network failure — request never completed ({error})"
+        code = getattr(error, "status_code", None)
+        if code == 429:
+            return "PlantNet: rate limited (HTTP 429) — retry shortly"
+        if code in (401, 403):
+            return f"PlantNet: API key rejected (HTTP {code})"
+        if code is not None:
+            return f"PlantNet: API error (HTTP {code}) — {error}"
+        return f"PlantNet: request failed — {error}"
+    if result is None:
+        # No result and no exception — should be unreachable. Say so rather than
+        # inventing a cause.
+        return "PlantNet: no result returned (cause not recorded)"
+    return None
+
 
 GBIF_OCCURRENCE_URL = "https://api.gbif.org/v1/occurrence/search"
 GBIF_SPECIES_URL    = "https://api.gbif.org/v1/species/search"
@@ -155,8 +255,11 @@ async def reidentify_observation(
     if _organ not in PLANTNET_ORGANS:
         _organ = "auto"
 
+    pn_error: Optional[PlantNetError] = None
+
     # Run in parallel — never let one failure kill the other
     async def _plantnet() -> object:
+        nonlocal pn_error
         if not use_pn:
             return None
         try:
@@ -165,9 +268,11 @@ async def reidentify_observation(
                 lat=obs.latitude, lng=obs.longitude,
                 organ=_organ,
             )
-        except PlantNetError:
+        except PlantNetError as exc:
+            pn_error = exc
             return None
-        except Exception:
+        except Exception as exc:                      # noqa: BLE001
+            pn_error = PlantNetError(f"{type(exc).__name__}: {exc}")
             return None
 
     pn_result, inat_candidates = await asyncio.gather(
@@ -228,19 +333,14 @@ async def reidentify_observation(
             "source": source_label,
         })
 
+    # Recorded outcomes only — see _plantnet_warning / _inat_warning.
     warnings = []
-    if not api_key:
-        warnings.append("PlantNet: no API key configured (set PLANTNET_API_KEY in .env)")
-    elif pn_result is None:
-        warnings.append("PlantNet: no results (API may have returned an error or rate limit)")
-    if not inat_token:
-        warnings.append(
-            "iNaturalist: no API token configured — "
-            "get yours at https://www.inaturalist.org/users/api_token "
-            "and set INATURALIST_API_TOKEN in .env"
-        )
-    elif not inat_candidates:
-        warnings.append("iNaturalist: no results (API error)")
+    w = _plantnet_warning(pn_result, pn_error, api_key)
+    if w:
+        warnings.append(w)
+    w = _inat_warning(inat_candidates or [], inat_token)
+    if w:
+        warnings.append(w)
 
     return {
         "observation_id": observation_id,
@@ -293,7 +393,10 @@ async def second_opinion(
     if _organ not in PLANTNET_ORGANS:
         _organ = "auto"
 
+    pn_error: Optional[PlantNetError] = None
+
     async def _plantnet() -> object:
+        nonlocal pn_error
         if not api_key:
             return None
         try:
@@ -303,7 +406,11 @@ async def second_opinion(
                 organ=_organ,
                 include_related_images=include_related_images,
             )
-        except Exception:
+        except PlantNetError as exc:
+            pn_error = exc
+            return None
+        except Exception as exc:                      # noqa: BLE001
+            pn_error = PlantNetError(f"{type(exc).__name__}: {exc}")
             return None
 
     async def _inat() -> list:
@@ -425,15 +532,14 @@ async def second_opinion(
             "reference_images": item.get("reference_images", []),
         })
 
+    # Recorded outcomes only — see _plantnet_warning / _inat_warning.
     warnings = []
-    if not api_key:
-        warnings.append("PlantNet: no API key — set PLANTNET_API_KEY in .env")
-    elif pn_result is None:
-        warnings.append("PlantNet: no results (API error or rate limit)")
-    if not inat_token:
-        warnings.append("iNaturalist: no token — set INATURALIST_API_TOKEN in .env")
-    elif not inat_candidates:
-        warnings.append("iNaturalist: no results (API error)")
+    w = _plantnet_warning(pn_result, pn_error, api_key)
+    if w:
+        warnings.append(w)
+    w = _inat_warning(inat_candidates or [], inat_token)
+    if w:
+        warnings.append(w)
     if not gbif_query:
         warnings.append("GBIF: skipped — no current species name to search")
     elif not gbif_results:
@@ -500,7 +606,12 @@ async def retry_identify(
     use_pn   = (not is_fungi) and bool(api_key)
     use_inat = bool(inat_token)
 
+    # Capture the PlantNetError rather than collapsing every failure to None —
+    # is_connection_error/status_code are the only record of what went wrong.
+    pn_error: Optional[PlantNetError] = None
+
     async def _plantnet() -> object:
+        nonlocal pn_error
         if not use_pn:
             return None
         try:
@@ -508,7 +619,11 @@ async def retry_identify(
                 path, api_key=api_key,
                 lat=obs.latitude, lng=obs.longitude,
             )
-        except Exception:
+        except PlantNetError as exc:
+            pn_error = exc
+            return None
+        except Exception as exc:                      # noqa: BLE001
+            pn_error = PlantNetError(f"{type(exc).__name__}: {exc}")
             return None
 
     pn_result, inat_candidates = await asyncio.gather(
@@ -577,18 +692,16 @@ async def retry_identify(
 
     total = sum(len(g["candidates"]) for g in groups)
 
+    # Report recorded outcomes only — never a disjunction of guesses.
+    # PlantNet is plant-only, so on fungi it is not consulted and not reported.
     warnings = []
-    if use_pn and pn_result is None:
-        warnings.append("PlantNet: no results (API error or rate limit)")
-    elif not is_fungi and not api_key:
-        warnings.append("PlantNet: no API key configured (set PLANTNET_API_KEY in .env)")
-    if not inat_token:
-        warnings.append(
-            "iNaturalist: no API token configured — refresh at "
-            "inaturalist.org/users/api_token and set INATURALIST_API_TOKEN in .env"
-        )
-    elif not inat_candidates:
-        warnings.append("iNaturalist: no results (API error or expired token)")
+    if not is_fungi:
+        w = _plantnet_warning(pn_result, pn_error, api_key)
+        if w:
+            warnings.append(w)
+    w = _inat_warning(inat_candidates or [], inat_token)
+    if w:
+        warnings.append(w)
 
     return {
         "observation_id": observation_id,
@@ -596,6 +709,10 @@ async def retry_identify(
         "groups": groups,
         "total": total,
         "warnings": warnings,
+        # Structured transport outcome so the client can distinguish "the call
+        # failed" from "the call worked and found nothing" without parsing prose.
+        "inat_state": (last_inat_status() or {}).get("state") if inat_token else "no_token",
+        "plantnet_failed": bool(pn_error) if not is_fungi else None,
     }
 
 

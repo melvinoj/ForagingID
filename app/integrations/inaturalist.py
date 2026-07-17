@@ -30,9 +30,41 @@ VISION_URL = "https://api.inaturalist.org/v1/computervision/score_image"
 TAXA_URL   = "https://api.inaturalist.org/v1/taxa/autocomplete"
 TAXA_SEARCH_URL = "https://api.inaturalist.org/v1/taxa"
 TAXA_DETAIL_URL = "https://api.inaturalist.org/v1/taxa/{taxon_id}"
-# Fail fast when offline: 8 s ceiling so a dead connection never hangs the
-# pipeline behind a spinner that never resolves (offline-hardening Fix 1).
-TIMEOUT_S  = 8
+# Fail fast when offline, without failing a healthy call.
+#
+# Was a flat 8 s. Measured on a healthy network (6 successful trials, 3.5 MB
+# photo): 3.62, 4.31, 4.35, 4.83, 6.06, 8.78 s — median ~4.6 s, max 8.78 s.
+# One of six exceeded the old ceiling on a network that was working, and the
+# integration reports a timeout as state='unreachable', so ~1-in-6 healthy
+# calls could surface to the reviewer as a transport failure.
+#
+# The spread is dominated by upload time, not by iNat's own latency: uplink here
+# measured ~2.3 Mbit/s (shared with the ngrok tunnel and Syncthing), so a 4 MB
+# photo needs ~14 s of pure transfer in the worst case. A single scalar cannot
+# serve both "detect a dead socket quickly" and "allow a slow large upload to
+# finish", which is what the old value tried to do.
+#
+# Split, using httpx's per-phase timeouts:
+#   connect=5   a TCP+TLS handshake that has not completed in 5 s is a dead or
+#               unroutable network — 15 July's DNS failure surfaced here in
+#               well under 1 s. Keeps the fail-fast property that mattered.
+#   write=30    the upload leg. ~6x the measured worst case (4.8 s of a 8.78 s
+#               call), and >2x the 14 s worst-case transfer for a 4 MB photo on
+#               a saturated 2.3 Mbit/s uplink. This is the leg that was failing.
+#   read=20     iNat's vision inference. Comfortably clear of the ~4 s observed.
+#   pool=5      waiting on a free connection from the pool.
+#
+# Chosen against the measured distribution rather than round numbers: the old
+# 8 s sat *inside* the observed range of successful calls, which is the defect.
+# Every phase limit here sits well outside it, so a timeout now means something
+# is actually wrong. The cost of the higher ceiling is bounded — it applies only
+# to a call already in trouble, and only the write leg is generous.
+TIMEOUT = httpx.Timeout(connect=5.0, write=30.0, read=20.0, pool=5.0)
+
+# Scalar ceiling for the small JSON GETs (taxa autocomplete / search / detail).
+# Those send no image, so the upload-driven spread above does not apply to them
+# and they keep the original fail-fast value. Only score_image() uses TIMEOUT.
+TIMEOUT_S = 8
 
 # Last observed iNaturalist call status — surfaced to the owner UI (via /api/me) so an
 # expired token, which silently routes every scan to needs_review, is visible during
@@ -167,7 +199,11 @@ async def score_image(
         form_data["observed_on"] = observed_on
 
     try:
-        async with httpx.AsyncClient(timeout=TIMEOUT_S) as client:
+        # Per-phase TIMEOUT (not the scalar): this is the only call that uploads
+        # a multi-MB image, so it is the only one needing a long write budget
+        # while still failing fast on a dead connect. The taxa/autocomplete calls
+        # below are small JSON GETs and keep the scalar.
+        async with httpx.AsyncClient(timeout=TIMEOUT) as client:
             resp = await client.post(
                 VISION_URL,
                 headers={"Authorization": f"Bearer {api_token}"},

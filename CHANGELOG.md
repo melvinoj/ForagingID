@@ -207,6 +207,76 @@ Still open:
 
 ## History
 
+### 2026-07-17 06:54
+**Snapshot** — Manual snapshot
+DB: `snapshots/db_20260717_065439.sqlite`
+
+### 2026-07-17 06:43
+**PlantNet transient write-timeout: (5,25) timeout tuple + bounded retry (3 attempts, 0.5s/1.5s backoff), transport-only. Verified 22099 live: dual agreement 80.39/87.83 Circaea lutetiana. Plus read-only impact assessment of 7 weeks of transport failures.**
+
+**Built:**
+- plantnet.py bounded retry on socket stalls only — never on HTTP status (429/4xx/5xx answered = no retry, verified by unit check: 1 post call)
+- PlantNetResult.attempts + PlantNetError.attempts — retried successes/failures measurable
+- processing_logs retry line in identification.py and scan.py — logs only when attempts>1
+**Fixed:**
+- plantnet.py:33 REQUEST_TIMEOUT_S=8 scalar -> REQUEST_TIMEOUT=(5,25) tuple. connect=5 keeps fail-fast; read=25 ~5x observed worst success (5.02s)
+- Root mechanism: requests timeout is per-socket-op, NOT total. 8s never meant the upload may take 8s
+**Files:** `app/integrations/plantnet.py`, `app/services/identification.py`, `app/api/scan.py`
+**Pending:**
+- VERIFIED 22099: PlantNet 80.39% + iNat 87.83% Circaea lutetiana, inat_state=ok, zero warnings, plantnet_failed=False. Token refresh confirmed working
+- 22099 did NOT auto-approve — still needs_review/below_threshold. retry-identify is read-only by contract (never auto-approves). Auto-approve only runs on the P1 scan path at ingest. Melvins call whether to confirm manually or re-ingest
+- IMPACT (read-only): 3,239 observations had >=1 PlantNet transport failure. 828 identified iNat-ONLY (PlantNet silently dropped out of _dual_agree). dual_source_agreement set on ZERO of the 3,239 — no row was ever auto-approved on a degraded dual-source check
+- IMPACT: 2,083 REJECTED rows had zero candidates AND a PlantNet transport failure — rejected on incomplete evidence. Files unlinked. Recoverable only from DIGIERA/phone
+- PREFILTER CLEAN: 0 not_plant rows had a PlantNet transport failure. prefilter.py never calls PlantNet (runs before it, local classifier only). not_plant decisions are NOT contaminated
+- 141-KEEPER BATCH CLEAN: 0 pending-queue rows have a PlantNet transport failure. The batch does not need this question asked of it
+- Backlog (parked): httpx swap for plantnet.py — fault is not the library, retry addresses it
+
+### 2026-07-16 19:28
+**Identification failure messaging + iNat timeout. reidentify.py now reports recorded transport state instead of guessing; PlantNetError preserved; below_threshold card copy corrected to distinguish transport failure from genuine below-threshold; iNat vision timeout split per-phase.**
+
+**Built:**
+- _inat_warning() / _plantnet_warning() in reidentify.py — single mapping from recorded state to text; never infers cause from an empty list
+- retry-identify response now returns structured inat_state + plantnet_failed alongside prose warnings
+**Fixed:**
+- reidentify.py x3 sites (163/175, 300/310, 507/516): bare except Exception -> return None replaced with except PlantNetError as exc capture, preserving is_connection_error + status_code
+- reidentify.py:235/243, 432/436, 582/591: guess-disjunction warnings removed. grep confirms zero remaining instances of API error or rate limit / API error or expired token
+- review.html below_threshold copy: now keys off candidates.length — candidates present vs none on record. Prior copy (mine, earlier today) claimed threshold filtering for rows that had candidates=[] from transport failure
+- inaturalist.py: score_image now uses httpx.Timeout(connect=5, write=30, read=20, pool=5). TIMEOUT_S=8 retained for small JSON GETs only
+**Files:** `app/api/reidentify.py`, `app/integrations/inaturalist.py`, `frontend/review.html`
+**Pending:**
+- iNAT TOKEN NOW GENUINELY EXPIRED — exp claim was 2026-07-16T07:09:35Z, elapsed ~10h ago. Refresh at inaturalist.org/users/api_token. Verified live: new code reports token expired or invalid (HTTP 401) correctly; old code would have said API error or expired token as a guess
+- PlantNet healthy throughout: #22083 retry returns 6 candidates, top Verbascum chaixii 79.16%, plantnet_failed=False, no PlantNet warning emitted. Old code would have blamed PlantNet for a rate limit it never hit
+- RECON RESULT: guess-from-[] defect was contained to reidentify.py. identification.py:150/168 is the correct reference impl (catches PlantNetError, reads is_connection_error, uses raise_on_connection_error=True). scan.py:1079 already calls last_inat_status(). sharing.py:292 exposes it at /api/me. No other surface affected — no broad fix needed
+- Melvin to verify live in browser: below_threshold cards now render an honest species block; review.html changes are unverified by Code per project rule
+
+### 2026-07-15 12:24
+**Read-only diagnostic of identification API failures on #22083/#22099. Root cause: transient network failure on the local machine, not auth/quota/no-match. Both APIs verified healthy now; both photos identify at ~80%.**
+
+**Pending:**
+- KILLED: iNat expired-token claim — token valid until 2026-07-16T07:09:35Z (21.95h left), live calls 6/6 ok
+- ROOT CAUSE: transient local network loss. Both providers last succeeded together at #22120 07:11:36; both failed 07:21:41 with DNS [Errno 8]. Shared uplink = not independent failures
+- #22083 retry now -> PlantNet 79.16% Verbascum chaixii; #22099 -> PlantNet 80.39% + iNat 87.83% Circaea lutetiana (dual agreement, would auto-approve)
+- BUG: reidentify.py:511-512 swallows PlantNetError -> None, discarding is_connection_error + message
+- BUG: reidentify.py:582/591 warnings guess (API error or rate limit / expired token) while last_inat_status() already holds the true state (ok/ok_empty/token_expired/rate_limited/unreachable/file_error). Already imported in scan.py:1079 and exposed at /api/me; reidentify never calls it
+- FRAGILITY: iNat TIMEOUT_S=8 vs measured healthy latency 3.62-8.78s — trial exceeded the timeout on a working network
+- Upload measured 2.29 Mbit/s with ngrok tunnel active — thin margin for 3.5-4MB uploads
+
+### 2026-07-15 11:04
+**Fixed silent blank species block in review cards: identification_status chain had no terminal else, so below_threshold/failed_identification/pending_identification rendered nothing (3,850 cards). Also stopped P7 fabricating a 0.0% score for names with no backing candidate (10 rows).**
+
+**Built:**
+- Final-catch species block branch in _makeCardHtml — states pipeline outcome per identification_status, neutral styling, no edibility/safety signal
+**Fixed:**
+- below_threshold (5,077 rows) / failed_identification (16) / pending_identification (9) no longer render a blank species area
+- P7 suggestion block no longer fabricates 0.0% + conf-low red when species_suggested has no matching candidate — score omitted, labelled unverified (10 rows incl. 22087 salsify, 22093 wood fern)
+**Files:** `frontend/review.html`
+**Pending:**
+- STILL OPEN: edits-dont-sustain symptom — NOT caused by missing edit target (corr-wrap always rendered; root cause unfound)
+- STILL OPEN: strikethrough on 22087 — line-through exists nowhere in frontend/ or git history; needs screenshot
+- review.html chain has a branch for pending_connection (0 rows, never existed)
+- Look up button silently persists typed text to species_suggested via fire-and-forget PATCH /suggest — design question
+- 18669/18706/19490: below_threshold WITH species_primary set (all rejected)
+
 ### 2026-07-15 09:25
 **Snapshot** — End of session — Session ended from Settings page
 DB: `snapshots/db_20260715_092525.sqlite`

@@ -20,17 +20,64 @@ Failure strategy (per spec):
 """
 
 import asyncio
+import logging
 import requests as _requests  # sync, reliable for multipart file uploads
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional, List
 
+_log = logging.getLogger(__name__)
+
 PLANTNET_BASE = "https://my-api.plantnet.org/v2/identify"
 DEFAULT_PROJECT = "all"
 DEFAULT_ORGAN = "auto"
-# Fail fast when offline: 8 s ceiling so a dead connection never hangs the
-# pipeline behind a spinner that never resolves (offline-hardening Fix 1).
-REQUEST_TIMEOUT_S = 8
+
+# (connect, read) rather than a scalar.
+#
+# requests' timeout is NOT a total-request budget: the value applies to the
+# connect phase and then to each individual socket operation independently.
+# The old scalar 8 therefore never meant "the upload may take 8 s" — it meant
+# "no single socket op may stall 8 s", which is a different and much more easily
+# tripped condition.
+#
+# Measured against 22099's real 4.03 MB photo, 8 trials, uplink at 8.99 Mbit/s:
+#   OK 4.84 / 5.02 / 3.79 / 3.22 / 3.23 / 3.57 / 4.12 s   (7 of 8)
+#   FAIL 9.63 s — "request timed out"                     (1 of 8)
+# Successes cluster at 3.2–5.0 s, i.e. 40–60% of the old ceiling. The failure is
+# not a call running slightly over budget; it is a momentary socket stall on a
+# link shared with ngrok and Syncthing. 4 MB at 8.99 Mbit/s needs only ~3.6 s of
+# transfer, so bandwidth is not the constraint.
+#
+#   connect=5  keeps the fail-fast property that mattered on 15 July: the DNS
+#              failure surfaced in well under 1 s, and a dead network must never
+#              hang the pipeline behind a spinner.
+#   read=25    a real ceiling ~5x the observed worst success (5.02 s) and well
+#              outside the success range, so a trip means something is genuinely
+#              wrong rather than merely slow.
+#
+# Raising this further would not fix the stall — it would only wait longer for
+# the same fault. The stall is handled by the bounded retry below, not here.
+REQUEST_TIMEOUT = (5, 25)
+
+# Back-compat: callers/tests that read a scalar get the effective ceiling.
+REQUEST_TIMEOUT_S = 25
+
+# Bounded retry for transport transients only.
+#
+# Attempt count: first-attempt success measured at 7/8 (~87.5%). Independent
+# stalls compound as (1/8)^n, so 3 attempts ≈ 1-in-512 residual failure. That is
+# the knee of the curve — a 4th attempt buys ~1-in-4096 while adding another
+# 25 s of worst-case latency to a call that is already failing. Kept low
+# deliberately: retry masks a real fault, so it must not become a way of never
+# seeing it.
+#
+# Backoff: 0.5 s then 1.5 s. The observed stall is momentary (neighbouring calls
+# in the same loop succeeded in ~3 s), so a short pause is enough to land on a
+# clear socket. Deliberately not exponential-with-jitter — this is a single-user
+# local pipeline against an API we are not thundering-herding, and the total
+# added latency on a fully failed call stays bounded at ~2 s of sleep.
+PLANTNET_MAX_ATTEMPTS = 3
+PLANTNET_RETRY_BACKOFF_S = (0.5, 1.5)
 
 
 class PlantNetError(Exception):
@@ -41,12 +88,17 @@ class PlantNetError(Exception):
     (offline) rather than an API-level error (bad key, malformed response).
     The identification pipeline uses this to route the observation to
     'pending_connection' instead of discarding it.
+
+    attempts: how many transport attempts were made before giving up. 1 for any
+    non-retried failure (HTTP errors are never retried). Lets callers log the
+    real retry cost so the transient-stall rate stays measurable.
     """
     def __init__(self, message: str, status_code: Optional[int] = None,
-                 is_connection_error: bool = False):
+                 is_connection_error: bool = False, attempts: int = 1):
         super().__init__(message)
         self.status_code = status_code
         self.is_connection_error = is_connection_error
+        self.attempts = attempts
 
 
 @dataclass
@@ -69,6 +121,12 @@ class PlantNetResult:
     best_match: Optional[str]
     candidates: list[PlantNetCandidate]
     raw_response: dict          # full API JSON — always stored
+    # Transport attempts needed to obtain this response. 1 = first attempt.
+    # >1 means a transient socket stall was retried through. Purely diagnostic:
+    # it records what the transport cost, and must never influence candidates,
+    # scores, thresholds or routing — a retried success is otherwise identical
+    # to a first-attempt success.
+    attempts: int = 1
 
     @property
     def top_candidate(self) -> Optional[PlantNetCandidate]:
@@ -171,32 +229,93 @@ async def identify_image(
             params=params,
             files=[("images", (image_path.name, image_bytes, "image/jpeg"))],
             data=[("organs", organ)],
-            timeout=REQUEST_TIMEOUT_S,
+            timeout=REQUEST_TIMEOUT,
         )
 
-    try:
-        loop = asyncio.get_event_loop()
-        response = await loop.run_in_executor(None, _do_post)
-    except _requests.Timeout:
-        raise PlantNetError("PlantNet request timed out", is_connection_error=True)
-    except _requests.ConnectionError as e:
-        raise PlantNetError(f"PlantNet connection error: {e}", is_connection_error=True)
-    except _requests.RequestException as e:
-        raise PlantNetError(f"PlantNet network error: {e}")
+    # ── Bounded retry — transport transients ONLY ────────────────────────────
+    # Retries a socket-level stall (Timeout / ConnectionError), which is the
+    # ~1-in-8 fault measured against this endpoint. Never retries an HTTP
+    # status: a 4xx/5xx means PlantNet answered, and re-sending a 4 MB image to
+    # an API that already gave a verdict is quota abuse — a 429 in particular
+    # would be made strictly worse by retrying it. Those paths fall through to
+    # the status handling below on the first response, exactly as before.
+    #
+    # Purely a transport concern: identical request each attempt, and the
+    # response of a retried success is the same object shape a first-attempt
+    # success returns. Nothing here can alter candidates, scores, thresholds or
+    # routing — a retried success is indistinguishable downstream except for
+    # .attempts on the result.
+    loop = asyncio.get_event_loop()
+    response = None
+    attempts = 0
+    last_transport_error: Optional[PlantNetError] = None
 
+    for attempt in range(1, PLANTNET_MAX_ATTEMPTS + 1):
+        attempts = attempt
+        try:
+            response = await loop.run_in_executor(None, _do_post)
+            break
+        except _requests.Timeout:
+            last_transport_error = PlantNetError(
+                "PlantNet request timed out", is_connection_error=True
+            )
+        except _requests.ConnectionError as e:
+            last_transport_error = PlantNetError(
+                f"PlantNet connection error: {e}", is_connection_error=True
+            )
+        except _requests.RequestException as e:
+            # Not a socket stall (malformed request, invalid URL, …) — a retry
+            # would fail identically. Surface immediately.
+            raise PlantNetError(f"PlantNet network error: {e}")
+
+        if attempt < PLANTNET_MAX_ATTEMPTS:
+            _log.warning(
+                "PlantNet transport failure on attempt %d/%d for %s: %s — retrying",
+                attempt, PLANTNET_MAX_ATTEMPTS, image_path.name, last_transport_error,
+            )
+            await asyncio.sleep(PLANTNET_RETRY_BACKOFF_S[attempt - 1])
+
+    if response is None:
+        # Every attempt hit a transport stall. Preserve the real recorded fault
+        # (is_connection_error stays True) and state the attempt count so the
+        # retry is never silent — the messaging contract from 16 July stands:
+        # report what was recorded, never a guessed cause.
+        _log.warning(
+            "PlantNet: all %d attempts failed for %s — %s",
+            attempts, image_path.name, last_transport_error,
+        )
+        raise PlantNetError(
+            f"{last_transport_error} (after {attempts} attempts)",
+            is_connection_error=True,
+            attempts=attempts,
+        )
+
+    if attempts > 1:
+        _log.info(
+            "PlantNet: succeeded on attempt %d/%d for %s",
+            attempts, PLANTNET_MAX_ATTEMPTS, image_path.name,
+        )
+
+    # From here on the request is answered — these paths are reached on the
+    # first response and are never retried (see the loop comment above).
     if response.status_code == 404:
         # PlantNet returns 404 when no species match at all (not truly an error)
-        return PlantNetResult(best_match=None, candidates=[], raw_response={"status": 404, "message": "no_result"})
+        return PlantNetResult(best_match=None, candidates=[],
+                              raw_response={"status": 404, "message": "no_result"},
+                              attempts=attempts)
 
     if response.status_code != 200:
         raise PlantNetError(
             f"PlantNet API error {response.status_code}: {response.text[:200]}",
             status_code=response.status_code,
+            attempts=attempts,
         )
 
     try:
         payload = response.json()
     except Exception as e:
-        raise PlantNetError(f"PlantNet returned non-JSON response: {e}")
+        raise PlantNetError(f"PlantNet returned non-JSON response: {e}", attempts=attempts)
 
-    return _parse_response(payload)
+    result = _parse_response(payload)
+    result.attempts = attempts
+    return result

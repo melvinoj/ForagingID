@@ -1090,6 +1090,16 @@ async def _identify_scanned(
                     message=f"PlantNet error: {pn_error}",
                 ))
 
+            # Retried-success log — keeps the ~1-in-8 transient-stall rate
+            # measurable rather than letting the retry hide it. Observability
+            # only: attempts never touches scoring, thresholds or routing.
+            _pn_attempts = getattr(pn_result, "attempts", 1) if pn_result else 1
+            if _pn_attempts > 1:
+                session.add(ProcessingLog(
+                    observation_id=obs_id, stage="identify", status="success",
+                    message=f"PlantNet: transport retry — succeeded on attempt {_pn_attempts}",
+                ))
+
             # ── iNat call outcome (observability only) ──────────────────────
             # Symmetric with the PlantNet error log above: PlantNet failures were
             # already visible in processing_logs, but iNat's state was only ever

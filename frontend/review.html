@@ -1855,16 +1855,22 @@ function _makeCardHtml(obs) {
       const sugMatch  = candidates.find(c => c.scientific_name === obs.species_suggested);
       const sugCommon = (sugMatch && sugMatch.common_names && sugMatch.common_names.length)
         ? sugMatch.common_names.join(' · ') : '';
-      const sugScore  = sugMatch ? (sugMatch.score || 0) : 0;
+      // A name with no matching entry in candidates[] has no score at all — the
+      // pipeline never scored it. Reporting that absence as "0.0%" invents a
+      // machine verdict that was never issued, and confClass(0) then paints it
+      // conf-low red, so a name with no data reads as a name the model rejected.
+      // Show the score only when a candidate actually backs it.
+      const hasScore  = !!sugMatch;
+      const sugScore  = hasScore ? (sugMatch.score || 0) : 0;
       const sugPct    = (sugScore * 100).toFixed(1);
-      const sugCls    = confClass(sugScore);
+      const sugCls    = hasScore ? confClass(sugScore) : '';
       const sciSafe   = (obs.species_suggested || '').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
       speciesHtml = `
         <div class="species-block ${sugCls}">
-          <span class="sp-score">${sugPct}%</span>
+          ${hasScore ? `<span class="sp-score">${sugPct}%</span>` : ''}
           <div class="sp-name">${_esc(obs.species_suggested)} <button class="sp-rename-btn" onclick="openRenameRowForm(${obs.id})" title="Rename species">✎</button></div>
           ${sugCommon ? `<div class="sp-common">${_esc(sugCommon)}</div>` : ''}
-          <div class="sp-suggested-label">suggested</div>
+          <div class="sp-suggested-label">${hasScore ? 'suggested' : 'unverified name — not scored by the pipeline'}</div>
           ${sugScore < 0.80 ? `<button class="btn-second-opinion" id="sop-btn-${obs.id}"
             onclick="showSecondOpinion(${obs.id},this)">🔍 Second Opinion</button>
             <div class="sop-panel" id="sop-panel-${obs.id}" style="display:none"></div>` : ''}
@@ -1877,6 +1883,61 @@ function _makeCardHtml(obs) {
             </div>
             <div id="rrow-result-${obs.id}" class="rrow-result"></div>
           </div>
+        </div>`;
+    }
+
+    // ── Final catch — every non-landscape card gets a species block ────────
+    // The status chain above matches 'identified', 'not_plant' and
+    // 'pending_connection'. It has no terminal else, so every other value of
+    // identification_status left speciesHtml as '' and the card rendered no
+    // species area at all — silently, with no throw, which is why the server
+    // log, console and network tab are all clean. Against the DB that is 3,850
+    // cards: below_threshold (the ones P7 above does not rescue),
+    // failed_identification (16) and pending_identification (9). Keyed on
+    // !speciesHtml rather than on a status list so any value added later is
+    // caught too, and so the P7 suggestion block above still wins when it fires.
+    //
+    // Deliberately neutral:
+    //  - No conf-* class. Those colour the border green/amber/red and would read
+    //    as a verdict on the plant rather than on the pipeline run.
+    //  - No data-genuine-nomatch attribute. That marker drives
+    //    _isGenuineNoMatchCard() -> selectAllNoMatch() -> bulk Reject all, and
+    //    delete_observation_file() unlinks the only copy on disk. It must stay
+    //    limited to the identified-with-empty-candidates case above.
+    //  - Carries .sp-name so _applyCorrectionName() overwrites this text in
+    //    place when a name is chosen, instead of injecting a second block.
+    // Copy note: 'below_threshold' does NOT by itself mean the pipeline scored
+    // something and found it too low. It also covers rows where every provider
+    // failed at transport and nothing was ever returned to score — 22083/22093/
+    // 22096/22099 (15 July) are exactly that: candidates=[] from a DNS failure,
+    // recorded in processing_logs as state=unreachable, not a weak match.
+    // An earlier version of this branch said "No result above the confidence
+    // threshold" for both, which states a cause the row does not evidence.
+    //
+    // So key off what is actually on the row — the stored candidate list — and
+    // say only what it supports. Where the row cannot distinguish "API answered
+    // with nothing" from "API never answered", say the outcome and name no
+    // cause; the per-provider reason lives in the Request ID / Second Opinion
+    // panels, which read the recorded transport state.
+    //
+    // Transport/pipeline reporting only — nothing here comments on edibility or
+    // on whether any identification is correct.
+    if (!speciesHtml && !isLandscape) {
+      let idMsg;
+      if (obs.identification_status === 'below_threshold') {
+        idMsg = candidates.length
+          ? 'Candidates returned, none above the confidence threshold. Press Request ID to see them.'
+          : 'No candidates on record — the identification produced no result. Press Request ID to run it again and see why.';
+      } else if (obs.identification_status === 'failed_identification') {
+        idMsg = 'Identification did not complete. Press Request ID to run it again and see why.';
+      } else if (obs.identification_status === 'pending_identification') {
+        idMsg = 'Identification has not run yet.';
+      } else {
+        idMsg = `No identification on record (status: ${obs.identification_status || 'unknown'}).`;
+      }
+      speciesHtml = `
+        <div class="species-block">
+          <div class="sp-name" style="font-style:normal;font-weight:500;color:#666;font-size:0.78rem">${_esc(idMsg)}</div>
         </div>`;
     }
 

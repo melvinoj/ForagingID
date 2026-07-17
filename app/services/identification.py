@@ -152,6 +152,13 @@ async def identify_observation(
                     lat=obs.latitude, lng=obs.longitude,
                 )
                 await asyncio.sleep(API_DELAY_S)
+            # Log a retried success so the ~1-in-8 transient-stall rate stays
+            # measurable in processing_logs rather than being masked by the
+            # retry. Silent on a clean first attempt — no log noise.
+            _pn_attempts = getattr(pn_result, "attempts", 1)
+            if _pn_attempts > 1:
+                _log(session, obs.id, "identify",
+                     f"PlantNet: transport retry — succeeded on attempt {_pn_attempts}")
         except PlantNetError as exc:
             pn_error = str(exc)
             if getattr(exc, "is_connection_error", False):

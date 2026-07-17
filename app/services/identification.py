@@ -186,10 +186,20 @@ async def identify_observation(
 
     duration_ms = int((time.monotonic() - start) * 1000)
 
-    # ── iNaturalist kingdom gate ──────────────────────────────────────────────
-    # If iNaturalist's top result is outside Plantae/Fungi at ≥5% confidence,
-    # the subject is definitively non-target (animal, insect, etc.).
-    # Auto-reject immediately — do not continue to species assignment.
+    # ── iNaturalist kingdom signal ────────────────────────────────────────────
+    # Twin of the gate in scan.py:1250 — see the full reasoning there. Both
+    # pipelines call one or the other, so fixing one and not the other would
+    # leave the destructive path live on half the traffic.
+    #
+    # Was: reject + unlink the files when iNat's top candidate fell outside
+    # Plantae/Fungi at ≥5%. It fired on four real plant photos (dog 6.8%, cat
+    # 12.1%, cow 9.4%, lime gall mite 48.4%) and was wrong every time. A
+    # low-confidence non-plant guess frequently names something *in* the frame
+    # rather than the subject.
+    #
+    # Now: routes to needs_review, never deletes, records the candidate and its
+    # score honestly so the reviewer can judge the signal for themselves.
+    # force_review is honoured trivially — the only outcome left is needs_review.
     if inat_hits:
         _ik = inat_hits[0]
         _kingdom = (_ik.iconic_taxon_name or "").lower()
@@ -199,11 +209,16 @@ async def identify_observation(
             await set_observation_species(session, obs, None)
             obs.species_candidates_json = json.dumps([])
             obs.processing_stage = "identified"
-            obs.review_status = "rejected"
-            obs.prefilter_category = "person_animal"
+            obs.review_status = "needs_review"
+            obs.review_label = "non_plant"
+            # prefilter_category deliberately left alone — the prefilter passed
+            # these as plant; calling them a prefilter rejection was untrue.
             _note = (
-                f"Auto-rejected: iNaturalist kingdom={_ik.iconic_taxon_name}"
-                f" ({_ik.scientific_name} {_ik.score:.1%})"
+                f"Possible non-plant subject — iNaturalist's top candidate was "
+                f"{_ik.scientific_name} ({_ik.iconic_taxon_name}) at {_ik.score:.1%}. "
+                f"Sent to review, not rejected: a low-confidence non-plant guess is a "
+                f"signal, not a verdict, and may name something in the frame rather "
+                f"than the subject."
             )
             existing = obs.reviewer_notes or ""
             obs.reviewer_notes = existing + ("\n" if existing else "") + _note
@@ -211,15 +226,13 @@ async def identify_observation(
                 observation_id=obs.id,
                 field_name="review_status",
                 old_value=_old_status,
-                new_value="rejected",
-                edited_by="identify:kingdom_gate",
+                new_value="needs_review",
+                edited_by="identify:kingdom_signal",
             ))
             _log(session, obs.id, "identified", _note, duration_ms)
             await session.flush()
-            try:
-                _delete_file(obs)
-            except Exception as _exc:
-                _id_log.warning("identify obs %d: file cleanup failed: %s", obs.id, _exc)
+            # No _delete_file() — this path must never destroy the only copy on a
+            # probabilistic guess.
             return "identified"
 
     # ── Build per-source candidate lists ──────────────────────────────────

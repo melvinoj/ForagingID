@@ -207,6 +207,28 @@ Still open:
 
 ## History
 
+### 2026-07-17 12:39
+**Snapshot** — Manual snapshot
+DB: `snapshots/db_20260717_123904.sqlite`
+
+### 2026-07-17 12:28
+**iNat kingdom gate now routes to needs_review and never deletes; fixed on BOTH paths (scan.py + identification.py twin). 20223 restored from DIGIERA hash-verified, completing 4/4. Audit: 93 historical gate rejections, ALL recoverable, zero gone.**
+
+**Fixed:**
+- scan.py:1250 kingdom gate — review_status rejected->needs_review, review_label=non_plant, NO delete_observation_file(), _p2_tick files_rejected->files_review. prefilter_category no longer clobbered to person_animal (the prefilter passed these as plant conf 0.900; relabelling them a prefilter rejection was untrue and buried them in the wrong triage band). Note now names candidate+score and frames it as a signal, not a verdict
+- identification.py:189 TWIN gate — same fix. It also called _delete_file(). Fixing one path and not the other would have left the destructive path live on half the traffic
+- force_review honoured trivially and permanently on both: the branch has no reject path left, only outcome is needs_review
+**Files:** `app/api/scan.py`, `app/services/identification.py`
+**Pending:**
+- SNAPSHOT db_20260717_122157.sqlite (commit 5e52dc6b)
+- 20223 RESTORED from /Volumes/DIGIERA/Pictures/2023/IMG_20230725_113806.jpg, sha256 verified identical, thumbnail regenerated. 4/4 damaged rows now have files. ALL 9 needs_review with files+thumbs on disk. 0 orphans
+- VERIFY 12/12 behavioural: non-plant top candidate -> needs_review with FILE STILL ON DISK; review_label=non_plant; prefilter_category NOT clobbered; note names candidate+score; force_review honoured; twin path same; normal ID unaffected (real APIs, Corylus 64.35%)
+- AUDIT — 97 kingdom-gate rejections logged, 93 still rejected (4 are the ones restored today). Date range 2026-06-06 to 2026-07-17. Score distribution: min 5.1%, median 22.2%, max 93.3%. 45/97 rejected on <20% confidence, 29/97 on <10%
+- AUDIT RECOVERABILITY: 82 recoverable from DIGIERA, 11 from Syncthing source, 0 still on disk, ZERO PERMANENTLY GONE. Nothing restored — Melvins call, separate decision
+- AUDIT PATTERN: 73 Mammalia (mostly Canis familiaris / Homo sapiens — plausibly genuine dog/people photos, though 29 were <10% noise). 13 Insecta — ALL from Syncthing source and ALL plant-dwelling: gall wasps (Andricus foecundatrix = oak artichoke gall, Bassettia flavipes), leaf miners (Caloptilia negundella), aphids (Prociphilus fraxinifolii = ash aphid), viburnum beetle, AND Bombus frigidus 51.1% — a BUMBLEBEE, literally the fireweed/bumblebee case CHANGELOG already flagged. These 13 are high-suspicion false rejections: the model named the organism ON the plant instead of the plant
+- SEPARATE FINDING, not fixed: identification.py:324 No candidates -> auto-reject ALSO deletes and ignores force_review. It fires on transport failure (if pn_error). scan.py equivalent routes to needs_review instead (P1 must never be auto-rejected on confidence). Asymmetry: P2 file_upload deletes, P1 syncthing does not. Same shape as the 2,083 rejected-on-transport-failure question
+- INTEGRITY: all 43 tables EXACT MATCH to pre-write snapshot, max obs id 22140 unchanged. 4 test rows cleaned in FK order + files. Guard rails: keepers 141/141 pending with files, never_reject 3 thumbs intact, 5 private DELETEs pending with files, deleted_hashes 12
+
 ### 2026-07-17 12:21
 **Snapshot** — Manual snapshot
 DB: `snapshots/db_20260717_122157.sqlite`

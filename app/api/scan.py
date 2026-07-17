@@ -1246,10 +1246,40 @@ async def _identify_scanned_inner(
                         "source": "plantnet",
                     })
 
-            # ── iNat kingdom gate ─────────────────────────────────────────
-            # If iNaturalist's top result is outside Plantae/Fungi at ≥5%
-            # confidence, the subject is definitively non-target. Auto-reject
-            # before any candidate merge — mirrors the gate in identification.py.
+            # ── iNat kingdom signal ───────────────────────────────────────
+            # iNaturalist's top candidate falling outside Plantae/Fungi is a
+            # SIGNAL that the frame may not be a plant. It is not a verdict, and
+            # it never deletes.
+            #
+            # Until 17 July this rejected the row and unlinked its files. The old
+            # comment claimed ≥5% made the subject "definitively" non-target.
+            # That is false, and it was false four times out of four the only time
+            # it was ever measured — clearing the nine stalled rows tripped it on:
+            #   Canis familiaris   6.8%   (a plant photo)
+            #   Felis catus       12.1%   (a plant photo)
+            #   Bos taurus         9.4%   (a plant photo)
+            #   Eriophyes tiliae  48.4%   (a lime GALL MITE — i.e. iNat named the
+            #                              organism living on the leaf instead of
+            #                              the leaf, and the plant lost)
+            # Two of those four survive only because a test harness happened to
+            # restore them from /tmp before the 30 s undo timers fired.
+            #
+            # The doctrine this restores: auto-approve requires dual agreement;
+            # auto-reject required nothing at all. That asymmetry was backwards.
+            # A wrong approve puts junk on the map and a human can pull it back.
+            # A wrong reject destroys the only copy and nobody ever knows.
+            #
+            # Same failure class as the fireweed binned person_animal for a
+            # bumblebee in frame: something else in the shot wins and the plant
+            # loses. Now a human decides.
+            #
+            # force_review is honoured trivially and permanently: this branch has
+            # no reject path left, so its only outcome is needs_review.
+            #
+            # prefilter_category is deliberately NOT overwritten to
+            # "person_animal" any more. The prefilter passed these rows as plant
+            # (typically conf 0.900); relabelling them as a prefilter rejection
+            # was simply untrue, and it buried them in the wrong triage band.
             _INAT_ALLOWED = {"plantae", "fungi"}
             if inat_hits:
                 _top_kingdom = (inat_hits[0].iconic_taxon_name or "").lower()
@@ -1258,12 +1288,15 @@ async def _identify_scanned_inner(
                         and obs.review_status != "manually_verified" \
                         and not obs.human_corrected:
                     obs.identification_status = "identified"
-                    obs.review_status         = "rejected"
-                    obs.prefilter_category    = "person_animal"
+                    obs.review_status         = "needs_review"
+                    obs.review_label          = "non_plant"
                     obs.processing_stage      = "identified"
                     _note = (
-                        f"Auto-rejected: iNat kingdom={inat_hits[0].iconic_taxon_name}"
-                        f" ({inat_hits[0].scientific_name} {inat_hits[0].score:.1%})"
+                        f"Possible non-plant subject — iNaturalist's top candidate was "
+                        f"{inat_hits[0].scientific_name} ({inat_hits[0].iconic_taxon_name}) "
+                        f"at {inat_hits[0].score:.1%}. Sent to review, not rejected: a "
+                        f"low-confidence non-plant guess is a signal, not a verdict, and "
+                        f"may name something in the frame rather than the subject."
                     )
                     obs.reviewer_notes = (
                         (obs.reviewer_notes + "\n" if obs.reviewer_notes else "") + _note
@@ -1273,12 +1306,10 @@ async def _identify_scanned_inner(
                         message=_note,
                     ))
                     await session.commit()
-                    try:
-                        delete_observation_file(obs)
-                    except Exception as _del_exc:
-                        log.warning("scan identify obs %d: file cleanup failed: %s", obs_id, _del_exc)
+                    # No delete_observation_file() — this path must never destroy
+                    # the only copy on a probabilistic guess.
                     _scan_status[obs_id] = "done"
-                    await _p2_tick(obs_id, files_processed=1, files_rejected=1)
+                    await _p2_tick(obs_id, files_processed=1, files_review=1)
                     return
 
             if inat_hits:

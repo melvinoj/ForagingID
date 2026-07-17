@@ -207,6 +207,31 @@ Still open:
 
 ## History
 
+### 2026-07-17 12:21
+**Snapshot** — Manual snapshot
+DB: `snapshots/db_20260717_122157.sqlite`
+
+### 2026-07-17 12:16
+**INCIDENT + FIX. Parts 1-3 implemented and working (prologue guard, durable failure recorder, orphan sweep). But clearing the 9 triggered the iNat kingdom gate, which auto-rejected 4 and unlinked their files. 3 of 4 recovered; 20223 needs DIGIERA remounted.**
+
+**Built:**
+- scan.py _mark_identify_failed() — single durable failure recorder, retries 3x on lock contention (the fault that most often lands there), never raises, message=str(exc) per the 16 July no-guessing contract
+- scan.py _identify_scanned is now a thin wrapper around _identify_scanned_inner, catching from function entry onward. Covers the 104-line prologue AND the inner handler failing under the same contention. 6-line diff instead of re-indenting 93 lines of a 499-line live function
+- syncthing.py _run_identification except now calls _mark_identify_failed — was in-memory counters only, lost on restart
+- app/services/orphan_sweep.py — periodic sweep for stage=ingested with no identify log. Takes the same pipeline mutex as P1/archive via pipeline_try_acquire (non-blocking, skips if a scan holds it, so it can never be the concurrent writer that caused this). 15-min grace period is load-bearing: a row sits at ingested for the whole duration of its own identification, so no grace = double-identify. 10-min cadence, cap 20/cycle, force_review=True, logs every sweep. Wired into lifespan
+**Files:** `app/api/scan.py`, `app/api/syncthing.py`, `app/services/orphan_sweep.py`, `app/main.py`
+**Pending:**
+- SNAPSHOT db_20260717_120523.sqlite (commit b0705273) before the write
+- *** INCIDENT: 4 of the 9 auto-rejected -> delete_observation_file fired -> files unlinked. 20223 (dog 6.8%), 20560 (mite 48.4%), 21178 (cat 12.1%), 21250 (cow 9.4%) ***
+- *** ROOT CAUSE OF INCIDENT — iNat KINGDOM GATE, scan.py:1250. If iNat top candidate is not plantae/fungi AND score >= 0.05, auto-reject + prefilter_category=person_animal + files unlinked. force_review does NOT veto it — only guards are manually_verified and human_corrected. The 15 July force_review fix covered auto-APPROVE only; auto-REJECT was never covered ***
+- THE 5% THRESHOLD IS THE REAL DEFECT. Code comment claims at >=5% confidence the subject is definitively non-target. A 6.8% dog guess is noise, not a verdict. 20560 was rejected on Eriophyes tiliae 48.4% — a LIME GALL MITE that lives on lime leaves, i.e. the photo is almost certainly lime foliage with galls. Same class as CHANGELOG fireweed/bumblebee note but worse: that binned, this DELETES
+- RECOVERY: 21178 + 21250 restored from /tmp/foragingid_undo (test script exited before their 30s timers fired). 20560 restored from the Syncthing read-only source dir, sha256 verified identical, thumbnail regenerated. 20223 STILL MISSING — no local copy; was verified present on DIGIERA earlier today; DIGIERA has since been UNMOUNTED. Remount and restore IMG_20230725_113806.jpg
+- My first permanently-lost call was WRONG — DIGIERA had been unmounted, so find returned nothing. Corrected.
+- ALL 9 now needs_review, 0 orphans remaining (predicate returns empty). 4 test rows 22141-22144 cleaned in FK order, proven gone
+- GUARD RAILS INTACT: keepers 141, never_reject 3 (thumbnails on disk), deleted_hashes 12, 5 private DELETEs pending with files
+- Behavioural verify 10/12. The 2 failures were NOT the new code — they are the kingdom-gate bug, caught by the test exactly as intended
+- NOT FIXED, needs Melvin decision: kingdom gate ignores force_review; 5% threshold; gate auto-deletes files
+
 ### 2026-07-17 12:05
 **Snapshot** — Manual snapshot
 DB: `snapshots/db_20260717_120523.sqlite`

@@ -150,10 +150,17 @@ async def lifespan(app: FastAPI):
     task = asyncio.create_task(syncthing._auto_scan_loop())
     _ls6 = _time.perf_counter()
     print(f"[TIMING] lifespan: create_task(syncthing): {_ls6 - _ls5:.1f}s", flush=True)
+
+    # Orphan sweep — recovers rows committed at stage='ingested' that never
+    # reached identify. Takes the same pipeline mutex as P1/the archive scan, so
+    # it can never compete with a live scan for the single SQLite writer.
+    from app.services.orphan_sweep import orphan_sweep_loop
+    sweep_task = asyncio.create_task(orphan_sweep_loop())
     print(f"[TIMING] lifespan: TOTAL startup: {_ls6 - _ls0:.1f}s", flush=True)
 
     yield
     task.cancel()
+    sweep_task.cancel()
 
 
 app = FastAPI(

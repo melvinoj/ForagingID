@@ -777,6 +777,18 @@ async def _run_identification(obs_id: int) -> None:
     except Exception as exc:
         _state["session_failed"] += 1
         _state["errors"].append(f"ID obs#{obs_id}: {exc}")
+        # Durable record — the in-memory _state above dies with the process, and
+        # scan_sessions.files_failed is a bare integer with no diagnosis. That
+        # combination is why the 15 July stalls left six weeks of silence: the
+        # only trace of three failures was "files_failed=3" on session 40.
+        # _mark_identify_failed writes a processing_logs row naming the real
+        # exception and never raises.
+        #
+        # Backstop only: _identify_scanned now records its own failures, so an
+        # exception reaching here means its recorder itself failed. Recording
+        # twice is acceptable; recording nothing is what we are fixing.
+        from app.api.scan import _mark_identify_failed
+        await _mark_identify_failed(obs_id, exc)
         from app.services.scan_sessions import session_inc
         await session_inc(_current_p1_session_id,
                           files_processed=1, files_failed=1)

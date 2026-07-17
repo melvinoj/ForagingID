@@ -935,6 +935,69 @@ async def _p2_tick(obs_id: int, **fields: int) -> None:
 # Background identification
 # ---------------------------------------------------------------------------
 
+async def _mark_identify_failed(obs_id: int, exc: BaseException) -> None:
+    """
+    Durably record an identification failure. The single place a failure becomes
+    a persisted fact rather than an in-memory counter.
+
+    Before 17 July a failure could vanish entirely: _identify_scanned's handler
+    only covered lines 1042+, so anything raised in the 104-line prologue escaped
+    it, and P1's caller caught the escapee only to increment an in-memory counter
+    (syncthing.py:777) that dies with the process. Nine rows sat at
+    stage='ingested' for six weeks with no log, no status, no error.
+
+    Message is str(exc) — the real recorded fault, never a guessed cause. Same
+    contract as the 16 July provider-messaging fix: report what happened, do not
+    infer a plausible reason.
+
+    Retried, because the fault that most often lands here is SQLite lock
+    contention (67 occurrences 27 May – 27 Jun; 11 on 2026-06-07 and 5 on
+    2026-06-14, the two stall dates). A single write attempt would lose the
+    record to the very condition it is trying to report.
+
+    Never raises: a failure to record a failure degrades to log.exception rather
+    than propagating and re-orphaning the row.
+    """
+    msg = f"{type(exc).__name__}: {exc}"
+    _scan_status[obs_id] = "failed"
+
+    for attempt in range(1, 4):
+        try:
+            async with AsyncSessionLocal() as session:
+                obs = await session.get(Observation, obs_id)
+                if obs is None:
+                    log.error(
+                        "[identify] obs %s not found — failure not recorded on the row: %s",
+                        obs_id, msg,
+                    )
+                    return
+                # Guard: only move a row that is still awaiting identification.
+                # If it already reached a terminal state this call is a late
+                # straggler (e.g. the body handler already marked it and then
+                # something downstream threw) and must not clobber the result.
+                if obs.identification_status == "pending_identification":
+                    obs.identification_status = "failed_identification"
+                    obs.review_status = "needs_review"
+                    obs.review_label  = "failed_id"
+                session.add(ProcessingLog(
+                    observation_id=obs_id,
+                    stage="identify",
+                    status="failed",
+                    message=msg,
+                ))
+                await session.commit()
+            await _p2_tick(obs_id, files_processed=1, files_failed=1)
+            return
+        except Exception:
+            if attempt == 3:
+                log.exception(
+                    "[identify] obs %s: could not persist failure after %d attempts. "
+                    "Original fault: %s", obs_id, attempt, msg,
+                )
+                return
+            await asyncio.sleep(0.5 * attempt)
+
+
 async def _identify_scanned(
     obs_id: int,
     source: str = "both",
@@ -945,6 +1008,33 @@ async def _identify_scanned(
 
     force_review=True: result goes to needs_review regardless of confidence.
     This is always True for phone uploads and override-prefilter actions.
+
+    This wrapper is the guard the function lacked. _identify_scanned_inner's own
+    try opens ~100 lines into its body; everything before it — the imports, the
+    settings reads, and two AsyncSessionLocal() blocks (pause check, category
+    routing) — ran unprotected, so a lock-contention error there left the row at
+    stage='ingested' with no trace. Wrapping the call catches from entry onward
+    without re-indenting 93 lines of a 499-line function inside a live pipeline:
+    identical guarantee, far smaller blast radius.
+
+    It also covers the inner handler failing. That handler opens its own session
+    to record the failure; under the same contention that caused the failure,
+    that write can raise too. Then the escapee lands here.
+    """
+    try:
+        await _identify_scanned_inner(obs_id, source=source, force_review=force_review)
+    except Exception as exc:
+        await _mark_identify_failed(obs_id, exc)
+
+
+async def _identify_scanned_inner(
+    obs_id: int,
+    source: str = "both",
+    force_review: bool = False,
+) -> None:
+    """
+    Implementation. Call _identify_scanned, never this directly — this one can
+    raise from its prologue, which is the bug the wrapper exists to contain.
     """
     from app.integrations.plantnet import identify_image as pn_identify, PlantNetError
     from app.integrations.inaturalist import score_image as inat_score, last_inat_status
@@ -1423,18 +1513,12 @@ async def _identify_scanned(
             await _p2_tick(obs_id, files_processed=1, files_review=1)
 
     except Exception as exc:
-        _scan_status[obs_id] = "failed"
-        async with AsyncSessionLocal() as session:
-            obs = await session.get(Observation, obs_id)
-            if obs:
-                obs.identification_status = "failed_identification"
-                obs.review_status = "needs_review"
-                session.add(ProcessingLog(
-                    observation_id=obs_id, stage="identify", status="failed",
-                    message=str(exc),
-                ))
-                await session.commit()
-        await _p2_tick(obs_id, files_processed=1, files_failed=1)
+        # Delegates to the shared recorder so the body and the prologue report a
+        # failure identically — and so this write gets the same lock-contention
+        # retry. Previously this was a single unretried attempt: under the very
+        # contention that causes most failures here, the record of the failure
+        # could be lost to the same fault.
+        await _mark_identify_failed(obs_id, exc)
 
 
 # ---------------------------------------------------------------------------

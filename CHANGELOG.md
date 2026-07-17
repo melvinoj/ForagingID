@@ -207,6 +207,26 @@ Still open:
 
 ## History
 
+### 2026-07-17 12:50
+**Snapshot** — Manual snapshot
+DB: `snapshots/db_20260717_125003.sqlite`
+
+### 2026-07-17 12:42
+**Restored the 13 Insecta kingdom-gate rejections to needs_review. Files hash-verified from Syncthing source (11) and DIGIERA (2). Mammalia untouched. Exactly 13 rows changed.**
+
+**Pending:**
+- SNAPSHOT db_20260717_123904.sqlite (commit 9c4d65fd) before the write
+- SPLIT CONFIRMED: 13 Insecta = 11 Syncthing-source + 2 DIGIERA. Every Syncthing-source kingdom-gate row is Insecta, as Melvin said
+- RESTORED 13/13 files, sha256 verified per row, zero mismatches, thumbnails regenerated. Routed to needs_review + review_label=non_plant. No identification re-run, no approvals, no obs_category/prefilter/edibility changes
+- VERIFIED per row: all 13 needs_review with original AND thumbnail on disk
+- MAMMALIA UNTOUCHED: 0 rows changed by this pass. 71 distinct Mammalia rows — 68 rejected + 3 needs_review (20223/21178/21250, restored in the earlier pass, not this one)
+- COUNT CORRECTION: my earlier audit reported Mammalia 73 / Insecta 13 — those were LOG ROW counts. Distinct observations: Mammalia 71 (obs 19447 has 3 duplicate gate logs), Insecta 13 (13 log rows = 13 distinct, so the Insecta figure was right). No data discrepancy; my expectation was wrong
+- EXACTLY 13 rows changed DB-wide vs snapshot: 18180, 19361, 21311, 21312, 21322, 21412, 21446, 21863, 21891, 21965, 21992, 22003, 22050. Deltas: needs_review 51->64 (+13), rejected 11467->11454 (-13), observation_edits +13, processing_logs +13. observations row count unchanged 13836, max id unchanged 22140
+- deleted_hashes UNTOUCHED at 12. None of the 13 was blacklisted. The 7 DELETE foreclosures hold
+- GUARD RAILS: keepers 141/141 pending with files, none touched. 21212/21215/21216 never_reject=1 thumbs intact. The 9 stalled all still needs_review. 5 private DELETEs pending with files
+- OPEN ITEM (not actioned, out of scope per no prefilter changes): all 13 carry prefilter_category=person_animal, written by the gate. 11 of 13 contradict it with is_plant_likely=1 conf=0.900 — the prefilter passed them as plant and the gate then relabelled the band. They will show a person_animal badge in review, which is not the same footing as any other card. 18180 (conf 0.117) and 19361 (conf 0.05) genuinely failed the prefilter, so a blanket revert would be wrong. Needs Melvins call
+- REMAINING kingdom-gate rejections not in scope: 68 Mammalia, 5 Aves, 2 Animalia, 1 Chromista, 1 Reptilia, 1 Mollusca
+
 ### 2026-07-17 12:39
 **Snapshot** — Manual snapshot
 DB: `snapshots/db_20260717_123904.sqlite`

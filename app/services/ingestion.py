@@ -129,6 +129,13 @@ async def _ingest_one_no_commit(
 
         thumb_str = str(thumb_path) if thumb_path else None
 
+        # Deleted-hash gate — precedes the duplicate check because DELETE removes
+        # the observations row, so _find_duplicate_by_hash cannot catch a photo
+        # the user permanently deleted. Single implementation in ingest_guard.
+        from app.services.ingest_guard import blacklisted_skip
+        if await blacklisted_skip(session, file_hash, "folder_scan", path_str):
+            return None, "blacklisted"
+
         existing_id = await _find_duplicate_by_hash(session, file_hash, path_str)
         if existing_id is not None:
             # Exact duplicate (same SHA-256) already in DB — skip entirely.
@@ -227,11 +234,11 @@ async def scan_folder(
     # Load checkpoint (set of already-processed absolute path strings)
     done_set: set[str] = _load_checkpoint(folder) if resume else set()
 
-    ingested = skipped = failed = geotagged = duplicates = 0
+    ingested = skipped = failed = geotagged = duplicates = blacklisted = 0
     batch_pending: list[tuple[Observation, str]] = []
 
     async def _flush_batch():
-        nonlocal ingested, geotagged, duplicates, failed
+        nonlocal ingested, geotagged, duplicates, failed, blacklisted
         try:
             await session.commit()
             for obs, status in batch_pending:
@@ -242,6 +249,10 @@ async def scan_folder(
                 elif status == "duplicate":
                     # Same-content file already in DB — counted but no Observation created
                     duplicates += 1
+                elif status == "blacklisted":
+                    # Permanently deleted by a human — no Observation created.
+                    # Counted separately: this is a deliberate skip, not a failure.
+                    blacklisted += 1
                 else:
                     failed += 1
         except Exception as exc:
@@ -284,4 +295,8 @@ async def scan_folder(
         "failed": failed,
         "geotagged": geotagged,
         "duplicates": duplicates,
+        # Files refused by the deleted-hash gate. Surfaced separately so a
+        # permanently-deleted photo re-appearing in a source folder is visible
+        # in the scan summary rather than hidden inside "duplicates".
+        "blacklisted": blacklisted,
     }

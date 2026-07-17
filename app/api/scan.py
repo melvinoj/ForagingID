@@ -56,6 +56,7 @@ from app.models.observation import Observation, is_terminal_review_status
 from app.models.processing import ProcessingLog
 from app.services.background_processes import bp_start, bp_progress, bp_finish
 from app.services.file_cleanup import delete_observation_file
+from app.services.ingest_guard import blacklisted_skip
 from app.services.prefilter import classify_plant_likelihood
 from app.services.species_link import set_observation_species
 from app.services.taxonomy import collapse_autonym, normalize_taxon_key
@@ -262,6 +263,26 @@ async def scan_image(
         raise
 
     sha = hashlib.sha256(content).hexdigest()
+
+    # ── Deleted-hash gate (before writing anything) ───────────────────────
+    # A hash on the blacklist was permanently deleted by a human. DELETE removes
+    # the observations row, so the duplicate check below cannot catch it — this
+    # is the only thing standing between a rescan and re-ingesting a photo the
+    # user destroyed. Single implementation in services/ingest_guard.py.
+    async with AsyncSessionLocal() as session:
+        if await blacklisted_skip(session, sha, "p2_scan_image", file.filename or "?"):
+            if scan_session_id:
+                from app.services.scan_sessions import session_inc as _sinc
+                await _sinc(scan_session_id, files_processed=1, files_duplicate=1)
+                await _p2_auto_close(scan_session_id)
+            return {
+                "passed": False,
+                "observation_id": None,
+                "blacklisted": True,
+                "prefilter": "blacklisted",
+                "status": "skipped",
+                "reason": "previously deleted by user — not re-ingested",
+            }
 
     # ── Duplicate check (before writing anything) ─────────────────────────
     async with AsyncSessionLocal() as session:
@@ -2205,6 +2226,20 @@ async def _run_archive_scan(job_id: int, year_dirs: list) -> None:
                         continue
 
                     sha = hashlib.sha256(content).hexdigest()
+
+                    # ── Deleted-hash gate ─────────────────────────────────
+                    # This is the DIGIERA archive rescan — the exact event the
+                    # blacklist exists to prevent. DELETE removes the row, so
+                    # the duplicate check below cannot catch a deleted photo.
+                    async with AsyncSessionLocal() as _db:
+                        _blocked = await blacklisted_skip(
+                            _db, sha, "p2_archive_scan", fname
+                        )
+                    if _blocked:
+                        folder_already += 1
+                        total_already  += 1
+                        await _sinc(session_id, files_processed=1, files_duplicate=1)
+                        continue
 
                     # ── Duplicate check ───────────────────────────────────
                     async with AsyncSessionLocal() as _db:

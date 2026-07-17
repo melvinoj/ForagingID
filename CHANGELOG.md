@@ -207,6 +207,31 @@ Still open:
 
 ## History
 
+### 2026-07-17 09:01
+**Snapshot** — Manual snapshot
+DB: `snapshots/db_20260717_090137.sqlite`
+
+### 2026-07-17 08:30
+**Deleted-hash ingest gate: was P1-only, now enforced on all 5 ingest paths via single shared guard (services/ingest_guard.py). Verified behaviourally on every path: 14/14 assertions. Test rows cleaned in FK order, DB exact-match to pre-test snapshot.**
+
+**Built:**
+- app/services/ingest_guard.py — blacklisted_skip(session, hash, source, path). Single implementation of the deleted-hash rule. Uses caller session for the indexed lookup; writes the skip log in its OWN session and commits, because the 5 call sites have incompatible commit conventions and a log added to the caller session would be silently dropped on exactly the paths that matter
+- ingestion.py scan_folder now returns blacklisted count separately — was being miscounted as failed by the else branch
+**Fixed:**
+- RECON CORRECTED THE PREMISE: gap was not P1-vs-P2. FIVE ingest paths exist; only ONE (p1_syncthing) had the check. Unprotected: p2_scan_image, p2_upload, folder_scan (ingestion.py), p2_archive_scan (_run_archive_scan = the DIGIERA rescan, the exact event the blacklist exists to prevent)
+- Wired gate into all 5 at the point where hash is known and before any row write. syncthing.py inline check REPLACED by the shared guard — one implementation, five call sites
+- DRIFT not deliberate: reflog walk over 21 distinct versions — check has NEVER existed on scan.py/upload.py/ingestion.py in any recoverable commit. Same birth-defect shape as review.html missing else and _dual_agree bypass
+**Files:** `app/services/ingest_guard.py`, `app/api/scan.py`, `app/api/upload.py`, `app/services/ingestion.py`, `app/api/syncthing.py`
+**Pending:**
+- SNAPSHOT db_20260717_082013.sqlite (commit a198957b) before any write
+- BEHAVIOURAL VERIFY 14/14 on all 5 real entry points: blacklisted -> 0 rows + skip logged; clean -> row created. p1_syncthing still returns duplicate (counting unchanged); folder_scan returns new blacklisted status
+- CLEANUP: 5 test observations (22126-22130) + children deleted in FK order; 1 orphan ingest/success log with observation_id=None initially missed by the FK sweep, found by id-range diff and removed. FINAL: all 43 tables exact-match to pre-test snapshot; max obs id 22125 unchanged
+- NO true chokepoint exists — the 5 paths share no common row-writing function. Building one = restructuring ingest, out of scope, NOT done. A BEFORE INSERT trigger was considered and rejected (opaque exception instead of clean logged skip)
+- PERMANENCE: deleted_hashes has no removal path. Blacklisting is a PERMANENT foreclosure per hash — that photo can never be ingested again by any path, from any source. The DELETE decision is final. Not adding a removal path (per instruction)
+- Lookup scales: EXPLAIN QUERY PLAN confirms SEARCH USING INDEX ix_deleted_hashes_file_hash (UNIQUE). O(log n) at 7, 1130, or 10354
+- syncthing.py:157 bulk path (loads all hashes into a set) left as-is — it is a whats-new prefilter, not a row-write gate; the per-file gate at :610 is the actual guarantee
+- NEXT (separate passes): reject 1,122; DELETE 7 with blacklist
+
 ### 2026-07-17 08:20
 **Snapshot** — Manual snapshot
 DB: `snapshots/db_20260717_082013.sqlite`

@@ -36,6 +36,7 @@ from app.config import settings
 from app.database import AsyncSessionLocal
 from app.models.observation import Observation
 from app.models.processing import ProcessingLog
+from app.services.ingest_guard import blacklisted_skip
 from app.services.settings_service import get_setting
 
 
@@ -593,19 +594,20 @@ async def _ingest_file(file_path: Path) -> Union[int, str, None]:
         raise RuntimeError(f"Could not read {file_path.name}: {exc}")
 
     # Early duplicate check before doing any file I/O — avoids wasting a copy.
-    # Also checks deleted_hashes to prevent re-ingest of user-deleted observations.
+    # The deleted_hashes half of this check now routes through the shared gate in
+    # services/ingest_guard.py: it was previously implemented inline here and
+    # nowhere else, which is how four other ingest paths ended up without it.
+    # One implementation, five call sites. Behaviour here is unchanged ("duplicate"
+    # is still returned so P1 counting is untouched) — the gate adds the skip log
+    # this path never wrote.
     if sha:
-        from app.models.observation import DeletedHash
         async with AsyncSessionLocal() as _dup_check:
             existing = await _dup_check.scalar(
                 select(Observation).where(Observation.file_hash == sha)
             )
             if existing:
                 return "duplicate"
-            was_deleted = await _dup_check.scalar(
-                select(DeletedHash).where(DeletedHash.file_hash == sha)
-            )
-            if was_deleted:
+            if await blacklisted_skip(_dup_check, sha, "p1_syncthing", file_path.name):
                 return "duplicate"
 
     # Extract EXIF from the original source file

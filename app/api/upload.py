@@ -31,6 +31,7 @@ from app.database import AsyncSessionLocal
 from app.models.observation import Observation
 from app.models.processing import ProcessingLog
 from app.services.file_cleanup import delete_observation_file
+from app.services.ingest_guard import blacklisted_skip
 from app.services.prefilter import classify_plant_likelihood
 from app.services.identification import identify_observation
 from app.utils.exif import extract_exif, ExifData
@@ -117,6 +118,19 @@ async def upload_image(
 
     # ── Create Observation record ─────────────────────────────────────────
     async with AsyncSessionLocal() as session:
+        # Deleted-hash gate — a permanently deleted photo must never re-enter by
+        # any path. Must precede the duplicate check: DELETE removes the
+        # observations row, so the duplicate check cannot catch it.
+        if await blacklisted_skip(session, sha, "p2_upload", save_path.name):
+            save_path.unlink(missing_ok=True)
+            return {
+                "observation_id": None,
+                "blacklisted": True,
+                "prefilter": "blacklisted",
+                "status": "skipped",
+                "reason": "previously deleted by user — not re-ingested",
+            }
+
         # Check for duplicate (same hash already ingested)
         if sha:
             existing = await session.scalar(

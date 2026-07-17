@@ -21,53 +21,6 @@ _log = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/identify", tags=["identification"])
 
-_identify_status: dict = {
-    "running": False,
-    "processed": 0,
-    "total": 0,
-    "started_at": None,       # Unix timestamp (float) when current run started
-    "last_result": None,
-    "stop_requested": False,  # set to True by POST /stop; cleared on each new run
-}
-
-
-@router.get("/status")
-async def identification_status():
-    return _identify_status
-
-
-@router.get("/pending-connection")
-async def pending_connection_count(db: AsyncSession = Depends(get_db)):
-    """
-    Count observations parked as 'pending_connection' — i.e. identification
-    could not run because the device was offline. Drives the reconnect banner.
-    """
-    from sqlalchemy import func
-    count = await db.scalar(
-        select(func.count(Observation.id)).where(
-            Observation.identification_status == "pending_connection"
-        )
-    )
-    return {"count": count or 0, "running": _identify_status["running"]}
-
-
-@router.post("/stop")
-async def stop_identification():
-    """
-    Gracefully stop an in-progress identification run.
-    The current photo completes normally; no data is lost.
-    The job can be resumed at any time via /run with retry_failed=True.
-    """
-    if not _identify_status["running"]:
-        raise HTTPException(status_code=409, detail="No identification run is currently in progress")
-    _identify_status["stop_requested"] = True
-    return {
-        "status": "stop_requested",
-        "message": "Will stop after the current photo completes — no data is lost.",
-        "processed_so_far": _identify_status["processed"],
-    }
-
-
 class PrefilterFailedRequest(BaseModel):
     dry_run: bool = True
 

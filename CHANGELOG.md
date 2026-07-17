@@ -2,43 +2,10 @@
 
 ## Current State
 
-Current State
+Two small corrections to your End Session block, since it's already submitted and these are now stale:
 
-This session — the fail-quiet defect class, closed by audit rather than instance.
-
-Full branch-chain audit of every reject path. Method: enumerate call sites from the tree, don't infer coverage. Result overturned two of the CHANGELOG's own claims. identification.py:324 was real, defective on all three axes (no origin check, force_review ignored, transport failure rejected as no-match) — and had never fired. Zero rows, 7.5-week window. The 2,083 attributed to it were rejected by a human reading a review card that said "no candidates" when the truth was a PlantNet transport failure — 4,280 rows carry that signature, 100% with reviewed_at. The card lied; the human judged honestly on it. Mechanism already fixed (15 July warning work + (5,25) timeout + bounded retry). Re-framing, not re-fixing. is_phone does not mark P1 — it marks manual upload; syncthing IS P1 and is the one that can auto-approve. Planning-side error, corrected at source.
-
-Fixed. identification.py:324 → needs_review + below_threshold, is_terminal_review_status guarded so it never clobbers a human decision, transport failure named as signal not verdict, _delete_file gone from the file. identification.py:467 → origin guard added; phone AND file_upload never auto-approve (Code widened from the prompt's file_upload-only after checking field semantics — correct). Return value identified → below_threshold: honest field over preserved counter bucket. 16/16 behavioural, mocked APIs, no production DB. Fungi guards (118, 402) and SINGLE_SOURCE_AUTO_APPROVE untouched.
-
-SINGLE_SOURCE_AUTO_APPROVE = 0.92 audited. Hardcoded constant, identification.py:50, PlantNet-only by construction (iNat can never be lone source). Current path: 0 rows ever. Predecessor logic (>70%, 26–30 May) approved 75 that still stand. Threshold decision: ≥90% single-source stays — Melvin's call, and the data backs it, all 5 safety-relevant rows fell below 90%. Fungi doctrine holds: 0 in either population, double-guarded.
-
-19 swept. Below-90% ∩ reviewed_at IS NULL. The other 41 below-90% carry reviewed_at from a prior system:fix_unfiltered_approvals pass — already triaged once, re-approved by human. Code surfaced the conflict with my Step 3 (which named 4 human-locked rows) and stopped for a decision rather than overriding a changed_by='human' lock. Option A taken: honour the guard. 9498 Galeopsis tetrahit (toxic, 82.2%) was the one genuinely unreviewed row and is now in review; 7877/8057/8058/8262 stay on prior human judgement. Marked [single-source sweep 2026-07-17], edited_by='system:', no identification_status change, no delete. Verified by re-SELECT by id. Map 2152→2133, exactly 19. Snapshot db_20260717_202238.
-
-Second identification core deleted. Root cause of the whole class: two parallel implementations, scan.py correct, services/identification.py defective, neither aware of the other — same rule fixed twice, once each. Subtraction, not convergence. pending_connection, the one state scan.py can't produce, was created zero times ever by any live path; the reconnect banner has always shown 0. My recon's "known set" was wrong — Code found scan.py:1041 importing three shared constants and a CLI, two call sites beyond what I claimed. Blockers were mechanical, not capability: constants extracted to app/services/id_ratelimit.py (semaphore verified single shared object, is → True), scan.py:1041 repointed, identify.py's boot-crashing top-level import removed, scripts/identify.py deleted (unused, confirmed), pending-connection.js + 3 script tags gone. upload.py deleted entire rather than partially — unmounted, unimported, route already 404; Code flagged the widening. Zero importers tree-wide. Verified in a fresh process: live P2 identifier ran end-to-end, identified + dual-agreed + auto-approved, function-local id_ratelimit import resolved, async with _INAT_SEMAPHORE executed. Snapshot db_20260717_204557.
-
-Phantom species backlog hard-deleted (earlier this session). 49 of 50 phantoms + children; 653 Oenanthe crocata retained as hazard reference, re-queried by field (toxic | verified=1 | verified_by=human | deadly) unchanged. FK child map discovered by scanning foreign_key_list, not assumed — caught string-keyed tables a hardcoded list would have missed. 644→595, exact. Global orphan sweep 0. Taxonomy obs_state none 50→1, confirmed=539 / in_review=55 held. Source (orphan-GC at set_observation_species, Alembic 0049) was already fixed — this was the separate later cleanup, correctly sequenced. Snapshot db_20260714_163401.
-
-⚠️ Snapshot filename anomaly, unresolved: the phantom delete reported db_20260714_163401 — a 14 July timestamp on a 17 July destructive write, while db_20260717_090803 already existed. Either misreported or the snapshot resolved to a stale file. Not chased. Worth one ls before trusting that rollback path.
-
-Server ran stale throughout Step 2/3 verification — uvicorn --reload worker orphaned to launchd, not Code's child, so it never reloaded. Code detected this rather than reporting a false pass, and re-verified in a fresh isolated process. Side effect: test-poking the stale /run executed old batch code, copying 121 confirmed-plant files to photos/confirmed_plants/. No observations modified. Needs manual restart before anything is trusted live.
-
-Pending / next:
-Restart uvicorn manually, confirm /api/identify/run and /run-pending 404 — nothing this session is confirmed live until this happens.
-Dead endpoint cleanup — /api/identify/status, /stop, /pending-connection now unreachable. Prompt written, not run.
-Live check: trigger a run while PlantNet is rate-limited, confirm no-candidate rows land in review with files intact.
-2,083 (really 4,280 transport-failure rejects, 3,340 via scan.py's safe path): human decisions made on false card copy. Source fixed. Recovery from DIGIERA + re-run now viable at ~1-in-512 residual vs 1-in-8. Data task, own session, snapshot gate. Melvin's call whether worth it.
-68 Mammalia + 5 Aves + 2 Animalia + 1 Chromista + 1 Reptilia + 1 Mollusca still kingdom-gate rejected, all recoverable. 29 of 97 fired under 10%.
-141 keepers → review via override-prefilter.
-7 DELETEs with hash blacklist — 13623, 13368, 20066, 20053, 20022, 19436, 19437. Permanent foreclosure, final.
-Retry ID / Request ID buttons absent on below_threshold review cards — suspected same missing-branch class. Not diagnosed.
-3 damaged rows (17052, 17737, 18709) from the force_review bug, still on the map.
-Verify the 2 vestigial [single-source sweep] cosmetic items if any surface in review UI.
-Check which PlantNet timeout is actually live in plantnet.py — CHANGELOG records (5,25) with httpx explicitly parked; 16 July output shows httpx.Timeout(connect=5, write=30, read=20, pool=5). Two different implementations of one fix. One line to settle.
-
-Parked:
-pending_connection enum value stays in the model — nothing writes it, nothing will. Removing it is a separate question, needs a migration.
-/api/identify/queue, /stats, /prefilter-* — live, keep.
-P1/P2 concurrency mutex. httpx swap. create_all/Alembic dual-mechanism guard. Vestigial ignored body fields. Maskable icon safe-zone padding. Periodic orphaned_at purge. EUIPO/UKIPO search (classes 9 & 42), September. recorded_walks whitelist-vs-gate contradiction. Live tunnel-guest 403 test. bulk_reassign
+"Restart uvicorn manually / nothing confirmed live until this happens" — done, and the fresh server proved the deletions.
+"Dead endpoint cleanup — prompt written, not run" — run, verified live.
 
 ## Current State — 10 July 2026
 
@@ -208,6 +175,13 @@ Still open:
 - Enrichment gap remediation — 9 AI drafts pending approval, 6 species never scanned, 79 no-PFAF species need alt-source decision
 
 ## History
+
+### 2026-07-17 21:09
+**Snapshot** — End of session — Session ended from Settings page
+DB: `snapshots/db_20260717_210939.sqlite`
+
+### 2026-07-17 21:09
+**Session ended** — Session ended from Settings page
 
 ### 2026-07-17 21:04
 **Snapshot** — End of session — Session ended from Settings page

@@ -26,10 +26,9 @@ from app.config import settings
 from app.integrations.plantnet import PlantNetError, PlantNetResult, identify_image
 from app.services.species_link import set_observation_species
 from app.services.taxonomy import normalize_taxon_key
-from app.models.observation import Observation, ObservationEdit
+from app.models.observation import Observation, ObservationEdit, is_terminal_review_status
 from app.models.processing import ProcessingLog
 from app.models.species import SpeciesCandidate
-from app.services.file_cleanup import delete_observation_file as _delete_file
 
 _id_log = logging.getLogger("foragingid.identification")
 
@@ -320,23 +319,43 @@ async def identify_observation(
         _log(session, obs.id, "pending_connection", note, duration_ms)
         return "pending_connection"
 
-    # ── No candidates → auto-reject ───────────────────────────────────────
+    # ── No candidates → review queue (never reject, never delete) ─────────
+    # Was: reject + _delete_file when neither source returned a candidate. That
+    # auto-rejected on evidence the pipeline never gathered — a PlantNet
+    # transport failure (rate-limit, 5xx, malformed-payload 400) or an expired
+    # iNaturalist token produces an empty candidate list that is, here,
+    # indistinguishable from a genuine clean "no match". iNaturalist returns []
+    # for ALL of its error states, so an empty list is not evidence of anything.
+    # An API that failed to answer is not evidence of no match.
+    #
+    # Matches the reference handler at scan.py:1344 — no candidates always
+    # routes to review, for both pipelines. Connection failures never reach
+    # here: they are caught above (line 314 → pending_connection). Reaching
+    # this branch means the device was online but the source(s) returned
+    # nothing usable — a signal for a human, not a verdict the pipeline can make.
+    #
+    # force_review is honoured trivially: the only outcome left is needs_review,
+    # so there is no approve/reject path for an override to suppress.
     if not candidates:
-        obs.identification_status = "identified"
+        obs.identification_status = "below_threshold"
         await set_observation_species(session, obs, None)
         obs.species_candidates_json = json.dumps([])
         obs.processing_stage = "identified"
-        obs.review_status = "rejected"
-        note = "No species candidates — auto-rejected"
+        # Never clobber a status a human has already finalized.
+        if not is_terminal_review_status(obs.review_status):
+            obs.review_status = "needs_review"
+            obs.review_label  = "failed_id"
         if pn_error:
-            note += f" (PlantNet error: {pn_error})"
+            note = (
+                f"No candidates returned, but PlantNet did not answer cleanly "
+                f"({pn_error}). Sent to review, not rejected: an API that failed "
+                f"to answer is not evidence of no match."
+            )
+        else:
+            note = "No candidates from any source — sent to review queue"
+        obs.routing_reason = note
         _log(session, obs.id, "identified", note, duration_ms)
-        await session.flush()
-        try:
-            _delete_file(obs)
-        except Exception as _exc:
-            _id_log.warning("identify obs %d: file cleanup failed: %s", obs.id, _exc)
-        return "identified"
+        return "below_threshold"
 
     top_d = candidates[0]
     top_score = top_d["score"]
@@ -464,7 +483,18 @@ async def identify_observation(
     # Fix 3 — the column reflects genuine agreement only.
     obs.dual_source_agreement = 1 if dual_agree else 0
 
-    if auto_approve and prefilter_ran:
+    # Origin guard: manual uploads never auto-approve, regardless of confidence
+    # or cross-source agreement (CLAUDE.md: file_upload source always →
+    # needs_review). "phone" is the legacy alias for a manual upload and is
+    # treated identically, matching scan.py's is_phone. Syncthing (P1) is the
+    # only source permitted to auto-approve. This is a provenance rule, separate
+    # from the dual-agreement / confidence rules computed above.
+    _is_manual_upload = (obs.upload_source or "") in ("phone", "file_upload")
+
+    if auto_approve and prefilter_ran and _is_manual_upload:
+        obs.review_status = "needs_review"
+        flag_note = f"Review queue (manual upload — never auto-approved) — {agreement_note}"
+    elif auto_approve and prefilter_ran:
         obs.review_status = "approved"
         flag_note = f"Auto-approved — {agreement_note}"
         if single_source_approve:

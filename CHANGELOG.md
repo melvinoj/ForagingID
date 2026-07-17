@@ -207,6 +207,38 @@ Still open:
 
 ## History
 
+### 2026-07-17 12:05
+**Snapshot** — Manual snapshot
+DB: `snapshots/db_20260717_120523.sqlite`
+
+### 2026-07-17 09:23
+**Read-only diagnostic of the 9 stalled pending_identification rows. Root cause: _identify_scanned outer try starts at line 1042 but the function starts at 938 — a 104-line unprotected prologue containing two DB sessions. Exceptions there escape silently. Ceiling is exactly 9.**
+
+**Pending:**
+- ID LIST CORRECTION: Melvins list had 20185 and 20623 — both are rejected/not_plant (part of the 1,113 just rejected). The real stalled rows are 20105 and 20223. Correct 9: 20105, 20223, 20560, 20561, 20562, 21178, 21248, 21250, 21251
+- ROOT CAUSE: scan.py _identify_scanned spans 938-1437 but its outer try opens at 1042. Lines 938-1041 are UNPROTECTED and contain two AsyncSessionLocal() blocks (977 pause check, 988 category routing). Any exception there escapes the handler at 1425 that would otherwise set failed_identification + write an identify log. Row stays at ingested/pending_identification with zero trace
+- P1 AMPLIFIER: syncthing.py _run_identification except block (777-782) catches, increments in-memory _state and scan_sessions.files_failed, then writes NOTHING to the row and NOTHING to processing_logs — not even a log.error. The only durable trace is an integer files_failed on the session row
+- P2 PATH: scan.py:538 background_tasks.add_task(_identify_scanned, obs_id, source). An exception in the unprotected prologue propagates to Starlette, app log only, row orphaned. NOT P1-only — 3 of 9 are file_upload, 6 syncthing
+- CEILING IS EXACTLY 9. Query: stage=ingested AND no identify log = 9 rows, all pending/pending_identification/band=plant. Date range 2026-06-07 05:46:50 to 2026-06-14 05:26:46. No hidden population
+- NOT an interrupted run: stalled rows are INTERLEAVED with successes (21248 stalled, 21249 approved, 21250/21251 stalled). Neighbours identified fine. Individual per-row failures
+- CORROBORATION (not proof): database is locked errors occurred 11x on 2026-06-07 and 5x on 2026-06-14 — exactly the two stall dates (67 total, 2026-05-27 to 2026-06-27). Each stall moment had 2-4 rows created in the SAME SECOND = concurrent writers. Consistent with SQLite lock contention throwing in the unprotected prologue. Cannot be proven — the diagnosis was discarded by design and June app logs no longer exist (logs/ starts 2026-06-24)
+- NO RETRY SWEEP: nothing in main.py lifespan sweeps stage=ingested or pending_identification. reprocess-pending is manual and filters on file_path substring + review_status. Stalled rows are orphaned permanently
+- NOT SURFACED: stats endpoint breaks down by review_status only, no identification_status. review.html had no pending_identification branch until my fix today — these rendered as BLANK CARDS. They were invisible until the queue count forced a look
+
+### 2026-07-17 09:11
+**DESTRUCTIVE: rejected 1,113 triaged non-keeper not_plant rows through the bulk reject path. Scope corrected from 1,122 to 1,113 — the 9 pending_identification rows were never triaged and 7 of them are not on DIGIERA.**
+
+**Pending:**
+- SNAPSHOT db_20260717_090803.sqlite (commit 1a3d24f2) before the write. Earlier db_20260717_090137 covers the stop-and-report pass
+- SCOPE CORRECTED: Melvin approved 1,113 not 1,122. The 9 pending_identification rows (band=plant, is_plant_likely=1, conf=0.9, ZERO identify logs) were never on any contact sheet — the 25 sheets covered exactly the 1,262 not_plant rows per band; no plant band sheet exists. 7 of the 9 are NOT on DIGIERA (six PXL_2026 phone photos post-date the DIGIERA consolidation) so rejecting them would have been permanent
+- DIGIERA recoverability verified before writing: 40/40 sampled not_plant reject rows found on DIGIERA (100%). The 1,113 are recoverable
+- EXECUTED: 8 batches of 150 via POST /api/bulk/review on the live server (so delete_observation_file 30s hard-delete fires in the server event loop; a standalone script would exit first and orphan files in /tmp). 1,113/1,113 in 22.8s. Undo dir drained to 0 in 20s
+- VERIFIED: 1,113/1,113 rejected, 0 originals and 0 thumbnails left on disk, file_hash retained on all 1,113 (dedupe still blocks re-ingest). ALL 141 keepers intact — triage_keep=1, still pending, originals on disk, ZERO touched. 21212/21215/21216 thumbnails intact on disk (8328b/1275b/13209b), never_reject=1. 5 private DELETEs untouched. The 9 pending_identification untouched, files on disk
+- INTEGRITY vs pre-write snapshot: observations row count UNCHANGED 13836 (reject keeps rows), max id 22140 unchanged. Only deltas: observation_edits +1113 (audit trail), background_processes +8 (the batches). deleted_hashes still 12 — NO blacklisting this pass, as instructed
+- pending 1271 -> 158 (-1113). rejected 10354 -> 11467 (+1113). approved and manually_verified UNCHANGED
+- Pending queue now 158 = 141 keepers + 3 never_reject + 5 private DELETEs + 9 pending_identification
+- NEXT (separate passes): the 7 DELETEs with blacklist (13623, 13368, 20066, 20053, 20022, 19436, 19437); the 9 pending_identification need Request ID run, not rejection; the 141 keepers go to review via override-prefilter
+
 ### 2026-07-17 09:08
 **Snapshot** — Manual snapshot
 DB: `snapshots/db_20260717_090803.sqlite`

@@ -5,19 +5,17 @@ For large batches use scripts/identify.py instead.
 
 import json
 import logging
-import time
-from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import Optional, List
 
 from app.config import settings
-from app.database import get_db, AsyncSessionLocal
+from app.database import get_db
 from app.models.observation import Observation, TERMINAL_REVIEW_STATUSES
 from app.services.file_cleanup import delete_observation_file
-from app.services.identification import run_identification_batch, LOW_CONFIDENCE_THRESHOLD
-from app.utils.caffeinate import keep_awake
+from app.services.id_ratelimit import LOW_CONFIDENCE_THRESHOLD
 
 _log = logging.getLogger(__name__)
 
@@ -31,64 +29,6 @@ _identify_status: dict = {
     "last_result": None,
     "stop_requested": False,  # set to True by POST /stop; cleared on each new run
 }
-
-
-class IdentifyRequest(BaseModel):
-    retry_failed: bool = False
-    batch_size: int = 20
-    source: str = "plantnet"   # "plantnet" | "inaturalist" | "both"
-
-
-async def _run_identification(retry_failed: bool, batch_size: int, source: str = "plantnet"):
-    _identify_status["running"] = True
-    _identify_status["processed"] = 0
-    _identify_status["total"] = 0
-    _identify_status["started_at"] = time.time()
-    _identify_status["stop_requested"] = False  # reset on every new run
-
-    def _on_progress(current: int, total: int) -> None:
-        _identify_status["processed"] = current
-        _identify_status["total"] = total
-
-    def _stop_check() -> bool:
-        return bool(_identify_status.get("stop_requested", False))
-
-    try:
-        api_key = settings.plantnet_api_key
-        with keep_awake("ForagingID identification in progress"):
-            async with AsyncSessionLocal() as session:
-                result = await run_identification_batch(
-                    session,
-                    api_key=api_key,
-                    batch_size=batch_size,
-                    retry_failed=retry_failed,
-                    source=source,
-                    progress_callback=_on_progress,
-                    stop_check=_stop_check,
-                )
-        _identify_status["last_result"] = result
-    except Exception as exc:
-        _identify_status["last_result"] = {"error": str(exc)}
-    finally:
-        _identify_status["running"] = False
-        _identify_status["started_at"] = None
-        _identify_status["stop_requested"] = False
-
-
-@router.post("/run")
-async def trigger_identification(req: IdentifyRequest, background_tasks: BackgroundTasks):
-    if not settings.plantnet_api_key:
-        raise HTTPException(status_code=400, detail="PLANTNET_API_KEY not configured")
-    if _identify_status["running"]:
-        raise HTTPException(status_code=409, detail="Identification already running")
-    source = req.source if req.source in ("plantnet", "inaturalist", "both") else "plantnet"
-    background_tasks.add_task(_run_identification, req.retry_failed, req.batch_size, source)
-    return {
-        "status": "started",
-        "threshold": LOW_CONFIDENCE_THRESHOLD,
-        "retry_failed": req.retry_failed,
-        "source": source,
-    }
 
 
 @router.get("/status")
@@ -109,35 +49,6 @@ async def pending_connection_count(db: AsyncSession = Depends(get_db)):
         )
     )
     return {"count": count or 0, "running": _identify_status["running"]}
-
-
-@router.post("/run-pending")
-async def run_pending_identification(background_tasks: BackgroundTasks):
-    """
-    Reconnect hook — re-run identification for all 'pending_connection'
-    observations (the batch picks them up automatically). Source is
-    auto-detected from whichever API credentials are configured, so the
-    button works whether the pipeline uses PlantNet, iNaturalist, or both.
-    """
-    if _identify_status["running"]:
-        raise HTTPException(status_code=409, detail="Identification already running")
-
-    has_pn   = bool(settings.plantnet_api_key)
-    has_inat = bool(settings.inaturalist_api_token)
-    if has_pn and has_inat:
-        source = "both"
-    elif has_pn:
-        source = "plantnet"
-    elif has_inat:
-        source = "inaturalist"
-    else:
-        raise HTTPException(
-            status_code=400,
-            detail="No identification API configured (set PLANTNET_API_KEY or INATURALIST_API_TOKEN)",
-        )
-
-    background_tasks.add_task(_run_identification, False, 20, source)
-    return {"status": "started", "source": source}
 
 
 @router.post("/stop")

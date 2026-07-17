@@ -1038,10 +1038,10 @@ async def _identify_scanned_inner(
     """
     from app.integrations.plantnet import identify_image as pn_identify, PlantNetError
     from app.integrations.inaturalist import score_image as inat_score, last_inat_status
-    from app.services.identification import (
+    from app.services.id_ratelimit import (
         LOW_CONFIDENCE_THRESHOLD,
-        _INAT_SEMAPHORE,   # shared singleton — same object as the identification service
-        INAT_DELAY_S,      # 1 s gap; keeps scan + re-id calls in the same queue
+        _INAT_SEMAPHORE,   # shared singleton — the one live iNat request queue
+        INAT_DELAY_S,      # 1 s gap; serialises scan iNat calls through that queue
     )
     from app.models.species import SpeciesCandidate
     # Imported once at the top of the function so the name is bound before its

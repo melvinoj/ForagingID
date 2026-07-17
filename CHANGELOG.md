@@ -207,6 +207,45 @@ Still open:
 
 ## History
 
+### 2026-07-17 08:20
+**Snapshot** — Manual snapshot
+DB: `snapshots/db_20260717_082013.sqlite`
+
+### 2026-07-17 08:16
+**Survivors-only contact sheets built for the 141 keepers (3 sheets). Blacklist recon: blanket blacklist dropped — reject cannot re-ingest. Passport pages 20053/20022 confirmed visually; 19436/19437 found as same-shoot neighbours, added to DELETE set.**
+
+**Built:**
+- scripts/make_survivor_sheets.py — reimplementation of the 15 July sheet generator (original was never in the repo). Conventions matched to no_plant_signal_sheet_14.jpg: 2488x1360, 10x6=60/sheet, photo_taken_at asc NULLs last, header band/sheet-no/count/id-range/order, per-photo #id + date
+- 3 survivors sheets at ~/Documents/ForagingID/triage_survivors/ — distinct path, original 25 whole-queue sheets untouched (timestamps still 15 Jul 05:26)
+**Files:** `scripts/make_survivor_sheets.py`
+**Pending:**
+- DECISION 1: blanket hash-blacklist DROPPED. Premise was false — reject retains the observations row and file_hash, and scan.py:1783 dedupes on Observation.file_hash, so rejected rows classify as already not new. All 10,354 existing rejections are un-blacklisted and none have re-ingested in 7 weeks. Blacklist matters only for DELETE (row removed)
+- GAP (unfixed, reported): P2 — scan.py/upload.py/ingest.py — NEVER checks deleted_hashes. Only P1 syncthing.py:157 and :606 do. The DIGIERA rescan is P2, so a DELETED photo would re-ingest today. Affects the 7 DELETEs, not the rejects
+- GAP (unfixed, reported): deleted_hashes is irreversible — no code path removes a row. Manual DELETE FROM only
+- DECISION 2: DELETE-with-blacklist set now 7 — 13623, 13368, 20066, 20053, 20022 (pending) + 19436, 19437 (already rejected). 20053/20022 visually confirmed as UK passport photo page on no_plant_signal_sheet_14.jpg. 19436 shares 20053 exact capture second (2024-04-19 10:35:48), 19437 +5min
+- REJECT COUNT REVISED: 1,122 = 1,271 − 141 keepers − 3 never_reject − 5 pending private DELETEs. Not 1,124, not ~950
+- DECISION 3: 48 screenshots in reject set NOT reviewed — Melvins call
+- Sheet ranges: 01 ids 11544–20656 (60) | 02 ids 11132–21161 (60) | 03 ids 16123–22043 (21)
+- NEXT: Melvin confirms keep set against the 3 survivors sheets, then reject 1,122 + DELETE 7
+- Filename keyword search for documents is worthless — all filenames are hash-prefixed device names. Timestamp clustering is what found 19436/19437
+
+### 2026-07-17 06:58
+**Marked the 141 keepers from Melvin 15 July triage. Migration 0050 adds triage_keep/triage_keep_at/never_reject. 141 rows marked triage_keep=1; 21212/21215/21216 marked never_reject=1 with enforcement in delete_observation_file(). Marks only — no status/category/file changes.**
+
+**Built:**
+- Migration 0050_add_triage_keep — triage_keep BOOLEAN nullable (3-state NULL/1/0), triage_keep_at DATETIME, never_reject BOOLEAN. All additive, all nullable
+- never_reject enforced inside delete_observation_file() — hard veto at the destructive call site, covering all 7 reject callers. Behaviourally tested: protected file survives, unprotected still moves to undo dir
+**Files:** `migrations/versions/0050_add_triage_keep.py`, `app/models/observation.py`, `app/services/file_cleanup.py`
+**Pending:**
+- SNAPSHOT db_20260717_065439.sqlite (commit c044ee3e) taken before any write
+- 141 keepers marked triage_keep=1, all re-SELECTed by ID individually: all triage_keep=1, triage_keep_at set, review_status=pending, identification_status=not_plant. Zero failures
+- Resolution method VALIDATED against the artifact: my derived sheet-14 offset-780 slice matched Melvins sheet-read exactly including the non-monotonic run 20509,20512,20510,20511. Sheet size 60 confirmed
+- Band spread: 125 no_plant_signal + 8 sky_blue + 8 person_animal = 141. Zero dupes. All 141 existed, non-rejected, not_plant, correct band
+- Non-keepers: 1121 = 1262-141, all still pending, all files intact except 21212/21215/21216 (thumbnail-only, known, now never_reject protected)
+- 13623/13368/20066 untouched: triage_keep NULL, never_reject NULL, still pending/not_plant. Require DELETE + hash blacklist — separate pass, not done
+- ZERO rows rejected, deleted, approved, or unlinked. undo dir empty. Status counts unchanged: rejected 10354, approved 2062, manually_verified 105, pending 1271, needs_review 28
+- NEXT: survivors-only contact sheets -> Melvin confirms -> then rejection. Keepers to review via override-prefilter, separate pass
+
 ### 2026-07-17 06:54
 **Snapshot** — Manual snapshot
 DB: `snapshots/db_20260717_065439.sqlite`

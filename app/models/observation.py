@@ -74,6 +74,21 @@ class Observation(Base):
     reviewed_at: Mapped[Optional[datetime]] = mapped_column(DateTime)
     workshop_suitable: Mapped[Optional[bool]] = mapped_column(Boolean)
 
+    # --- Human triage layer (migration 0050) ---
+    # Deliberately separate from review_label: that field is machine-written by
+    # the scan/trust/audit pipelines and is overwritten on rescan, so it cannot
+    # hold a human decision. These are written only by a human triage pass.
+    #
+    # triage_keep is three-state on purpose:
+    #   None = untriaged, True = human keeper, False = explicit human discard.
+    # Do not collapse to a default-False boolean — that erases "nobody has
+    # looked at this yet", which a delete-by-omission pass depends on.
+    triage_keep: Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True)
+    triage_keep_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    # Data protection, orthogonal to triage_keep: True means no other copy of
+    # this photo is known to exist on disk. Enforced in delete_observation_file().
+    never_reject: Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True)
+
     # Processing state
     processing_stage: Mapped[str] = mapped_column(
         String(30), default="ingested"

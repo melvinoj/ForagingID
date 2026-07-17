@@ -59,6 +59,22 @@ def delete_observation_file(obs) -> None:
     single hard-delete task after 30s.
     """
     obs_id = obs.id
+
+    # never_reject (migration 0050) — hard veto at the destructive call site.
+    # True means no other copy of this photo is known to exist: for 21212/21215/
+    # 21216 the thumbnail is the only surviving copy, the original is already
+    # gone from uploads/, and DIGIERA/PhoneForaging are not on disk. Deleting
+    # here would destroy the last copy with no route back.
+    #
+    # Enforced here rather than in the callers because every reject path funnels
+    # through this function — observations.py, bulk_actions.py, identify.py,
+    # upload.py, audit.py, prefilter.py and scan.py all call it. A guard in any
+    # one caller would leave the other six open. Returns without touching a file
+    # so a reject still marks the row; only the unlink is refused.
+    if getattr(obs, "never_reject", False):
+        _print("obs %d: REFUSED file delete — never_reject is set (no other copy on disk)", obs_id)
+        return
+
     paths_to_check = []
 
     if obs.file_path:

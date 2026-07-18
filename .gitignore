@@ -11,6 +11,8 @@ __pycache__/
 
 # Mac system files
 .DS_Store
+# AppleDouble resource forks (created on non-native filesystems)
+._*
 
 # Claude / AI local configs
 .claude/
@@ -25,9 +27,18 @@ __pycache__/
 # ── Generated data (never commit) ─────────────────────────────────────────
 # SQLite database (trial observations, thumbnails index)
 data/foragingid.db
+# WAL/shared-memory sidecars — live DB state, never source
+data/foragingid.db-wal
+data/foragingid.db-shm
 
 # Generated thumbnails (rebuilt from source photos)
 data/thumbnails/
+# Quarantined thumbnails — image binaries, same class as thumbnails/ above.
+# Was tracked by oversight (10,768 files / 188M); untracked 18 Jul 2026.
+data/thumbnails_quarantine/
+
+# Triage contact sheets (image binaries) — moved in from ~/Documents/ForagingID
+data/triage_sheets/
 
 # Cache and checkpoint files from scan runs
 data/cache/

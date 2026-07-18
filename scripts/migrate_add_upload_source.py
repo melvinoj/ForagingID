@@ -5,7 +5,8 @@ upload_source TEXT — "phone" | NULL
   "phone"  = uploaded directly from browser
   NULL     = ingested from a local folder scan
 
-Also ensures ~/Documents/ForagingID/uploads/ directory exists.
+Also ensures the project-rooted uploads/ directory exists
+(settings.phone_uploads_dir → <PROJECT_ROOT>/uploads).
 
 Usage:
     PYTHONPATH=. python scripts/migrate_add_upload_source.py

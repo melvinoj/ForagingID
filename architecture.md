@@ -11,7 +11,7 @@
 - **Migrations**: Alembic with `render_as_batch=True` (SQLite compatible, Postgres ready)
 - **Running**: Local MacBook, `http://127.0.0.1:8000`
 - **Repo**: `github.com/melvinoj/ForagingID`
-- **Start**: `cd ~/Documents/ForagingID && source venv/bin/activate && python run.py`
+- **Start**: `cd ~/ForagingID && source ~/foragingid-venv/bin/activate && uvicorn app.main:app --reload`
 
 ---
 
@@ -97,8 +97,8 @@ Three user types — design for all three from the start:
 
 | What | Where |
 |------|-------|
-| Project root | `~/Documents/ForagingID` |
-| Database | `~/Documents/ForagingID/foraging.db` |
+| Project root | `~/ForagingID` |
+| Database | `~/ForagingID/data/foragingid.db` |
 | Identification service | `app/services/identification.py` |
 | Map API | `app/api/map.py` |
 | Ingest API | `app/api/ingest.py` |

@@ -2,10 +2,12 @@
 """
 Survivors-only contact sheets — the 141 rows marked triage_keep=1 (migration 0050).
 
-Rebuild of the generator that produced the 25 whole-queue sheets at
-~/Documents/ForagingID/triage/ on 15 July. The original script was not in the
-repo, so this is a reimplementation matched to the surviving artifacts rather
-than the original tool. Conventions taken from no_plant_signal_sheet_14.jpg:
+Rebuild of the generator that produced the 25 whole-queue sheets on 15 July.
+Those sheets were written to ~/Documents/ForagingID/triage/ at the time and
+were moved into data/triage_sheets/triage/ on 18 July; nothing writes outside
+PROJECT_ROOT any more. The original script was not in the repo, so this is a
+reimplementation matched to the surviving artifacts rather than the original
+tool. Conventions taken from no_plant_signal_sheet_14.jpg:
 
   canvas      2488x1360, 10 cols x 6 rows = 60 photos/sheet
   ordering    photo_taken_at ASC, NULLs last, id as tiebreak
@@ -34,7 +36,7 @@ from PIL import Image, ImageDraw, ImageFont
 
 PROJECT = Path(__file__).resolve().parent.parent
 DB = PROJECT / "data" / "foragingid.db"
-OUT_DIR = Path.home() / "Documents" / "ForagingID" / "triage_survivors"
+OUT_DIR = PROJECT / "data" / "triage_sheets" / "triage_survivors"
 
 PER_SHEET = 60
 COLS, ROWS = 10, 6

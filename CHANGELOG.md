@@ -180,6 +180,10 @@ Still open:
 
 ## History
 
+### 2026-07-18 06:40
+**Snapshot** — Manual snapshot
+DB: `snapshots/db_20260718_064023.sqlite`
+
 ### 2026-07-18 05:57
 **Snapshot** — End of session — Session ended from Settings page
 DB: `snapshots/db_20260718_055724.sqlite`

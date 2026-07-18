@@ -61,9 +61,33 @@ SNAPSHOTS_DIR = PROJECT_ROOT / "snapshots"
 EXTERNAL_DRIVE      = Path("/Volumes/DIGIERA")
 EXTERNAL_BACKUP_DIR = EXTERNAL_DRIVE / "ForagingID_Backup"
 
-# Retention: keep all snapshots < 7 days, one per day for 7–28 days, delete older.
-_RETENTION_FULL_DAYS = 7
-_RETENTION_THIN_DAYS = 28
+# Retention — dashcam model. Snapshots are taken before every write, so the
+# volume is driven by write frequency, not by days:
+#   - always keep the most recent _RETENTION_KEEP_RECENT, whatever their age
+#     (the within-session rollback points)
+#   - plus one per day for the last _RETENTION_DAILY_DAYS days
+#   - delete everything else
+#
+# Age and recency are keyed off the FILENAME timestamp (db_YYYYMMDD_HHMMSS),
+# never st_mtime. Snapshots are written with shutil.copy2, which preserves the
+# SOURCE database's mtime — so a snapshot file's mtime records when the DB was
+# last written, not when the snapshot was taken. Sorting by mtime silently
+# picks the wrong "most recent" set.
+_RETENTION_KEEP_RECENT = 8
+_RETENTION_DAILY_DAYS  = 7
+
+_SNAP_TS_RE = re.compile(r"db_(\d{8})_(\d{6})")
+
+
+def _snapshot_taken_at(path: Path) -> Optional[datetime]:
+    """Snapshot creation time parsed from its filename. None if unparseable."""
+    m = _SNAP_TS_RE.search(path.name)
+    if not m:
+        return None
+    try:
+        return datetime.strptime(m.group(1) + m.group(2), "%Y%m%d%H%M%S")
+    except ValueError:
+        return None
 
 
 def _prune_snapshots() -> int:
@@ -71,25 +95,43 @@ def _prune_snapshots() -> int:
     if not SNAPSHOTS_DIR.exists():
         return 0
     now = datetime.now()
-    by_day: dict[str, list[Path]] = {}
+
+    dated: list[tuple[datetime, Path]] = []
     for f in SNAPSHOTS_DIR.glob("db_*.sqlite*"):
-        age_days = (now - datetime.fromtimestamp(f.stat().st_mtime)).total_seconds() / 86400
-        if age_days < _RETENTION_FULL_DAYS:
+        if not f.is_file():
             continue
-        day_key = datetime.fromtimestamp(f.stat().st_mtime).strftime("%Y-%m-%d")
-        by_day.setdefault(day_key, []).append((f, age_days))
+        ts = _snapshot_taken_at(f)
+        if ts is None:
+            continue          # unparseable name — never delete what we can't date
+        dated.append((ts, f))
+
+    if not dated:
+        return 0
+
+    dated.sort(key=lambda x: x[0], reverse=True)   # newest first
+
+    keep: set[Path] = set()
+
+    # 1. the most recent N, regardless of age
+    for _ts, f in dated[:_RETENTION_KEEP_RECENT]:
+        keep.add(f)
+
+    # 2. one per day (that day's newest) for the last N days
+    seen_days: set[str] = set()
+    for ts, f in dated:
+        if (now - ts).total_seconds() / 86400 > _RETENTION_DAILY_DAYS:
+            continue
+        day = ts.strftime("%Y-%m-%d")
+        if day not in seen_days:
+            seen_days.add(day)
+            keep.add(f)
+
     deleted = 0
-    for day_key, files in by_day.items():
-        files.sort(key=lambda x: x[0].stat().st_mtime)
-        age = files[0][1]
-        if age > _RETENTION_THIN_DAYS:
-            for f, _ in files:
-                f.unlink(missing_ok=True)
-                deleted += 1
-        else:
-            for f, _ in files[1:]:
-                f.unlink(missing_ok=True)
-                deleted += 1
+    for _ts, f in dated:
+        if f in keep:
+            continue
+        f.unlink(missing_ok=True)
+        deleted += 1
     return deleted
 
 

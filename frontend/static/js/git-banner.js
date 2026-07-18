@@ -14,7 +14,7 @@
 (function () {
   'use strict';
 
-  const COMMAND  = 'cd ~/Documents/ForagingID\ngit push origin main';
+  const COMMAND  = 'cd ~/ForagingID\ngit push origin main';
   const AUTO_MS  = 10000;   // auto-dismiss delay
 
   let _banner    = null;
@@ -110,7 +110,7 @@
       <span class="gbanner-text">
         <strong>Changes saved</strong> — remember to push to GitHub
       </span>
-      <button class="gbanner-copy" onclick="window._gitBannerCopy()" title="Copies two lines: cd ~/Documents/ForagingID &amp;&amp; git push origin main">
+      <button class="gbanner-copy" onclick="window._gitBannerCopy()" title="Copies two lines: cd ~/ForagingID &amp;&amp; git push origin main">
         Copy git command
       </button>
       <button class="gbanner-dismiss" onclick="window._gitBannerDismiss()" aria-label="Dismiss">✕</button>

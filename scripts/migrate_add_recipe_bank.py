@@ -3,7 +3,7 @@ Migration: add species_recipes table + populate from existing culinary_info.reci
 
 Idempotent — safe to run multiple times.
 Run with:
-    PYTHONPATH=/Users/melvinjarman/Documents/ForagingID python scripts/migrate_add_recipe_bank.py
+    PYTHONPATH=/Users/melvinjarman/ForagingID python scripts/migrate_add_recipe_bank.py
 """
 
 import asyncio

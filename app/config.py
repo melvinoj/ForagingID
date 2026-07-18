@@ -70,9 +70,14 @@ class Settings(BaseSettings):
         """
         Syncthing watch directory — photos synced automatically from phone.
         Read-only: files here are never moved or deleted by the app.
-        Resolves to: ~/Local (unsynced)/PhoneForaging/
+        Resolves to: ~/Local(unsynced)/PhoneForaging
+
+        Fallback only — the live path comes from the photo_library_path DB
+        setting (see syncthing._watch_dir()). Note there is no space in
+        "Local(unsynced)": this literal must match the directory on disk, or
+        clearing the DB override leaves P1 watching a non-existent folder.
         """
-        return Path("~/Local (unsynced)/PhoneForaging").expanduser()
+        return Path("~/Local(unsynced)/PhoneForaging").expanduser()
 
     @property
     def species_resources_dir(self) -> Path:

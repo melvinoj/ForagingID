@@ -2,52 +2,14 @@
 
 ## Current State
 
-Current State — 18 July 2026
-
-Housekeeping session: disk from 31G → 15G, git from 5.1G → 192M, all ForagingID content consolidated under ~/ForagingID (nothing outside it). No schema changes. Continued directly from yesterday's fail-quiet fix pass.
-
-SNAPSHOT RETENTION (dashcam):
-- _prune_snapshots() rewritten (dev.py:64): keep most recent 8 + one per day for 7 days, keyed off filename timestamp via new _snapshot_taken_at() helper (NOT st_mtime — copy2 preserves source DB mtime, so mtime is unreliable). Undateable files never deleted.
-- Prune already ran on snapshot creation (dev.py:318, inside create_snapshot) — my recon claimed end-session-only, Code checked and corrected me, removed the redundant call it had added.
-- Ran once: 71 → 14 files, 13G → 3.4G. All 3 session rollback points preserved.
-
-GIT — untracking + history reclaim:
-- .gitignore added: ._* (global), data/foragingid.db-wal, -shm, data/thumbnails_quarantine/, data/triage_sheets/. git rm --cached the sidecars, all ._ AppleDouble files, and the 10,768-file quarantine tree (files stay on disk).
-- Tracked files 11,072 → 298. thumbnails_quarantine was the real growth driver — thumbnails/ beside it was already ignored; oversight, not decision.
-- Root-cause finding overturned two of my hypotheses: the 3.66G was NOT in git history (56 commits = 183M, healthy) and was NOT the WAL (0 bytes in history). It was ~4,800 UNREACHABLE objects — pre-reset DB snapshots + photo binaries that 6 July's "fresh start" made undiscoverable but never evicted; the reflog pinned them, gc honours 90-day reflogExpire.
-- Fix was reflog expire + gc, NOT filter-repo (would've rewritten 56 hashes + force-pushed for <5% of the win) and NOT another fresh reset (that's what caused this): git reflog expire --expire=now --all && git gc --prune=now. .git 3.9G → 192M, size-pack 183.89 MiB (= reachable objects exactly, nothing unreachable left). No force-push, origin untouched.
-- POINT OF NO RETURN CROSSED: pre-6-July git objects now permanently gone. Were already unreachable by normal means; DIGIERA holds external backups. Confirmed acceptable before running.
-
-STRAY FOLDER — triage artifacts moved in:
-- ~/Documents/ForagingID/{triage,triage_survivors} → data/triage_sheets/. COPIED, verified 4 ways (diff -r, sha256, timestamps 15 Jul 05:26 / 17 Jul 08:15, 28/28 files), source removed after re-check. ~/Documents/ForagingID deleted. iCloud path already absent.
-- Updated: make_survivor_sheets.py (OUT_DIR now PROJECT-relative), git-banner.js:17,113 (was handing a wrong-dir cd ~/Documents/ForagingID push command — user-facing bug), architecture.md:14,100-101.
-- CHANGELOG history entry citing old triage path left unedited — true when written; the move is recorded here in Current State instead.
-
-BAK FILES: 4 × foragingid.db.bak_20260615_* deleted (0.97G, confirmed zero code refs). Note: these were the last June-era DB copies ON THIS MACHINE — pre-July local DB state now lives only on DIGIERA. Consistent with dashcam model.
-
-FINAL STATE: 15G total. photos/ 7.2G (P1 originals, load-bearing — note: photos/ is 7.2G, larger than the pipeline2/ 2.1G subdir I'd been quoting), uploads/ 3.7G (unexamined), snapshots/ 3.4G (dashcam, self-limiting, verified: created 1 + pruned 1, held at 14), data/ 983M, .git 192M. git status clean, commit 0292565 (local ahead of origin by 1, normal push suffices). App boots, 13,836 observations readable.
-
-OUTSTANDING / NEXT:
-
-Carried from yesterday, still open:
-- Snapshot filename anomaly (phantom-delete reported db_20260714_163401 on a 17 July write) — likely explained now: the old ~/Documents snapshot location existed until today, so a stale path could have resolved there. Worth confirming dev.py can no longer resolve outside PROJECT_ROOT.
-- Which PlantNet timeout is live in plantnet.py — (5,25) per CHANGELOG vs httpx.Timeout form in 16 July output. One grep.
-- Live rate-limited run: no-candidate rows → review, files intact (324 fix verified in isolation, not yet live).
-- 868 file_upload transport-failure rejects with stored candidates: DECLINED. Recon showed candidates are noise (857 <50%, 306 top-candidate animals inc. Homo sapiens), 0 originals on disk (866 thumbnail-only), 850/868 shot >1yr pre-ingest (archive, DSC_ camera not PXL_ phone). Not worth review time. Rows kept as tombstones (file_hash blocks re-ingest on next DIGIERA rescan).
-- 3,401 empty-candidate file_upload rejects: effectively closed — 98% originals gone (deleted at reject time), no evidence ever existed.
-- Kingdom-gate recoverables: 68 Mammalia + 5 Aves + 2 Animalia + 1 Chromista + 1 Reptilia + 1 Mollusca still rejected, all recoverable, Melvin's call.
-- 3 damaged rows (17052, 17737, 18709) from force_review bug, still on map.
-- Retry ID / Request ID buttons absent on below_threshold review cards (suspected missing-branch class).
-
-New this session, worth resolving:
-- uploads/ 3.7G unexamined — CLAUDE.md calls it "pending" staging but 12,351 observations reference it directly; possible spent-file win but needs real recon, not a blind delete. The one unexamined large directory.
-- snapshots/ gzip: 14 × 245M uncompressed = 3.4G; gzip → ~700M at cost of decompress in restore path. Deliberate mechanism change, not cleanup.
-- Duplicate docs/architecture.md — two drifting copies, both stale (one still lists deleted services/identification.py). Resolve to one.
-- architecture.md:102 still lists app/services/identification.py (deleted yesterday) — stale.
-
-Doc drift note: CLAUDE.md + architecture.md describe pre-consolidation paths (venv ./venv vs real ~/foragingid-venv; DB/root as ~/Documents/ForagingID). A docs-accuracy pass is overdue — flagged repeatedly, never done.
-
-Parked (unchanged): P1/P2 concurrency mutex; httpx swap; create_all/Alembic dual-mechanism guard; vestigial ignored body fields; maskable icon safe-zone padding; periodic orphaned_at purge; EUIPO/UKIPO search (classes 9 & 42) September; recorded_walks whitelist-vs-gate; live tunnel-guest 403 test; bulk_reassign re-enrich after merge; truncation (review history, map/encounters clamps, recipe previews); dark theme tokens.css; shared safety-text render helper; thumbnails_quarantine purge (now untracked, still 188M on disk); pending_connection enum value removal.
+Docs are now accurate, five stale-thing bugs closed, docs/architecture.md canonical with protocols.md confirming the choice. That's a genuine clean state.
+Checkpoint addendum — new list, priority order:
+1. The ~11 never-ingested P1 photos (bucket b from the reconcile). 14 files synced to PhoneForaging with no DB row; minus 1 .mp4 (correctly skipped video), 1 LONG_EXPOSURE cover variant, 1 double-(1) duplicate — leaving ~11 ordinary photos the auto-scan should have picked up and didn't, spanning 2026-06-01 to 2026-07-10. Fully recoverable, never seen. The why matters as much as the re-ingest — silent auto-scan skips are the same defect class as everything else. Recon first: what those 11 are and why _auto_scan_loop() missed them, before ingesting.
+2. Live rate-limited run — verify the 324 fix in production: no-candidate rows land in review, files intact. Only verified in isolation so far.
+3. Which PlantNet timeout is live — (5,25) per CHANGELOG vs the httpx form in the 16 July output. One grep, one-line correction if they disagree.
+4. uploads/ 3.7G recon — the one unexamined large directory. CLAUDE.md calls it staging but 12,351 observations reference it directly. Possible spent-file reclaim, needs real recon not a blind delete.
+5. .claude/launch.json port 8001 vs documented 8000 — undocumented, possibly deliberate. Trivial — either document the separation or align it.
+Carried, unchanged: kingdom-gate recoverables (78 rows, your call); 3 damaged map rows (17052/17737/18709); Retry ID buttons absent on below_threshold cards; snapshots gzip option (~700M win); thumbnails_quarantine purge.
 
 ## Current State — 10 July 2026
 
@@ -217,6 +179,13 @@ Still open:
 - Enrichment gap remediation — 9 AI drafts pending approval, 6 species never scanned, 79 no-PFAF species need alt-source decision
 
 ## History
+
+### 2026-07-18 08:09
+**Snapshot** — End of session — Session ended from Settings page
+DB: `snapshots/db_20260718_080919.sqlite`
+
+### 2026-07-18 08:09
+**Session ended** — Session ended from Settings page
 
 ### 2026-07-18 07:56
 **Snapshot** — End of session — Session ended from Settings page

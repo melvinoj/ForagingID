@@ -100,7 +100,7 @@ POST /api/dev/log
 There are two import pipelines, sharing identification logic but differing in approval rules.
 
 ### Pipeline 1 — Syncthing (P1)
-Watches `~/Documents/PhoneForaging/` via `syncthing._auto_scan_loop()` (started at lifespan). Source files are **read-only**; each is copied to `photos/pipeline2/` before a DB record is created (Option B copy-on-ingest, migration 0021).
+Watches `~/Local(unsynced)/PhoneForaging` via `syncthing._auto_scan_loop()` (started at lifespan). The live path comes from the `photo_library_path` setting in the DB, not a hardcoded constant — `_watch_dir()` reads that override first and only falls back to `config.py`'s `phone_foraging_dir`, which is stale and points at a non-existent path. Source files are **read-only**; each is copied to `photos/pipeline2/` before a DB record is created (Option B copy-on-ingest, migration 0021).
 
 **Routing:** dual-API agreement ≥ `upload_auto_approve_threshold` → `approved`; everything else → `needs_review`. **P1 never auto-rejects on confidence** — only `not_plant` pre-filter rejections are valid rejections.
 
@@ -146,7 +146,7 @@ The three code paths that set `manually_verified` also upgrade `identification_s
 
 Schema changes use two mechanisms:
 
-1. **Alembic** for structural changes: `migrations/versions/NNNN_*.py`. Run with `alembic upgrade head`. Current head: `0044_add_species_synonyms`.
+1. **Alembic** for structural changes: `migrations/versions/NNNN_*.py`. Run with `alembic upgrade head`. Current head: `0050_add_triage_keep`.
 
 2. **Idempotent SQL in `app/database.py` `init_db()`** for data backfills and one-time rescue operations that run on every server start (harmless if rows already updated). Use `INSERT OR IGNORE` / `UPDATE ... WHERE condition` patterns. New columns still go via Alembic — `init_db()` is for data, not schema.
 

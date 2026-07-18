@@ -59,7 +59,7 @@ SQLite continues through Phases 10–12. Postgres migration is Phase 13 via Alem
 
 ## Ingestion Pipelines
 
-- **Pipeline 1**: Syncthing folder sync from `~/Documents/PhoneForaging/` (phone photos, GPS intact)
+- **Pipeline 1**: Syncthing folder sync from `~/Local(unsynced)/PhoneForaging` (phone photos, GPS intact); path set by the `photo_library_path` DB setting, not hardcoded
 - **Pipeline 2**: Browser folder upload
 
 ---
@@ -99,7 +99,7 @@ Three user types — design for all three from the start:
 |------|-------|
 | Project root | `~/ForagingID` |
 | Database | `~/ForagingID/data/foragingid.db` |
-| Identification service | `app/services/identification.py` |
+| Identification rate-limit constants | `app/services/id_ratelimit.py` (identification core consolidated into `app/api/scan.py`) |
 | Map API | `app/api/map.py` |
 | Ingest API | `app/api/ingest.py` |
 | Culinary/rename logic | `app/api/culinary.py` |

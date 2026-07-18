@@ -9,9 +9,15 @@
 set -e
 cd "$(dirname "$0")"
 
-# Activate virtual environment if present
-if [ -f "venv/bin/activate" ]; then
-  source venv/bin/activate
+# Activate the project virtual environment.
+# ~/foragingid-venv is the real venv; there is no in-tree ./venv. Guarded so a
+# missing venv is loud rather than silently falling through to system Python.
+VENV_ACTIVATE="$HOME/foragingid-venv/bin/activate"
+if [ -f "$VENV_ACTIVATE" ]; then
+  source "$VENV_ACTIVATE"
+else
+  echo "ERROR: venv not found at $VENV_ACTIVATE" >&2
+  exit 1
 fi
 
 PORT="${PORT:-8000}"

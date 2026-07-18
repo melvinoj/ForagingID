@@ -2,10 +2,14 @@
 
 ## Current State
 
-Two small corrections to your End Session block, since it's already submitted and these are now stale:
+11 P1/syncthing transport-failure rejects restored → needs_review. Snapshot db_20260717_213411 (b518f28d). 7 empty-candidate (below_threshold, files on disk — 4 direct, 3 via PhoneForaging fallback) + 4 with candidates already stored (no re-ID needed). edited_by='system:p1_transport_restore'. 21333 included as needs_review, deliberately NOT promoted to manually_verified — manual_entry set species_primary but no human ever approved it; a system: write must not plant a human lock. Picea abies surfaced for one-click approval, provenance intact. Verified by re-SELECT per id: 11/11 needs_review, identification_status untouched, 0 syncthing transport-fail rows still rejected, no collateral. Queue 72→83, pending unchanged at 149. Files on disk post-write. Safety-relevant: 21777 Heracleum dissectum + 21799 Heracleum sibiricum (Apiaceae/hogweed) were rejected on the false "no candidates" card with candidates stored — off the map until now. 15958 will show Gorilla gorilla (iNat animal misfire).
 
-"Restart uvicorn manually / nothing confirmed live until this happens" — done, and the fresh server proved the deletions.
-"Dead endpoint cleanup — prompt written, not run" — run, verified live.
+Population re-derived down from 4,280 → 3,408 → 2,957 genuine transport failures (434 were HTTP 4xx/5xx — the API answered with an error; ~31 were SQLite lock errors mislabelled as PlantNet failures). P1/P2 marker is clean (syncthing vs file_upload); what's not separable is within P2 — DIGIERA archive rescan IS a browser folder upload, same route as manual drag-drop, so both write file_upload into uploads/. Not a missing marker: same pipeline, two uses.
+
+Deferred: re-running ID on the 7 group-(a) rows — now visible in review, decide after looking. 21777's pipeline2 copy is deleted; the PhoneForaging fallback is a different rendition of the same capture (Motion Photo variant) — only matters if group-(a)-style re-ID happens later.
+
+Open: the 868 file_upload rows with candidates already stored (rejected on false copy, zero recovery cost, pure review load). Attribution to archive-vs-manual not possible from upload_source — needs EXIF taken_at, scan_sessions pipeline=2 batch timestamps, or file_path residue. Recon not run.
+3,401 empty-candidate file_upload rows: 98% originals gone (delete_observation_file at reject time — every reject since the beginning, not the recent cull), thumbnails too low-res to re-ID, no evidence ever existed. Weakest case on every axis. Effectively closed unless something changes.
 
 ## Current State — 10 July 2026
 
@@ -175,6 +179,13 @@ Still open:
 - Enrichment gap remediation — 9 AI drafts pending approval, 6 species never scanned, 79 no-PFAF species need alt-source decision
 
 ## History
+
+### 2026-07-18 05:57
+**Snapshot** — End of session — Session ended from Settings page
+DB: `snapshots/db_20260718_055724.sqlite`
+
+### 2026-07-18 05:57
+**Session ended** — Session ended from Settings page
 
 ### 2026-07-17 21:34
 **Snapshot** — Manual snapshot

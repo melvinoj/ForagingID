@@ -35,6 +35,41 @@ def is_terminal_review_status(status: Optional[str]) -> bool:
 PHONE_ORIGIN_SOURCE = "syncthing"
 
 
+# ── Scene rows and what counts as "identified" ───────────────────────────────
+# obs_category value for a landscape/scene shot: a photo of a place, not of an
+# organism. These legitimately have NO species and never will.
+SCENE_CATEGORY = "landscape"
+
+
+def qualifies_as_identified(obs) -> bool:
+    """
+    True when an observation entering a confirmed review state should carry
+    identification_status='identified'.
+
+    Two cases qualify, and they are NOT the same test:
+      • a species was assigned — the ordinary case; or
+      • the row is a scene shot with no species — identification is complete
+        because there is nothing to identify.
+
+    WHY THIS IS SHARED, not inlined at each call site:
+    the rule previously existed as `if obs.species_primary` duplicated in
+    bulk_actions.py and observation_service.py. The scene case was added to the
+    bulk copy only, so approving a landscape row in bulk produced
+    approved+identified+NULL while approving the same row singly produced
+    approved+below_threshold+NULL — the invariant-breaking state, from the same
+    action, depending only on which button was pressed. That is the exact
+    fixed-one-twin-missed-the-other shape this codebase keeps hitting. One
+    definition means a third caller cannot reintroduce the divergence.
+
+    Deliberately does NOT qualify a non-scene row with no species: for a plant
+    or fungi row, "approved but unidentified" is a real unresolved state, not a
+    finished one, and must stay visible as such.
+    """
+    if obs.species_primary:
+        return True
+    return (getattr(obs, "obs_category", None) or "") == SCENE_CATEGORY
+
+
 def is_phone_origin(obs) -> bool:
     """
     True when this observation came off the phone via Syncthing (P1).

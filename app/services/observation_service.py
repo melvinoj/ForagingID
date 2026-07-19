@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Optional
 from sqlalchemy.ext.asyncio import AsyncSession
-from app.models.observation import Observation, ObservationEdit
+from app.models.observation import Observation, ObservationEdit, qualifies_as_identified
 from app.services.species_link import set_observation_species
 from app.config import settings
 
@@ -84,8 +84,11 @@ async def update_observation_status(
     is_confirmed = review_status in confirmed_statuses
 
     if is_confirmed:
-        # Promote identification status if species_primary is set
-        if obs.species_primary and obs.identification_status != "identified":
+        # Promote identification status when identification is complete —
+        # a species was assigned, OR this is a scene row that has none by
+        # nature. Shared with bulk_actions.py via qualifies_as_identified so
+        # single-approve and bulk-approve cannot diverge again.
+        if qualifies_as_identified(obs) and obs.identification_status != "identified":
             _log_edit(session, obs, "identification_status", prev_id_status, "identified", edited_by)
             obs.identification_status = "identified"
 

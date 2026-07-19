@@ -74,7 +74,7 @@ from typing import Optional
 from sqlalchemy import text
 
 from app.database import AsyncSessionLocal
-from app.models.observation import Observation
+from app.models.observation import Observation, is_phone_origin
 from app.models.processing import ProcessingLog
 
 log = logging.getLogger(__name__)
@@ -146,7 +146,7 @@ async def sweep_identify_orphans(dry_run: bool = False) -> dict:
                     if obs is None:
                         continue
                     src_setting = ("api_source_syncthing"
-                                   if obs.upload_source == "syncthing"
+                                   if is_phone_origin(obs)
                                    else "api_source_file_upload")
                     session.add(ProcessingLog(
                         observation_id=obs_id,

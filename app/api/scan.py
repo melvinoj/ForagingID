@@ -1206,10 +1206,19 @@ async def _identify_scanned_inner(
             # "file_upload" and legacy "phone" are both treated as manual uploads
             # that require human review regardless of confidence.
             # "syncthing" CAN auto-approve on dual-agree ≥ auto_approve_threshold (force_review=False).
-            is_phone = obs.upload_source in ("phone", "file_upload")
+            #
+            # NAME, deliberately: this is NOT "phone origin". It was called
+            # is_phone, which read as a provenance test and was twice mistaken
+            # for one. What it actually decides is whether auto-approve is
+            # vetoed — see the force_review line below and the _dual_agree gate.
+            # By that meaning, file_upload IS in the set and syncthing is NOT,
+            # which is the inverse of provenance. Membership below is unchanged
+            # and must stay unchanged: it produces the documented P1/P2 routing.
+            # For genuine provenance use is_phone_origin() from models/observation.
+            requires_forced_review = obs.upload_source in ("phone", "file_upload")
             # Fungi observations always need human review (safety-critical)
             is_fungi = (obs.obs_category or "plant") == "fungi"
-            force_review = force_review or is_phone or is_fungi
+            force_review = force_review or requires_forced_review or is_fungi
 
             path = Path(obs.file_path)
             if not path.exists():
@@ -1551,7 +1560,7 @@ async def _identify_scanned_inner(
             _inat_top_score = inat_hits[0].score if inat_hits else 0.0
 
             # `not force_review` is the veto and must stay part of this condition:
-            # force_review already subsumes is_phone and is_fungi (set at the top of
+            # force_review already subsumes requires_forced_review and is_fungi (set at the top of
             # the session block, and again on fungi auto-detection above), so a
             # manual upload, a fungus, or an explicit override-prefilter caller can
             # never reach auto-approve no matter how confidently the APIs agree.
@@ -1600,8 +1609,8 @@ async def _identify_scanned_inner(
                 if not terminal:
                     obs.review_status = "needs_review"
 
-                if is_phone or force_review:
-                    if is_phone:
+                if requires_forced_review or force_review:
+                    if requires_forced_review:
                         # Build a concise reason for the reviewer badge
                         if _pn_top_name and _inat_top_name and _pn_top_name != _inat_top_name:
                             _reason = (f"APIs disagree: "

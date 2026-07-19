@@ -107,7 +107,7 @@ async def pipeline_stats():
     from datetime import date
 
     async with AsyncSessionLocal() as db:
-        from app.models.observation import Observation
+        from app.models.observation import Observation, PHONE_ORIGIN_SOURCE
         from sqlalchemy import select
 
         stmt = select(
@@ -125,11 +125,11 @@ async def pipeline_stats():
             func.sum(case((Observation.review_status == "needs_review", 1), else_=0)).label("needs_review"),
             func.sum(case((Observation.review_status == "rejected", 1), else_=0)).label("rejected"),
             # Syncthing pipeline
-            func.sum(case((Observation.upload_source == "syncthing", 1), else_=0)).label("syncthing_total"),
-            func.sum(case(((Observation.upload_source == "syncthing") & (Observation.identification_status == "pending_identification"), 1), else_=0)).label("syncthing_pending_id"),
-            func.sum(case(((Observation.upload_source == "syncthing") & (Observation.identification_status == "identified"), 1), else_=0)).label("syncthing_identified"),
-            func.sum(case(((Observation.upload_source == "syncthing") & (Observation.review_status.in_(["approved", "manually_verified"])), 1), else_=0)).label("syncthing_approved"),
-            func.sum(case(((Observation.upload_source == "syncthing") & (Observation.review_status == "needs_review"), 1), else_=0)).label("syncthing_needs_review"),
+            func.sum(case((Observation.upload_source == PHONE_ORIGIN_SOURCE, 1), else_=0)).label("syncthing_total"),
+            func.sum(case(((Observation.upload_source == PHONE_ORIGIN_SOURCE) & (Observation.identification_status == "pending_identification"), 1), else_=0)).label("syncthing_pending_id"),
+            func.sum(case(((Observation.upload_source == PHONE_ORIGIN_SOURCE) & (Observation.identification_status == "identified"), 1), else_=0)).label("syncthing_identified"),
+            func.sum(case(((Observation.upload_source == PHONE_ORIGIN_SOURCE) & (Observation.review_status.in_(["approved", "manually_verified"])), 1), else_=0)).label("syncthing_approved"),
+            func.sum(case(((Observation.upload_source == PHONE_ORIGIN_SOURCE) & (Observation.review_status == "needs_review"), 1), else_=0)).label("syncthing_needs_review"),
             # File upload pipeline (file_upload + legacy phone)
             func.sum(case((Observation.upload_source.in_(["file_upload", "phone"]), 1), else_=0)).label("upload_total"),
             func.sum(case(((Observation.upload_source.in_(["file_upload", "phone"])) & (Observation.identification_status == "pending_identification"), 1), else_=0)).label("upload_pending_id"),
@@ -269,7 +269,7 @@ async def db_summary():
         not_enr = sum(1 for r in enr_subset if r.data_confidence is None or r.data_confidence == 0.0)
         edib_ok = sum(1 for r in subset if r.edibility_status and r.edibility_status not in ("unknown", "unclear"))
         edib_unk = sum(1 for r in subset if not r.edibility_status or r.edibility_status in ("unknown", "unclear"))
-        p1 = sum(1 for r in subset if r.upload_source == "syncthing")
+        p1 = sum(1 for r in subset if r.upload_source == PHONE_ORIGIN_SOURCE)
         p2 = sum(1 for r in subset if r.upload_source in ("file_upload", "phone"))
         return {
             "total": total,

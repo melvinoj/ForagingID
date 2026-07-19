@@ -17,6 +17,30 @@ def is_terminal_review_status(status: Optional[str]) -> bool:
     return status in TERMINAL_REVIEW_STATUSES
 
 
+# ── Phone origin (provenance) ────────────────────────────────────────────────
+# The upload_source written by Pipeline 1 (Syncthing): a photo that arrived
+# straight off the phone with its capture metadata intact.
+#
+# This is PROVENANCE and nothing else. It is deliberately NOT the same set as
+# scan.py's `requires_forced_review`, which decides whether auto-approve is
+# vetoed and — correctly — contains file_upload but not syncthing, the inverse
+# of this. One badly-named variable (`is_phone`) previously served both ideas
+# and was twice read as provenance when it was a routing veto. Two concepts,
+# two names, defined apart on purpose. Do not merge them.
+PHONE_ORIGIN_SOURCE = "syncthing"
+
+
+def is_phone_origin(obs) -> bool:
+    """
+    True when this observation came off the phone via Syncthing (P1).
+
+    Use for genuine provenance questions — GPS/EXIF trust, P1-only rules.
+    Never use it to decide auto-approve eligibility; that is
+    scan.py's `requires_forced_review`, which is a different set.
+    """
+    return getattr(obs, "upload_source", None) == PHONE_ORIGIN_SOURCE
+
+
 class Observation(Base):
     __tablename__ = "observations"
 

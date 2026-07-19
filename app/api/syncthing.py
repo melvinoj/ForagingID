@@ -35,7 +35,7 @@ from sqlalchemy import select, or_, and_
 
 from app.config import settings
 from app.database import AsyncSessionLocal
-from app.models.observation import Observation
+from app.models.observation import Observation, PHONE_ORIGIN_SOURCE
 from app.models.processing import ProcessingLog
 from app.services.ingest_guard import blacklisted_skip
 from app.services.settings_service import get_setting
@@ -322,7 +322,7 @@ async def syncthing_status():
                 Observation.review_status,
                 Observation.identification_status,
                 Observation.species_primary,
-            ).where(Observation.upload_source == "syncthing")
+            ).where(Observation.upload_source == PHONE_ORIGIN_SOURCE)
         )
         rows = result.fetchall()
 
@@ -398,7 +398,7 @@ async def list_rejected():
                 Observation.thumbnail_path,
             )
             .where(
-                Observation.upload_source == "syncthing",
+                Observation.upload_source == PHONE_ORIGIN_SOURCE,
                 Observation.review_status == "rejected",
             )
             .order_by(Observation.reviewed_at.desc().nullslast(),
@@ -559,7 +559,7 @@ def _no_id_result_filter():
     are the rows a re-run should retry (e.g. after the threshold or API routing
     changed, or after an ID bug was fixed)."""
     return and_(
-        Observation.upload_source == "syncthing",
+        Observation.upload_source == PHONE_ORIGIN_SOURCE,
         Observation.review_status == "needs_review",
         or_(
             Observation.identification_status == "failed_identification",
@@ -869,7 +869,7 @@ async def _ingest_file(file_path: Path) -> Union[int, str, None]:
             altitude_m=exif.altitude_m,
             camera_make=exif.camera_make,
             camera_model=exif.camera_model,
-            upload_source="syncthing",
+            upload_source=PHONE_ORIGIN_SOURCE,
             review_status="pending",
             processing_stage="ingested",
             identification_status="pending_identification",
@@ -934,7 +934,7 @@ async def _ingest_file(file_path: Path) -> Union[int, str, None]:
 async def _run_identification(obs_id: int) -> None:
     """
     Identify a Syncthing observation. Imports and calls scan.py's worker,
-    which already handles upload_source="syncthing" correctly:
+    which already handles upload_source=PHONE_ORIGIN_SOURCE correctly:
       - dual-agree ≥80% → auto-approved
       - otherwise → needs_review "Syncthing — needs review"
     """

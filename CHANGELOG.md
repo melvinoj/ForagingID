@@ -2,6 +2,34 @@
 
 ## Current State
 
+Current State — 19 July 2026
+Session focus: Blank review-card fix → uncovered and closed a reject-triggered file-deletion defect class; recovered all affected P1 originals.
+Landed and verified this session:
+RENDER — blank infinite-length review cards (review.html:1778)
+
+Thumbnail onerror used innerHTML += on .thumb-wrap, re-serialising the broken <img> → 404 → onerror refired → unbounded 150px leaf-tile stack; #grid align-items:stretch dragged row-siblings to match, producing tall empty columns. Fixed with this.outerHTML= swap (matches sibling renderers at 5068) — img replaced not recreated, onerror can't refire. Share-button removal preserved; null file_path guard added at 1781 (latent whole-grid-kill).
+
+SAFETY — reject/delete file-deletion guard (file_cleanup.py, observations.py)
+
+Root cause of the blank cards was file-less DB rows: reject hard-deleted originals via _DELETABLE_SEGMENTS (path-based) + 3 hand-listed never_reject IDs — no origin check across 6 call sites. Post-3-June ingest cutover moved P1 originals into the deletable zone; guard-coverage gap (same class as the Opus audit).
+Added is_phone_origin veto to delete_observation_file(): syncthing-origin files (original + thumbnail) never deleted on reject. P2/file_upload stays reclaimable (DIGIERA is master).
+Closed the manual-Delete P1 hole: DELETE /{id} (observations.py) routed raw unlinks through the guarded deleter — P1 + never_reject files retained on delete (DB row still removed). App-wide unlink census: zero remaining raw sites bypass the guard.
+Verified by dry constructed-object tests both paths.
+
+RECOVERY — 17 P1 rows restored (hash-verified)
+
+5 thumbnail-only (8781, 10517, 15956, 15958, 15970): regenned from surviving PhoneForaging/ originals.
+12 lost-original (19825, 21303, 21376, 21434, 21499, 21728, 21835, 21333, 21657, 21673, 21777, 21799): re-copied from live syncthing source, thumbnails regenned. All 12 SHA-256 match the DB file_hash recorded at ingest — provably the same bytes. Fresh-connection re-query by ID confirms files on disk. Net P1 loss: zero. No DB rows modified (paths already correct); filesystem-only writes. Snapshot db_20260719_214921.sqlite, commit 99ce2daf.
+
+Reclassified, not loss (your model, confirmed against code): 1,221 file_upload orig+thumb absent + ~10,162 orig-absent = cull remnants (recent review trim + earlier cull), DIGIERA-backed, hashed/recorded → recoverable by rescan. App never writes to DIGIERA (grep-confirmed: read-only + one additive backup). Not this thread's problem.
+Pending / next (fresh thread):
+
+DB reconciliation census — rows across the collection with dead file_path/thumbnail_path after the culls; recon-first, decide reconcile policy before any write. Read-only start.
+encounters.py:529 — encounter-audio delete has no origin veto; phone-captured voice notes are P1-equivalent irreplaceable. Inline fix, later.
+review.html:5373 — loc-no-thumb malformed backslash-escaped attribute (latent, Locations card).
+
+Carried, unchanged: 3 damaged map rows (17052/17737/18709); Retry-ID buttons absent on below_threshold cards; snapshots gzip option; thumbnails_quarantine purge.
+
 ## Current State — 19 July 2026
 
 **Session focus:** Opus phase-boundary audit → full remediation of the 
@@ -383,6 +411,13 @@ Still open:
 - Enrichment gap remediation — 9 AI drafts pending approval, 6 species never scanned, 79 no-PFAF species need alt-source decision
 
 ## History
+
+### 2026-07-19 21:56
+**Snapshot** — End of session — Session ended from Settings page
+DB: `snapshots/db_20260719_215647.sqlite`
+
+### 2026-07-19 21:56
+**Session ended** — Session ended from Settings page
 
 ### 2026-07-19 21:49
 **Snapshot** — Manual snapshot

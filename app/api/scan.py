@@ -1501,8 +1501,11 @@ async def _identify_scanned_inner(
                 obs.identification_status   = "identified"
                 obs.processing_stage        = "identified"
             # Cache top candidate confidence so the review-queue confidence sort
-            # (server-side) works for syncthing-pipeline imports too. Same
-            # normalisation guard as the upload path (identification.py).
+            # (server-side) works for syncthing-pipeline imports too. The
+            # >1.0 guard normalises APIs that report percentages rather than
+            # fractions. (Previously cross-referenced app/services/
+            # identification.py, which no longer exists — both pipelines now
+            # run through this single function.)
             _ts = top.get("score")
             if _ts is not None and not terminal:
                 obs.top_score = (_ts / 100.0) if _ts > 1.0 else _ts

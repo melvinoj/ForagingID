@@ -4,6 +4,100 @@
 
 ## Current State — 19 July 2026
 
+**Session focus:** Opus phase-boundary audit → full remediation of the 
+guard-coverage defect class, plus repair of the 6 invariant-drifted rows. 
+All audit findings closed. Invariant clean: card_counted 2158 = map_eligible 
+2158, zero drift.
+
+**Landed and verified this session (all harness- or live-verified per fix):**
+
+STRUCTURAL — _identify_scanned_inner guard-coverage fix (scan.py)
+- Root-cause fix for the guard-coverage defect class (4 prior instances in 
+  2 weeks: kingdom gate, blacklist gate, force_review-in-else, terminal 
+  guard). Compute `terminal = is_terminal_review_status(obs.review_status)` 
+  ONCE up front; every human-decision mutation gated on it; diagnostics/
+  append-only rows left unconditional. All hand-rolled terminal variants 
+  retired (grep for `!= "manually_verified"` returns nothing).
+- Closed A1 (min-confidence branch: species-wipe + review_status revert, 
+  zero guard, executed on live manually_verified rows), A2 (unguarded 
+  species overwrite), A3 (reviewer_notes overwrite — now append-never-
+  overwrite; also fixed an auto-approve `reviewer_notes = None` blanket 
+  wipe), A5 (missing-file path), A6 (kingdom gate now covers all 3 terminal 
+  states), A7 (6 review_label writes via single apply point). Two sites the 
+  audit missed (pause check, no-credential exit) also found and guarded.
+- A6 behaviour signed off: approved/rejected rows are now immune to 
+  automated re-ID pull-back. Human override stands — finalized is finalized.
+
+EDIBILITY — rename safety bypass (enrichment.py, A4)
+- Rename path was silently downgrading human-confirmed toxic → unknown and 
+  clearing the human-lock, bypassing _enforce_edibility_write_rules(). 
+  Found routing-through-the-gate would NOT fix it (gate permits toxic→
+  unknown by design, off-ladder). Removed the automated edibility mutation 
+  entirely — verdict/lock never written by this path for any row. Rename 
+  now flags for review (existing review_requested triple) on any established 
+  verdict, locked or not. Verified: locked toxic + locked edible both 
+  preserved + flagged; unlocked correctly not flagged. AST-walk confirms 
+  zero edibility writes remain in the rename function.
+
+PHONE-ORIGIN — reconciled to one definition (A8, all parts)
+- Root finding: `is_phone` never meant "phone origin" — it meant "must 
+  force review". Tuple produced correct routing; the NAME lied. 
+  Renamed → `requires_forced_review` (zero behaviour change, proven by 
+  reconstruction-diff). Added canonical `is_phone_origin(obs) → 
+  upload_source == 'syncthing'`; retired 12 scattered string literals.
+- identify.py bulk-act filter (`.isnot("phone")`, 0-row no-op) removed as 
+  obsolete — the case it guarded no longer exists; documented why. 
+- Fail-closed on unknown provenance: `requires_forced_review = not 
+  is_phone_origin(obs)` — auto-approve is now opt-in for syncthing ONLY; 
+  file_upload, legacy phone, NULL, and any future source fail closed to 
+  review. 26 NULL-provenance rows moved from auto-approve-eligible to 
+  review-bound. Added an "Unknown origin — needs review" label so those 
+  rows aren't mislabelled "File upload".
+
+APPROVED-NO-SPECIES — named the legitimate state (both approve paths)
+- "approved, identified, no species" is now a named valid state for 
+  landscape/scene rows. Factored `qualifies_as_identified(obs)` (species 
+  set OR obs_category=='landscape') into observation.py; both bulk_actions 
+  and the shared observation_service helper use it. Fixed a second 
+  instance the audit reported as clean — single-approve had the identical 
+  gap (fix-one-twin-miss-the-other). One predicate, 4 call sites, zero 
+  duplicated logic.
+
+DATA REPAIR — the 6 drifted rows (all fixed)
+- 3 landscape (8771/9645/9827): repaired to approved+identified+NULL.
+- 9827 stale candidates cleared (10 Canis lupus rows + json); row retained 
+  as hazard reference.
+- 8771 unlogged species-primary clear: backfilled the missing audit row 
+  (timestamp unrecoverable — git reset 6 July — stamped honestly, inference 
+  in a log, not fabricated).
+- 3 plant (21562/21770/21771): were P1 rows that failed ID only on PlantNet 
+  timeouts. Deliberately re-opened (logged repair:reopen_for_reid) and 
+  re-identified through the standard path with force_review=True. All three 
+  identified this time (Thymus praecox, Campanula rotundifolia, Lactuca 
+  muralis) — the (5,25)+retry fix worked where it previously timed out. 
+  Now in review queue awaiting confirmation; none auto-approved.
+
+DOCS — consistency pass (CLAUDE.md, architecture.md, scan.py comment)
+- uploads/ corrected to primary-image-store; scan.py identification.py 
+  stale ref replaced; architecture.md date + canonical start command; 
+  timestamp convention (UTC DB vs local filenames) documented; the three 
+  shared predicates and the scene-state exception recorded as canonical, 
+  with "do not "fix" this as drift" flagged.
+
+**In the review queue (awaiting your confirmation, not urgent):**
+21562 Thymus praecox (edible), 21770 Campanula rotundifolia (edible), 
+21771 Lactuca muralis (CAUTION) — all edibility_verified=0, provisional 
+species links, low_confidence. The caution one wants a conscious confirm.
+
+**Carried, unchanged:** 3 damaged map rows (17052/17737/18709); Retry-ID 
+buttons absent on below_threshold cards; snapshots gzip option (~700M win); 
+thumbnails_quarantine purge.
+
+**Pending / next:** none from this session's audit — all findings closed. 
+Next work is a separate fix (new thread).
+
+## Current State — 19 July 2026
+
 **Session focus:** Checkpoint list follow-through — P1 auto-scan hardening, 
 identification.py:324 fix verification (now scan.py:1343), terminal-status 
 guard bug, defence-in-depth species-card count filter, watch-dir silent-skip 
@@ -289,6 +383,13 @@ Still open:
 - Enrichment gap remediation — 9 AI drafts pending approval, 6 species never scanned, 79 no-PFAF species need alt-source decision
 
 ## History
+
+### 2026-07-19 16:59
+**Snapshot** — End of session — Session ended from Settings page
+DB: `snapshots/db_20260719_165927.sqlite`
+
+### 2026-07-19 16:59
+**Session ended** — Session ended from Settings page
 
 ### 2026-07-19 16:50
 **Snapshot** — Manual snapshot

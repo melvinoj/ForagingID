@@ -82,7 +82,7 @@ POST /api/dev/log
 - `app/integrations/` — External API clients (PlantNet, iNaturalist, Claude, etc.)
 - `frontend/` — HTML pages + `static/js/`
 - `photos/pipeline2/` — P2 (Syncthing/Takeout) copies — project-local, HD-independent
-- `uploads/` — Browser-uploaded pending photos
+- `uploads/` — **primary image store**, not staging. ~88% of observations reference it directly via `file_path` (12,239 of 13,855). Browser uploads land here and stay here. See "Data Model — critical rules" below: never bulk-delete, never move without updating every affected `file_path`.
 - `snapshots/` (in `/Users/melvinjarman/ForagingID/snapshots/`, project-local) — DB snapshots
 - `/Volumes/DIGIERA/Pictures/` — photo archive (year folders 2013–2026, consolidated June 2026); HD-dependent, used as P2 rescan source
 
@@ -133,12 +133,34 @@ Two orthogonal status fields on `observations`:
 | `identification_status` | `pending_identification`, `identified`, `below_threshold`, `failed_identification`, `not_plant`, `pending_connection` |
 | `review_status` | `pending`, `needs_review`, `approved`, `manually_verified`, `rejected` |
 
-**Critical invariant:** when `review_status = 'manually_verified'`, `identification_status` must be `'identified'`. The map (`/api/map/geojson`) filters on BOTH: `review_status IN ('approved','manually_verified') AND identification_status = 'identified'`. The species card counts on `review_status` only — so any drift between the two fields creates a card-count vs map-pin discrepancy.
+**Critical invariant:** when `review_status = 'manually_verified'`, `identification_status` must be `'identified'`. The map (`/api/map/geojson`) filters on BOTH: `review_status IN ('approved','manually_verified') AND identification_status = 'identified'`. The species-card count (`list_species` in `culinary.py`) now applies the **same two-field filter**, so the two agree by construction; before 19 July 2026 it counted on `review_status` alone and any drift produced a card-count vs map-pin discrepancy.
 
 The three code paths that set `manually_verified` also upgrade `identification_status`:
 - `observations.py` — `correct-species` endpoint
 - `reidentify.py` — `confirm-species` endpoint
 - `trust.py` — `accept-species` bulk path
+
+### "Approved, identified, no species" — a legitimate state, not drift
+
+**Landscape/scene rows are approved and identified with `species_primary = NULL`, by design.** A photo of a place has no organism to name; identification is *complete* because there is nothing to identify. Do NOT "repair" these rows — they are correct.
+
+The invariant is `approved ⇒ identified`. It is **not** `identified ⇒ has species`. Reading it the second way is what made these rows look like corruption.
+
+This state is produced deliberately by `observations.py` (category change → landscape) and, since 19 July 2026, by both approve paths. As of that date the map and species-card counts agree exactly (2158/2158, zero drifted rows) *because* scene rows are consistently `identified`.
+
+A non-landscape row with no species is a different thing entirely: for a plant or fungi row, "approved but unidentified" is a real unresolved state and must stay visible as such.
+
+### Shared predicates — single source of truth
+
+Three predicates in `app/models/observation.py` are the **only** definitions of their respective questions. **Extend the predicate; never copy its logic into a call site.** Every bug in this class this project has hit came from the same rule existing in two places and one copy being updated:
+
+| Predicate | Means | Notes |
+|---|---|---|
+| `is_terminal_review_status(status)` | `approved` / `manually_verified` / `rejected` — a finalized human decision | Automated paths (identification, retries, bulk queues) must never mutate these rows. `scan.py` reads it **once** per observation into `terminal` before any mutation, and every write in that function is guarded by it. |
+| `is_phone_origin(obs)` | `upload_source == 'syncthing'` — P1, GPS-intact phone capture | **Provenance only.** Never use it to decide auto-approve eligibility. |
+| `qualifies_as_identified(obs)` | `species_primary` set **OR** `obs_category == 'landscape'` | Names the scene state above. Used by BOTH approve paths — `bulk_actions.py` and the shared `observation_service.update_observation_status` helper (which backs single-approve, `reidentify.py` and `trust.py`). |
+
+**`requires_forced_review` (in `scan.py`) is `not is_phone_origin(obs)`** — auto-approve is **opt-in for syncthing only**. `file_upload`, legacy `phone`, NULL, and any future unrecognised source all fail closed to review. This is *not* a provenance test despite the complement relationship: the questions differ ("where did this come from?" vs "must a human see this?") and they diverge the moment a second origin is trusted. It was previously named `is_phone` and was twice misread as provenance.
 
 ---
 
@@ -178,6 +200,33 @@ Each snapshot:
 To restore: Settings → Snapshots → Restore (confirms before acting).
 
 **Always take a snapshot before any bulk data write.**
+
+### Timestamp convention — two clocks, deliberately
+
+The app writes timestamps in **two different zones**, and they do not line up:
+
+| Record | Source | Zone |
+|---|---|---|
+| DB audit columns — `created_at`, `edited_at`, `deleted_at` | `datetime.utcnow()` | **UTC** |
+| CHANGELOG entries, snapshot filenames, commit messages | `datetime.now()` | **LOCAL (CEST, +2)** |
+
+**Do not compare a commit message, snapshot filename, or CHANGELOG timestamp
+directly against a DB audit row** — they are offset by the local UTC offset.
+Doing so has already produced one false "clock skew" investigation: a commit
+dated in local time read as hours adrift from a `date -u` reading, when the
+clock was correct to 13 ms.
+
+This is a **documented convention, not a bug**. Snapshot filenames are
+load-bearing for retention — `dev.py` keys snapshot age off the *filename*,
+never `st_mtime` — so the filename format must not change. Relatedly, snapshot
+files are written with `shutil.copy2`, which preserves the SOURCE database's
+mtime: a snapshot's mtime records when the DB was last written, not when the
+snapshot was taken. A large filename-vs-mtime gap means the DB was idle, not
+that anything is wrong.
+
+Relative ordering *within* one system is always safe (both audit tables use
+UTC, so `processing_logs.created_at` vs `observation_edits.edited_at` compare
+correctly).
 
 ---
 

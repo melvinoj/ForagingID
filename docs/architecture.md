@@ -1,5 +1,5 @@
 # ForagingID — Architecture
-*Last updated: May 2026*
+*Last updated: 19 July 2026*
 
 ---
 
@@ -11,7 +11,9 @@
 - **Migrations**: Alembic with `render_as_batch=True` (SQLite compatible, Postgres ready)
 - **Running**: Local MacBook, `http://127.0.0.1:8000`
 - **Repo**: `github.com/melvinoj/ForagingID`
-- **Start**: `cd ~/ForagingID && source ~/foragingid-venv/bin/activate && uvicorn app.main:app --reload`
+- **Start**: `cd ~/ForagingID && source ~/foragingid-venv/bin/activate && uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload --reload-dir app`
+  (canonical form — matches CLAUDE.md. `--reload-dir app` matters: without it the
+  reloader watches the whole tree, including `uploads/` and `snapshots/`.)
 
 ---
 

@@ -328,8 +328,11 @@ async def handle_species_rename(
        under the old name is invalid for the new identity.
     3. Reset all source timestamps — forces a full re-fetch on next enrich.
     4. Reset data_confidence to 0.0.
-    5. Reset species.edibility_status → 'unknown' and edibility_verified → False.
-       Safety-critical: edibility cannot carry over from a wrong identification.
+    5. Edibility: verdict and human-lock are left UNTOUCHED, always. If the
+       species carries an established or human-confirmed verdict, the rename
+       raises a curator review flag instead. Safety-critical and deliberate:
+       an automated path must never relax or unlock an edibility verdict —
+       any doubt goes to a human, it does not get silently cleared.
     6. Flag all approved recipes → status='needs_review' with a system note.
     7. Cancel pending AI drafts → status='stale' (content was for the old name).
     8. Write a _rename_event row to culinary_info_history for full audit trail.
@@ -360,12 +363,44 @@ async def handle_species_rename(
     # 4. Reset confidence
     ci.data_confidence = 0.0
 
-    # 5. Reset edibility on species row only on a true scientific-name rename.
-    # On merge/reassign (is_rename=False) the edibility has already been curated
-    # for this identity and must be preserved.
+    # 5. Edibility on a rename: FLAG FOR HUMAN REVIEW, never auto-relax.
+    #
+    # This previously did `sp.edibility_status = "unknown"` and
+    # `sp.edibility_verified = False` directly, which silently downgraded a
+    # human-confirmed 'toxic' to 'unknown' AND cleared the human lock — an
+    # automated relax of a safety verdict, and the only edibility writer in the
+    # codebase that bypassed _enforce_edibility_write_rules().
+    #
+    # Routing it through that gate would NOT have fixed it. RULE 1 does not
+    # apply ('unknown' is not toxic/caution) and RULE 2 compares severity
+    # ladders where 'unknown' is deliberately off-ladder (severity None), so
+    # the relax check short-circuits and the write is permitted. The gate's own
+    # docstring flags this case as intentionally out of scope. The defect is
+    # the automated mutation itself, so the mutation is what goes.
+    #
+    # The verdict and its lock are now left completely untouched on every path.
+    # A rename that genuinely invalidates the old identity's edibility routes to
+    # a curator instead, via the same review_requested triple that itis.py uses
+    # for rename suggestions. Fails conservative: a stale-but-restrictive
+    # verdict that a human will re-confirm beats a silently cleared one.
     if is_rename:
-        sp.edibility_status = "unknown"
-        sp.edibility_verified = False
+        _verdict = (sp.edibility_status or "unknown").strip().lower()
+        _locked = bool(sp.edibility_verified)
+        if _verdict not in ("unknown", "unclear", "") or _locked:
+            ci.review_requested = True
+            ci.review_requested_at = datetime.utcnow()
+            _note = (
+                f"Species renamed {old_name!r} → {new_name!r}. Edibility verdict "
+                f"{_verdict!r}"
+                + (" (human-confirmed, locked)" if _locked else "")
+                + " was carried over unchanged and NOT cleared — please re-confirm "
+                "it applies to the new identity. Automated paths never relax or "
+                "unlock an edibility verdict."
+            )
+            ci.review_request_note = (
+                f"{ci.review_request_note}\n{_note}"
+                if ci.review_request_note else _note
+            )
 
     # 6. Flag approved recipes for review
     await db.execute(

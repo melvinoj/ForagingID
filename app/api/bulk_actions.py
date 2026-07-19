@@ -130,10 +130,29 @@ async def _bulk_review_task(obs_ids: List[int], status: str, pid: Optional[int])
                     obs.species_suggested = None
                     obs.human_corrected = True
 
-                # Upgrade identification_status when approving with a species
+                # Upgrade identification_status when approving.
+                #
+                # Two cases qualify as "identification is done":
+                #   • a species was assigned, or
+                #   • the row is a landscape/scene shot, which legitimately has
+                #     NO species and never will. observations.py's category
+                #     change already sets identified + species NULL for exactly
+                #     this state; bulk approve did not, so approving a landscape
+                #     row here left it approved + below_threshold + NULL —
+                #     invariant-breaking (the map filters on identified, the
+                #     card counts on review_status) and the sole cause of the
+                #     six known drifted rows. This makes the two paths agree.
+                #
+                # No species is invented and species_primary is never written.
+                # A NON-landscape row with no species still does NOT qualify:
+                # for a plant/fungi row, "approved but unidentified" is a real
+                # unresolved state, not a finished one.
+                _scene_no_species = (
+                    not obs.species_primary and obs.obs_category == "landscape"
+                )
                 if (
                     status in confirmed_statuses
-                    and obs.species_primary
+                    and (obs.species_primary or _scene_no_species)
                     and obs.identification_status != "identified"
                 ):
                     _log_edit(

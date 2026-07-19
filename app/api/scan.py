@@ -998,9 +998,17 @@ async def _mark_identify_failed(obs_id: int, exc: BaseException) -> None:
             await asyncio.sleep(0.5 * attempt)
 
 
-# The one note this function writes on its own behalf. Kept as a constant so
-# _append_note and _strip_review_marker cannot drift apart from the writer.
+# The notes this function writes on its own behalf. Kept as constants, and
+# collected in _APP_MARKERS, so the writers and _strip_review_marker cannot
+# drift apart — a marker added to one and missed by the other would either
+# stack duplicates or survive a strip it should not have.
+#
+# Two markers because provenance differs and the badge must say which. Calling
+# a NULL-provenance row a "File upload" is the same mislabelled-origin defect
+# that made `is_phone` unreadable, one layer down in curator-visible text.
 _REVIEW_MARKER = "File upload — needs review"
+_UNKNOWN_ORIGIN_MARKER = "Unknown origin — needs review"
+_APP_MARKERS = (_REVIEW_MARKER, _UNKNOWN_ORIGIN_MARKER)
 
 
 def _append_note(notes: Optional[str], marker: str) -> str:
@@ -1031,7 +1039,7 @@ def _strip_review_marker(notes: Optional[str]) -> Optional[str]:
     """
     if not notes:
         return None
-    kept = [ln for ln in notes.splitlines() if ln.strip() != _REVIEW_MARKER]
+    kept = [ln for ln in notes.splitlines() if ln.strip() not in _APP_MARKERS]
     return "\n".join(kept).strip() or None
 
 
@@ -1636,8 +1644,17 @@ async def _identify_scanned_inner(
                         else:
                             _reason = "one or both APIs returned no candidates"
                             _label = "failed_id"
-                        flag = f"File upload — needs review ({_reason})"
-                        _add_note = _REVIEW_MARKER
+                        # requires_forced_review covers three provenances since
+                        # the fail-closed change: a known browser/phone upload,
+                        # and anything unrecognised (NULL or a future source).
+                        # They route identically — both to review — but the note
+                        # is curator-visible, so it must not claim an origin the
+                        # row does not have.
+                        if obs.upload_source in ("phone", "file_upload"):
+                            _add_note = _REVIEW_MARKER
+                        else:
+                            _add_note = _UNKNOWN_ORIGIN_MARKER
+                        flag = f"{_add_note} ({_reason})"
                     else:
                         # Pre-filter override — review but no upload badge (fungi or force)
                         flag = f"Review queue (pre-filter override) — {top['source']} {top['score']:.2%}"

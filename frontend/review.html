@@ -1775,10 +1775,10 @@ function _makeCardHtml(obs) {
       thumbName
         ? `<img src="/thumbnails/${thumbName}" alt="photo" loading="lazy"
                onclick="selectModeActive ? toggleCard(${obs.id}, this) : openCardPhoto(${obs.id})"
-               onerror="this.parentElement.querySelector('.btn-share-photo')&&this.parentElement.querySelector('.btn-share-photo').remove();this.parentElement.innerHTML+='<div class=no-thumb>🌿</div>';this.remove()">`
+               onerror="var b=this.parentElement&&this.parentElement.querySelector('.btn-share-photo');if(b)b.remove();this.outerHTML='<div class=&quot;no-thumb&quot;>🌿</div>'">`
         : '<div class="no-thumb">🌿</div>'
     }${shareBtn}</div>`;
-    const fname = obs.file_path.split('/').pop();
+    const fname = obs.file_path ? obs.file_path.split('/').pop() : '(no file path)';
 
     // ── Category ──────────────────────────────────────────────────────────
     const obsCat = (obs.obs_category || 'plant').toLowerCase();

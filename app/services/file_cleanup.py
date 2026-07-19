@@ -9,6 +9,8 @@ import shutil
 from pathlib import Path
 from typing import List, Optional
 
+from app.models.observation import is_phone_origin
+
 
 def _print(fmt, *args):
     print(f"[file_cleanup] {fmt % args}", flush=True)
@@ -73,6 +75,30 @@ def delete_observation_file(obs) -> None:
     # so a reject still marks the row; only the unlink is refused.
     if getattr(obs, "never_reject", False):
         _print("obs %d: REFUSED file delete — never_reject is set (no other copy on disk)", obs_id)
+        return
+
+    # Provenance veto — P1/syncthing files are never deleted, for either path.
+    #
+    # The segment list below is a location test, not an origin test, and the two
+    # stopped agreeing at the copy-on-ingest cutover (~3 June 2026, migration
+    # 0021). Before it, P1 originals sat in PhoneForaging/ and were skipped by
+    # _is_deletable(); after it they are copied to photos/pipeline2/, which IS in
+    # _DELETABLE_SEGMENTS — so a reject began hard-deleting phone originals that
+    # the earlier behaviour had protected. 12 P1 originals were destroyed this
+    # way. A phone original has no second copy once the source leaves the device,
+    # so this is unrecoverable loss; a P2 upload is a copy of a file the user
+    # still holds elsewhere.
+    #
+    # Vetoes the thumbnail too: thumbnail_path is unconditionally eligible below
+    # (no segment check), so without this it would still be destroyed, and for a
+    # row whose original is already gone the thumbnail is the last surviving
+    # copy — the exact situation never_reject exists to prevent.
+    #
+    # Enforced here, alongside never_reject, for the same reason: all six reject
+    # call sites funnel through this function, so a guard in any one of them
+    # would leave the other five open.
+    if is_phone_origin(obs):
+        _print("obs %d: REFUSED file delete — phone-origin (P1/syncthing), no second copy", obs_id)
         return
 
     paths_to_check = []

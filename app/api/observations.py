@@ -10,7 +10,7 @@ from pydantic import BaseModel, Field
 from datetime import datetime
 
 from app.database import get_db
-from app.models.observation import Observation, ObservationEdit
+from app.models.observation import Observation, ObservationEdit, is_phone_origin
 from app.models.species import Species
 from app.services.species_link import set_observation_species
 from app.models.processing import ProcessingLog
@@ -855,47 +855,33 @@ async def delete_observation(
     if not obs:
         raise HTTPException(status_code=404, detail="Observation not found")
 
-    # Safety: never delete the source photo from the user's Pictures folder
-    home_pics = Path("~/Documents/Pictures").expanduser()
-
-    # Remove confirmed copy if it exists inside the ForagingID project
-    confirmed_removed = False
-    if obs.confirmed_copy_path:
-        cp = Path(obs.confirmed_copy_path)
-        # Only delete if it's inside the project folder (never ~/Documents/Pictures)
-        if not str(cp.resolve()).startswith(str(home_pics)) and cp.exists():
-            try:
-                cp.unlink()
-                confirmed_removed = True
-            except Exception:
-                pass  # non-critical
-
-    # Also remove file_path if it's inside the project (uploaded/scanned copy)
-    app_file_removed = False
-    if obs.file_path:
-        fp = Path(obs.file_path)
-        project_root = Path(__file__).resolve().parent.parent.parent
-        in_project = str(fp.resolve()).startswith(str(project_root))
-        in_pics    = str(fp.resolve()).startswith(str(home_pics))
-        if in_project and not in_pics and fp.exists():
-            try:
-                fp.unlink()
-                app_file_removed = True
-            except Exception:
-                pass
-
-    # Remove thumbnail if it exists
-    thumb_removed = False
-    if obs.thumbnail_path:
-        tp = Path(obs.thumbnail_path)
-        if not tp.is_absolute():
-            tp = Path(__file__).resolve().parent.parent.parent / tp
-        if tp.exists():
-            try:
-                tp.unlink()
-                thumb_removed = True
-            except Exception:
-                pass
+    # ── File deletion — routed through the single guarded deleter ─────────
+    # This endpoint previously carried its own raw unlinks (file_path,
+    # confirmed_copy_path, thumbnail_path) gated only on a project-root /
+    # Pictures containment check — no origin veto and no never_reject veto.
+    # A phone original deleted here is unrecoverable: for a P1/syncthing
+    # capture no DIGIERA master exists once the source leaves the device.
+    #
+    # Route through delete_observation_file() so every delete path in the app
+    # (reject × 6 call sites + this manual delete) shares ONE guard
+    # (never_reject + is_phone_origin) and one behaviour (move to undo dir,
+    # 30 s window, then hard-delete). Its _DELETABLE_SEGMENTS gate keeps the
+    # old protections: ~/Documents/Pictures and any archive/source path are
+    # outside the deletable segments and so are still skipped.
+    #
+    # The DB row is still deleted below — the user asked for the card to be
+    # gone; only the on-disk phone original is preserved. Net effect: a P1
+    # card can leave the queue, but its phone original is never unlinked by
+    # the app on any path.
+    file_retained = is_phone_origin(obs) or bool(getattr(obs, "never_reject", False))
+    if file_retained:
+        _reason = "phone-origin" if is_phone_origin(obs) else "never_reject"
+        print(
+            f"[observations] obs {observation_id}: file retained — {_reason}, "
+            f"no second copy",
+            flush=True,
+        )
+    delete_observation_file(obs)
 
     # Record file_hash in deleted_hashes so the file is never re-ingested
     if obs.file_hash:
@@ -919,9 +905,8 @@ async def delete_observation(
             f"action=observation_deleted observation_id={observation_id} "
             f"species={obs.species_primary or 'unknown'} "
             f"file={obs.file_path or 'none'} "
-            f"confirmed_copy_removed={confirmed_removed} "
-            f"app_file_removed={app_file_removed} "
-            f"thumb_removed={thumb_removed} "
+            f"file_delete=routed_through_guard "
+            f"file_retained={file_retained} "
             f"triggered_by=user"
             f"{reason_note}"
         ),
@@ -954,6 +939,5 @@ async def delete_observation(
     return {
         "ok": True,
         "deleted_id": observation_id,
-        "confirmed_copy_removed": confirmed_removed,
-        "app_file_removed": app_file_removed,
+        "file_retained": file_retained,
     }

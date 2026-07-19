@@ -2,14 +2,124 @@
 
 ## Current State
 
-Docs are now accurate, five stale-thing bugs closed, docs/architecture.md canonical with protocols.md confirming the choice. That's a genuine clean state.
-Checkpoint addendum — new list, priority order:
-1. The ~11 never-ingested P1 photos (bucket b from the reconcile). 14 files synced to PhoneForaging with no DB row; minus 1 .mp4 (correctly skipped video), 1 LONG_EXPOSURE cover variant, 1 double-(1) duplicate — leaving ~11 ordinary photos the auto-scan should have picked up and didn't, spanning 2026-06-01 to 2026-07-10. Fully recoverable, never seen. The why matters as much as the re-ingest — silent auto-scan skips are the same defect class as everything else. Recon first: what those 11 are and why _auto_scan_loop() missed them, before ingesting.
-2. Live rate-limited run — verify the 324 fix in production: no-candidate rows land in review, files intact. Only verified in isolation so far.
-3. Which PlantNet timeout is live — (5,25) per CHANGELOG vs the httpx form in the 16 July output. One grep, one-line correction if they disagree.
-4. uploads/ 3.7G recon — the one unexamined large directory. CLAUDE.md calls it staging but 12,351 observations reference it directly. Possible spent-file reclaim, needs real recon not a blind delete.
-5. .claude/launch.json port 8001 vs documented 8000 — undocumented, possibly deliberate. Trivial — either document the separation or align it.
-Carried, unchanged: kingdom-gate recoverables (78 rows, your call); 3 damaged map rows (17052/17737/18709); Retry ID buttons absent on below_threshold cards; snapshots gzip option (~700M win); thumbnails_quarantine purge.
+## Current State — 19 July 2026
+
+**Session focus:** Checkpoint list follow-through — P1 auto-scan hardening, 
+identification.py:324 fix verification (now scan.py:1343), terminal-status 
+guard bug, defence-in-depth species-card count filter, watch-dir silent-skip 
+logging, launch.json port documentation.
+
+**Completed and verified this session:**
+
+- Confirmed identification.py:324 no longer exists; live no-candidate gate 
+  is scan.py:1343-1379. Harness-verified: transport failure → needs_review, 
+  file intact, cause named in log. Branch fires ~4,574 times total (335 
+  syncthing, 4,239 file_upload) — corrects earlier "rare" framing, which 
+  described the now-deleted old path.
+
+- Fixed terminal-status guard bug at scan.py:1343-1379: only review_status 
+  was protected against a retry-identify re-run on a finalized row; 
+  identification_status, species_id, species_candidates_json, and 
+  processing_stage were unguarded and could silently wipe a human-locked 
+  species assignment on any approved/manually_verified/rejected row. All 
+  four now gated by is_terminal_review_status(). Verified across all three 
+  terminal statuses plus a non-terminal control (still routes normally). 
+  Log message corrected — no longer claims "sent to review queue" on a row 
+  that wasn't.
+
+- Recon on 6 rows matching the pre-fix corruption signature (8771, 9645, 
+  9827, 21562, 21770, 21771): audit trail confirms none were caused by 
+  this bug — all deliberately human-approved landscape/scenery photos with 
+  no species ever assigned, or (9827) a deliberately-removed bad ID (dog 
+  misID at 1866% score). Nothing to restore. Real drift cause identified 
+  instead: bulk_actions.py:107 (_bulk_review_task) sets review_status 
+  without syncing identification_status — deferred, see Pending.
+
+- Added defence-in-depth two-field filter to species-card count query 
+  (culinary.py:88-96), matching map.py's identification_status='identified' 
+  clause. Verified no-op on current data (2,114 before/after, ORM and live 
+  endpoint both confirmed) — guards a currently-unreached state.
+
+- PlantNet timeout confirmed correct, no drift: (5,25) tuple + bounded 
+  retry live at plantnet.py:60/253-276. Apparent conflict with a 16 July 
+  httpx form was a different module (inaturalist.py) — false alarm, closed.
+
+- uploads/ recon: nothing reclaimable, 0 orphaned bytes. Confirmed still 
+  the primary image store (12,239 of 13,836 observation file_paths), not 
+  "browser-uploaded pending photos" per CLAUDE.md — doc correction still 
+  outstanding (see Pending). 36G→3.7G explained: cumulative 
+  delete_observation_file() on rejected rows over time, not a migration.
+
+- ~11 "never-ingested" P1 photos: recon reversed the premise. All 11 were 
+  previously ingested, human-reviewed, and deliberately deleted — now 
+  correctly blacklisted. Not lost data; do not re-ingest without an 
+  explicit DELETE FROM deleted_hashes decision (not made this session).
+
+- Fixed bare except: pass at syncthing.py _auto_scan_loop tick: now logs 
+  via three channels (stderr w/ traceback, _state["errors"], 
+  processing_logs) through a must-not-raise helper. Verified via harness 
+  and live production.
+
+- Fixed unlogged blacklist skip in _find_new_files: blacklisted-hash skips 
+  now log via ingest_guard.blacklisted_skip(), source="p1_autoscan_filter", 
+  deduped once per hash per process lifetime. Ordinary duplicate skips 
+  remain silent, unchanged. Verified live: 12 rows / 12 distinct hashes, 
+  held steady across ~45 ticks.
+
+- Fixed watch-dir silent skip (photo_library_path missing/misconfigured): 
+  now logs via _record_watch_dir_missing, same three-channel bar, latched 
+  on path value not per-tick. Harness-verified 4 cases incl. no false 
+  positives.
+
+- launch.json port 8001 (vs documented 8000): confirmed deliberate — 
+  separates tool-launched preview servers from the manually-run dev server 
+  on 8000. Left as-is, added an inert in-file comment. No change needed.
+
+**Retracted this session (both self-caught before any write):**
+
+- The 2,161 vs 2,155 map/card-count "discrepancy" that drove the 
+  culinary.py fix did not exist in the app — it came from an ad-hoc query 
+  reported as app behaviour without being run through the live code path. 
+  Real numbers: card count 2,114, map pins 2,131 (map shows more, not 
+  fewer — inverse of what was assumed). Gap judged not worth pursuing.
+- A reported "raw control character in /api/species/ JSON" was a 
+  diagnostic-harness artifact (zsh's echo interpreting \n as a literal 
+  newline), not an app defect. Live endpoint parses cleanly.
+- Pattern to carry forward: any anomalous number from an ad-hoc diagnostic 
+  script needs to be reproduced through the real code path before being 
+  reported as a finding — both retractions shared this root cause.
+
+**Known issues / notes:**
+
+- Unplanned live write: editing syncthing.py under --reload --reload-dir 
+  app hot-reloaded the running production server mid-session, firing 12 
+  real blacklisted_hash_skip rows to the live DB before any deliberate 
+  test ran. Append-only audit rows only, nothing destructive, no snapshot 
+  taken beforehand. Going forward: any edit to a module backing an active 
+  background loop should be flagged as a live write before editing, not 
+  discovered after.
+- scan.py:1380 log message still says "no species assigned" on the 
+  terminal-guard path, where the species is now correctly retained — 
+  one-line wording fix, left alone deliberately, not urgent.
+
+**Working tree — uncommitted:**
+Modified: app/api/culinary.py, app/api/scan.py, app/api/syncthing.py
+Untracked/edited: .claude/launch.json (comment added, port unchanged)
+All changes harness- and/or live-verified individually. Nothing committed 
+yet — this End Session should commit all four together.
+
+**Pending / next (priority order):**
+1. bulk_actions.py:107 — sync identification_status on bulk-approve, or 
+   formalize "approved, no species" as a legitimate state. Deferred design 
+   call, currently inert in practice.
+2. CLAUDE.md's uploads/ description is wrong — it's the primary image 
+   store (88% of observations), not "browser-uploaded pending photos." 
+   Fold into next doc-accuracy pass.
+3. scan.py:1380 log wording — cosmetic, whenever convenient.
+
+**Carried, unchanged from prior sessions:** 3 damaged map rows 
+(17052/17737/18709); Retry ID buttons absent on below_threshold cards; 
+snapshots gzip option (~700M win); thumbnails_quarantine purge.
 
 ## Current State — 10 July 2026
 
@@ -179,6 +289,13 @@ Still open:
 - Enrichment gap remediation — 9 AI drafts pending approval, 6 species never scanned, 79 no-PFAF species need alt-source decision
 
 ## History
+
+### 2026-07-19 05:55
+**Snapshot** — End of session — Session ended from Settings page
+DB: `snapshots/db_20260719_055536.sqlite`
+
+### 2026-07-19 05:55
+**Session ended** — Session ended from Settings page
 
 ### 2026-07-18 08:09
 **Snapshot** — End of session — Session ended from Settings page

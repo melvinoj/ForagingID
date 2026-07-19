@@ -86,7 +86,14 @@ async def list_species(
             sqlfunc.count(Observation.id).label("obs_count"),
         )
         .where(Observation.species_primary.is_not(None))
+        # Two-field filter, matching map.py's geojson gate exactly. The
+        # review_status clause alone would count a row whose species_primary is
+        # set while identification_status is not 'identified' — card-counted but
+        # never map-eligible, the documented drift shape. No such row exists
+        # today (this clause is a no-op on current data), so it is a guard
+        # against the state, not a fix for it.
         .where(Observation.review_status.in_(["approved", "manually_verified"]))
+        .where(Observation.identification_status == "identified")
         .group_by(Observation.species_primary)
         .order_by(Observation.species_primary)
     )

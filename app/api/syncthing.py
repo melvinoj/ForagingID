@@ -22,6 +22,7 @@ import asyncio
 import json as _json
 import logging
 import shutil
+import traceback
 import uuid
 from datetime import datetime
 from pathlib import Path
@@ -85,6 +86,15 @@ _current_p1_session_id: Optional[int] = None
 
 _semaphore: Optional[asyncio.Semaphore] = None
 
+# Hashes already logged as blacklist-filtered this process. Bounded by the size
+# of deleted_hashes (12 rows today), cleared on restart — see
+# _log_blacklist_filter_skip for why this is deduped rather than logged per tick.
+_blacklist_logged: set = set()
+
+# Path last logged as missing, or None when the watch dir is present. Latch, not
+# a counter — see _record_watch_dir_missing for why this is not per-tick.
+_watch_dir_missing_logged: Optional[str] = None
+
 # Lenient prefilter for Pipeline 1 — only the clearest non-biological subjects.
 # Anything plausibly biological (indoor, low-signal, sky, food) passes through.
 # Rejects are saved with identification_status="not_plant" and are recoverable
@@ -103,6 +113,107 @@ def _get_semaphore() -> asyncio.Semaphore:
 # Utility: find image files in PhoneForaging not yet in the database
 # ---------------------------------------------------------------------------
 
+def _watch_dir_ok(path: Path) -> None:
+    """Clear the missing-dir latch so a later disappearance logs again."""
+    global _watch_dir_missing_logged
+    if _watch_dir_missing_logged is not None:
+        log.info("watch directory is available again: %s", path)
+        _watch_dir_missing_logged = None
+
+
+def _record_watch_dir_missing(path: Path) -> None:
+    """
+    Record that the configured watch directory does not exist.
+
+    Deliberately NOT routed through _record_auto_scan_failure: that function
+    takes an exception and calls log.exception, which without live exception
+    context would attach a meaningless "NoneType: None" traceback, and it writes
+    stage='auto_scan' status='failed'. A missing directory is a configuration
+    state, not a tick failure. Same three channels, same visibility bar, honest
+    labelling.
+
+    Latched on the path value, not deduped per process: _find_new_files runs on
+    a 60-second loop, so logging every tick would write ~1,440 identical rows a
+    day. One row per distinct bad path, re-armed by _watch_dir_ok when the
+    directory reappears, so a genuine break/fix/break cycle is still recorded.
+
+    MUST NOT raise — it sits on the ingest path and a failed audit write must
+    never stop directory scanning.
+    """
+    global _watch_dir_missing_logged
+    if _watch_dir_missing_logged == str(path):
+        return
+    _watch_dir_missing_logged = str(path)
+
+    override = get_setting("photo_library_path")
+    source = "photo_library_path setting" if override else "config.py fallback"
+    detail = f"watch directory does not exist: {path} (from {source})"
+
+    try:
+        log.error("P1 auto-scan disabled — %s", detail)
+    except Exception:
+        pass
+
+    try:
+        _state["errors"].append(f"auto-scan: {detail}")
+        if len(_state["errors"]) > _MAX_ERRORS:
+            _state["errors"] = _state["errors"][-_MAX_ERRORS:]
+    except Exception:
+        pass
+
+    try:
+        asyncio.create_task(_write_watch_dir_missing_log(detail))
+    except Exception:
+        pass
+
+
+async def _write_watch_dir_missing_log(detail: str) -> None:
+    """Durable half of _record_watch_dir_missing. Swallows its own errors."""
+    try:
+        async with AsyncSessionLocal() as log_session:
+            log_session.add(ProcessingLog(
+                observation_id=None,   # configuration state, no row involved
+                stage="auto_scan",
+                status="skipped",
+                message=(
+                    f"action=watch_dir_missing {detail} "
+                    "— no files can be ingested until this path is corrected"
+                ),
+            ))
+            await log_session.commit()
+    except Exception:
+        log.warning("could not persist watch-dir-missing log for: %s", detail)
+
+
+async def _log_blacklist_filter_skip(sha: str, path: Path) -> None:
+    """
+    Emit one blacklisted_hash_skip log for a file filtered out by the deleted-hash
+    tier of _find_new_files.
+
+    Deduped per process, not per call. _find_new_files runs on a 60-second loop
+    against a directory whose contents persist, so an unconditional log here
+    would rewrite the same rows every minute (~17k/day for the current 12
+    blacklisted files) and bury the signal it exists to provide. One line per
+    hash per server lifetime keeps the fact visible and also gives a useful
+    per-boot snapshot of the blacklist-versus-directory intersection.
+
+    Logging is delegated to services.ingest_guard.blacklisted_skip so the format
+    stays identical to the five ingest call sites; that function re-checks the
+    hash against deleted_hashes itself, which is the authoritative read. The
+    prefetched set is only a cheap filter to decide whether to ask, so this
+    costs one indexed query per genuinely blacklisted file, not per candidate.
+    """
+    if sha in _blacklist_logged:
+        return
+    _blacklist_logged.add(sha)
+    try:
+        async with AsyncSessionLocal() as session:
+            await blacklisted_skip(session, sha, "p1_autoscan_filter", str(path))
+    except Exception:
+        # Never let an audit-log failure break directory scanning.
+        log.warning("could not log blacklist skip for %s", path, exc_info=True)
+
+
 async def _find_new_files() -> List[Path]:
     """
     Return image paths in PhoneForaging that have no matching observation.
@@ -120,7 +231,14 @@ async def _find_new_files() -> List[Path]:
     """
     phone_dir = _get_phone_dir()
     if not phone_dir.exists():
+        # Fail-quiet class: an empty list here is indistinguishable from
+        # "nothing new to ingest", so a mistyped photo_library_path — or the
+        # stale config.py fallback, which points at a path that does not exist —
+        # silently disables P1 ingest for the life of the process. Behaviour is
+        # deliberately unchanged; only its visibility.
+        _record_watch_dir_missing(phone_dir)
         return []
+    _watch_dir_ok(phone_dir)
 
     # All image files in the directory (recursive)
     all_images = [
@@ -151,12 +269,15 @@ async def _find_new_files() -> List[Path]:
 
     from app.models.observation import DeletedHash
 
+    # These two sets were previously merged into one. They are kept separate so
+    # the skip loop below can tell WHY a file was excluded: an ordinary content
+    # duplicate (silent, uninteresting) or a blacklisted deleted hash (worth a
+    # log line — this tier was the one silent skip the ingest guard never saw).
     async with AsyncSessionLocal() as session:
         result = await session.execute(select(Observation.file_hash))
         known_hashes = {row[0] for row in result.fetchall() if row[0]}
-        # Also exclude hashes of previously deleted observations
         del_result = await session.execute(select(DeletedHash.file_hash))
-        known_hashes.update(row[0] for row in del_result.fetchall())
+        blacklisted_hashes = {row[0] for row in del_result.fetchall() if row[0]}
 
     truly_new = []
     for p in path_new:
@@ -166,6 +287,14 @@ async def _find_new_files() -> List[Path]:
             sha = None
         if sha and sha in known_hashes:
             continue  # content already ingested under a different filename
+        if sha and sha in blacklisted_hashes:
+            # Permanently deleted by the user — must not be re-ingested. The
+            # skip itself is correct and unchanged; only its invisibility was
+            # the bug. Logging is delegated to the shared ingest guard so this
+            # tier emits the same blacklisted_hash_skip shape as the five
+            # ingest call sites, rather than a second bespoke log format.
+            await _log_blacklist_filter_skip(sha, p)
+            continue
         truly_new.append(p)
 
     return sorted(truly_new)
@@ -305,6 +434,61 @@ async def list_rejected():
 # Server-side auto-scan loop (60-second tick, independent of browser)
 # ---------------------------------------------------------------------------
 
+def _record_auto_scan_failure(exc: BaseException) -> None:
+    """
+    Record a failed auto-scan tick. MUST NOT raise — it is called from inside
+    an `except` block, so any exception escaping here would propagate out of
+    the handler and kill the loop, which is the exact failure this replaced.
+
+    Channels are ordered by how likely they are to survive the failure being
+    reported. The stderr logger goes first and is the only guaranteed one: the
+    most likely causes of a tick failure (DB lock, disk full) are precisely the
+    conditions under which the processing_logs write below will also fail.
+    """
+    detail = f"{type(exc).__name__}: {exc}"
+
+    # 1. stderr logger — always available, carries the full traceback.
+    try:
+        log.exception("auto-scan tick failed: %s", detail)
+    except Exception:
+        pass
+
+    # 2. In-memory state — surfaced by GET /api/syncthing/status (errors[-5:]).
+    try:
+        _state["errors"].append(f"auto-scan: {detail}")
+        if len(_state["errors"]) > _MAX_ERRORS:
+            _state["errors"] = _state["errors"][-_MAX_ERRORS:]
+    except Exception:
+        pass
+
+    # 3. processing_logs — durable, survives restart. Fire-and-forget so a slow
+    #    or blocked DB cannot stall the 60s cadence.
+    try:
+        tb = traceback.format_exc()
+        asyncio.create_task(_write_auto_scan_failure_log(detail, tb))
+    except Exception:
+        pass
+
+
+async def _write_auto_scan_failure_log(detail: str, tb: str) -> None:
+    """Durable half of _record_auto_scan_failure. Swallows its own errors."""
+    try:
+        async with AsyncSessionLocal() as log_session:
+            log_session.add(ProcessingLog(
+                observation_id=None,   # loop-level failure, no row involved
+                stage="auto_scan",
+                status="failed",
+                message=(
+                    f"action=auto_scan_tick_failed error={detail}\n"
+                    f"traceback:\n{tb}"
+                ),
+            ))
+            await log_session.commit()
+    except Exception:
+        # Already reported via logger + _state; nothing further to do.
+        log.warning("auto-scan: could not persist failure log for: %s", detail)
+
+
 async def _auto_scan_loop() -> None:
     """
     Runs as a background asyncio task for the life of the server process.
@@ -320,8 +504,12 @@ async def _auto_scan_loop() -> None:
                 if new_files:
                     settings.ensure_dirs()
                     asyncio.create_task(_process_all(new_files))
-        except Exception:
-            pass
+        except Exception as exc:
+            # This tick failed. Never re-raise: the loop must survive every
+            # error or auto-scan dies silently for the life of the process.
+            # Previously `except Exception: pass` — which hid DB locks, hash
+            # IO errors and permission failures with zero trace.
+            _record_auto_scan_failure(exc)
         await asyncio.sleep(60)
 
 

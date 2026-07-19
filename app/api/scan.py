@@ -1342,21 +1342,42 @@ async def _identify_scanned_inner(
 
             # ── No candidates ─────────────────────────────────────────────
             if not candidates:
-                obs.identification_status = "below_threshold"
-                await set_observation_species(session, obs, None)
-                obs.species_candidates_json = _json.dumps([])
-                obs.processing_stage = "identified"
-                # No candidates → always review queue. P1 (syncthing) must never
-                # be auto-rejected on confidence; only not_plant pre-filter rejects.
-                # Never clobber a status a human has already finalized — a retry-
-                # identify re-run was silently un-rejecting observations otherwise.
+                # Never clobber a row a human has already finalized. The guard
+                # previously covered only review_status, which left the other
+                # four writes unprotected: a no-candidate re-identify on a
+                # manually_verified row set identification_status to
+                # below_threshold and NULLed the human's species_id. That breaks
+                # the documented invariant (manually_verified implies identified)
+                # — the map filters on both fields so the pin disappears, while
+                # the species card counts on review_status alone so it still
+                # counts. Six live rows were corrupted this way before the guard
+                # was widened.
+                #
+                # Skipping processing_stage here does not strand the row: the
+                # orphan sweep requires NOT EXISTS(processing_logs stage=
+                # 'identify'), and the log written below always satisfies it.
                 if not is_terminal_review_status(obs.review_status):
+                    obs.identification_status = "below_threshold"
+                    await set_observation_species(session, obs, None)
+                    obs.species_candidates_json = _json.dumps([])
+                    obs.processing_stage = "identified"
+                    # No candidates → review queue. P1 (syncthing) must never be
+                    # auto-rejected on confidence; only not_plant pre-filter rejects.
                     obs.review_status = "needs_review"
                     obs.review_label  = "failed_id"
+                    _outcome = " — sent to review queue"
+                else:
+                    # Report what actually happened. Claiming "sent to review
+                    # queue" for a row that was deliberately left untouched
+                    # would make the log say the opposite of the truth.
+                    _outcome = (
+                        f" — row left unchanged (review_status="
+                        f"{obs.review_status!r} is a finalized human decision)"
+                    )
                 note = "No candidates from any source"
                 if pn_error:
                     note += f" (PlantNet: {pn_error})"
-                note += " — sent to review queue"
+                note += _outcome
                 log.warning(
                     "[ID no-candidates] obs#%s: no candidates returned "
                     "(PlantNet error: %s) — file seen, no species assigned",

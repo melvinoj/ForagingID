@@ -998,6 +998,43 @@ async def _mark_identify_failed(obs_id: int, exc: BaseException) -> None:
             await asyncio.sleep(0.5 * attempt)
 
 
+# The one note this function writes on its own behalf. Kept as a constant so
+# _append_note and _strip_review_marker cannot drift apart from the writer.
+_REVIEW_MARKER = "File upload — needs review"
+
+
+def _append_note(notes: Optional[str], marker: str) -> str:
+    """
+    Add `marker` to reviewer_notes without destroying what is already there.
+
+    reviewer_notes is curator-authored prose. The identification pipeline used
+    to assign over it (`obs.reviewer_notes = "File upload — needs review"`),
+    silently deleting human text on every re-identify. Appending is the pattern
+    the kingdom gate already used correctly; this makes it the only pattern.
+
+    Idempotent: re-running identification does not stack duplicate markers.
+    """
+    if not notes:
+        return marker
+    if marker in notes:
+        return notes
+    return f"{notes}\n{marker}"
+
+
+def _strip_review_marker(notes: Optional[str]) -> Optional[str]:
+    """
+    Remove only this function's own marker line, preserving every other line.
+
+    Auto-approve previously cleared reviewer_notes outright, which removed the
+    app's badge and any curator prose alongside it. Clearing the badge is
+    legitimate; clearing the prose is not.
+    """
+    if not notes:
+        return None
+    kept = [ln for ln in notes.splitlines() if ln.strip() != _REVIEW_MARKER]
+    return "\n".join(kept).strip() or None
+
+
 async def _identify_scanned(
     obs_id: int,
     source: str = "both",
@@ -1066,7 +1103,9 @@ async def _identify_scanned_inner(
             try:
                 async with AsyncSessionLocal() as _pdb:
                     _pobs = await _pdb.get(Observation, obs_id)
-                    if _pobs and _pobs.identification_status == "pending_identification":
+                    if (_pobs
+                            and _pobs.identification_status == "pending_identification"
+                            and not is_terminal_review_status(_pobs.review_status)):
                         _pobs.identification_status = "failed_identification"
                         await _pdb.commit()
             except Exception:
@@ -1118,9 +1157,14 @@ async def _identify_scanned_inner(
         async with AsyncSessionLocal() as session:
             obs = await session.get(Observation, obs_id)
             if obs:
-                obs.identification_status = "failed_identification"
-                obs.review_status = "needs_review"
-                obs.review_label  = "failed_id"
+                # Separate session from the main block below, so it needs its own
+                # terminal read. Same rule, same helper: a missing API credential
+                # is an infrastructure problem and must never rewrite a status a
+                # human has finalized. The log row below is written either way.
+                if not is_terminal_review_status(obs.review_status):
+                    obs.identification_status = "failed_identification"
+                    obs.review_status = "needs_review"
+                    obs.review_label  = "failed_id"
                 session.add(ProcessingLog(
                     observation_id=obs_id, stage="identify", status="failed",
                     message="; ".join(cred_warnings) or "No identification source available",
@@ -1135,6 +1179,29 @@ async def _identify_scanned_inner(
             if not obs:
                 return
 
+            # ── Terminal-state read: ONE definition for this whole function ──
+            # Computed here, before any mutation, and used by every branch below.
+            #
+            # This replaces four different guard idioms that previously coexisted
+            # in this function — an is_terminal_review_status() call in some
+            # branches, a hand-rolled `!= "manually_verified"` in the kingdom
+            # gate, and no check at all in others. The audit found six mutation
+            # sites where a write sat outside its nearest guard; the min-
+            # confidence branch had no guard at all and was demonstrated wiping
+            # a curator's species_id and reverting their review decision.
+            #
+            # The rule below is uniform: anything that encodes or overwrites a
+            # human decision — review_status, review_label, reviewer_notes,
+            # identification_status, species assignment, candidate evidence —
+            # is written only when `terminal` is False. Diagnostics and
+            # append-only audit rows are written unconditionally, because they
+            # record what happened without changing what was decided.
+            #
+            # Read once rather than re-evaluated per branch so that a mutation
+            # earlier in the function can never change how a later branch is
+            # guarded.
+            terminal = is_terminal_review_status(obs.review_status)
+
             # Reload upload_source to know if we must force_review.
             # "file_upload" and legacy "phone" are both treated as manual uploads
             # that require human review regardless of confidence.
@@ -1146,11 +1213,14 @@ async def _identify_scanned_inner(
 
             path = Path(obs.file_path)
             if not path.exists():
-                obs.identification_status = "failed_identification"
                 # Every rejected observation has its file deleted by the reject
                 # flow, so this branch fires on any re-identify attempt against
                 # one — never clobber a status a human has already finalized.
-                if not is_terminal_review_status(obs.review_status):
+                # identification_status was previously set ABOVE this guard,
+                # which put approved rows into approved+failed_identification:
+                # invariant broken, pin gone from the map, card count wrong.
+                if not terminal:
+                    obs.identification_status = "failed_identification"
                     obs.review_status = "needs_review"
                     obs.review_label  = "failed_id"
                 session.add(ProcessingLog(
@@ -1285,7 +1355,7 @@ async def _identify_scanned_inner(
                 _top_kingdom = (inat_hits[0].iconic_taxon_name or "").lower()
                 if _top_kingdom and _top_kingdom not in _INAT_ALLOWED \
                         and inat_hits[0].score >= 0.05 \
-                        and obs.review_status != "manually_verified" \
+                        and not terminal \
                         and not obs.human_corrected:
                     obs.identification_status = "identified"
                     obs.review_status         = "needs_review"
@@ -1356,7 +1426,7 @@ async def _identify_scanned_inner(
                 # Skipping processing_stage here does not strand the row: the
                 # orphan sweep requires NOT EXISTS(processing_logs stage=
                 # 'identify'), and the log written below always satisfies it.
-                if not is_terminal_review_status(obs.review_status):
+                if not terminal:
                     obs.identification_status = "below_threshold"
                     await set_observation_species(session, obs, None)
                     obs.species_candidates_json = _json.dumps([])
@@ -1394,14 +1464,20 @@ async def _identify_scanned_inner(
 
             # ── Store top result ──────────────────────────────────────────
             top = candidates[0]
-            obs.species_candidates_json = _json.dumps(candidates)
-            obs.identification_status   = "identified"
-            obs.processing_stage        = "identified"
+            # Candidate evidence and identification state describe the verdict,
+            # so they are guarded. A finalized row keeps the evidence its
+            # reviewer actually saw; the per-candidate SpeciesCandidate rows
+            # added further down are append-only and still written, so this run
+            # is never lost — it just does not overwrite the decided state.
+            if not terminal:
+                obs.species_candidates_json = _json.dumps(candidates)
+                obs.identification_status   = "identified"
+                obs.processing_stage        = "identified"
             # Cache top candidate confidence so the review-queue confidence sort
             # (server-side) works for syncthing-pipeline imports too. Same
             # normalisation guard as the upload path (identification.py).
             _ts = top.get("score")
-            if _ts is not None:
+            if _ts is not None and not terminal:
                 obs.top_score = (_ts / 100.0) if _ts > 1.0 else _ts
 
             # ── Minimum confidence threshold ──────────────────────────────
@@ -1410,16 +1486,30 @@ async def _identify_scanned_inner(
             # reference and route straight to the review queue as unidentified.
             MIN_ID_CONF = _gs("min_identification_confidence")
             if top["score"] < MIN_ID_CONF:
-                await set_observation_species(session, obs, None)
-                obs.species_suggested        = top["scientific_name"]
-                obs.review_status            = "needs_review"
-                obs.review_label             = "low_confidence"
-                obs.identification_status    = "below_threshold"  # distinct from 'identified'
-                msg = (
-                    f"[no-match] Best candidate {top['scientific_name']!r} "
-                    f"({top['score']:.2%}) is below min threshold "
-                    f"({MIN_ID_CONF:.0%}) — sent to review as unidentified"
-                )
+                # This branch previously had NO terminal guard of any kind. On a
+                # manually_verified row it wiped species_id, cleared the species
+                # link, and reverted review_status to needs_review — undoing a
+                # curator's decision because one API returned a low-confidence
+                # guess. Demonstrated in the audit harness, not theoretical.
+                if not terminal:
+                    await set_observation_species(session, obs, None)
+                    obs.species_suggested        = top["scientific_name"]
+                    obs.review_status            = "needs_review"
+                    obs.review_label             = "low_confidence"
+                    obs.identification_status    = "below_threshold"  # distinct from 'identified'
+                    msg = (
+                        f"[no-match] Best candidate {top['scientific_name']!r} "
+                        f"({top['score']:.2%}) is below min threshold "
+                        f"({MIN_ID_CONF:.0%}) — sent to review as unidentified"
+                    )
+                else:
+                    msg = (
+                        f"[no-match] Best candidate {top['scientific_name']!r} "
+                        f"({top['score']:.2%}) is below min threshold "
+                        f"({MIN_ID_CONF:.0%}) — row left unchanged "
+                        f"(review_status={obs.review_status!r} is a finalized "
+                        f"human decision)"
+                    )
                 log.warning(
                     "[ID no-match] obs#%s: %s @ %.1f%%, threshold %.0f%% "
                     "— file seen but no species assigned (review queue)",
@@ -1434,7 +1524,12 @@ async def _identify_scanned_inner(
                 await _p2_tick(obs_id, files_processed=1, files_review=1)
                 return
 
-            await set_observation_species(session, obs, top["scientific_name"])
+            # A curator's species assignment is the single most expensive piece
+            # of human work this app stores. Overwriting it with an API's top
+            # guess on a re-identify was unguarded and unchecked against
+            # human_corrected.
+            if not terminal:
+                await set_observation_species(session, obs, top["scientific_name"])
 
             # ── Auto-approve logic ────────────────────────────────────────
             # Single-source auto-approve removed — see 9.6 fix.
@@ -1472,12 +1567,26 @@ async def _identify_scanned_inner(
                 and _inat_top_score >= UPLOAD_AUTO_APPROVE_THRESHOLD
             )
 
+            # review_label / reviewer_notes are collected into locals through the
+            # branches below and applied ONCE, under the terminal guard, after the
+            # if/else closes. Previously each branch assigned obs.review_label
+            # directly — six assignments, all of them outside the nearest guard,
+            # so a finalized row was relabelled on every re-identify. Routing the
+            # writes through locals means a new branch cannot reintroduce that bug
+            # without deliberately bypassing the single apply point.
+            _label: Optional[str] = None
+            _add_note: Optional[str] = None
+            _clear_marker = False
+
             if _dual_agree:
                 # Both APIs agree at or above threshold → auto-approve, plot on map immediately
                 # (unless this observation already has a finalized human decision).
-                if not is_terminal_review_status(obs.review_status):
+                if not terminal:
                     obs.review_status  = "approved"
-                    obs.reviewer_notes = None
+                    # Was `obs.reviewer_notes = None` — a blanket wipe that
+                    # destroyed curator prose along with the app's own badge.
+                    # Clear only the marker this function wrote.
+                    _clear_marker = True
                 flag = (
                     f"Auto-approved — both APIs agree: {top['scientific_name']} "
                     f"PN={_pn_top_score:.0%} iNat={_inat_top_score:.0%}"
@@ -1488,7 +1597,7 @@ async def _identify_scanned_inner(
                 # force_review override, phone uploads) → always review queue.
                 # Single-source auto-approve removed — see 9.6 fix.
                 # Never clobber a status a human has already finalized.
-                if not is_terminal_review_status(obs.review_status):
+                if not terminal:
                     obs.review_status = "needs_review"
 
                 if is_phone or force_review:
@@ -1498,35 +1607,47 @@ async def _identify_scanned_inner(
                             _reason = (f"APIs disagree: "
                                        f"PN={_pn_top_name!r} ({_pn_top_score:.0%}) vs "
                                        f"iNat={_inat_top_name!r} ({_inat_top_score:.0%})")
-                            obs.review_label = "low_confidence"
+                            _label = "low_confidence"
                         elif top["score"] < UPLOAD_AUTO_APPROVE_THRESHOLD:
                             _reason = f"confidence below threshold ({top['score']:.0%} < {UPLOAD_AUTO_APPROVE_THRESHOLD:.0%})"
-                            obs.review_label = "low_confidence"
+                            _label = "low_confidence"
                         elif not use_pn or not use_inat:
                             _reason = "dual API confirmation not available (check API tokens)"
-                            obs.review_label = "failed_id"
+                            _label = "failed_id"
                         else:
                             _reason = "one or both APIs returned no candidates"
-                            obs.review_label = "failed_id"
+                            _label = "failed_id"
                         flag = f"File upload — needs review ({_reason})"
-                        obs.reviewer_notes = "File upload — needs review"
+                        _add_note = _REVIEW_MARKER
                     else:
                         # Pre-filter override — review but no upload badge (fungi or force)
                         flag = f"Review queue (pre-filter override) — {top['source']} {top['score']:.2%}"
-                        obs.review_label = "non_plant" if is_fungi else "low_confidence"
+                        _label = "non_plant" if is_fungi else "low_confidence"
                 else:
                     # Syncthing: dual-agree check failed → review queue
                     if _pn_top_name and _inat_top_name and _pn_top_name != _inat_top_name:
                         _reason = (f"APIs disagree: PN={_pn_top_name!r} ({_pn_top_score:.0%}) "
                                    f"vs iNat={_inat_top_name!r} ({_inat_top_score:.0%})")
-                        obs.review_label = "low_confidence"
+                        _label = "low_confidence"
                     elif not use_pn or not use_inat:
                         _reason = "dual API confirmation not available (check API tokens)"
-                        obs.review_label = "failed_id"
+                        _label = "failed_id"
                     else:
                         _reason = f"below threshold ({top['score']:.0%} < {UPLOAD_AUTO_APPROVE_THRESHOLD:.0%})"
-                        obs.review_label = "low_confidence"
+                        _label = "low_confidence"
                     flag = f"Review queue — {_reason}"
+
+            # ── Single apply point for review_label / reviewer_notes ─────────
+            # Every label and note write in this function funnels through here,
+            # behind one guard. Notes are appended or marker-stripped, never
+            # assigned over — curator prose survives every automated path.
+            if not terminal:
+                if _label is not None:
+                    obs.review_label = _label
+                if _clear_marker:
+                    obs.reviewer_notes = _strip_review_marker(obs.reviewer_notes)
+                if _add_note:
+                    obs.reviewer_notes = _append_note(obs.reviewer_notes, _add_note)
 
             session.add(ProcessingLog(
                 observation_id=obs_id, stage="identify", status="success",

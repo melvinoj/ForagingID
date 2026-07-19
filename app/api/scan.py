@@ -52,7 +52,7 @@ from sqlalchemy.exc import IntegrityError
 
 from app.config import settings
 from app.database import AsyncSessionLocal
-from app.models.observation import Observation, is_terminal_review_status
+from app.models.observation import Observation, is_terminal_review_status, is_phone_origin
 from app.models.processing import ProcessingLog
 from app.services.background_processes import bp_start, bp_progress, bp_finish
 from app.services.file_cleanup import delete_observation_file
@@ -1211,11 +1211,21 @@ async def _identify_scanned_inner(
             # is_phone, which read as a provenance test and was twice mistaken
             # for one. What it actually decides is whether auto-approve is
             # vetoed — see the force_review line below and the _dual_agree gate.
-            # By that meaning, file_upload IS in the set and syncthing is NOT,
-            # which is the inverse of provenance. Membership below is unchanged
-            # and must stay unchanged: it produces the documented P1/P2 routing.
-            # For genuine provenance use is_phone_origin() from models/observation.
-            requires_forced_review = obs.upload_source in ("phone", "file_upload")
+            #
+            # SHAPE, deliberately: opt-IN for the one trusted origin, not
+            # opt-out for a known-bad list. Previously this was
+            # `upload_source in ("phone", "file_upload")`, which meant anything
+            # NOT on that list — the 26 legacy NULL-provenance rows, and any
+            # source added in future — silently defaulted to auto-approve
+            # eligible. Unknown provenance earning the most permissive outcome
+            # is the wrong default in a flow where edibility rides on species ID.
+            #
+            # Inverted, the only value that yields False (auto-approve eligible)
+            # is syncthing. file_upload and legacy phone stay True exactly as
+            # before, so the documented P1/P2 routing is unchanged; NULL,
+            # unknown, and any future unrecognised source now fail closed to
+            # review. A new pipeline must be explicitly trusted to auto-approve.
+            requires_forced_review = not is_phone_origin(obs)
             # Fungi observations always need human review (safety-critical)
             is_fungi = (obs.obs_category or "plant") == "fungi"
             force_review = force_review or requires_forced_review or is_fungi

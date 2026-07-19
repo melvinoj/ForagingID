@@ -21,12 +21,17 @@ def is_terminal_review_status(status: Optional[str]) -> bool:
 # The upload_source written by Pipeline 1 (Syncthing): a photo that arrived
 # straight off the phone with its capture metadata intact.
 #
-# This is PROVENANCE and nothing else. It is deliberately NOT the same set as
-# scan.py's `requires_forced_review`, which decides whether auto-approve is
-# vetoed and — correctly — contains file_upload but not syncthing, the inverse
-# of this. One badly-named variable (`is_phone`) previously served both ideas
-# and was twice read as provenance when it was a routing veto. Two concepts,
-# two names, defined apart on purpose. Do not merge them.
+# This is PROVENANCE and nothing else. One badly-named variable (`is_phone`)
+# previously served both this idea and "must be force-reviewed", and was twice
+# read as provenance when it was a routing veto. Two concepts, two names.
+#
+# scan.py's `requires_forced_review` is currently defined as the exact
+# complement of this predicate (`not is_phone_origin(obs)`) — auto-approve is
+# opt-in for the one trusted origin, everything else fails closed to review.
+# That complement is a POLICY choice, not an identity: the questions differ
+# ("where did this come from?" vs "must a human see this?"), and they would
+# diverge the moment a second origin is trusted to auto-approve, or syncthing
+# needs forced review for some category. Keep the two names.
 PHONE_ORIGIN_SOURCE = "syncthing"
 
 

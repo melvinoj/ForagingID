@@ -142,8 +142,8 @@ async def prefilter_tier_action(
     scope:  which identification_status to include
 
     Safeguards:
-    - Never touches approved / manually_verified observations
-    - Never touches phone upload observations (upload_source='phone')
+    - Never touches approved / manually_verified / rejected observations
+      (TERMINAL_REVIEW_STATUSES)
     - Returns count of affected rows; always a dry-run check first
     """
     from sqlalchemy import and_
@@ -164,10 +164,24 @@ async def prefilter_tier_action(
     }[req.scope]
 
     # Fetch candidates
+    #
+    # NOTE — a third clause, `Observation.upload_source.isnot("phone")`, was
+    # removed here as obsolete. It was written to stop bulk-acting DIRECT phone
+    # uploads back when "phone" was a live upload_source. That source is retired:
+    # zero rows carry it, so the clause excluded nothing (verified: it dropped
+    # 0 of 13,855 rows, i.e. a no-op on every possible subset).
+    #
+    # It was NOT repointed at either surviving source, deliberately:
+    #   • file_upload is this tool's actual triage target — excluding it would
+    #     break the endpoint's purpose.
+    #   • syncthing is "phone"'s GPS-bearing successor, but P1 rows are handled
+    #     by the auto-scan loop and do not reach this bulk path, so a filter
+    #     here would guard an unreachable case.
+    # The P1-veto protection lives in the auto-scan routing (scan.py's
+    # requires_forced_review / _dual_agree gate), not in this query.
     stmt = select(Observation).where(
         Observation.identification_status.in_(scope_filter),
         Observation.review_status.notin_(TERMINAL_REVIEW_STATUSES),
-        Observation.upload_source.isnot("phone"),   # never bulk-act on phone uploads
     )
     obs_list = (await db.execute(stmt)).scalars().all()
 

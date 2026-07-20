@@ -412,6 +412,10 @@ Still open:
 
 ## History
 
+### 2026-07-20 09:55
+**Snapshot** — Manual snapshot
+DB: `snapshots/db_20260720_095533.sqlite`
+
 ### 2026-07-20 06:32
 **Snapshot** — End of session — Session ended from Settings page
 DB: `snapshots/db_20260720_063250.sqlite`
@@ -686,7 +690,9 @@ DB: `snapshots/db_20260717_082013.sqlite`
 **Pending:**
 - DECISION 1: blanket hash-blacklist DROPPED. Premise was false — reject retains the observations row and file_hash, and scan.py:1783 dedupes on Observation.file_hash, so rejected rows classify as already not new. All 10,354 existing rejections are un-blacklisted and none have re-ingested in 7 weeks. Blacklist matters only for DELETE (row removed)
 - GAP (unfixed, reported): P2 — scan.py/upload.py/ingest.py — NEVER checks deleted_hashes. Only P1 syncthing.py:157 and :606 do. The DIGIERA rescan is P2, so a DELETED photo would re-ingest today. Affects the 7 DELETEs, not the rejects
+  - **CORRECTION (20 Jul 2026): CLOSED — this gap no longer exists.** The check was extracted into `app/services/ingest_guard.py::blacklisted_skip()` — one implementation, five call sites. Its docstring records the history: *"Until 17 July that guarantee was fictional on four of five ingest paths."* Guarded P2 paths, each **before** the dup check and before any row is written: `scan.py:273` (`p2_scan_image` — the browser scan/upload), `scan.py:2531` (`p2_archive_scan` — the DIGIERA rescan, named in-code as the exact event the blacklist exists to prevent), `ingestion.py:136` (`folder_scan`). There is no `upload.py`; `ingest.py` creates no rows — `_run_scan` delegates to `scan_folder` → `_ingest_one_no_commit`, inheriting the guard. P1 unchanged, now at `syncthing.py:798` + `:211` (the `:157`/`:606` line refs above are stale post-refactor). Proven 20 Jul: 4/4 paths return the skip verdict against a blacklisted hash, 4/4 pass a non-blacklisted hash (negative control), and the real `folder_scan` call site returns `(None, "blacklisted")` creating no row. Run against a throwaway DB copy; live DB sha256 unchanged.
 - GAP (unfixed, reported): deleted_hashes is irreversible — no code path removes a row. Manual DELETE FROM only
+  - **CORRECTION (20 Jul 2026): half of this still stands, half was wrong.** STILL TRUE: no code path *removes* a row — that is deliberate, not a gap (see `ingest_guard.py` PERMANENCE: blacklisting is a permanent foreclosure, so a DELETE decision must be taken as final). NOW WRONG: population is **not** manual-only. `observations.py:886-896` (`DELETE /{observation_id}`) writes the `DeletedHash` row automatically on hard delete, atomic with row removal — the insert, `db.delete(obs)` (:929) and the single `db.commit()` (:937) are one transaction. This is the **only** hard-delete path in the app (one hit for `db.delete(obs)`/`sql_delete(Observation)` app-wide); the other `delete_observation_file` call sites are reject/prefilter paths that keep the row, so the dup check covers those and they are correctly not blacklisted. Corroboration: `deleted_hashes` is now 15 rows, not the 12 recorded elsewhere in this log.
 - DECISION 2: DELETE-with-blacklist set now 7 — 13623, 13368, 20066, 20053, 20022 (pending) + 19436, 19437 (already rejected). 20053/20022 visually confirmed as UK passport photo page on no_plant_signal_sheet_14.jpg. 19436 shares 20053 exact capture second (2024-04-19 10:35:48), 19437 +5min
 - REJECT COUNT REVISED: 1,122 = 1,271 − 141 keepers − 3 never_reject − 5 pending private DELETEs. Not 1,124, not ~950
 - DECISION 3: 48 screenshots in reject set NOT reviewed — Melvins call

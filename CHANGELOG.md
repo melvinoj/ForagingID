@@ -4,24 +4,41 @@
 
 ## Current State
 
-Build status — this session:
-- P1 recovery COMPLETE: 17/17 (5 thumbnail regens + 12 originals recovered), all SHA-256 hash-verified against DB file_hash. Snapshot db_20260719_214921, commit 99ce2daf. No DB rows modified — filesystem-only.
-- Pass A COMPLETE (ran in the Seasons Code session — thread mixup, harmless; executed once, live DB byte-identical to pre-pass snapshot). Global process visibility, display-only: p1_syncthing bp row; review retry-ID retains process_id; job-status-widget on 12/12 real app pages via site-header.js (!is_guest gate, #job-status-mount); interrupted→terminal; culinary raw-UPDATE routed through bp_set_status; recover_stale_processes() added at startup. Snapshot db_20260720_095533, commit b4fd2b12.
-- deleted_hashes / P2 foreclosure: CHANGELOG:688-689 gaps were ALREADY closed by ingest_guard.py (5 call sites); proven 4/4 skip across P2+P1; CHANGELOG:688-689 corrected inline. Delete function is NOT broken — hard-delete (observations.py:886-929) removes row+file+blacklists atomically, one transaction.
-- Process-visibility audit (Parts 1-3) COMPLETE: invisible set = 7 (p2_delta, archive_scan, auto_enrich[enrich.py], p1_reprocess, folder_scan, rescan_unknown, elevation_enrich). Real-cancel-capable: enrichment_run, auto_enrich(after wiring), ai_draft, p2_delta, archive_scan. All others cosmetic (no real End).
+## Current State
 
-Pending / next — run in order from a fresh Code session, confirm each clean before the next:
-- Pass C (prompt ready): give the 7 invisible processes bp rows (additive visibility).
-- Pass D (prompt ready): floating minimizable widget shell — port scan row look, new shell, show/hide, all real app pages, display-only.
-- Pass E (prompt ready): honest End — enrich.py honor-cancel; End buttons on real-capable types only; cancel endpoint refuses non-honoring types (kills flip-back lie); delete dead itis _cancelled check.
-- Decision taken (veto-able): auto_enrich routed through bp_start + made real-End, not display-only.
+WIDGET ARC — COMPLETE (Passes C, D, E + E-fix 1–6). Global process-visibility widget: durable, floating, minimizable, honest controls. All implemented + snapshotted; live-verified except the two P1-dependent checks noted at bottom.
 
-Also open (not this widget arc):
+Shipped this session (in order):
+- P1 recovery: 17/17 (5 thumbnail regens + 12 originals), all SHA-256 hash-verified vs DB file_hash. Filesystem-only, no DB rows changed. Snapshot db_20260719_214921 / 99ce2daf.
+- Pass A (ran in Seasons Code session — thread mixup, harmless, executed once): global widget display-only, p1_syncthing bp row, retry-ID retains process_id, widget on 12 real app pages via site-header.js (!is_guest gate, #job-status-mount), interrupted→terminal, culinary raw-UPDATE→bp_set_status, recover_stale_processes() at startup. Snapshot db_20260720_095533 / b4fd2b12.
+- deleted_hashes/foreclosure: CHANGELOG:688-689 gaps were ALREADY closed by ingest_guard.py (5 call sites); proven 4/4 skip P1+P2; CHANGELOG corrected inline. Delete function is NOT broken — hard-delete (observations.py:886-929) removes row+file+blacklists atomically.
+- Pass C: 7 invisible processes given bp rows (p2_delta, archive_scan, auto_enrich[enrich.py], p1_reprocess, folder_scan, rescan_unknown, elevation_enrich). p2_delta/archive_scan carry session:<id> in detail. Snapshot db_20260720_151717 / 1f36683e.
+- Pass D: floating widget shell, scan-row look ported (17/17 CSS verbatim, scoped #job-status-widget), pinned TOP-RIGHT (bottom-right collided with taxonomy zoom controls), minimize/expand, show-when-active/auto-hide, 90s window, N-concurrent.
+- Pass E: honest End per-capability. Real-End: enrichment_run, auto_enrich, ai_draft(+_id_notes), p2_delta, archive_scan. CANCELLABLE_TYPES gate — cancel/pause endpoint REFUSES non-honoring types (409), kills the flip-back lie. Dead itis _cancelled check deleted. Snapshot db_20260720_184211 / c832d4e7.
+- E-fix 1: auto_enrich resumable — resume index sourced from persisted progress_current (not culinary's in-memory resume_from); refuses resume if species_list lost (won't enrich wrong species). p2_delta pause round-trip: reconciles within a lifetime; splits only across restart (bp interrupted vs session paused — never falsely "running"). Snapshot db_20260720_190529 / 7ab8091d.
+- E-fix 2: dismiss verb (terminal/stalled only; refuses running-fresh with 409 — proven cannot kill live work; refuses paused). Flips stale→interrupted, clears last_heartbeat. Single _STALE_WHERE predicate shared with recover_stale_processes. Snapshot db_20260720_191317 / b5a4d47d.
+- E-fix 5: is_stalled reconciled to _STALE_WHERE via shared is_stale_row() — one stale definition everywhere. (Defensive; case (c) unreachable by live code today.) Snapshot db_20260720_213251 / d4c1232d.
+- E-fix 6: (1) min-visible floor MIN_VISIBLE_MS=4000 (a floor, NOT a hide-short threshold) + FRESH_FINISH_S=5 guard so page load doesn't pop old completions; effective 4–7s. (2) bp_start silent-None now warns via _warn_unobserved() inside bp_start (never a deliberate None; covers all 16 sites) — swallow-and-continue unchanged. Snapshot db_20260720_215128 / 01c117f0.
+- Env: killed 4-day-old orphan uvicorn (PID 65515, wildcard *:8000 bind, pre-session code) that was intercepting some browser traffic and had wedged. Server restarted clean, single worker, all endpoints 200 OK — the "wedge" was the ghost, not a deadlock.
+
+Pending / next — the pivot, own fresh thread:
+- MUTEX RACE (read-only diagnostic first, HIGH priority, data-safety): E-fix-1's diagnostic caught two _process_all P1 invocations 0.5ms apart BOTH passing pipeline_try_acquire (sessions 93+94 from one Syncthing delivery). The P1/P2 concurrency lock let two P1 batches through. Not a display issue — a real lock race. Not currently causing a live hang (server healthy on single worker), so approach clean-headed, not as a fire. Diagnose why the mutex didn't serialize before any fix.
+
+Owed verification (needs real P1 files — Syncthing delivery; NOT yet tested):
+- 4s floor actually holds a fast P1 row visible (~4–7s) instead of flickering.
+- grep "runs unobserved" in uvicorn terminal stays silent (or fires correctly if a bp row is ever lost).
+- Pass C: real P1 batch → auto_enrich row appears/clears; real archive scan → archive_scan row with session:<id> rolling per year folder.
+- Pass D/E: widget mount on all pages, End/Resume/Dismiss buttons behave per-capability in browser.
+
+Deferred (named dependencies, not loose ends):
+- E-fix 3 (p2_delta pause durable across restart — row-lookup by process_type+session:<id> in detail, not the dead _p2_bp_pid dict) + paused-p2_delta clear-on-session-close: WRITTEN, NOT RUN. Was queued after E-fix 5; session ended first. Run next session with the mutex work or before.
+- E-fix 4 (widget Pause button for auto_enrich — makes E-fix-1's Resume reachable from UI; currently Resume only via hand API pause): WRITTEN, NOT RUN. Same — queued, session ended.
+- Pass B store-merge (job_queue→background_processes: additive migration [queue_position, payload, ended_at, created_at, label, error→TEXT, queued] → dual-write → repoint reads → retire). Enables uniform Rerun/Top on BP rows. Own thread.
+
+Also open (unrelated to widget):
+- 7 private DELETEs (13623, 13368, 20066, 20053, 20022 pending + 19436/19437 rejected — passports/child): Melvin to delete manually in UI. Foreclosure proven, they stay gone. deleted_hashes permanent (no removal path).
 - File-less-row DB reconciliation census — deliberately after recovery; still open.
-- Pass B store-merge (job_queue→background_processes: additive migration [queue_position, payload, ended_at, created_at, label, error→TEXT, queued] → dual-write → repoint reads → retire). Enables uniform Rerun/Top on BP-backed rows. Own thread.
-
-Known issues / owed verification:
-- Pass A live checks still owed (browser + real P1): P1 autoscan row end-to-end, P1+P2 concurrent N-render, widget mount on the 4 newly-covered pages, review.html console glance.
+- iNaturalist token EXPIRED (token_expired / HTTP 401) — obs 22162 identified on PlantNet alone, below threshold 43.6%. Refresh at inaturalist.org/users/api_token (operational, per CLAUDE.md).
 
 ## Current State — 19 July 2026
 
@@ -404,6 +421,13 @@ Still open:
 - Enrichment gap remediation — 9 AI drafts pending approval, 6 species never scanned, 79 no-PFAF species need alt-source decision
 
 ## History
+
+### 2026-07-20 22:10
+**Snapshot** — End of session — Session ended from Settings page
+DB: `snapshots/db_20260720_221009.sqlite`
+
+### 2026-07-20 22:10
+**Session ended** — Session ended from Settings page
 
 ### 2026-07-20 21:51
 **Snapshot** — Manual snapshot

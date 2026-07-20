@@ -18,10 +18,32 @@ log = logging.getLogger(__name__)
 STALL_THRESHOLD_S = 60
 
 
+def _warn_unobserved(process_type: str) -> None:
+    """
+    One recognisable line for every way bp_start can fail to produce an id.
+
+    A None from bp_start is never deliberate — the contract is "an id, or a
+    failure" — and every downstream helper (bp_progress, bp_heartbeat,
+    bp_finish, bp_set_status) early-returns on None. So a lost id silently
+    demotes a process to unobserved: it runs correctly and completely, and the
+    widget never knows it existed. That is precisely what happened to a real P1
+    batch on 20 July 2026 — two concurrent P1 invocations, one bp row, and no
+    trace of the missing one. Grep for this string when a process runs but
+    never appears.
+    """
+    log.warning(
+        "bp_start returned None for %s — process runs unobserved "
+        "(likely DB contention); no background_processes row will exist for it",
+        process_type,
+    )
+
+
 async def bp_start(process_type: str, progress_total: int = 0, detail: str = "") -> Optional[int]:
     """
     INSERT a new background_processes row and return its process_id.
-    Returns None on any failure.
+    Returns None on any failure — never as a deliberate no-op, which is why
+    every None path below warns. Still swallow-and-continue: the caller's work
+    must proceed unobserved rather than fail.
     """
     try:
         now = datetime.utcnow()
@@ -36,9 +58,19 @@ async def bp_start(process_type: str, progress_total: int = 0, detail: str = "")
                 {"pt": process_type, "now": now, "total": progress_total, "detail": detail},
             )
             await db.commit()
-            return result.lastrowid
+            pid = result.lastrowid
+            if not pid:
+                # The previously SILENT path: no exception, but no usable id
+                # either. The except below has always logged; this returned a
+                # falsy id with no trace at all.
+                _warn_unobserved(process_type)
+                return None
+            return pid
     except Exception:
+        # Keep the traceback (ERROR), and add the greppable one-liner so both
+        # failure paths surface identically.
         log.exception("background_processes: bp_start failed (type=%s)", process_type)
+        _warn_unobserved(process_type)
         return None
 
 

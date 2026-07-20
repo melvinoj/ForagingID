@@ -81,6 +81,72 @@
   //
   // Every other type gets NO button. Their endpoint refuses too (409), so a
   // stale client cannot produce a fake cancel either.
+  // ── Minimum visible duration ─────────────────────────────────────────────
+  // A finished process must stay on screen for at least this long after the
+  // widget first sees it, so a job that takes less time than one poll interval
+  // is still observable. This is a FLOOR on how long a row is shown — never a
+  // threshold that hides short jobs.
+  //
+  // How a row that finished between two polls still gets its floor:
+  // /api/processes/active returns terminal rows while their heartbeat is inside
+  // its 90 s window, so a job that started and completed entirely between two
+  // polls is still returned on the NEXT poll, already 'complete'. That first
+  // sighting starts the floor and the row lingers from there. A row that is
+  // never returned at all — created and dismissed inside one interval, or the
+  // server never wrote it (see bp_start's unobserved warning) — cannot be
+  // rendered; there is nothing to render. That case is accepted, not papered
+  // over: the backend warning is what surfaces it.
+  var MIN_VISIBLE_MS = 4000;
+
+  // key → epoch ms of the first render this row appeared in.
+  var firstSeenAt = {};
+
+  // Only a row that finished THIS recently is eligible to start a floor on its
+  // first sighting. Without this, opening a page would pop up every job that
+  // finished in the last 90 s. Uses the server-computed heartbeat age, so it
+  // does not depend on the browser clock matching the server's.
+  var FRESH_FINISH_S = 5;
+
+  function _floorKey(p) { return 'p:' + p.process_id; }
+
+  // True when a row that normal rules would drop must still be shown, because
+  // its minimum visible time has not elapsed. Records first-sighting time as a
+  // side effect. Never applies to running/paused rows — those are returned by
+  // the caller before this is consulted, so the floor can never freeze or
+  // delay a live row's updates.
+  function _holdForFloor(p) {
+    var key = _floorKey(p);
+    var now = Date.now();
+    var seen = firstSeenAt[key];
+
+    if (seen === undefined) {
+      // First time this row has ever been seen, and it is already finished.
+      // Give it a floor only if it finished moments ago; otherwise it is
+      // history and should not appear at all.
+      var age = p.heartbeat_age_s;
+      if (age === null || age === undefined || age > FRESH_FINISH_S) return false;
+      firstSeenAt[key] = now;
+      return true;
+    }
+    return (now - seen) < MIN_VISIBLE_MS;
+  }
+
+  // Called for every row that IS rendered, so a row first seen while running
+  // has its floor measured from that moment rather than from when it finished.
+  function _noteSeen(p) {
+    var key = _floorKey(p);
+    if (firstSeenAt[key] === undefined) firstSeenAt[key] = Date.now();
+  }
+
+  // Drop bookkeeping for rows whose floor has long expired, so a long-lived tab
+  // does not accumulate keys forever.
+  function _pruneFirstSeen() {
+    var now = Date.now();
+    Object.keys(firstSeenAt).forEach(function (k) {
+      if (now - firstSeenAt[k] > 10 * MIN_VISIBLE_MS) delete firstSeenAt[k];
+    });
+  }
+
   var cancellableProcessTypes = null;   // filled from the server; null = unknown
   var resumeRoutes            = null;   // {process_type: url}, likewise
   var SESSION_PAUSE_TYPES = { 'p2_delta': 1, 'archive_scan': 1 };
@@ -327,11 +393,19 @@
     // themselves. 'complete' is deliberately excluded — every finished job
     // lingering for 90 s would be noise, and excluding it is what makes the
     // widget disappear promptly when the work is done.
+    //
+    // …except that dropping 'complete' the instant it appears made short jobs
+    // unobservable. A real P1 ingest on 20 July 2026 lived 155 ms against this
+    // file's 3000 ms poll: about a 1-in-20 chance any poll saw it running, and
+    // once complete it was filtered here. The floor below fixes that WITHOUT a
+    // "hide if shorter than X" rule — that would be the opposite fix and would
+    // re-bury exactly these short bursts.
     processes.forEach(function (p) {
       var live = (p.status === 'running' || p.status === 'paused');
       var recentlyEnded = (p.status === 'failed' || p.status === 'interrupted');
-      if (!live && !recentlyEnded) return;
+      if (!live && !recentlyEnded && !_holdForFloor(p)) return;
       if (live && queueRunningTypes[p.process_type]) return;
+      _noteSeen(p);
       items.push({
         label:   PROCESS_LABELS[p.process_type] || p.process_type || 'Process',
         // A running row whose heartbeat has gone stale is shown as stalled, the
@@ -530,6 +604,7 @@
   function poll() {
     fetchBoth().then(function (results) {
       var items = mergeItems(results[0], results[1]);
+      _pruneFirstSeen();
       var json = JSON.stringify(items);
       if (json !== lastJSON) {
         lastJSON = json;

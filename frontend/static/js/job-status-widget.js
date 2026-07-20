@@ -61,6 +61,61 @@
   // minimizing during a long batch stays minimized when the next job starts.
   var collapsed = false;
 
+  // ── Which rows may offer "End" ───────────────────────────────────────────
+  // An End button appears ONLY where pressing it genuinely stops the work. A
+  // button that flips a status row while the worker carries on is the specific
+  // lie this pass removes, so capability — not convenience — decides.
+  //
+  // Three real stop routes exist, each owned by a different subsystem:
+  //   1. /api/processes/{id}/cancel  — the worker polls its own bp row.
+  //      Membership is served by /api/processes/cancellable-types, read from
+  //      the same constant the endpoint enforces, so the button and the server
+  //      cannot disagree. Never hard-code the set here.
+  //   2. /api/scan/pause/{session_id} — scan sessions; session_id is parsed out
+  //      of the bp row's detail ("session:<id> — …"), written there for exactly
+  //      this purpose.
+  //   3. /api/queue/{id}/cancel — job_queue rows whose runner checks the queue
+  //      status. Only the two AI-draft backfills are listed: the scan page's
+  //      own filter/identify/enrich jobs are driven by that page's open tab, so
+  //      cancelling them from another page would not reliably stop anything.
+  //
+  // Every other type gets NO button. Their endpoint refuses too (409), so a
+  // stale client cannot produce a fake cancel either.
+  var cancellableProcessTypes = null;   // filled from the server; null = unknown
+  var SESSION_PAUSE_TYPES = { 'p2_delta': 1, 'archive_scan': 1 };
+  var QUEUE_CANCEL_TYPES  = { 'ai_draft_backfill': 1, 'ai_draft_backfill_id_notes': 1 };
+
+  function _loadCancellableTypes() {
+    fetch('/api/processes/cancellable-types')
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (d) {
+        if (!d || !d.cancellable_types) return;
+        var m = {};
+        d.cancellable_types.forEach(function (t) { m[t] = 1; });
+        cancellableProcessTypes = m;
+      })
+      .catch(function () { /* stays null — no End offered, which fails safe */ });
+  }
+
+  // Returns {url, label} when this row has a real stop route, else null.
+  function endTarget(it) {
+    if (it.status !== 'running' && it.status !== 'paused' && it.status !== 'stalled') return null;
+    if (it.source === 'queue') {
+      return QUEUE_CANCEL_TYPES[it.type] && it.jobId
+        ? { url: '/api/queue/' + it.jobId + '/cancel' }
+        : null;
+    }
+    if (SESSION_PAUSE_TYPES[it.type]) {
+      var m = /session:(\d+)/.exec(it.detail || '');
+      return m ? { url: '/api/scan/pause/' + m[1] } : null;
+    }
+    // Server-declared set only; if the fetch has not landed yet, offer nothing.
+    if (cancellableProcessTypes && cancellableProcessTypes[it.type] && it.pid) {
+      return { url: '/api/processes/' + it.pid + '/cancel' };
+    }
+    return null;
+  }
+
   // ── Styles ───────────────────────────────────────────────────────────────
   // Every ported rule is scoped under #job-status-widget rather than declared
   // as a bare .jq-* / .status-badge rule. The declarations are verbatim from
@@ -137,6 +192,15 @@
       '#job-status-widget .jq-progress-fill.ok{background:#86efac;}',
       '#job-status-widget .jq-progress-text{font-size:0.7rem;color:#7a9e88;font-variant-numeric:tabular-nums;}',
       '#job-status-widget .jq-error{font-size:0.72rem;color:#fca5a5;}',
+      '#job-status-widget .jq-actions{display:flex;gap:5px;flex-wrap:wrap;margin-top:2px;}',
+      '#job-status-widget .jq-btn{',
+      '  font-size:0.72rem;font-weight:600;padding:2px 8px;border-radius:4px;',
+      '  cursor:pointer;font-family:inherit;border:1px solid;transition:background 0.12s;',
+      '  touch-action:manipulation;',
+      '}',
+      '#job-status-widget .jq-btn-cancel{background:transparent;color:#888;border-color:#4a5e5a;}',
+      '#job-status-widget .jq-btn-cancel:hover{background:#3a1a1a;color:#fca5a5;border-color:#7f1d1d;}',
+      '#job-status-widget .jq-btn:disabled{opacity:0.4;cursor:default;pointer-events:none;}',
       '#job-status-widget .status-badge{',
       '  display:inline-block;font-size:0.68rem;font-weight:700;',
       '  padding:2px 7px;border-radius:10px;vertical-align:middle;',
@@ -216,6 +280,9 @@
           current: j.progress_current || 0,
           total:   j.progress_total || 0,
           error:   j.error_message || '',
+          source:  'queue',
+          type:    j.job_type,
+          jobId:   j.id,
         });
         if (j.status === 'running') queueRunningTypes[j.job_type] = true;
       }
@@ -240,6 +307,12 @@
         current: p.progress_current || 0,
         total:   p.progress_total || 0,
         error:   p.error || '',
+        source:  'process',
+        type:    p.process_type,
+        pid:     p.process_id,
+        // Carried solely so endTarget() can read "session:<id>" out of it for
+        // the scan-session types; not rendered.
+        detail:  p.detail || '',
       });
     });
 
@@ -262,10 +335,10 @@
     return (v || 0).toLocaleString();
   }
 
-  // Same markup shape as scan.html's _jqRenderJob, minus .jq-actions: this pass
-  // ships no per-row controls (End is Pass E), so the actions row is omitted
-  // rather than rendered empty.
-  function renderRow(it) {
+  // Same markup shape as scan.html's _jqRenderJob. The .jq-actions row is
+  // rendered only when this row has a real stop route — no button, rather than
+  // a disabled or dishonest one, for everything else.
+  function renderRow(it, idx) {
     var prog = '';
     if (it.total > 0) {
       var pct = Math.round(it.current / it.total * 100);
@@ -276,14 +349,48 @@
              ' (' + pct + '%)</div>';
     }
     var err = it.error ? '<div class="jq-error">' + esc(it.error) + '</div>' : '';
+
+    var actions = '';
+    if (endTarget(it)) {
+      actions = '<div class="jq-actions">' +
+                  '<button type="button" class="jq-btn jq-btn-cancel" ' +
+                          'onclick="window.__jswEnd(' + idx + ', this)">End</button>' +
+                '</div>';
+    }
+
     return '<div class="jq-job">' +
              '<div class="jq-job-top">' +
                '<span class="jq-label">' + esc(it.label) + '</span>' +
                '<span class="status-badge ' + esc(it.status) + '">' + esc(it.status) + '</span>' +
              '</div>' +
-             prog + err +
+             prog + err + actions +
            '</div>';
   }
+
+  // End: fires the row's real stop route. Cooperative everywhere — the worker
+  // stops at its next safe boundary, so the row can legitimately stay 'running'
+  // for one more item. The button is disabled rather than the row being
+  // optimistically restyled, because claiming it stopped before it has is the
+  // same class of lie as a cancel that does nothing.
+  window.__jswEnd = function (idx, btn) {
+    var it = lastItems[idx];
+    if (!it) return;
+    var target = endTarget(it);
+    if (!target) return;
+    if (!window.confirm('End "' + it.label + '"? It stops at the next safe point; ' +
+                        'work already done is kept.')) return;
+    if (btn) { btn.disabled = true; btn.textContent = 'Ending…'; }
+    fetch(target.url, { method: 'POST' }).then(function (r) {
+      if (r.ok) return;
+      return r.json().catch(function () { return {}; }).then(function (d) {
+        if (btn) { btn.disabled = false; btn.textContent = 'End'; }
+        window.alert('Could not end this job: ' + (d.detail || ('HTTP ' + r.status)));
+      });
+    }).catch(function (e) {
+      if (btn) { btn.disabled = false; btn.textContent = 'End'; }
+      window.alert('Could not end this job: ' + e.message);
+    });
+  };
 
   function render(items) {
     lastItems = items;
@@ -363,5 +470,6 @@
     if (document.hidden) stopPolling(); else startPolling();
   });
 
+  _loadCancellableTypes();
   startPolling();
 })();

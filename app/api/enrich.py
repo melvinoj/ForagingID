@@ -7,6 +7,7 @@ POST /api/enrich/re-enrich-empty — re-fetch PFAF+Wikidata for confirmed specie
                                    culinary_info row exists but edible_parts is NULL
 """
 
+import logging
 from datetime import datetime
 from typing import Optional
 
@@ -19,6 +20,8 @@ from app.models.observation import Observation
 from app.models.species import EnrichmentSource, Species
 
 router = APIRouter(prefix="/api/enrich", tags=["enrich"])
+
+log = logging.getLogger(__name__)
 
 _state: dict = {
     "running":       False,
@@ -268,7 +271,7 @@ async def _run_enrichment_task(
     _state["progress"] = []
     _state["last_trigger"] = trigger
 
-    # ── Durable process row (Pass C — additive, display-only) ─────────────
+    # ── Durable process row (Pass C row; Pass E made it genuinely stoppable) ──
     # Started only after the already-running guard above has passed, so a
     # re-entrant call that early-returns creates no row. This is the post-P1
     # auto-enrich runner with its own _state; it is deliberately NOT merged
@@ -281,6 +284,31 @@ async def _run_enrichment_task(
         detail=f"Enrichment ({trigger}): starting",
     )
     _bp_ok = False
+    _bp_stopped_at = None   # set when the loop exits on a pause/cancel signal
+
+    async def _cancel_check():
+        """
+        Cooperative stop, checked by run_enrichment_batch BEFORE each species.
+        Returns 'paused'/'cancelled' when the API has flagged this row.
+
+        Cooperative by construction: the signal is only ever observed between
+        species, so the species being enriched when the user presses End always
+        finishes and commits. Nothing is killed mid-write.
+        """
+        if _bp_pid is None:
+            return None
+        try:
+            async with AsyncSessionLocal() as _db:
+                r = (await _db.execute(
+                    text("SELECT status FROM background_processes WHERE process_id = :pid"),
+                    {"pid": _bp_pid},
+                )).fetchone()
+            if r and r[0] in ("paused", "cancelled"):
+                return r[0]
+        except Exception:
+            # A failed status read must never abort a healthy run.
+            log.warning("auto_enrich: cancel check failed for process %s", _bp_pid, exc_info=True)
+        return None
 
     def _cb(current: int, total: int, name: str, status: str) -> None:
         _state["current"] = current
@@ -303,16 +331,30 @@ async def _run_enrichment_task(
                 re_enrich=re_enrich,
                 fill_empty_only=fill_empty_only,
                 progress_cb=_cb,
+                cancel_check_fn=_cancel_check,
             )
         _state["last_counters"] = counters
         _state["last_run"]      = datetime.utcnow().isoformat()
+        _bp_stopped_at = counters.get("stopped_at")
         _bp_ok = True
     finally:
         _state["running"] = False
-        await bp_finish(
-            _bp_pid,
-            "complete" if _bp_ok else "failed",
-            error="" if _bp_ok else "Enrichment run aborted before completion",
-            current=_state["current"],
-            total=_state["total"] or _state["current"],
-        )
+        if _bp_stopped_at is not None:
+            # Stopped on a pause/cancel signal. The row's terminal status was
+            # set by the API and MUST NOT be overwritten here — writing
+            # 'complete' over a user's cancel is the exact flip-back lie this
+            # pass exists to remove. Record where it stopped and leave status be.
+            await bp_progress(
+                _bp_pid, _bp_stopped_at, _state["total"] or _bp_stopped_at,
+                detail=f"Stopped by user at {_bp_stopped_at} of "
+                       f"{_state['total'] or _bp_stopped_at}",
+            )
+            log.info("auto_enrich: stopped by signal at species %s", _bp_stopped_at)
+        else:
+            await bp_finish(
+                _bp_pid,
+                "complete" if _bp_ok else "failed",
+                error="" if _bp_ok else "Enrichment run aborted before completion",
+                current=_state["current"],
+                total=_state["total"] or _state["current"],
+            )

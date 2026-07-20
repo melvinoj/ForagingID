@@ -238,10 +238,6 @@ async def _run_backfill() -> None:
             ).all()
 
         for sp_id, sp_name in rows:
-            # Honour pause/cancel signals
-            if _backfill_state.get("_cancelled"):
-                break
-
             _backfill_state["last_name"] = sp_name
             try:
                 result = await _do_itis_lookup(sp_name)
@@ -287,7 +283,6 @@ async def _run_backfill() -> None:
     finally:
         _backfill_state["running"]     = False
         _backfill_state["finished_at"] = datetime.utcnow().isoformat() + "Z"
-        _backfill_state.pop("_cancelled", None)
         log.info(
             "[ITIS backfill] done — %d/%d checked, %d errors",
             _backfill_state["done"],

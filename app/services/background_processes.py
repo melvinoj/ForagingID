@@ -139,13 +139,23 @@ async def bp_set_status(process_id: Optional[int], status: str, heartbeat: bool 
         log.exception("background_processes: bp_set_status failed (id=%s)", process_id)
 
 
-# ── The stale predicate — ONE definition ─────────────────────────────────────
+# ── The stale predicate — ONE definition, two expressions ────────────────────
 # "Stale" means: still marked running, but nothing has stamped a heartbeat
-# inside the threshold, so the process driving it is not alive. Written once
-# here and shared by recover_stale_processes() (startup sweep) and bp_dismiss()
-# (manual clear-out), because those two must agree about what counts as dead —
-# a dismiss that used a looser rule than the sweep would be a way to clear a row
-# whose worker is still running, which is exactly what dismiss must never do.
+# inside the threshold, so the process driving it is not alive.
+#
+# THREE call sites must agree about what counts as dead:
+#   recover_stale_processes()  — startup sweep          (SQL)
+#   bp_dismiss()               — manual clear-out       (SQL)
+#   _row_to_dict()['is_stalled'] — the flag the UI shows (Python)
+# A dismiss looser than the sweep would be a way to clear a row whose worker is
+# still running; a display flag looser than either shows STALLED next to a job
+# that is working fine, and invites exactly that dismiss.
+#
+# The predicate cannot literally be shared code — one side is a WHERE clause
+# evaluated by SQLite, the other runs on a row already in memory. So they are
+# kept clause-for-clause parallel below, over the same fields, against the same
+# threshold constant, and their agreement is asserted by test rather than
+# assumed. The disjuncts are numbered so the two stay aligned by eye.
 #
 # Parameterised on :thresh (a UTC datetime). Applies only to status='running';
 # callers add their own status handling for paused/terminal rows.
@@ -161,6 +171,44 @@ _STALE_WHERE = (
 def stale_threshold() -> datetime:
     """The cutoff a heartbeat must beat to count as alive."""
     return datetime.utcnow() - timedelta(seconds=STALL_THRESHOLD_S)
+
+
+def is_stale_row(
+    status: Optional[str],
+    last_heartbeat: Optional[datetime],
+    started_at: Optional[datetime],
+    threshold: Optional[datetime] = None,
+) -> bool:
+    """
+    Python expression of _STALE_WHERE, disjunct for disjunct.
+
+    Takes parsed datetimes (or None) so callers do their own column decoding.
+    threshold defaults to stale_threshold() — the SAME cutoff the SQL is given,
+    never a second constant.
+
+    Before this was unified, the display flag used its own rule and said
+    "stalled" for ANY null heartbeat, ignoring started_at entirely. That marked
+    a freshly-started row STALLED for as long as it went without its first
+    heartbeat, while the sweep — correctly — left it alone.
+
+    One deliberate difference at the edges: a column that cannot be parsed into
+    a datetime arrives here as None, where SQLite would compare the raw value.
+    That resolves to the null branches below, i.e. toward "stalled", which shows
+    a warning rather than hiding a dead row.
+    """
+    if status != "running":
+        return False
+    if threshold is None:
+        threshold = stale_threshold()
+
+    # d1: last_heartbeat IS NOT NULL AND last_heartbeat < :thresh
+    if last_heartbeat is not None:
+        return last_heartbeat < threshold
+    # d2: last_heartbeat IS NULL AND started_at IS NOT NULL AND started_at < :thresh
+    if started_at is not None:
+        return started_at < threshold
+    # d3: last_heartbeat IS NULL AND started_at IS NULL
+    return True
 
 
 async def recover_stale_processes() -> None:
@@ -330,10 +378,9 @@ def _row_to_dict(row) -> dict:
     now = datetime.utcnow()
     heartbeat = _dt_parse(row[5])
     status = row[2]
-    is_stalled = (
-        status == "running"
-        and (heartbeat is None or (now - heartbeat).total_seconds() > STALL_THRESHOLD_S)
-    )
+    # Shared predicate — same rule, same threshold as the startup sweep and
+    # bp_dismiss. started_at (row[3]) participates; it used to be ignored here.
+    is_stalled = is_stale_row(status, heartbeat, _dt_parse(row[3]))
     return {
         "process_id":       row[0],
         "process_type":     row[1],

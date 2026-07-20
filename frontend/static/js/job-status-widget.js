@@ -82,6 +82,7 @@
   // Every other type gets NO button. Their endpoint refuses too (409), so a
   // stale client cannot produce a fake cancel either.
   var cancellableProcessTypes = null;   // filled from the server; null = unknown
+  var resumeRoutes            = null;   // {process_type: url}, likewise
   var SESSION_PAUSE_TYPES = { 'p2_delta': 1, 'archive_scan': 1 };
   var QUEUE_CANCEL_TYPES  = { 'ai_draft_backfill': 1, 'ai_draft_backfill_id_notes': 1 };
 
@@ -89,12 +90,25 @@
     fetch('/api/processes/cancellable-types')
       .then(function (r) { return r.ok ? r.json() : null; })
       .then(function (d) {
-        if (!d || !d.cancellable_types) return;
-        var m = {};
-        d.cancellable_types.forEach(function (t) { m[t] = 1; });
-        cancellableProcessTypes = m;
+        if (!d) return;
+        if (d.cancellable_types) {
+          var m = {};
+          d.cancellable_types.forEach(function (t) { m[t] = 1; });
+          cancellableProcessTypes = m;
+        }
+        // Resume is offered ONLY for types the server publishes a route for.
+        // Not hard-coded here, for the same reason End is not: the server owns
+        // which controls are real.
+        if (d.resume_routes) resumeRoutes = d.resume_routes;
       })
-      .catch(function () { /* stays null — no End offered, which fails safe */ });
+      .catch(function () { /* stays null — no controls offered, which fails safe */ });
+  }
+
+  // Returns {url} when this PAUSED row can genuinely be resumed, else null.
+  function resumeTarget(it) {
+    if (it.status !== 'paused' || it.source !== 'process') return null;
+    if (!resumeRoutes || !resumeRoutes[it.type]) return null;
+    return { url: resumeRoutes[it.type] };
   }
 
   // Returns {url, label} when this row has a real stop route, else null.
@@ -198,6 +212,8 @@
       '  cursor:pointer;font-family:inherit;border:1px solid;transition:background 0.12s;',
       '  touch-action:manipulation;',
       '}',
+      '#job-status-widget .jq-btn-resume{background:#1a3a08;color:#86efac;border-color:#2d5016;}',
+      '#job-status-widget .jq-btn-resume:hover{background:#2d5016;}',
       '#job-status-widget .jq-btn-cancel{background:transparent;color:#888;border-color:#4a5e5a;}',
       '#job-status-widget .jq-btn-cancel:hover{background:#3a1a1a;color:#fca5a5;border-color:#7f1d1d;}',
       '#job-status-widget .jq-btn:disabled{opacity:0.4;cursor:default;pointer-events:none;}',
@@ -350,13 +366,17 @@
     }
     var err = it.error ? '<div class="jq-error">' + esc(it.error) + '</div>' : '';
 
-    var actions = '';
-    if (endTarget(it)) {
-      actions = '<div class="jq-actions">' +
-                  '<button type="button" class="jq-btn jq-btn-cancel" ' +
-                          'onclick="window.__jswEnd(' + idx + ', this)">End</button>' +
-                '</div>';
+    // Resume sits before End, the order scan.html uses for a paused job.
+    var buttons = '';
+    if (resumeTarget(it)) {
+      buttons += '<button type="button" class="jq-btn jq-btn-resume" ' +
+                         'onclick="window.__jswResume(' + idx + ', this)">▶ Resume</button>';
     }
+    if (endTarget(it)) {
+      buttons += '<button type="button" class="jq-btn jq-btn-cancel" ' +
+                         'onclick="window.__jswEnd(' + idx + ', this)">End</button>';
+    }
+    var actions = buttons ? '<div class="jq-actions">' + buttons + '</div>' : '';
 
     return '<div class="jq-job">' +
              '<div class="jq-job-top">' +
@@ -372,6 +392,26 @@
   // for one more item. The button is disabled rather than the row being
   // optimistically restyled, because claiming it stopped before it has is the
   // same class of lie as a cancel that does nothing.
+  // Resume: restarts a paused run from its stop index. No confirm — unlike End,
+  // it is not destructive and is trivially undone by pausing again.
+  window.__jswResume = function (idx, btn) {
+    var it = lastItems[idx];
+    if (!it) return;
+    var target = resumeTarget(it);
+    if (!target) return;
+    if (btn) { btn.disabled = true; btn.textContent = 'Resuming…'; }
+    fetch(target.url, { method: 'POST' }).then(function (r) {
+      if (r.ok) return;
+      return r.json().catch(function () { return {}; }).then(function (d) {
+        if (btn) { btn.disabled = false; btn.textContent = '▶ Resume'; }
+        window.alert('Could not resume: ' + (d.detail || ('HTTP ' + r.status)));
+      });
+    }).catch(function (e) {
+      if (btn) { btn.disabled = false; btn.textContent = '▶ Resume'; }
+      window.alert('Could not resume: ' + e.message);
+    });
+  };
+
   window.__jswEnd = function (idx, btn) {
     var it = lastItems[idx];
     if (!it) return;

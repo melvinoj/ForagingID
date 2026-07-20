@@ -41,6 +41,20 @@ _RECENT_WINDOW_S = 90
 # have no cooperative stop at all and must not offer one.
 CANCELLABLE_TYPES = {"enrichment_run", "auto_enrich"}
 
+# ── Which process types can be RESUMED from a paused row, and where ─────────
+# Same principle as CANCELLABLE_TYPES: listed only if a route genuinely restarts
+# the run from its stop index rather than from zero.
+#
+# 'enrichment_run' is deliberately absent even though it does support resume.
+# Its resume is folded into POST /api/enrichment/run — the same route that
+# STARTS a run — which falls back to a fresh run from 0 when it finds no paused
+# job in memory. That is fine behind review.html's own button, which is driven
+# by that page's job state, but a generic Resume button firing it could silently
+# launch a whole new enrichment. Its affordance stays where it is.
+RESUME_ROUTES = {
+    "auto_enrich": "/api/enrich/resume",
+}
+
 
 async def _load_row(process_id: int):
     """Fetch (status, process_type) for a process row, or 404."""
@@ -134,8 +148,12 @@ async def cancel_process(process_id: int):
 @router.get("/cancellable-types")
 async def list_cancellable_types():
     """
-    The set the UI must gate its End buttons on, served from the same constant
-    the endpoints enforce. One source of truth: a client cannot drift into
-    offering End for a type the server will refuse.
+    The capability map the UI must gate its per-row controls on, served from the
+    same constants the endpoints enforce. One source of truth: a client cannot
+    drift into offering End for a type the server will refuse, or Resume for a
+    type with no resume route.
     """
-    return {"cancellable_types": sorted(CANCELLABLE_TYPES)}
+    return {
+        "cancellable_types": sorted(CANCELLABLE_TYPES),
+        "resume_routes":     dict(RESUME_ROUTES),
+    }

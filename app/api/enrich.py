@@ -11,7 +11,7 @@ import logging
 from datetime import datetime
 from typing import Optional
 
-from fastapi import APIRouter, BackgroundTasks
+from fastapi import APIRouter, BackgroundTasks, HTTPException
 from sqlalchemy import func, select, text
 
 from app.database import AsyncSessionLocal
@@ -31,6 +31,19 @@ _state: dict = {
     "last_run":      None,  # ISO datetime of last completed run
     "last_counters": None,  # {total, enriched, partial, not_found, skipped, failed}
     "last_trigger":  None,  # "manual" | "auto" | "re-enrich-empty"
+    # Resume context for a PAUSED run, mirroring the shape culinary.py keeps in
+    # _enrichment_jobs[job_id]. Set only when the loop exited on a 'paused'
+    # signal; cleared on cancel (terminal) and on a completed run.
+    #
+    # The stop INDEX is not the important part of this dict — that is persisted
+    # on the bp row itself as progress_current, and the resume route prefers the
+    # row. What is only available here is the run's ARGUMENTS, above all
+    # species_list: an auto_enrich run enriches one P1 batch's new species, and
+    # start_from is an index into exactly that list. Resuming with a different
+    # list would silently enrich the wrong species. So if this context is lost
+    # (server restart), resume refuses rather than guessing — see /resume.
+    "resume":        None,  # {process_id, index, species_list, re_enrich,
+                            #  fill_empty_only, trigger}
 }
 
 _MAX_LOG = 300
@@ -211,6 +224,79 @@ async def enrich_run(background_tasks: BackgroundTasks):
     return {"status": "started"}
 
 
+@router.post("/resume")
+async def enrich_resume(background_tasks: BackgroundTasks):
+    """
+    Resume a PAUSED auto_enrich run from where it stopped — not a fresh run.
+
+    Mirrors how culinary.py resumes enrichment_run (find the paused row, put it
+    back to 'running', hand run_enrichment_batch a start_from), with one
+    deliberate difference: the resume INDEX is taken from the paused row's
+    progress_current, which the runner persists on every stop, rather than from
+    an in-memory counter. That survives anything that does not lose the row.
+
+    What memory still holds is the run's arguments — above all species_list, the
+    list start_from indexes into. Without it a resume would enrich a different
+    set of species from position N, so a lost context is refused (409), never
+    guessed at.
+
+    Cancelled runs are terminal by design and are not resumable: this route only
+    accepts a row whose status is 'paused'.
+    """
+    from app.services.background_processes import bp_active_row
+
+    if _state["running"]:
+        raise HTTPException(status_code=409, detail="An enrichment run is already in progress.")
+
+    ctx = _state.get("resume")
+    if not ctx:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "Nothing to resume: no paused auto-enrichment run is on record. "
+                "A cancelled run is terminal, and resume context does not survive "
+                "a server restart — start a new run instead."
+            ),
+        )
+
+    row = await bp_active_row("auto_enrich")
+    if not row or row["status"] != "paused":
+        _state["resume"] = None
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "Nothing to resume: the auto-enrichment row is "
+                f"{row['status'] if row else 'gone'}, not paused."
+            ),
+        )
+    if row["process_id"] != ctx["process_id"]:
+        _state["resume"] = None
+        raise HTTPException(
+            status_code=409,
+            detail="Resume context does not match the paused process row; start a new run.",
+        )
+
+    # Row is authoritative for the index; the remembered one is the fallback.
+    start_from = row["progress_current"] or ctx["index"] or 0
+
+    _state["resume"] = None
+    background_tasks.add_task(
+        _run_enrichment_task,
+        ctx["species_list"],
+        ctx["trigger"],
+        ctx["re_enrich"],
+        ctx["fill_empty_only"],
+        start_from,
+        row["process_id"],
+    )
+    return {
+        "status":      "resumed",
+        "process_id":  row["process_id"],
+        "start_from":  start_from,
+        "total":       row["progress_total"],
+    }
+
+
 @router.post("/re-enrich-empty")
 async def re_enrich_empty(background_tasks: BackgroundTasks):
     """
@@ -257,10 +343,17 @@ async def _run_enrichment_task(
     trigger: str = "manual",
     re_enrich: bool = False,
     fill_empty_only: bool = False,
+    start_from: int = 0,
+    process_id: Optional[int] = None,
 ) -> None:
     """
     Shared enrichment runner used by both the UI button and the Syncthing
     auto-enrich path.  species_list=None means full batch.
+
+    start_from / process_id are the resume path (POST /api/enrich/resume):
+    start_from skips the first N species via run_enrichment_batch's existing
+    slice, and process_id re-uses the paused row instead of opening a new one,
+    so one logical run stays one row. Both default to a fresh run from 0.
     """
     if _state["running"]:
         return
@@ -277,12 +370,26 @@ async def _run_enrichment_task(
     # auto-enrich runner with its own _state; it is deliberately NOT merged
     # with culinary.py's 'enrichment_run' — different runner, different type.
     import asyncio as _asyncio
-    from app.services.background_processes import bp_start, bp_progress, bp_finish
-    _bp_pid = await bp_start(
-        "auto_enrich",
-        progress_total=len(species_list) if species_list else 0,
-        detail=f"Enrichment ({trigger}): starting",
+    from app.services.background_processes import (
+        bp_start, bp_progress, bp_finish, bp_set_status,
     )
+    if process_id is not None:
+        # Resume: re-use the paused row. heartbeat=True so the row is not judged
+        # stalled the instant it returns to 'running' — same reason and same
+        # helper call culinary.py uses when it resumes enrichment_run.
+        _bp_pid = process_id
+        await bp_set_status(_bp_pid, "running", heartbeat=True)
+        await bp_progress(
+            _bp_pid, start_from,
+            len(species_list) if species_list else 0,
+            detail=f"Enrichment ({trigger}): resuming from item {start_from}",
+        )
+    else:
+        _bp_pid = await bp_start(
+            "auto_enrich",
+            progress_total=len(species_list) if species_list else 0,
+            detail=f"Enrichment ({trigger}): starting",
+        )
     _bp_ok = False
     _bp_stopped_at = None   # set when the loop exits on a pause/cancel signal
 
@@ -332,6 +439,7 @@ async def _run_enrichment_task(
                 fill_empty_only=fill_empty_only,
                 progress_cb=_cb,
                 cancel_check_fn=_cancel_check,
+                start_from=start_from,
             )
         _state["last_counters"] = counters
         _state["last_run"]      = datetime.utcnow().isoformat()
@@ -340,17 +448,50 @@ async def _run_enrichment_task(
     finally:
         _state["running"] = False
         if _bp_stopped_at is not None:
-            # Stopped on a pause/cancel signal. The row's terminal status was
-            # set by the API and MUST NOT be overwritten here — writing
-            # 'complete' over a user's cancel is the exact flip-back lie this
-            # pass exists to remove. Record where it stopped and leave status be.
+            # Stopped on a pause/cancel signal. The row's status was set by the
+            # API and MUST NOT be overwritten here — writing 'complete' over a
+            # user's cancel is the exact flip-back lie Pass E removed. Record
+            # where it stopped (progress_current IS the resume index) and leave
+            # status alone.
+            _total_now = _state["total"] or _bp_stopped_at
             await bp_progress(
-                _bp_pid, _bp_stopped_at, _state["total"] or _bp_stopped_at,
-                detail=f"Stopped by user at {_bp_stopped_at} of "
-                       f"{_state['total'] or _bp_stopped_at}",
+                _bp_pid, _bp_stopped_at, _total_now,
+                detail=f"Stopped by user at {_bp_stopped_at} of {_total_now}",
             )
-            log.info("auto_enrich: stopped by signal at species %s", _bp_stopped_at)
+
+            # paused → resumable; cancelled → terminal. Which one it was is
+            # recorded on the row by the API, so read it back rather than
+            # assuming: the two differ only in whether resume is offered.
+            _signal = None
+            try:
+                async with AsyncSessionLocal() as _db:
+                    _r = (await _db.execute(
+                        text("SELECT status FROM background_processes WHERE process_id = :pid"),
+                        {"pid": _bp_pid},
+                    )).fetchone()
+                _signal = _r[0] if _r else None
+            except Exception:
+                log.warning("auto_enrich: could not read stop signal for %s", _bp_pid,
+                            exc_info=True)
+
+            if _signal == "paused":
+                _state["resume"] = {
+                    "process_id":      _bp_pid,
+                    "index":           _bp_stopped_at,
+                    "species_list":    species_list,
+                    "re_enrich":       re_enrich,
+                    "fill_empty_only": fill_empty_only,
+                    "trigger":         trigger,
+                }
+            else:
+                # cancelled (or unreadable) — terminal, no resume offered.
+                _state["resume"] = None
+            log.info("auto_enrich: stopped by '%s' signal at species %s",
+                     _signal, _bp_stopped_at)
         else:
+            # Ran to the end (or died): the run is over either way, so any
+            # resume context from an earlier pause of this run is now stale.
+            _state["resume"] = None
             await bp_finish(
                 _bp_pid,
                 "complete" if _bp_ok else "failed",

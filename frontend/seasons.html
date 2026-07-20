@@ -56,15 +56,30 @@
     background:linear-gradient(to top, rgba(14,26,14,.4), transparent); }
 
   /* ── Species thumbnail ──────────────────────────────────── */
+  /* Wrapper: owns POSITION only. Its transform (centring + drift + parallax)
+     is written exclusively by the rAF drift loop (_driftTick) — no CSS
+     transition here, or it would fight the per-frame writes. */
   .sp-dot { position:absolute; transform:translate(-50%,-50%);
-            width:48px; height:48px;
-            transition:opacity 0.15s ease, transform 0.15s ease, filter 0.15s ease;
-            will-change:transform, opacity, filter;
-            cursor:pointer; }
+            will-change:transform; cursor:pointer; }
+  /* Focus layer: owns the SCALE + BLUR + OPACITY channels. Its sole writer is
+     _applyDotVisual(). ONE transition covers scrub + hover-pull, so those two
+     interactions can never own competing transitions on this shared element
+     (the recurring shared-element-transition bug this project has hit). */
+  .sp-fx  { width:48px; height:48px; position:relative; transform-origin:50% 50%;
+            transition:transform 0.18s ease, filter 0.18s ease, opacity 0.18s ease;
+            will-change:transform, filter, opacity; }
   .sp-dot img { width:48px; height:48px; border-radius:50%; object-fit:cover;
                 border:2px solid #2a4a2a; display:block;
                 transition:border-color 0.2s, box-shadow 0.2s; }
   .sp-dot img.sp-main-thumb { width:100%; height:100%; }
+
+  /* Toxic-only halo — a faint muted-red outline just outside the phenology
+     ring. The species CARD is the safety surface; on this scatter the halo is
+     a soft hint, not a warning. It rides the .sp-fx layer, so it scales, blurs
+     and fades with the dot like everything else. Toxic/deadly ONLY — caution
+     and inedible are unmarked here. */
+  .sp-fx.toxic { border-radius:50%;
+                 box-shadow:0 0 0 2px rgba(200,60,50,0.45), 0 0 5px 1px rgba(200,60,50,0.30); }
 
   /* Phenology ring colours */
   .sp-dot[data-ring="leaf"]   img { border-color:#4a9e4a; }
@@ -97,10 +112,16 @@
   .sp-dot .hover-card .hc-name { font-size:0.62rem; color:#c8ddb0; text-align:center;
                                   white-space:nowrap; max-width:120px; overflow:hidden;
                                   text-overflow:ellipsis; }
-  @media (hover:hover) {
-    .sp-dot.hovered .hover-card, .sp-dot:focus-within .hover-card { display:flex; }
-    .sp-dot.hovered img.sp-main-thumb, .sp-dot:focus-within img.sp-main-thumb { opacity:0; }
-    .sp-dot.hovered .sp-name, .sp-dot:focus-within .sp-name { opacity:0; }
+  /* Hover / tap "focus pull" racks a node forward (scale + sharpen) via JS
+     (_applyDotVisual with dot._pulled) rather than swapping in the popup card,
+     so the thumbnail itself stays visible while enlarged. */
+
+  /* Temporal aperture is a gesture (vertical two-finger scroll), no on-screen
+     control — the dolly slider was retired. */
+
+  /* Reduced motion: drift off (handled in JS), focus changes become instant. */
+  @media (prefers-reduced-motion: reduce) {
+    .sp-fx { transition:none; }
   }
 
   /* ── My Season list ────────────────────────────────────── */
@@ -216,6 +237,11 @@
                    padding:4px 6px; border-radius:4px; user-select:none;
                    background:none; border:none; white-space:nowrap; }
   .legend-toggle:hover, .legend-toggle.active { color:#c8ddb0; background:#1e3e1e; }
+  .play-toggle { color:#8ab87a; font-size:0.72rem; cursor:pointer; line-height:1;
+                 padding:4px 8px; border-radius:4px; user-select:none;
+                 background:none; border:none; white-space:nowrap; }
+  .play-toggle:hover { color:#c8ddb0; background:#1e3e1e; }
+  .play-toggle.playing { color:#6adf6a; }
   .pheno-legend { position:fixed; right:8px; z-index:91;
                   background:rgba(14,26,14,.95); backdrop-filter:blur(6px);
                   border:1px solid #1e3e1e; border-radius:8px 8px 0 0;
@@ -292,7 +318,36 @@
   var _lastFetchDay = -1;
   var _lastPhenoDay = -1;
   var _highlightedSid = null;
-  var _hoveredSid = null;
+
+  // ── Temporal-focus + aperture state ───────────────────────────
+  var TWO_PI = Math.PI * 2;
+  var _pulledDot = null;        // the single touch-pulled node, if any
+  var _driftRAF = null;
+  var _isTouch = window.matchMedia && window.matchMedia('(hover: none)').matches;
+  var _reducedMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  var DRIFT_R = 12;             // px wander radius (within the ~20px brief)
+
+  // Temporal focus (primary channel) — restored pre-rework coefficients.
+  var FOCUS_WINDOW = 30;        // days; peak within this window ⇒ sharpening
+
+  // Temporal APERTURE (vertical-gesture view control). 0 = normal temporal
+  // falloff (in-season sharp, rest receded); 1 = whole field sharp/full. It
+  // scales normDt by (1 − _aperture). Not persisted; eases back to 0 on release.
+  var _aperture = 0;
+  var _apertureReturnRAF = null;
+  var _apertureIdleTimer = null;
+  var APERTURE_WHEEL_GAIN = 0.004;  // aperture change per px of vertical delta
+  var APERTURE_DIR = 1;             // swipe-up opens (macOS natural scroll: deltaY>0). Flip to -1 to reverse.
+  var APERTURE_RETURN_MS = 1500;    // breathe-back duration
+  var APERTURE_STICKY = false;      // ← set true to make the aperture hold instead of auto-returning
+
+  // Play mode
+  var _playing = false;
+  var _playRAF = null;
+  var _playInterval = null;
+  var _playLast = 0;
+  var _playBtn = null;
+  var PLAY_CYCLE_MS = 45000;    // full year traversal ~45 s
 
   // Zoom state
   var _zoomActive = false;
@@ -365,7 +420,25 @@
     _placeSpecies();
     _renderMySeasonList();
 
+    // Focus visuals are applied by the synchronous _onScrollFrame() at the end
+    // of init (no _applyAllFocus here — that would briefly show out-of-season
+    // dots before visibility is known). Aperture starts at 0 (normal falloff).
+    if (!_reducedMotion) _driftRAF = requestAnimationFrame(_driftTick);
+    // Tap on empty canvas releases a touch-pulled node.
+    document.addEventListener('pointerdown', function (e) {
+      if (_isTouch && _pulledDot && !(e.target.closest && e.target.closest('.sp-dot'))) {
+        _releasePulled();
+      }
+    }, true);
+
     _scrollEl.addEventListener('scroll', _onScroll, { passive: true });
+
+    // Wheel/trackpad: vertical → temporal aperture, horizontal → year scroll
+    // (which pauses play). Non-passive so the vertical branch can preventDefault
+    // the page rubber-band. Programmatic play-scroll fires no wheel, so it never
+    // pauses itself. Touch year-scroll (horizontal) still pauses play.
+    _scrollEl.addEventListener('wheel', _onCanvasWheel, { passive: false });
+    _scrollEl.addEventListener('touchstart', _pausePlay, { passive: true });
 
     var _scrollAttempts = 0;
     function _tryScrollToToday() {
@@ -569,6 +642,220 @@
       }
     };
     bar.appendChild(legBtn);
+
+    // Play / pause — left-most control, adjacent to the month labels.
+    var playBtn = document.createElement('button');
+    playBtn.className = 'play-toggle';
+    playBtn.id = 'play-btn';
+    playBtn.textContent = '▶';
+    playBtn.title = 'Play through the year';
+    playBtn.onclick = _togglePlay;
+    bar.insertBefore(playBtn, bar.firstChild);
+    _playBtn = playBtn;
+  }
+
+  // ── Depth / focus plane ───────────────────────────────────────
+  // Deterministic [0,1) hash from an integer id + salt (mulberry-style).
+  function _hashUnit(id, salt) {
+    var h = (id ^ salt) >>> 0;
+    h = Math.imul(h ^ (h >>> 16), 2246822507) >>> 0;
+    h = Math.imul(h ^ (h >>> 13), 3266489909) >>> 0;
+    h = (h ^ (h >>> 16)) >>> 0;
+    return h / 4294967296;
+  }
+
+  // Assign stable per-species drift parameters (seeded from the id). No depth
+  // axis any more — the dolly was retired; only drift uses these.
+  function _seedDot(dot, sid) {
+    dot._phaseX = _hashUnit(sid, 104729) * TWO_PI;
+    dot._phaseY = _hashUnit(sid, 1299709) * TWO_PI;
+    var periodX = 60 + _hashUnit(sid, 15485863) * 60;  // 60–120 s
+    var periodY = 60 + _hashUnit(sid, 32452843) * 60;
+    dot._freqX = TWO_PI / periodX;
+    dot._freqY = TWO_PI / periodY;
+    dot._driftX = 0; dot._driftY = 0;
+    dot._pulled = false;
+    dot._hidden = false;
+  }
+
+  // Compose the wrapper transform: centring + drift. SOLE writer of .sp-dot's
+  // transform (rAF-owned) so drift can never collide with a CSS transition.
+  function _writeWrapper(dot) {
+    dot.style.transform = 'translate(-50%,-50%) translate(' + dot._driftX.toFixed(2) + 'px,' + dot._driftY.toFixed(2) + 'px)';
+  }
+
+  // SOLE writer of the .sp-fx (scale/blur/opacity) channels. Both scrub and
+  // hover-pull route through here, so they share one transition and cannot
+  // cancel each other. The toxic halo is pure CSS (.sp-fx.toxic box-shadow),
+  // so it rides the same layer — scaling, blurring and fading with the dot.
+  function _applyDotVisual(dot) {
+    var fx = dot.querySelector('.sp-fx');
+    if (dot._hidden) {
+      if (fx) fx.style.opacity = '0';
+      dot.style.pointerEvents = 'none';
+      return;
+    }
+    dot.style.pointerEvents = '';
+    var s, b, o;
+    if (dot._pulled) {
+      s = 1.3; b = 0; o = 1;                        // hover/tap pull overrides all
+    } else {
+      // ── Temporal focus: peak_doy vs viewport-centre day ──
+      // Drives blur/scale/opacity. In-season ⇒ sharp/full; far ⇒ receded.
+      var dd = Math.abs(dot._peakDoy - _currentDay);
+      var dayDist = Math.min(dd, DAYS_IN_YEAR - dd);
+      var normDt = Math.min(dayDist / FOCUS_WINDOW, 1.0);
+      // In-season boost: species with active phenology at the centre day pop
+      // forward — EXCEPT toxic/inedible, which stay receded (unchanged rule).
+      if (_phenoRingColour(dot, _currentDay) !== 'none') {
+        var edib = (dot.dataset.edibility || '').toLowerCase();
+        if (edib !== 'toxic' && edib !== 'inedible' && edib !== 'not_edible') {
+          normDt = Math.min(normDt, 0.15);
+        }
+      }
+      // ── Temporal aperture: flatten the falloff. 0 = full falloff (now),
+      // 1 = every dot sharp/full. Applied AFTER the boost, so the toxic/
+      // inedible exclusion holds at aperture 0 and washes out as it opens.
+      normDt = normDt * (1 - _aperture);
+
+      s = 1 - normDt * 0.4;      // 1.0 → 0.6
+      b = normDt * 3;            // 0 → 3px  (the only blur)
+      o = 1 - normDt * 0.5;      // 1.0 → 0.5
+    }
+    if (fx) {
+      fx.style.transform = 'scale(' + s.toFixed(3) + ')';
+      fx.style.filter = b > 0.15 ? 'blur(' + b.toFixed(2) + 'px)' : 'none';
+      fx.style.opacity = String(Math.max(0, Math.min(1, o)));
+    }
+  }
+
+  function _applyAllFocus() {
+    for (var sid in _dots) _applyDotVisual(_dots[sid]);
+  }
+
+  // Touch: rack exactly one node forward, releasing any previously pulled node.
+  function _pullOnly(dot) {
+    if (_pulledDot && _pulledDot !== dot) {
+      _pulledDot._pulled = false;
+      _pulledDot.style.zIndex = '';
+      _applyDotVisual(_pulledDot);
+    }
+    _pulledDot = dot;
+    dot._pulled = true;
+    dot.style.zIndex = '30';
+    _applyDotVisual(dot);
+  }
+
+  function _releasePulled() {
+    if (!_pulledDot) return;
+    _pulledDot._pulled = false;
+    _pulledDot.style.zIndex = '';
+    _applyDotVisual(_pulledDot);
+    _pulledDot = null;
+  }
+
+  // Anchored drift + eased parallax. ONE rAF loop, never a D3/CSS transition,
+  // so it cannot collide with the scrub/focus transition on .sp-fx.
+  function _driftTick(ts) {
+    var t = ts / 1000;
+    for (var sid in _dots) {
+      var dot = _dots[sid];
+      if (dot._hidden) continue;   // off-season: invisible, skip transform writes
+      dot._driftX = DRIFT_R * Math.sin(t * dot._freqX + dot._phaseX);
+      dot._driftY = DRIFT_R * Math.sin(t * dot._freqY + dot._phaseY + 1.7);
+      _writeWrapper(dot);
+    }
+    _driftRAF = requestAnimationFrame(_driftTick);
+  }
+
+  // ── Temporal aperture gesture ─────────────────────────────────
+  // Vertical wheel/trackpad delta over the canvas opens/closes the aperture.
+  // Horizontal delta is left to native year-scroll (dominant-axis split).
+  // NOTE: this is a VIEW control — it does NOT pause play. Opening the aperture
+  // while playing is fine; only horizontal (manual scroll) pauses play.
+  function _onCanvasWheel(e) {
+    if (Math.abs(e.deltaX) > Math.abs(e.deltaY)) {
+      // Horizontal → year scroll (native). Treat as manual scroll: pause play.
+      _pausePlay();
+      return;                       // let the band scroll natively
+    }
+    // Vertical → aperture. Prevent the page rubber-band.
+    e.preventDefault();
+    _aperture = Math.max(0, Math.min(1, _aperture + (e.deltaY * APERTURE_DIR) * APERTURE_WHEEL_GAIN));
+    _applyAllFocus();
+    _scheduleApertureReturn();
+  }
+
+  // On release (no wheel for ~140 ms) the aperture breathes back to 0 over
+  // APERTURE_RETURN_MS via rAF — unless APERTURE_STICKY holds it open.
+  function _scheduleApertureReturn() {
+    if (APERTURE_STICKY) return;
+    if (_apertureReturnRAF) { cancelAnimationFrame(_apertureReturnRAF); _apertureReturnRAF = null; }
+    clearTimeout(_apertureIdleTimer);
+    _apertureIdleTimer = setTimeout(_startApertureReturn, 140);
+  }
+
+  function _startApertureReturn() {
+    var from = _aperture;
+    if (from <= 0.001) { _aperture = 0; _applyAllFocus(); return; }
+    if (_reducedMotion) { _aperture = 0; _applyAllFocus(); return; }  // no easing under reduced motion
+    var start = null;
+    function tick(ts) {
+      if (start === null) start = ts;
+      var t = (ts - start) / APERTURE_RETURN_MS;
+      if (t >= 1) { _aperture = 0; _applyAllFocus(); _apertureReturnRAF = null; return; }
+      var k = 1 - Math.pow(1 - t, 3);          // ease-out cubic
+      _aperture = from * (1 - k);
+      _applyAllFocus();
+      _apertureReturnRAF = requestAnimationFrame(tick);
+    }
+    _apertureReturnRAF = requestAnimationFrame(tick);
+  }
+
+  // ── Play mode ─────────────────────────────────────────────────
+  // Auto-advances the timeline scroll through the year; temporal focus does
+  // the rest (species sharpen as their peak nears the centre, recede after).
+  function _togglePlay() { _playing ? _pausePlay() : _startPlay(); }
+
+  function _startPlay() {
+    if (_playing) return;
+    _playing = true;
+    if (_playBtn) { _playBtn.textContent = '❚❚'; _playBtn.classList.add('playing'); _playBtn.title = 'Pause'; }
+    if (_reducedMotion) {
+      // Discrete: step month-by-month, no smooth motion.
+      _playStep();
+      _playInterval = setInterval(_playStep, 2000);
+    } else {
+      _playLast = 0;
+      _playRAF = requestAnimationFrame(_playTick);
+    }
+  }
+
+  function _pausePlay() {
+    if (!_playing) return;
+    _playing = false;
+    if (_playBtn) { _playBtn.textContent = '▶'; _playBtn.classList.remove('playing'); _playBtn.title = 'Play through the year'; }
+    if (_playRAF) { cancelAnimationFrame(_playRAF); _playRAF = null; }
+    if (_playInterval) { clearInterval(_playInterval); _playInterval = null; }
+    _playLast = 0;
+  }
+
+  function _playTick(ts) {
+    if (!_playing) return;
+    if (!_playLast) _playLast = ts;
+    var dt = ts - _playLast;
+    _playLast = ts;
+    var max = Math.max(1, _bandWidth - _viewW);
+    var next = _scrollEl.scrollLeft + (max / PLAY_CYCLE_MS) * dt;
+    if (next >= max) next = 0;                 // loop back to Jan
+    _scrollEl.scrollLeft = next;               // fires native scroll → _onScrollFrame
+    _playRAF = requestAnimationFrame(_playTick);
+  }
+
+  function _playStep() {                        // reduced-motion discrete advance
+    var m = _monthFromDoy(_currentDay);
+    _scrollToDay(MONTH_STARTS[(m + 1) % 12]);
+    _onScrollFrame();
   }
 
   // ── Place species dots ────────────────────────────────────────
@@ -580,18 +867,29 @@
       var clamped = _clampPos(sp.home.x * _bandWidth, sp.home.y * _viewH);
       dot.style.left = clamped.x + 'px';
       dot.style.top = clamped.y + 'px';
-      dot.style.opacity = '0';
       dot.dataset.sid = sp.species_id;
       dot.dataset.visFrom = sp.visible_from;
       dot.dataset.visTo = sp.visible_to;
-      dot.dataset.peakDoy = sp.peak_doy;
       dot.dataset.flowerMonths = sp.flower_months || '';
       dot.dataset.fruitMonths = sp.fruit_months || '';
       dot.dataset.leafMonths = sp.leaf_months || '';
       dot.dataset.edibility = sp.edibility_status || '';
 
-      var html = '<img class="sp-main-thumb" src="" alt="">';
+      // Aesthetic depth + drift seeds — deterministic per species id, and
+      // seeded independently of the (season-anchored) position so depth is a
+      // free axis. Stable across visits because the seed is the id.
+      _seedDot(dot, sp.species_id);
+      dot._peakDoy = sp.peak_doy;   // temporal-focus anchor (viewport-centre gap)
+
+      // Toxic-only halo class on the .sp-fx layer. Toxic/deadly ONLY — caution
+      // and inedible are unmarked on this page (the card is the safety surface).
+      var edib0 = (sp.edibility_status || '').toLowerCase();
+      var toxCls = (edib0 === 'toxic') ? ' toxic' : '';
+
+      var html = '<div class="sp-fx' + toxCls + '" style="opacity:0">';
+      html += '<img class="sp-main-thumb" src="" alt="">';
       html += '<div class="sp-name">' + _esc(sp.display_name) + '</div>';
+      html += '</div>';
       html += '<div class="select-badge">+</div>';
       html += '<div class="hover-card"><img src="" alt=""><div class="hc-name">' + _esc(sp.display_name) + '</div></div>';
       dot.innerHTML = html;
@@ -608,27 +906,34 @@
       });
       dot.addEventListener('pointerup', function (e) {
         clearTimeout(pressTimer);
-        if (!didLongPress) {
-          e.stopPropagation();
-          _openCard(parseInt(dot.dataset.sid));
+        if (didLongPress) return;
+        e.stopPropagation();
+        var sid = parseInt(dot.dataset.sid);
+        if (e.pointerType === 'touch') {
+          // First tap racks the node forward; a second tap on the already-
+          // pulled node navigates (preserves existing open-card behaviour).
+          if (dot._pulled) { _openCard(sid); }
+          else { _pullOnly(dot); }
+        } else {
+          _openCard(sid);
         }
       });
       dot.addEventListener('pointerleave', function () { clearTimeout(pressTimer); });
 
-      // Hover lift (desktop only — CSS @media(hover:hover) guards the visual)
+      // Desktop hover = focus pull (rack forward). Touch is handled in pointerup.
       dot.addEventListener('mouseenter', function () {
-        _hoveredSid = parseInt(dot.dataset.sid);
+        if (_isTouch) return;
         dot.classList.add('hovered');
-        dot.style.zIndex = '15';
-        dot.style.opacity = '1';
-        dot.style.transform = 'translate(-50%,-50%) scale(1.1)';
-        dot.style.filter = 'none';
+        dot.style.zIndex = '30';
+        dot._pulled = true;
+        _applyDotVisual(dot);
       });
       dot.addEventListener('mouseleave', function () {
+        if (_isTouch) return;
         dot.classList.remove('hovered');
         dot.style.zIndex = '';
-        _hoveredSid = null;
-        _onScrollFrame();
+        dot._pulled = false;
+        _applyDotVisual(dot);
       });
 
       _trackEl.appendChild(dot);
@@ -683,44 +988,15 @@
       pill.style.left = (stopIndex / STOPS * barW) + 'px';
     }
 
-    // Update species visibility + temporal focus effect
-    var FOCUS_WINDOW = 30;
+    // Recompute per-dot visibility (season window) for the new centre day, then
+    // re-apply visuals. _applyDotVisual reads _currentDay (set above) for
+    // temporal focus and _aperture for the flatten — single writer.
     for (var sid in _dots) {
       var dot = _dots[sid];
       var visFrom = parseInt(dot.dataset.visFrom);
       var visTo = parseInt(dot.dataset.visTo);
-      var peakDoy = parseInt(dot.dataset.peakDoy);
-
-      var visible = _isVisible(visFrom, visTo, centreDoy);
-      if (!visible) {
-        dot.style.opacity = '0';
-        dot.style.pointerEvents = 'none';
-        continue;
-      }
-
-      var dayDist = Math.min(Math.abs(peakDoy - centreDoy), DAYS_IN_YEAR - Math.abs(peakDoy - centreDoy));
-      var normDt = Math.min(dayDist / FOCUS_WINDOW, 1.0);
-
-      // Species with active phenology at the scroll date get a focus boost —
-      // they're "in season now" even if their sighting peak was earlier.
-      // Toxic species don't get the boost (they should stay receded).
-      var ringColour = _phenoRingColour(dot, centreDoy);
-      if (ringColour !== 'none') {
-        var edib = (dot.dataset.edibility || '').toLowerCase();
-        if (edib !== 'toxic' && edib !== 'inedible' && edib !== 'not_edible') {
-          normDt = Math.min(normDt, 0.15);
-        }
-      }
-
-      var scale = 1.0 - normDt * 0.4;
-      var blur = normDt * 3;
-      var opacity = 1.0 - normDt * 0.5;
-
-      dot.style.pointerEvents = '';
-      if (_hoveredSid !== null && String(sid) === String(_hoveredSid)) continue;
-      dot.style.opacity = String(Math.max(0.15, opacity));
-      dot.style.transform = 'translate(-50%,-50%) scale(' + scale.toFixed(3) + ')';
-      dot.style.filter = blur > 0.2 ? 'blur(' + blur.toFixed(1) + 'px)' : 'none';
+      dot._hidden = !_isVisible(visFrom, visTo, centreDoy);
+      _applyDotVisual(dot);
     }
 
     // Fetch thumbnails + phenology data
@@ -733,7 +1009,7 @@
     // Update phenology ring colours for current scroll day
     for (var rsid in _dots) {
       var rdot = _dots[rsid];
-      if (parseFloat(rdot.style.opacity) < 0.1) continue;
+      if (rdot._hidden) continue;
       rdot.dataset.ring = _phenoRingColour(rdot, centreDoy);
     }
   }

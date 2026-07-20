@@ -268,12 +268,31 @@ async def _run_enrichment_task(
     _state["progress"] = []
     _state["last_trigger"] = trigger
 
+    # ── Durable process row (Pass C — additive, display-only) ─────────────
+    # Started only after the already-running guard above has passed, so a
+    # re-entrant call that early-returns creates no row. This is the post-P1
+    # auto-enrich runner with its own _state; it is deliberately NOT merged
+    # with culinary.py's 'enrichment_run' — different runner, different type.
+    import asyncio as _asyncio
+    from app.services.background_processes import bp_start, bp_progress, bp_finish
+    _bp_pid = await bp_start(
+        "auto_enrich",
+        progress_total=len(species_list) if species_list else 0,
+        detail=f"Enrichment ({trigger}): starting",
+    )
+    _bp_ok = False
+
     def _cb(current: int, total: int, name: str, status: str) -> None:
         _state["current"] = current
         _state["total"]   = total
         _state["progress"].append({"name": name, "status": status})
         if len(_state["progress"]) > _MAX_LOG:
             _state["progress"] = _state["progress"][-_MAX_LOG:]
+        # Mirror the same callback onto the durable row. _cb is sync, so this
+        # is fire-and-forget — same pattern as culinary.py's enrichment_run.
+        _asyncio.create_task(
+            bp_progress(_bp_pid, current, total, detail=f"{trigger}: {name}")
+        )
 
     try:
         from app.services.enrichment import run_enrichment_batch
@@ -287,5 +306,13 @@ async def _run_enrichment_task(
             )
         _state["last_counters"] = counters
         _state["last_run"]      = datetime.utcnow().isoformat()
+        _bp_ok = True
     finally:
         _state["running"] = False
+        await bp_finish(
+            _bp_pid,
+            "complete" if _bp_ok else "failed",
+            error="" if _bp_ok else "Enrichment run aborted before completion",
+            current=_state["current"],
+            total=_state["total"] or _state["current"],
+        )

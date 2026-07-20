@@ -31,6 +31,29 @@ class ScanRequest(BaseModel):
 
 async def _run_scan(folder: Path):
     _scan_status["running"] = True
+
+    # ── Durable process row (Pass C — additive, display-only) ─────────────
+    # POST /api/ingest/scan validates the folder and rejects a concurrent run
+    # (409) before scheduling this task, so reaching here means real work.
+    # scan_folder already takes a sync progress_callback — that existing hook
+    # is reused; no new loop, no change to the scan itself.
+    import asyncio as _asyncio
+    from app.services.background_processes import bp_start, bp_progress, bp_finish
+    _fs_pid = await bp_start("folder_scan", progress_total=0,
+                             detail=f"Folder scan: {folder}")
+    _fs_seen = {"current": 0, "total": 0}
+    _fs_ok = False
+
+    def _fs_cb(current: int, total: int) -> None:
+        _fs_seen["current"] = current
+        _fs_seen["total"]   = total
+        # One durable write per 10 files; libraries here run to 5-6 figures.
+        if current % 10 == 0 or current == total:
+            _asyncio.create_task(bp_progress(
+                _fs_pid, current, total,
+                detail=f"Folder scan: {current} of {total}",
+            ))
+
     try:
         from app.services.settings_service import get_setting
         with keep_awake("ForagingID folder scan in progress"):
@@ -42,12 +65,21 @@ async def _run_scan(folder: Path):
                     # Read from settings service so UI changes take effect without restart
                     thumbnail_size=get_setting("thumbnail_size"),
                     batch_size=get_setting("batch_size"),
+                    progress_callback=_fs_cb,
                 )
         _scan_status["last_result"] = result
+        _fs_ok = True
     except Exception as exc:
         _scan_status["last_result"] = {"error": str(exc)}
     finally:
         _scan_status["running"] = False
+        await bp_finish(
+            _fs_pid,
+            "complete" if _fs_ok else "failed",
+            error="" if _fs_ok else str(_scan_status.get("last_result") or "Folder scan failed"),
+            current=_fs_seen["current"],
+            total=_fs_seen["total"],
+        )
 
 
 @router.get("/default-folder")

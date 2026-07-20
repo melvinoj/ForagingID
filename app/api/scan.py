@@ -84,6 +84,13 @@ _p2_obs_session: dict = {}   # {obs_id: (session_id, filename)}
 _p2_progress: dict = {}          # {session_id: asyncio.Queue}
 _p2_session_counter: dict = {}   # {session_id: int}  — in-memory processed count
 
+# ── Pipeline 2 durable process row (Pass C — additive visibility only) ───────
+# {session_id: process_id} for the background_processes row that mirrors an
+# armed delta batch. P2 delta has no single owning coroutine (process-delta
+# arms; the frontend then drives uploads/retries; _p2_auto_close ends it), so
+# the bp lifecycle is anchored to the same three points as the session itself.
+_p2_bp_pid: dict = {}            # {session_id: process_id}
+
 # ── Pipeline 2 pause flag ─────────────────────────────────────────────────────
 # Session IDs that have been paused. _identify_scanned checks this before
 # processing each file and exits cleanly if the session is flagged.
@@ -855,9 +862,19 @@ async def _p2_auto_close(session_id: int) -> None:
             await session_close(session_id)
             # Signal SSE consumers that the session is finished
             q = _p2_progress.pop(session_id, None)
-            _p2_session_counter.pop(session_id, None)
+            _done_count = _p2_session_counter.pop(session_id, None)
             if q is not None:
                 await q.put({"done": True, "status": "complete"})
+            # Close the durable process row alongside the session (Pass C).
+            # This is the P2-delta equivalent of a `finally`: the session-close
+            # point is the only place the batch is known to be finished. An
+            # abandoned batch never reaches here and is caught by is_stalled /
+            # recover_stale_processes(), same as any killed process.
+            _bp_pid = _p2_bp_pid.pop(session_id, None)
+            if _bp_pid is not None:
+                await bp_finish(_bp_pid, "complete",
+                                current=_done_count if _done_count is not None else target,
+                                total=target)
     except Exception:
         log.exception("_p2_auto_close failed (session_id=%s)", session_id)
 
@@ -924,6 +941,19 @@ async def _p2_tick(obs_id: int, **fields: int) -> None:
                 "filename": filename,
                 "status":   status_label,
             })
+            # Mirror the same tick onto the durable process row (Pass C).
+            # Same loop tick as the SSE push — no extra iteration, no new work.
+            # Deliberately per-file rather than the every-10 cadence used by P1
+            # and the archive scan. This loop is network-bound (seconds per file
+            # for identification) and already does a read + session_inc per file,
+            # so one more small UPDATE is noise. Throttling here would leave
+            # last_heartbeat up to 10 slow identifications stale — past the 60s
+            # threshold — and the row would read as stalled while it was fine.
+            _p2_seen = _p2_session_counter[session_id]
+            await bp_progress(
+                _p2_bp_pid.get(session_id), _p2_seen, total,
+                detail=f"session:{session_id} — P2 delta: {_p2_seen} of {total}",
+            )
         await _p2_auto_close(session_id)
     except Exception:
         log.exception(
@@ -2313,6 +2343,23 @@ async def process_delta(body: dict):
     _p2_progress[session_id]       = asyncio.Queue()
     _p2_session_counter[session_id] = 0
 
+    # ── Durable process row (Pass C — additive, display-only) ─────────────
+    # Started only here, after every validation branch above has passed and the
+    # session is genuinely armed, so a rejected/409 request creates no row.
+    # session_id is stored in detail ("session:<id> — …") because this process
+    # is ended by POST /api/scan/pause/{session_id}, not by a bp-level signal.
+    # Re-arming a stalled session finishes the previous row first so a session
+    # never has two live rows.
+    _prev_pid = _p2_bp_pid.pop(session_id, None)
+    if _prev_pid is not None:
+        await bp_finish(_prev_pid, "interrupted",
+                        error="Session re-armed by a later process-delta call")
+    _p2_bp_pid[session_id] = await bp_start(
+        "p2_delta",
+        progress_total=(files_new + files_retryable),
+        detail=f"session:{session_id} — P2 delta: 0 of {files_new + files_retryable}",
+    )
+
     return {
         "session_id":       session_id,
         "status":           "running",
@@ -2457,6 +2504,20 @@ async def _run_archive_scan(job_id: int, year_dirs: list) -> None:
 
     total_new = total_already = 0
 
+    # ── Durable process row (Pass C — additive, display-only) ─────────────
+    # Started after the pipeline mutex is held, so a mutex-blocked early return
+    # above creates no row. progress_total starts at 0 and grows as each year
+    # folder is listed: counting every file up front would mean an extra walk of
+    # the whole DIGIERA volume before the job starts, which changes timing on
+    # the longest job in the app. detail carries the CURRENT year's session_id
+    # (this job spans one session per year) so Pass E can pause the live one.
+    _arch_pid   = await bp_start("archive_scan", progress_total=0,
+                                 detail=f"Archive scan: {len(year_dirs)} folders")
+    _arch_total = 0     # files discovered so far, across folders listed
+    _arch_base  = 0     # files walked in COMPLETED folders
+    _arch_done  = 0     # _arch_base + position within the current folder
+    _arch_ok    = False
+
     try:
         for year_dir in year_dirs:
             year_name = os.path.basename(year_dir)
@@ -2497,6 +2558,14 @@ async def _run_archive_scan(job_id: int, year_dirs: list) -> None:
                 "session_id":  session_id,
                 "total_files": len(image_files),
             })
+
+            # Grow the durable row's total as folders are discovered (Pass C).
+            _arch_total += len(image_files)
+            await bp_progress(
+                _arch_pid, _arch_done, _arch_total,
+                detail=f"session:{session_id} — Archive {year_name}: starting "
+                       f"{len(image_files)} files",
+            )
 
             _p2_threshold = _gs("prefilter_pipeline2_green_threshold")
             _thumb_size   = _gs("thumbnail_size")
@@ -2733,9 +2802,23 @@ async def _run_archive_scan(job_id: int, year_dirs: list) -> None:
                         "done":   i + 1,
                         "total":  len(image_files),
                     })
+                    # Same tick onto the durable row (Pass C) — one write per
+                    # 10 files, matching the existing SSE cadence. Counted the
+                    # same way the SSE event counts (i + 1, folder-relative,
+                    # offset by folders already walked) so the two never drift.
+                    _arch_done = _arch_base + i + 1
+                    await bp_progress(
+                        _arch_pid, _arch_done, _arch_total,
+                        detail=f"session:{session_id} — Archive {year_name}: "
+                               f"{i + 1} of {len(image_files)}",
+                    )
 
             # Close this year's session
             await session_set_status(session_id, "complete")
+
+            # Roll the durable row's baseline forward one folder (Pass C).
+            _arch_base += len(image_files)
+            _arch_done  = _arch_base
 
             await _push({
                 "type":       "folder_done",
@@ -2748,6 +2831,7 @@ async def _run_archive_scan(job_id: int, year_dirs: list) -> None:
             })
 
         await _push({"type": "done", "total_new": total_new, "total_already": total_already})
+        _arch_ok = True
 
     except Exception as exc:
         log.exception("archive_scan job %s failed: %s", job_id, exc)
@@ -2756,6 +2840,14 @@ async def _run_archive_scan(job_id: int, year_dirs: list) -> None:
         except Exception:
             pass
     finally:
+        # Terminal either way (Pass C); 'failed' only if the loop above raised.
+        await bp_finish(
+            _arch_pid,
+            "complete" if _arch_ok else "failed",
+            error="" if _arch_ok else "Archive scan aborted before completion",
+            current=_arch_done,
+            total=_arch_total,
+        )
         pipeline_release()
 
 
@@ -2931,6 +3023,14 @@ async def pause_session(session_id: int):
     _p2_session_counter.pop(session_id, None)
     if q is not None:
         await q.put({"done": True, "status": "paused"})
+
+    # Mirror the pause onto the durable process row (Pass C — reporting only).
+    # The pause itself is unchanged; without this the row would keep reading
+    # 'running' and then go stalled, which is a display lie, not a signal.
+    # The row is left live (not popped) because process-delta re-arms the same
+    # session, and that path finishes any prior row before starting a new one.
+    from app.services.background_processes import bp_set_status as _bp_set_status
+    await _bp_set_status(_p2_bp_pid.get(session_id), "paused")
 
     return {"paused": True, "session_id": session_id}
 

@@ -622,7 +622,21 @@ async def _reprocess_ids(ids: List[int]) -> None:
     _state["session_review"] = 0
     _state["session_failed"] = 0
 
+    # ── Durable process row (Pass C — additive, display-only) ─────────────
+    # The caller (POST /reprocess) has already returned nothing_to_do on an
+    # empty id list and already_processing when a batch is in flight, so by
+    # here the work is real. bp_* helpers swallow their own exceptions.
+    from app.services.background_processes import bp_start, bp_progress, bp_finish
+    _rp_pid = await bp_start(
+        "p1_reprocess",
+        progress_total=len(ids),
+        detail=f"P1 re-identify: 0 of {len(ids)}",
+    )
+    _rp_done = 0
+    _rp_ok = False
+
     async def _one(oid: int) -> None:
+        nonlocal _rp_done
         _state["in_flight"] += 1
         try:
             async with _get_semaphore():
@@ -634,11 +648,27 @@ async def _reprocess_ids(ids: List[int]) -> None:
                 _state["errors"] = _state["errors"][-_MAX_ERRORS:]
         finally:
             _state["in_flight"] -= 1
+            # Same completion point the in-memory counters use; one durable
+            # write per 10 observations, matching the P1 ingest cadence.
+            _rp_done += 1
+            if _rp_done % 10 == 0:
+                await bp_progress(
+                    _rp_pid, _rp_done, len(ids),
+                    detail=f"P1 re-identify: {_rp_done} of {len(ids)}",
+                )
 
     try:
         await asyncio.gather(*[_one(i) for i in ids], return_exceptions=True)
+        _rp_ok = True
     finally:
         _state["processing"] = False
+        await bp_finish(
+            _rp_pid,
+            "complete" if _rp_ok else "failed",
+            error="" if _rp_ok else "Re-identify batch aborted before completion",
+            current=_rp_done,
+            total=len(ids),
+        )
 
     if _batch_new_species:
         from app.api.enrich import _run_enrichment_task

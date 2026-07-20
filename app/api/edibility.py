@@ -560,6 +560,19 @@ async def _rescan_unknown_worker(species_ids: list[int]) -> None:
     from app.services.enrichment import enrich_species as _enrich
 
     _rescan_state.update(running=True, queued=len(species_ids), done=0, resolved=0)
+
+    # ── Durable process row (Pass C — additive, display-only) ─────────────
+    # POST /api/edibility/rescan returns 409 on a concurrent run and exits
+    # early with queued=0 when nothing matches, so reaching here means the
+    # species list is real and non-empty.
+    from app.services.background_processes import bp_start, bp_progress, bp_finish
+    _ru_pid = await bp_start(
+        "rescan_unknown",
+        progress_total=len(species_ids),
+        detail=f"Edibility rescan: 0 of {len(species_ids)}",
+    )
+    _ru_ok = False
+
     try:
         for sid in species_ids:
             try:
@@ -579,8 +592,24 @@ async def _rescan_unknown_worker(species_ids: list[int]) -> None:
                 log.warning("[edibility rescan] species %s failed: %s", sid, e)
             finally:
                 _rescan_state["done"] += 1
+                # Same loop tick the in-memory counter uses. Sequential and
+                # network-bound (one species per iteration), so every tick is
+                # mirrored — no throttling needed.
+                await bp_progress(
+                    _ru_pid, _rescan_state["done"], len(species_ids),
+                    detail=(f"Edibility rescan: {_rescan_state['done']} "
+                            f"of {len(species_ids)}"),
+                )
+        _ru_ok = True
     finally:
         _rescan_state["running"] = False
+        await bp_finish(
+            _ru_pid,
+            "complete" if _ru_ok else "failed",
+            error="" if _ru_ok else "Edibility rescan aborted before completion",
+            current=_rescan_state["done"],
+            total=len(species_ids),
+        )
         log.info("[edibility rescan] complete: %s/%s processed, %s resolved",
                  _rescan_state["done"], _rescan_state["queued"], _rescan_state["resolved"])
 

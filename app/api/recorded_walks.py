@@ -103,35 +103,65 @@ async def _enrich_elevation(walk_id: int, track_points: List[TrackPoint]) -> Non
     step = max(1, len(track_points) // 100)
     sampled = track_points[::step]
     locations = "|".join(f"{p.lat},{p.lng}" for p in sampled)
+
+    # ── Durable process row (Pass C — additive, display-only) ─────────────
+    # Started after the <2-points no-op guard above, so a walk with no usable
+    # track creates no row. This is the shortest of the seven — one HTTP call
+    # to Open-Topo-Data, typically a second or two — so it will usually appear
+    # and clear between two widget polls. Wired anyway for completeness: it is
+    # exactly the job that looks like a hang when the API is slow or timing out
+    # (20s client timeout), and that case is the one worth being able to see.
+    # No intermediate progress exists to mirror: there is a single request, so
+    # the row goes 0/N → terminal. walk_id is carried in detail for the same
+    # reason p2_delta carries session_id.
+    from app.services.background_processes import bp_start, bp_finish
+    _el_pid    = await bp_start(
+        "elevation_enrich",
+        progress_total=len(sampled),
+        detail=f"walk:{walk_id} — Elevation: {len(sampled)} points",
+    )
+    _el_status = "failed"
+    _el_error  = "Elevation enrichment did not complete"
+
     try:
-        async with httpx.AsyncClient(timeout=20.0) as client:
-            r = await client.get(OPEN_TOPO_URL, params={"locations": locations})
-            r.raise_for_status()
-            data = r.json()
-    except Exception as exc:
-        log.warning("elevation lookup failed for walk %d: %s", walk_id, exc)
-        return
+        try:
+            async with httpx.AsyncClient(timeout=20.0) as client:
+                r = await client.get(OPEN_TOPO_URL, params={"locations": locations})
+                r.raise_for_status()
+                data = r.json()
+        except Exception as exc:
+            log.warning("elevation lookup failed for walk %d: %s", walk_id, exc)
+            _el_error = f"Elevation lookup failed: {exc}"
+            return
 
-    results = data.get("results", [])
-    elevations = [res.get("elevation") for res in results if res.get("elevation") is not None]
-    if len(elevations) < 2:
-        return
+        results = data.get("results", [])
+        elevations = [res.get("elevation") for res in results if res.get("elevation") is not None]
+        if len(elevations) < 2:
+            _el_error = "Fewer than 2 elevation samples returned"
+            return
 
-    gain = loss = 0.0
-    for i in range(1, len(elevations)):
-        diff = elevations[i] - elevations[i - 1]
-        if diff > 0:
-            gain += diff
-        else:
-            loss += abs(diff)
+        gain = loss = 0.0
+        for i in range(1, len(elevations)):
+            diff = elevations[i] - elevations[i - 1]
+            if diff > 0:
+                gain += diff
+            else:
+                loss += abs(diff)
 
-    async with AsyncSessionLocal() as session:
-        walk = await session.get(RecordedWalk, walk_id)
-        if walk:
-            walk.elevation_gain_m = round(gain, 1)
-            walk.elevation_loss_m = round(loss, 1)
-            await session.commit()
-    log.info("elevation enriched for walk %d: +%.0fm -%.0fm", walk_id, gain, loss)
+        async with AsyncSessionLocal() as session:
+            walk = await session.get(RecordedWalk, walk_id)
+            if walk:
+                walk.elevation_gain_m = round(gain, 1)
+                walk.elevation_loss_m = round(loss, 1)
+                await session.commit()
+        log.info("elevation enriched for walk %d: +%.0fm -%.0fm", walk_id, gain, loss)
+        _el_status, _el_error = "complete", ""
+    finally:
+        await bp_finish(
+            _el_pid, _el_status, error=_el_error,
+            current=len(sampled) if _el_status == "complete" else 0,
+            total=len(sampled),
+        )
 
 
 # ---------------------------------------------------------------------------

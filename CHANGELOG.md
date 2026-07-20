@@ -2,33 +2,26 @@
 
 ## Current State
 
-Current State
-Session focus: Seasons page interaction rework — depth model replaced twice, landing on temporal-aperture design.
-Landed & verified in browser:
+## Current State
 
-Play mode: ▶ button in month bar, auto-advances year over 45s loop, temporal focus reorganises field; manual horizontal scroll pauses; reduced-motion steps month-by-month.
-Temporal focus restored as primary channel: normDt from peak_doy vs viewport-centre day drives blur/scale/opacity (original coefficients); toxic/inedible in-season boost exclusion restored; peak_doy re-plumbed as dot._peakDoy.
-Toxicity marker softened: skull/amber badges removed; toxic-only muted red halo on .sp-fx (box-shadow, blurs with dot); caution/inedible unmarked; species card remains the safety surface.
-Hover/tap focus pull + anchored Lissajous drift (wrapper/inner transform separation, single rAF, reduced-motion respected).
+Build status — this session:
+- P1 recovery COMPLETE: 17/17 (5 thumbnail regens + 12 originals recovered), all SHA-256 hash-verified against DB file_hash. Snapshot db_20260719_214921, commit 99ce2daf. No DB rows modified — filesystem-only.
+- Pass A COMPLETE (ran in the Seasons Code session — thread mixup, harmless; executed once, live DB byte-identical to pre-pass snapshot). Global process visibility, display-only: p1_syncthing bp row; review retry-ID retains process_id; job-status-widget on 12/12 real app pages via site-header.js (!is_guest gate, #job-status-mount); interrupted→terminal; culinary raw-UPDATE routed through bp_set_status; recover_stale_processes() added at startup. Snapshot db_20260720_095533, commit b4fd2b12.
+- deleted_hashes / P2 foreclosure: CHANGELOG:688-689 gaps were ALREADY closed by ingest_guard.py (5 call sites); proven 4/4 skip across P2+P1; CHANGELOG:688-689 corrected inline. Delete function is NOT broken — hard-delete (observations.py:886-929) removes row+file+blacklists atomically, one transaction.
+- Process-visibility audit (Parts 1-3) COMPLETE: invisible set = 7 (p2_delta, archive_scan, auto_enrich[enrich.py], p1_reprocess, folder_scan, rescan_unknown, elevation_enrich). Real-cancel-capable: enrichment_run, auto_enrich(after wiring), ai_draft, p2_delta, archive_scan. All others cosmetic (no real End).
 
-Landed, implemented-unverified (eyeball next session):
+Pending / next — run in order from a fresh Code session, confirm each clean before the next:
+- Pass C (prompt ready): give the 7 invisible processes bp rows (additive visibility).
+- Pass D (prompt ready): floating minimizable widget shell — port scan row look, new shell, show/hide, all real app pages, display-only.
+- Pass E (prompt ready): honest End — enrich.py honor-cancel; End buttons on real-capable types only; cancel endpoint refuses non-honoring types (kills flip-back lie); delete dead itis _cancelled check.
+- Decision taken (veto-able): auto_enrich routed through bp_start + made real-End, not display-only.
 
-Temporal aperture: vertical wheel/trackpad over canvas opens aperture (normDt × (1−_aperture)) — whole field sharpens progressively; auto-returns to in-season focus over 1.5s on release. Constants: APERTURE_DIR=1 (swipe-up opens), APERTURE_STICKY=false. Axis-split wheel handler: horizontal = year-scroll (pauses play), vertical = aperture (doesn't pause).
-Dolly slider fully retired: _cameraZ, parallax, seeded nodeDepth, right-edge slider DOM/CSS all removed. Single-writer discipline confirmed: .sp-fx visuals only via _applyDotVisual, .sp-dot transform only via _writeWrapper.
+Also open (not this widget arc):
+- File-less-row DB reconciliation census — deliberately after recovery; still open.
+- Pass B store-merge (job_queue→background_processes: additive migration [queue_position, payload, ended_at, created_at, label, error→TEXT, queued] → dual-write → repoint reads → retire). Enables uniform Rerun/Top on BP-backed rows. Own thread.
 
-Known/deferred from this session:
-
-Touch two-finger vertical pan not wired to aperture (wheel-only); deferred.
-Dec→Jan play loop is a hard snap; reduced-motion stepping can stall near January — cosmetic, refine if they bother.
-Plain mouse wheel over band now drives aperture, not year-scroll — by design, revisit if it annoys.
-Dev-log entries for today's prompts not yet posted — post after aperture eyeball, or fold into next session.
-
-Pending / next (carried):
-
-DB reconciliation census — dead file_path/thumbnail_path rows; recon-first, read-only start.
-encounters.py:529 — encounter-audio delete lacks origin veto.
-review.html:5373 — malformed backslash-escaped attribute (latent).
-Carried: 3 damaged map rows (17052/17737/18709); Retry-ID on below_threshold cards; snapshots gzip; thumbnails_quarantine purge.
+Known issues / owed verification:
+- Pass A live checks still owed (browser + real P1): P1 autoscan row end-to-end, P1+P2 concurrent N-render, widget mount on the 4 newly-covered pages, review.html console glance.
 
 ## Current State — 19 July 2026
 
@@ -411,6 +404,13 @@ Still open:
 - Enrichment gap remediation — 9 AI drafts pending approval, 6 species never scanned, 79 no-PFAF species need alt-source decision
 
 ## History
+
+### 2026-07-20 15:15
+**Snapshot** — End of session — Session ended from Settings page
+DB: `snapshots/db_20260720_151504.sqlite`
+
+### 2026-07-20 15:15
+**Session ended** — Session ended from Settings page
 
 ### 2026-07-20 09:55
 **Snapshot** — Manual snapshot

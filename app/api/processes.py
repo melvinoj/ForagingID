@@ -76,7 +76,7 @@ async def cancel_process(process_id: int):
         )).fetchone()
     if not row:
         raise HTTPException(status_code=404, detail="Process not found")
-    if row[0] in ("complete", "failed", "cancelled"):
+    if row[0] in ("complete", "failed", "cancelled", "interrupted"):
         raise HTTPException(status_code=409, detail=f"Process already in terminal state '{row[0]}'")
     await bp_set_status(process_id, "cancelled")
     return {"ok": True, "process_id": process_id, "status": "cancelled"}

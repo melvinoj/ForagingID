@@ -144,6 +144,10 @@ async def lifespan(app: FastAPI):
 
     from app.api.queue_api import recover_stale_jobs
     await recover_stale_jobs()
+    # Same recovery for background_processes: a row killed mid-run would
+    # otherwise stay 'running' forever and never leave /api/processes/active.
+    from app.services.background_processes import recover_stale_processes
+    await recover_stale_processes()
     _ls5 = _time.perf_counter()
     print(f"[TIMING] lifespan: recover_stale_jobs: {_ls5 - _ls4:.1f}s", flush=True)
 

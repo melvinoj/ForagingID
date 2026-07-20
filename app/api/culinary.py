@@ -2908,16 +2908,11 @@ async def start_enrichment_run(
     # If resuming, reuse the existing paused BP row (update status back to running)
     if paused_job and paused_job.get("process_id"):
         process_id = paused_job["process_id"]
-        from sqlalchemy import text as _text
-        async with AsyncSessionLocal() as _db:
-            await _db.execute(
-                _text(
-                    "UPDATE background_processes SET status='running', updated_at=:now, "
-                    "last_heartbeat=:now WHERE process_id=:pid"
-                ),
-                {"now": datetime.utcnow(), "pid": process_id},
-            )
-            await _db.commit()
+        # Routed through bp_set_status so background_processes.py stays the sole
+        # writer of this table. heartbeat=True reproduces the previous raw UPDATE
+        # exactly (status + updated_at + last_heartbeat).
+        from app.services.background_processes import bp_set_status as _bp_set_status
+        await _bp_set_status(process_id, "running", heartbeat=True)
         detail = f"Resuming enrichment from item {resume_from}…"
     else:
         process_id = await bp_start("enrichment_run", detail="Starting enrichment…")

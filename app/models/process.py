@@ -12,9 +12,16 @@ class BackgroundProcess(Base):
     __tablename__ = "background_processes"
 
     process_id:       Mapped[int]            = mapped_column(Integer, primary_key=True, autoincrement=True)
-    # Vocabulary: 'enrichment_run' | 'scan_session' | 'itis_backfill'
+    # Vocabulary: 'enrichment_run' | 'itis_backfill' | 'p1_syncthing' |
+    #   'reprocess_pending' | 'bulk_review' | 'bulk_retry_identify' |
+    #   'bulk_unlock_prefilter' | 'fungi_edibility_backfill' | 'ai_draft_backfill*'
+    # ('scan_session' was listed here historically but is never written — P1/P2
+    #  batch state lives in the scan_sessions table instead.)
     process_type:     Mapped[str]            = mapped_column(String(32), nullable=False, index=True)
-    # Vocabulary: 'running' | 'paused' | 'complete' | 'failed' | 'cancelled'
+    # Vocabulary: non-terminal 'running' | 'paused';
+    #             terminal 'complete' | 'failed' | 'cancelled' | 'interrupted'
+    # 'interrupted' is set by recover_stale_processes() at startup for rows whose
+    # driving process died without reaching bp_finish.
     status:           Mapped[str]            = mapped_column(String(16), nullable=False, default="running", server_default="running")
     started_at:       Mapped[datetime]       = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
     updated_at:       Mapped[datetime]       = mapped_column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)

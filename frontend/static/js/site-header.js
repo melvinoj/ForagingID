@@ -91,9 +91,28 @@
     drawer.appendChild(header);
     drawer.appendChild(nav);
 
+    // Explicit mount point for the global job-status widget. The widget used to
+    // look for #header, which no longer exists on any page, and silently fell
+    // back to document.body.firstChild. This anchor is owned by the header so
+    // the widget has one predictable, site-wide home.
+    var jobMount = document.createElement('div');
+    jobMount.id = 'job-status-mount';
+
     document.body.appendChild(chip);
     document.body.appendChild(scrim);
     document.body.appendChild(drawer);
+    document.body.insertBefore(jobMount, document.body.firstChild);
+  }
+
+  // Load the global job widget once, owner-only. Guests must never see process
+  // detail (it carries species names), same reasoning as the curatorOnly links.
+  function _loadJobWidget() {
+    if (window.__jobStatusWidgetLoaded) return;
+    window.__jobStatusWidgetLoaded = true;
+    var s = document.createElement('script');
+    s.src = '/static/js/job-status-widget.js';
+    s.defer = true;
+    document.head.appendChild(s);
   }
 
   // The chip is position:fixed, so it ignores body.style.paddingTop — the
@@ -138,6 +157,7 @@
       } else {
         document.querySelectorAll('.curator-nav').forEach(function (el) { el.style.display = ''; });
         _initEncountersBadge();
+        _loadJobWidget();
       }
     }).catch(function () {});
   }

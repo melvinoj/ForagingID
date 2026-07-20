@@ -676,6 +676,19 @@ async def _process_all(files: List[Path]) -> None:
     _current_p1_session_id = await session_open_p1(files_received=len(files))
     _state["session_files_received"] = len(files)
 
+    # ── Durable process row (additive, display-only) ───────────────────────
+    # Purely so the global job widget can see a P1 ingest from any page. The
+    # in-memory _state above and /api/syncthing/status are the scan page's live
+    # P1 card and are deliberately left untouched. bp_* helpers swallow their
+    # own exceptions, so this can never affect the batch.
+    from app.services.background_processes import bp_start, bp_progress, bp_finish
+    _p1_pid = await bp_start(
+        "p1_syncthing",
+        progress_total=len(files),
+        detail=f"P1 ingest: {len(files)} new",
+    )
+    _p1_ok = False
+
     # Heartbeat counter — stamp last_heartbeat every 10 files so the UI can
     # distinguish a live batch from a stalled / crashed one.
     _p1_hb_counter = 0
@@ -685,16 +698,30 @@ async def _process_all(files: List[Path]) -> None:
         _p1_hb_counter += 1
         if _p1_hb_counter % 10 == 0:
             await session_heartbeat(_current_p1_session_id)
+            # Mirror the same cadence onto the bp row (one write per 10 files).
+            await bp_progress(
+                _p1_pid, _p1_hb_counter, len(files),
+                detail=f"P1 ingest: {_p1_hb_counter} of {len(files)}",
+            )
 
     try:
         sem = _get_semaphore()
         tasks = [_process_one(p, sem, _heartbeat_tick) for p in files]
         await asyncio.gather(*tasks, return_exceptions=True)
+        _p1_ok = True
     finally:
         _state["processing"] = False
         _state["session_files_received"] = 0
         await session_close(_current_p1_session_id)
         _current_p1_session_id = None
+        # Terminal either way; 'failed' only if we never reached the line above.
+        await bp_finish(
+            _p1_pid,
+            "complete" if _p1_ok else "failed",
+            error="" if _p1_ok else "P1 batch aborted before completion",
+            current=len(files) if _p1_ok else _p1_hb_counter,
+            total=len(files),
+        )
         pipeline_release()
 
     # Auto-enrich any species newly confirmed in this batch

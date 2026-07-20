@@ -3192,6 +3192,11 @@ async function bulkRetryId() {
       body: JSON.stringify({ observation_ids: ids }),
     });
     if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    // The endpoint returns the durable background_processes id (bp_start fires
+    // server-side). Keep it: the global job widget polls /api/processes/active
+    // and renders this run's progress, so the toast is only immediate feedback.
+    const { process_id } = await r.json().catch(() => ({}));
+    window._lastBulkRetryProcessId = process_id || null;
     toast(`✓ ${ids.length} queued for re-identification`);
   } catch (e) {
     toast(`Failed: ${e.message}`);
@@ -5710,7 +5715,6 @@ document.getElementById('delete-dialog').addEventListener('show', () => {
 <script src="/static/js/pwa.js"></script>
 <script src="/static/js/offline.js"></script>
 <script src="/static/js/guest-mode.js"></script>
-<script src="/static/js/job-status-widget.js"></script>
 <script src="/static/js/seasonal-returns.js"></script>
 <script src="/static/js/site-header.js"></script>
 </body>

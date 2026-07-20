@@ -12,6 +12,12 @@
 (function () {
   'use strict';
 
+  // Idempotence: site-header.js injects this file on every page. Guard in case a
+  // page also carries a legacy <script> tag, which would otherwise start a
+  // second poller and a second banner.
+  if (window.__jobStatusWidgetInit) return;
+  window.__jobStatusWidgetInit = true;
+
   var POLL_MS = 3000;
   var BANNER_ID = 'job-status-banner';
   var BANNER_H = 32; // px reserved for body padding
@@ -24,6 +30,9 @@
     'bulk_retry_identify':       'Bulk Retry ID',
     'bulk_unlock_prefilter':     'Bulk Unlock',
     'reprocess_pending':         'Re-processing',
+    'p1_syncthing':              'Phone ingest',
+    'ai_draft_backfill':         'AI Drafts',
+    'ai_draft_backfill_id_notes':'AI ID Notes',
   };
 
   // ── Banner management ────────────────────────────────────────────────────
@@ -44,10 +53,12 @@
         'box-shadow:0 1px 4px rgba(0,0,0,0.25)',
         'min-height:28px',
       ].join(';');
-      // Insert right after #header (or as first child if no header)
-      var header = document.getElementById('header');
-      if (header && header.nextSibling) {
-        header.parentNode.insertBefore(b, header.nextSibling);
+      // Mount into the anchor owned by site-header.js. (#header was the old
+      // target and no longer exists on any page; body.firstChild remains only
+      // as a fallback for a page that somehow loads this without the header.)
+      var mount = document.getElementById('job-status-mount');
+      if (mount) {
+        mount.appendChild(b);
       } else {
         document.body.insertBefore(b, document.body.firstChild);
       }
@@ -90,9 +101,16 @@
       }
     });
 
+    // running/paused are live. failed and interrupted are TERMINAL but shown
+    // briefly: /api/processes/active only returns terminal rows while their
+    // heartbeat is inside its 90 s window, so they surface then drop by
+    // themselves. 'complete' is deliberately excluded — every finished job
+    // lingering for 90 s would be noise.
     processes.forEach(function (p) {
-      if (p.status !== 'running' && p.status !== 'paused') return;
-      if (queueRunningTypes[p.process_type]) return;
+      var live = (p.status === 'running' || p.status === 'paused');
+      var recentlyEnded = (p.status === 'failed' || p.status === 'interrupted');
+      if (!live && !recentlyEnded) return;
+      if (live && queueRunningTypes[p.process_type]) return;
       items.push({
         label:   PROCESS_LABELS[p.process_type] || p.process_type || 'Process',
         status:  p.status,
@@ -101,7 +119,7 @@
       });
     });
 
-    var order = { running: 0, paused: 1, queued: 2 };
+    var order = { running: 0, paused: 1, queued: 2, failed: 3, interrupted: 3 };
     items.sort(function (a, b) {
       return (order[a.status] || 9) - (order[b.status] || 9);
     });
@@ -128,6 +146,9 @@
       if (it.total > 0) text += ' — ' + it.current + '/' + it.total;
       if (it.status === 'paused') text += ' (paused)';
       if (it.status === 'queued') text += ' (queued)';
+      // interrupted renders like failed: the run stopped without finishing.
+      if (it.status === 'failed') text += ' (failed)';
+      if (it.status === 'interrupted') text += ' (interrupted)';
       parts.push(text);
     });
 

@@ -116,19 +116,63 @@ async def bp_finish(
         log.exception("background_processes: bp_finish failed (id=%s)", process_id)
 
 
-async def bp_set_status(process_id: Optional[int], status: str) -> None:
-    """Set status field only (used for pause/cancel from the API)."""
+async def bp_set_status(process_id: Optional[int], status: str, heartbeat: bool = False) -> None:
+    """
+    Set status field only (used for pause/cancel from the API).
+
+    heartbeat=True also stamps last_heartbeat — needed when returning a row to
+    'running' (e.g. enrichment resume), otherwise the row is immediately judged
+    stalled by _row_to_dict. Defaults False so pause/cancel behaviour is
+    unchanged.
+    """
     if process_id is None:
         return
     try:
+        hb = ", last_heartbeat = :now" if heartbeat else ""
         async with AsyncSessionLocal() as db:
             await db.execute(
-                text("UPDATE background_processes SET status = :s, updated_at = :now WHERE process_id = :pid"),
+                text(f"UPDATE background_processes SET status = :s, updated_at = :now{hb} WHERE process_id = :pid"),
                 {"s": status, "now": datetime.utcnow(), "pid": process_id},
             )
             await db.commit()
     except Exception:
         log.exception("background_processes: bp_set_status failed (id=%s)", process_id)
+
+
+async def recover_stale_processes() -> None:
+    """
+    Called once at server startup. Any row still 'running' whose last_heartbeat
+    (or started_at, when no heartbeat was ever written) is older than the stall
+    threshold was driven by a process that is no longer alive — a hard kill or
+    restart mid-run, where the bp_finish in the caller's `finally` never ran.
+
+    Without this a killed process leaves a row that /api/processes/active keeps
+    returning forever, because its status clause matches 'running' regardless of
+    heartbeat age. Transitioning to 'interrupted' makes it terminal, so it drops
+    out once its heartbeat leaves the endpoint's recent window.
+
+    Mirrors queue_api.recover_stale_jobs(), which does exactly this for job_queue.
+    """
+    try:
+        threshold = datetime.utcnow() - timedelta(seconds=STALL_THRESHOLD_S)
+        async with AsyncSessionLocal() as db:
+            result = await db.execute(
+                text(
+                    "UPDATE background_processes SET status='interrupted', updated_at=:now "
+                    "WHERE status='running' AND ("
+                    "  (last_heartbeat IS NOT NULL AND last_heartbeat < :thresh) "
+                    "  OR (last_heartbeat IS NULL AND started_at IS NOT NULL AND started_at < :thresh) "
+                    "  OR (last_heartbeat IS NULL AND started_at IS NULL) "
+                    ")"
+                ),
+                {"now": datetime.utcnow(), "thresh": threshold},
+            )
+            await db.commit()
+            n = result.rowcount
+        if n:
+            log.info("[processes] Startup recovery: %d stale running process(es) → interrupted", n)
+    except Exception:
+        log.exception("background_processes: recover_stale_processes failed")
 
 
 async def bp_active_count(process_type: str) -> int:

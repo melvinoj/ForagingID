@@ -405,6 +405,10 @@ Still open:
 
 ## History
 
+### 2026-07-20 15:17
+**Snapshot** — Manual snapshot
+DB: `snapshots/db_20260720_151717.sqlite`
+
 ### 2026-07-20 15:15
 **Snapshot** — End of session — Session ended from Settings page
 DB: `snapshots/db_20260720_151504.sqlite`

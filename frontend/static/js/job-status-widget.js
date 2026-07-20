@@ -104,6 +104,23 @@
       .catch(function () { /* stays null — no controls offered, which fails safe */ });
   }
 
+  // Dismiss is for rows that are dead but will not leave on their own: a
+  // 'stalled' row keeps status='running', so it never ages out of the active
+  // feed. A cleanly-finished row needs no Dismiss — it drops itself once its
+  // heartbeat leaves the recency window.
+  //
+  // No client-side rule decides what is dead. The server refuses (409) any row
+  // whose heartbeat is still fresh, using the same staleness predicate the
+  // startup sweep uses, so this button cannot silence live work even if the
+  // widget's view of a row were stale.
+  function dismissTarget(it) {
+    if (it.source !== 'process' || !it.pid) return null;
+    if (it.status !== 'stalled' && it.status !== 'failed' && it.status !== 'interrupted') {
+      return null;
+    }
+    return { url: '/api/processes/' + it.pid + '/dismiss' };
+  }
+
   // Returns {url} when this PAUSED row can genuinely be resumed, else null.
   function resumeTarget(it) {
     if (it.status !== 'paused' || it.source !== 'process') return null;
@@ -376,6 +393,10 @@
       buttons += '<button type="button" class="jq-btn jq-btn-cancel" ' +
                          'onclick="window.__jswEnd(' + idx + ', this)">End</button>';
     }
+    if (dismissTarget(it)) {
+      buttons += '<button type="button" class="jq-btn jq-btn-cancel" ' +
+                         'onclick="window.__jswDismiss(' + idx + ', this)">Dismiss</button>';
+    }
     var actions = buttons ? '<div class="jq-actions">' + buttons + '</div>' : '';
 
     return '<div class="jq-job">' +
@@ -392,6 +413,27 @@
   // for one more item. The button is disabled rather than the row being
   // optimistically restyled, because claiming it stopped before it has is the
   // same class of lie as a cancel that does nothing.
+  // Dismiss: clears a dead row from the feed. Stops nothing, so no confirm. The
+  // next poll re-renders from the server, so a refused dismiss simply leaves the
+  // row where it was.
+  window.__jswDismiss = function (idx, btn) {
+    var it = lastItems[idx];
+    if (!it) return;
+    var target = dismissTarget(it);
+    if (!target) return;
+    if (btn) { btn.disabled = true; btn.textContent = 'Dismissing…'; }
+    fetch(target.url, { method: 'POST' }).then(function (r) {
+      if (r.ok) { lastJSON = ''; poll(); return; }
+      return r.json().catch(function () { return {}; }).then(function (d) {
+        if (btn) { btn.disabled = false; btn.textContent = 'Dismiss'; }
+        window.alert('Could not dismiss: ' + (d.detail || ('HTTP ' + r.status)));
+      });
+    }).catch(function (e) {
+      if (btn) { btn.disabled = false; btn.textContent = 'Dismiss'; }
+      window.alert('Could not dismiss: ' + e.message);
+    });
+  };
+
   // Resume: restarts a paused run from its stop index. No confirm — unlike End,
   // it is not destructive and is trivially undone by pausing again.
   window.__jswResume = function (idx, btn) {

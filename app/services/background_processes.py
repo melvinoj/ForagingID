@@ -139,6 +139,30 @@ async def bp_set_status(process_id: Optional[int], status: str, heartbeat: bool 
         log.exception("background_processes: bp_set_status failed (id=%s)", process_id)
 
 
+# ── The stale predicate — ONE definition ─────────────────────────────────────
+# "Stale" means: still marked running, but nothing has stamped a heartbeat
+# inside the threshold, so the process driving it is not alive. Written once
+# here and shared by recover_stale_processes() (startup sweep) and bp_dismiss()
+# (manual clear-out), because those two must agree about what counts as dead —
+# a dismiss that used a looser rule than the sweep would be a way to clear a row
+# whose worker is still running, which is exactly what dismiss must never do.
+#
+# Parameterised on :thresh (a UTC datetime). Applies only to status='running';
+# callers add their own status handling for paused/terminal rows.
+_STALE_WHERE = (
+    "status='running' AND ("
+    "  (last_heartbeat IS NOT NULL AND last_heartbeat < :thresh) "
+    "  OR (last_heartbeat IS NULL AND started_at IS NOT NULL AND started_at < :thresh) "
+    "  OR (last_heartbeat IS NULL AND started_at IS NULL) "
+    ")"
+)
+
+
+def stale_threshold() -> datetime:
+    """The cutoff a heartbeat must beat to count as alive."""
+    return datetime.utcnow() - timedelta(seconds=STALL_THRESHOLD_S)
+
+
 async def recover_stale_processes() -> None:
     """
     Called once at server startup. Any row still 'running' whose last_heartbeat
@@ -154,16 +178,12 @@ async def recover_stale_processes() -> None:
     Mirrors queue_api.recover_stale_jobs(), which does exactly this for job_queue.
     """
     try:
-        threshold = datetime.utcnow() - timedelta(seconds=STALL_THRESHOLD_S)
+        threshold = stale_threshold()
         async with AsyncSessionLocal() as db:
             result = await db.execute(
                 text(
                     "UPDATE background_processes SET status='interrupted', updated_at=:now "
-                    "WHERE status='running' AND ("
-                    "  (last_heartbeat IS NOT NULL AND last_heartbeat < :thresh) "
-                    "  OR (last_heartbeat IS NULL AND started_at IS NOT NULL AND started_at < :thresh) "
-                    "  OR (last_heartbeat IS NULL AND started_at IS NULL) "
-                    ")"
+                    f"WHERE {_STALE_WHERE}"
                 ),
                 {"now": datetime.utcnow(), "thresh": threshold},
             )
@@ -173,6 +193,91 @@ async def recover_stale_processes() -> None:
             log.info("[processes] Startup recovery: %d stale running process(es) → interrupted", n)
     except Exception:
         log.exception("background_processes: recover_stale_processes failed")
+
+
+TERMINAL_STATUSES = ("complete", "failed", "cancelled", "interrupted")
+
+
+async def bp_dismiss(process_id: int) -> dict:
+    """
+    Clear a DEAD row out of the active feed. Never touches live work.
+
+    Returns {"ok": True, "action": …} on success, or {"ok": False, "reason": …}
+    for the caller to turn into an HTTP status:
+        "not_found"    — no such row
+        "running"      — running with a heartbeat inside the threshold: REFUSED.
+                         This is the whole safety property. A dismiss is not a
+                         backdoor cancel; if the work should stop, it has to go
+                         through a real cancel route that the worker observes.
+        "paused"       — deliberately paused and resumable, so not dead either.
+
+    Two accepted cases, both audit-preserving — the row stays, and no recorded
+    outcome is ever rewritten:
+      • stale (running, heartbeat past the shared _STALE_WHERE cutoff)
+        → 'interrupted', the exact transition recover_stale_processes() applies
+          at startup. Dismiss is just that sweep, run on demand for one row.
+      • already terminal → status left EXACTLY as it is.
+
+    Both then clear last_heartbeat, which is what actually removes the row from
+    /api/processes/active: that endpoint returns terminal rows while their
+    heartbeat is inside its recency window, so a NULL heartbeat drops the row
+    immediately instead of leaving it on screen for another 90 s. The field is a
+    liveness signal, not an outcome — on a row that is finished or dead it
+    carries no information, while status, error, progress and started_at (the
+    audit) are all untouched.
+    """
+    try:
+        threshold = stale_threshold()
+        async with AsyncSessionLocal() as db:
+            row = (await db.execute(
+                text("SELECT status FROM background_processes WHERE process_id = :pid"),
+                {"pid": process_id},
+            )).fetchone()
+            if not row:
+                return {"ok": False, "reason": "not_found"}
+            status = row[0]
+
+            if status == "paused":
+                return {"ok": False, "reason": "paused"}
+
+            if status not in TERMINAL_STATUSES:
+                # Running (or any unexpected non-terminal value): only dismissable
+                # when the SHARED stale predicate says the driver is gone. The
+                # check is done in SQL, in the same statement shape the startup
+                # sweep uses, so the two can never diverge.
+                stale = (await db.execute(
+                    text(
+                        "SELECT 1 FROM background_processes "
+                        f"WHERE process_id = :pid AND {_STALE_WHERE}"
+                    ),
+                    {"pid": process_id, "thresh": threshold},
+                )).fetchone()
+                if not stale:
+                    return {"ok": False, "reason": "running"}
+                await db.execute(
+                    text(
+                        "UPDATE background_processes "
+                        "SET status='interrupted', updated_at=:now, last_heartbeat=NULL "
+                        "WHERE process_id = :pid"
+                    ),
+                    {"now": datetime.utcnow(), "pid": process_id},
+                )
+                await db.commit()
+                return {"ok": True, "action": "interrupted"}
+
+            # Already terminal — drop it from the feed, leave the outcome alone.
+            await db.execute(
+                text(
+                    "UPDATE background_processes "
+                    "SET updated_at=:now, last_heartbeat=NULL WHERE process_id = :pid"
+                ),
+                {"now": datetime.utcnow(), "pid": process_id},
+            )
+            await db.commit()
+            return {"ok": True, "action": "dismissed"}
+    except Exception:
+        log.exception("background_processes: bp_dismiss failed (id=%s)", process_id)
+        return {"ok": False, "reason": "error"}
 
 
 async def bp_active_count(process_type: str) -> int:

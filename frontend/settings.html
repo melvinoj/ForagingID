@@ -2225,12 +2225,23 @@ async function loadBgProcesses() {
             ? p.heartbeat_age_s + 's ago'
             : Math.round(p.heartbeat_age_s / 60) + 'm ago')
         : 'never';
+      // Dismiss clears a DEAD row from the feed — it never stops live work, and
+      // the server refuses it (409) for a running row with a fresh heartbeat.
+      // Offered on stalled rows and on rows that already reached a terminal
+      // status; a paused row is stopped-but-resumable, so it gets neither.
+      const TERMINAL = ['complete', 'failed', 'cancelled', 'interrupted'];
+      const canDismiss = p.is_stalled || TERMINAL.indexOf(p.status) !== -1;
+      const dismissBtn = canDismiss
+        ? ' <button onclick="dismissBgProcess(' + p.process_id + ', this)"'
+          + '   style="padding:2px 10px;border:1px solid #d4d4d8;background:#fafafa;color:#52525b;'
+          + '          border-radius:5px;font-size:0.75rem;cursor:pointer">Dismiss</button>'
+        : '';
+
       if (p.is_stalled) {
-        // Cancel only where the worker genuinely honours the signal. For every
-        // other type a stalled row is cleared by recover_stale_processes() at
-        // the next server start, which is what that function is for — offering
-        // a Cancel here would just flip the row while the work (if any survives)
-        // carried on.
+        // Cancel only where the worker genuinely honours the signal — a Cancel
+        // elsewhere would flip the row while any surviving work carried on.
+        // Dismiss is always available here instead: the row is stale, so by the
+        // shared staleness predicate its driver is already gone.
         const canCancel = cancellable.has(p.process_type);
         return '<div style="padding:6px 0;border-bottom:1px solid #f0f0f0;display:flex;align-items:center;gap:10px;flex-wrap:wrap">'
           + '<span style="font-weight:600;color:#92400e">' + label + '</span>'
@@ -2241,7 +2252,8 @@ async function loadBgProcesses() {
               ? ' <button onclick="cancelBgProcess(' + p.process_id + ', this)"'
                 + '   style="padding:2px 10px;border:1px solid #fca5a5;background:#fef2f2;color:#b91c1c;'
                 + '          border-radius:5px;font-size:0.75rem;cursor:pointer">Cancel</button>'
-              : ' <span style="color:#888;font-size:0.74rem">(clears on next server start)</span>')
+              : '')
+          + dismissBtn
           + '</div>';
       }
       return '<div style="padding:6px 0;border-bottom:1px solid #f0f0f0;color:#374151">'
@@ -2249,10 +2261,33 @@ async function loadBgProcesses() {
         + ' — ' + prog
         + ' — ' + p.status
         + ' — <span style="color:#888;font-size:0.78rem">last heartbeat ' + hbAgo + '</span>'
+        + dismissBtn
         + '</div>';
     }).join('');
   } catch (_) {
     body.innerHTML = '<span style="color:#c00">Could not reach server.</span>';
+  }
+}
+
+// Dismiss removes a dead row from the feed. No confirm dialog: nothing is
+// stopped and no outcome is rewritten — the row keeps its status, error and
+// progress, it simply stops being reported as active. If the server judges the
+// process still alive it refuses (409) and the row is left exactly as it was.
+async function dismissBgProcess(processId, btn) {
+  btn.disabled = true;
+  try {
+    const r = await fetch('/api/processes/' + processId + '/dismiss', { method: 'POST' });
+    if (r.ok) {
+      const row = btn.closest('div');
+      if (row) row.remove();
+      return;
+    }
+    const d = await r.json().catch(() => ({}));
+    btn.disabled = false;
+    alert('Could not dismiss: ' + (d.detail || ('HTTP ' + r.status)));
+  } catch (e) {
+    btn.disabled = false;
+    alert('Could not dismiss: ' + e.message);
   }
 }
 

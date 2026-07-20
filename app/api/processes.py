@@ -145,6 +145,49 @@ async def cancel_process(process_id: int):
     return {"ok": True, "process_id": process_id, "status": "cancelled"}
 
 
+@router.post("/{process_id}/dismiss")
+async def dismiss_process(process_id: int):
+    """
+    Clear a dead row out of the active feed. NOT a cancel.
+
+    Accepted only for a row that is already terminal, or one still marked
+    running whose heartbeat is outside the stall threshold (its driver is gone).
+    A genuinely running process — fresh heartbeat — is refused with 409, because
+    a dismiss that could silence a live worker would be a backdoor cancel with
+    none of the cancel gate's guarantees.
+
+    The staleness test is the shared _STALE_WHERE predicate in
+    background_processes.py, the same one recover_stale_processes() sweeps with.
+    """
+    from app.services.background_processes import bp_dismiss
+
+    result = await bp_dismiss(process_id)
+    if result["ok"]:
+        return {"ok": True, "process_id": process_id, "action": result["action"]}
+
+    reason = result.get("reason")
+    if reason == "not_found":
+        raise HTTPException(status_code=404, detail="Process not found")
+    if reason == "running":
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "Cannot dismiss a running process; cancel it first if cancellable. "
+                "This row has a recent heartbeat, so its worker is still alive — "
+                "dismissing it would hide work that is still happening."
+            ),
+        )
+    if reason == "paused":
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "Cannot dismiss a paused process: it is stopped but resumable, "
+                "not dead. Resume it, or cancel it if it is cancellable."
+            ),
+        )
+    raise HTTPException(status_code=500, detail="Dismiss failed; see server log.")
+
+
 @router.get("/cancellable-types")
 async def list_cancellable_types():
     """

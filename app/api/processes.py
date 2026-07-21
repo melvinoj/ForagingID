@@ -196,7 +196,18 @@ async def list_cancellable_types():
     drift into offering End for a type the server will refuse, or Resume for a
     type with no resume route.
     """
+    # A type gets a widget PAUSE button only where the full pause→resume loop is
+    # reachable from the widget: it must be pausable at the endpoint (in
+    # CANCELLABLE_TYPES, which /pause enforces) AND have a widget resume route
+    # (in RESUME_ROUTES). enrichment_run is pausable but intentionally absent
+    # from RESUME_ROUTES — resuming it is folded into its own start route — so a
+    # widget Pause on it would strand the row paused with no way back. Serving
+    # the intersection keeps that judgement on the server, derived from the same
+    # constants the endpoints enforce, rather than a literal the client could
+    # drift from. Today this is exactly {auto_enrich}.
+    pausable_types = sorted(CANCELLABLE_TYPES & set(RESUME_ROUTES))
     return {
         "cancellable_types": sorted(CANCELLABLE_TYPES),
         "resume_routes":     dict(RESUME_ROUTES),
+        "pausable_types":    pausable_types,
     }

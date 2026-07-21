@@ -149,6 +149,7 @@
 
   var cancellableProcessTypes = null;   // filled from the server; null = unknown
   var resumeRoutes            = null;   // {process_type: url}, likewise
+  var pausableProcessTypes    = null;   // {process_type: 1}, likewise
   var SESSION_PAUSE_TYPES = { 'p2_delta': 1, 'archive_scan': 1 };
   var QUEUE_CANCEL_TYPES  = { 'ai_draft_backfill': 1, 'ai_draft_backfill_id_notes': 1 };
 
@@ -166,8 +167,24 @@
         // Not hard-coded here, for the same reason End is not: the server owns
         // which controls are real.
         if (d.resume_routes) resumeRoutes = d.resume_routes;
+        // Pause likewise. The server only lists a type here when the whole
+        // pause→resume loop is reachable, so a Pause button never strands a row.
+        if (d.pausable_types) {
+          var pm = {};
+          d.pausable_types.forEach(function (t) { pm[t] = 1; });
+          pausableProcessTypes = pm;
+        }
       })
       .catch(function () { /* stays null — no controls offered, which fails safe */ });
+  }
+
+  // Returns {url} when this RUNNING row can be cooperatively paused, else null.
+  // Gated by the server-served pausable set (auto_enrich today); never offered
+  // on an already-paused row. Uses the same /pause route review.html uses.
+  function pauseTarget(it) {
+    if (it.status !== 'running' || it.source !== 'process' || !it.pid) return null;
+    if (!pausableProcessTypes || !pausableProcessTypes[it.type]) return null;
+    return { url: '/api/processes/' + it.pid + '/pause' };
   }
 
   // Dismiss is for rows that are dead but will not leave on their own: a
@@ -297,6 +314,8 @@
       '}',
       '#job-status-widget .jq-btn-resume{background:#1a3a08;color:#86efac;border-color:#2d5016;}',
       '#job-status-widget .jq-btn-resume:hover{background:#2d5016;}',
+      '#job-status-widget .jq-btn-pause{background:#2a3c3a;color:#d8e4d8;border-color:#4a6060;}',
+      '#job-status-widget .jq-btn-pause:hover{background:#3a4e4a;}',
       '#job-status-widget .jq-btn-cancel{background:transparent;color:#888;border-color:#4a5e5a;}',
       '#job-status-widget .jq-btn-cancel:hover{background:#3a1a1a;color:#fca5a5;border-color:#7f1d1d;}',
       '#job-status-widget .jq-btn:disabled{opacity:0.4;cursor:default;pointer-events:none;}',
@@ -457,11 +476,17 @@
     }
     var err = it.error ? '<div class="jq-error">' + esc(it.error) + '</div>' : '';
 
-    // Resume sits before End, the order scan.html uses for a paused job.
+    // running → [Pause][End]; paused → [Resume][End]. Pause (running-only) and
+    // Resume (paused-only) are mutually exclusive by status, so at most one of
+    // them renders; End sits after either.
     var buttons = '';
     if (resumeTarget(it)) {
       buttons += '<button type="button" class="jq-btn jq-btn-resume" ' +
                          'onclick="window.__jswResume(' + idx + ', this)">▶ Resume</button>';
+    }
+    if (pauseTarget(it)) {
+      buttons += '<button type="button" class="jq-btn jq-btn-pause" ' +
+                         'onclick="window.__jswPause(' + idx + ', this)">⏸ Pause</button>';
     }
     if (endTarget(it)) {
       buttons += '<button type="button" class="jq-btn jq-btn-cancel" ' +
@@ -525,6 +550,28 @@
     }).catch(function (e) {
       if (btn) { btn.disabled = false; btn.textContent = '▶ Resume'; }
       window.alert('Could not resume: ' + e.message);
+    });
+  };
+
+  // Pause: cooperative stop of a running auto_enrich run. No confirm — it is not
+  // destructive (Resume picks up where it stopped). The button disables to
+  // 'Pausing…' rather than optimistically restyling the row; the next poll
+  // reflects the real 'paused' state, same honesty rule as End/Resume.
+  window.__jswPause = function (idx, btn) {
+    var it = lastItems[idx];
+    if (!it) return;
+    var target = pauseTarget(it);
+    if (!target) return;
+    if (btn) { btn.disabled = true; btn.textContent = 'Pausing…'; }
+    fetch(target.url, { method: 'POST' }).then(function (r) {
+      if (r.ok) return;
+      return r.json().catch(function () { return {}; }).then(function (d) {
+        if (btn) { btn.disabled = false; btn.textContent = '⏸ Pause'; }
+        window.alert('Could not pause: ' + (d.detail || ('HTTP ' + r.status)));
+      });
+    }).catch(function (e) {
+      if (btn) { btn.disabled = false; btn.textContent = '⏸ Pause'; }
+      window.alert('Could not pause: ' + e.message);
     });
   };
 

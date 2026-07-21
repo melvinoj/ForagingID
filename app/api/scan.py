@@ -879,6 +879,49 @@ async def _p2_auto_close(session_id: int) -> None:
         log.exception("_p2_auto_close failed (session_id=%s)", session_id)
 
 
+async def _find_p2_bp_row(session_id: int):
+    """
+    Resolve (process_id, status) for a session's p2_delta background_processes
+    row, so pause/close can reach it WITHOUT the in-memory _p2_bp_pid dict.
+
+    Fast path: the dict (same server lifetime). Slow path (after a restart, when
+    the dict is empty): look the row up by the 'session:<id> — ' prefix Pass C
+    writes into p2_delta.detail. The trailing space+em-dash makes the LIKE
+    pattern session-unique ('session:5 —%' cannot match 'session:50 — …'), and
+    process-delta finishes the prior row before opening a new one, so there is
+    at most one non-terminal p2_delta row per session.
+
+    The lookup is deliberately NOT status-filtered: a pause arriving after
+    recover_stale_processes() has already flipped the row to 'interrupted' must
+    still find it, so the two states can be reconciled. Returns (None, None)
+    when no such row exists.
+    """
+    pid = _p2_bp_pid.get(session_id)
+    try:
+        async with AsyncSessionLocal() as db:
+            if pid is not None:
+                r = (await db.execute(
+                    _sqla_text(
+                        "SELECT process_id, status FROM background_processes "
+                        "WHERE process_id = :pid"
+                    ),
+                    {"pid": pid},
+                )).fetchone()
+            else:
+                r = (await db.execute(
+                    _sqla_text(
+                        "SELECT process_id, status FROM background_processes "
+                        "WHERE process_type = 'p2_delta' AND detail LIKE :pat "
+                        "ORDER BY process_id DESC LIMIT 1"
+                    ),
+                    {"pat": f"session:{session_id} —%"},
+                )).fetchone()
+        return (r[0], r[1]) if r else (None, None)
+    except Exception:
+        log.exception("_find_p2_bp_row failed (session_id=%s)", session_id)
+        return (None, None)
+
+
 async def _p2_tick(obs_id: int, **fields: int) -> None:
     """
     Increment P2 session counters for a single completed observation,
@@ -2349,9 +2392,13 @@ async def process_delta(body: dict):
     # session_id is stored in detail ("session:<id> — …") because this process
     # is ended by POST /api/scan/pause/{session_id}, not by a bp-level signal.
     # Re-arming a stalled session finishes the previous row first so a session
-    # never has two live rows.
-    _prev_pid = _p2_bp_pid.pop(session_id, None)
-    if _prev_pid is not None:
+    # never has two live rows. Resolved by lookup, not the dict alone: after a
+    # restart the dict is empty but a genuinely 'paused' row survives (recovery
+    # only touches 'running' rows), and re-arm must finish that stale row rather
+    # than orphan it beside the new one.
+    _prev_pid, _prev_status = await _find_p2_bp_row(session_id)
+    _p2_bp_pid.pop(session_id, None)
+    if _prev_pid is not None and _prev_status in ("running", "paused"):
         await bp_finish(_prev_pid, "interrupted",
                         error="Session re-armed by a later process-delta call")
     _p2_bp_pid[session_id] = await bp_start(
@@ -3027,10 +3074,16 @@ async def pause_session(session_id: int):
     # Mirror the pause onto the durable process row (Pass C — reporting only).
     # The pause itself is unchanged; without this the row would keep reading
     # 'running' and then go stalled, which is a display lie, not a signal.
-    # The row is left live (not popped) because process-delta re-arms the same
-    # session, and that path finishes any prior row before starting a new one.
+    #
+    # Resolve the row rather than trusting the dict: after a restart the dict is
+    # empty, and recover_stale_processes() has flipped the old 'running' row to
+    # 'interrupted'. _find_p2_bp_row finds it by its detail prefix, and setting
+    # it back to 'paused' reconciles the split — the session genuinely IS paused,
+    # so 'paused' is the single truthful state for both records. The row is left
+    # live (not finished) because process-delta re-arms the same session.
     from app.services.background_processes import bp_set_status as _bp_set_status
-    await _bp_set_status(_p2_bp_pid.get(session_id), "paused")
+    _pause_pid, _ = await _find_p2_bp_row(session_id)
+    await _bp_set_status(_pause_pid, "paused")
 
     return {"paused": True, "session_id": session_id}
 
@@ -3096,5 +3149,16 @@ async def delete_session(session_id: int):
             {"id": session_id},
         )
         await db.commit()
+
+    # Clear the durable p2_delta row so an abandoned (typically paused) session
+    # does not leave a row lingering in the active feed forever. This is the
+    # session-close clear path for a paused row — resolved by lookup so it works
+    # after a restart too. Only a still-live row is transitioned; a row already
+    # complete/failed/interrupted is left as its recorded outcome.
+    _del_pid, _del_status = await _find_p2_bp_row(session_id)
+    if _del_pid is not None and _del_status in ("running", "paused"):
+        await bp_finish(_del_pid, "interrupted",
+                        error="Session deleted before completion")
+    _p2_bp_pid.pop(session_id, None)
 
     return {"deleted": session_id}

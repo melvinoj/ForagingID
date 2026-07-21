@@ -32,6 +32,7 @@ log = logging.getLogger(__name__)
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException
 from sqlalchemy import select, or_, and_
+from sqlalchemy.exc import IntegrityError
 
 from app.config import settings
 from app.database import AsyncSessionLocal
@@ -914,74 +915,102 @@ async def _ingest_file(file_path: Path) -> Union[int, str, None]:
                 local_path.unlink(missing_ok=True)
                 return "duplicate"
 
-        obs = Observation(
-            file_path=str(local_path),   # project-local copy, never HD-dependent
-            file_hash=sha,
-            file_size_bytes=len(content),
-            file_format=ext.lstrip("."),
-            thumbnail_path=str(thumb) if thumb else None,
-            photo_taken_at=exif.taken_at,
-            latitude=exif.latitude,
-            longitude=exif.longitude,
-            altitude_m=exif.altitude_m,
-            camera_make=exif.camera_make,
-            camera_model=exif.camera_model,
-            upload_source=PHONE_ORIGIN_SOURCE,
-            review_status="pending",
-            processing_stage="ingested",
-            identification_status="pending_identification",
-        )
-        session.add(obs)
-        await session.flush()
-
-        # Lenient pre-filter — rejects only clear non-biological subjects
+        # The secondary SELECT above is still a check-then-insert, not atomic:
+        # another writer can commit the same file_hash between it and our own
+        # commit. The UNIQUE index on observations.file_hash (migration 0033) is
+        # the real backstop, and it raises IntegrityError on the loser. That is
+        # a LOST DEDUP RACE, not a failure — handle it as the duplicate it is.
         try:
-            is_plant, conf, category = classify_plant_likelihood(
-                file_path,
-                has_gps=(exif.latitude is not None),
+            obs = Observation(
+                file_path=str(local_path),   # project-local copy, never HD-dependent
+                file_hash=sha,
+                file_size_bytes=len(content),
+                file_format=ext.lstrip("."),
+                thumbnail_path=str(thumb) if thumb else None,
+                photo_taken_at=exif.taken_at,
+                latitude=exif.latitude,
+                longitude=exif.longitude,
+                altitude_m=exif.altitude_m,
+                camera_make=exif.camera_make,
+                camera_model=exif.camera_model,
+                upload_source=PHONE_ORIGIN_SOURCE,
+                review_status="pending",
+                processing_stage="ingested",
+                identification_status="pending_identification",
             )
-        except Exception:
-            is_plant, conf, category = True, 0.5, "plant"
+            session.add(obs)
+            await session.flush()
 
-        gps_note = "GPS present" if exif.latitude is not None else "GPS missing"
+            # Lenient pre-filter — rejects only clear non-biological subjects
+            try:
+                is_plant, conf, category = classify_plant_likelihood(
+                    file_path,
+                    has_gps=(exif.latitude is not None),
+                )
+            except Exception:
+                is_plant, conf, category = True, 0.5, "plant"
 
-        if category in _P1_REJECT_CATEGORIES:
-            # Clear non-biological subject — save record but skip identification.
-            # Recoverable via POST /{obs_id}/override-prefilter.
-            obs.identification_status = "not_plant"
-            obs.review_status         = "pending"
-            obs.processing_stage      = "prefilter_rejected"
-            obs.is_plant_likely       = False
-            obs.plant_detect_confidence = conf
-            obs.prefilter_category    = category
-            session.add(ProcessingLog(
-                observation_id=obs.id,
-                stage="syncthing_prefilter_reject",
-                status="info",
-                message=(
-                    f"Syncthing prefilter rejected: {file_path.name} — "
-                    f"category={category} conf={conf:.3f} {gps_note}"
-                ),
-            ))
-            await session.commit()
-            _state["session_total"] += 1
-            return "prefilter"   # skip _run_identification; obs is saved and recoverable
-        else:
-            obs.is_plant_likely       = True
-            obs.plant_detect_confidence = conf
-            obs.prefilter_category    = category
-            session.add(ProcessingLog(
-                observation_id=obs.id,
-                stage="syncthing_ingest",
-                status="success",
-                message=(
-                    f"Syncthing import: {file_path.name} — "
-                    f"prefilter={category} conf={conf:.3f} {gps_note}"
-                ),
-            ))
-            await session.commit()
-            _state["session_total"] += 1
-            return obs.id
+            gps_note = "GPS present" if exif.latitude is not None else "GPS missing"
+
+            if category in _P1_REJECT_CATEGORIES:
+                # Clear non-biological subject — save record but skip identification.
+                # Recoverable via POST /{obs_id}/override-prefilter.
+                obs.identification_status = "not_plant"
+                obs.review_status         = "pending"
+                obs.processing_stage      = "prefilter_rejected"
+                obs.is_plant_likely       = False
+                obs.plant_detect_confidence = conf
+                obs.prefilter_category    = category
+                session.add(ProcessingLog(
+                    observation_id=obs.id,
+                    stage="syncthing_prefilter_reject",
+                    status="info",
+                    message=(
+                        f"Syncthing prefilter rejected: {file_path.name} — "
+                        f"category={category} conf={conf:.3f} {gps_note}"
+                    ),
+                ))
+                await session.commit()
+                _state["session_total"] += 1
+                return "prefilter"   # skip _run_identification; obs is saved and recoverable
+            else:
+                obs.is_plant_likely       = True
+                obs.plant_detect_confidence = conf
+                obs.prefilter_category    = category
+                session.add(ProcessingLog(
+                    observation_id=obs.id,
+                    stage="syncthing_ingest",
+                    status="success",
+                    message=(
+                        f"Syncthing import: {file_path.name} — "
+                        f"prefilter={category} conf={conf:.3f} {gps_note}"
+                    ),
+                ))
+                await session.commit()
+                _state["session_total"] += 1
+                return obs.id
+        except IntegrityError:
+            # A concurrent writer committed this file_hash between our secondary
+            # SELECT and our commit. Prove that's what happened rather than
+            # assume — re-check in a FRESH session, because this one is in a
+            # failed-transaction state after the IntegrityError.
+            await session.rollback()
+            winner = None
+            if sha:
+                async with AsyncSessionLocal() as _verify:
+                    winner = await _verify.scalar(
+                        select(Observation).where(Observation.file_hash == sha)
+                    )
+            if winner is None:
+                # No matching row → this was NOT a dedup collision (some other
+                # constraint, a real bug). Do not swallow it as a duplicate.
+                raise
+            # Confirmed lost race. Remove ONLY the copy THIS call just wrote —
+            # the winner's row and its own pipeline2 copy are untouched. Guarded
+            # by exists() so we never touch a path we did not create here.
+            if local_path.exists():
+                local_path.unlink()
+            return "duplicate"
 
 
 # ---------------------------------------------------------------------------

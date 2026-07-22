@@ -38,12 +38,31 @@ def _warn_unobserved(process_type: str) -> None:
     )
 
 
-async def bp_start(process_type: str, progress_total: int = 0, detail: str = "") -> Optional[int]:
+async def bp_start(
+    process_type: str,
+    progress_total: int = 0,
+    detail: str = "",
+    *,
+    label: Optional[str] = None,
+    payload: Optional[str] = None,
+    queue_position: Optional[int] = None,
+    created_at: Optional[datetime] = None,
+) -> Optional[int]:
     """
     INSERT a new background_processes row and return its process_id.
     Returns None on any failure — never as a deliberate no-op, which is why
     every None path below warns. Still swallow-and-continue: the caller's work
     must proceed unobserved rather than fail.
+
+    Pass B Phase 2 dual-write params (keyword-only, all default None so existing
+    callers are byte-unchanged and leave the new columns NULL). Only bp rows that
+    have a job_queue twin populate them — mirroring job_queue exactly:
+      label          fixed job name (distinct from `detail`, the mutating step)
+      payload        rerun payload as a JSON *string* (job_queue.payload is TEXT)
+      queue_position job_queue ordering value
+      created_at     enqueue time (distinct from started_at). Pass the SAME
+                     timestamp used for the job_queue INSERT so the twins agree.
+    Nothing reads these columns this phase.
     """
     try:
         now = datetime.utcnow()
@@ -52,10 +71,14 @@ async def bp_start(process_type: str, progress_total: int = 0, detail: str = "")
                 text(
                     "INSERT INTO background_processes "
                     "(process_type, status, started_at, updated_at, last_heartbeat, "
-                    " progress_current, progress_total, detail) "
-                    "VALUES (:pt, 'running', :now, :now, :now, 0, :total, :detail)"
+                    " progress_current, progress_total, detail, "
+                    " label, payload, queue_position, created_at) "
+                    "VALUES (:pt, 'running', :now, :now, :now, 0, :total, :detail, "
+                    " :label, :payload, :qpos, :created_at)"
                 ),
-                {"pt": process_type, "now": now, "total": progress_total, "detail": detail},
+                {"pt": process_type, "now": now, "total": progress_total, "detail": detail,
+                 "label": label, "payload": payload, "qpos": queue_position,
+                 "created_at": created_at},
             )
             await db.commit()
             pid = result.lastrowid
@@ -132,6 +155,15 @@ async def bp_finish(
         parts = ["status = :status", "updated_at = :now", "last_heartbeat = :now"]
         params: dict = {"status": status, "now": now, "pid": process_id, "error": error or None}
         parts.append("error = :error")
+        # Pass B Phase 2 dual-write. error_text mirrors job_queue.error_message
+        # (same value; `error` is left exactly as before). ended_at mirrors
+        # job_queue.ended_at — set ONLY on a genuinely terminal status. bp_finish
+        # is also called with status='paused' by the draft-loop signal path, and
+        # a paused row must NOT get an ended_at (job_queue's pause path leaves it
+        # NULL too). Nothing reads these columns this phase.
+        parts.append("error_text = :error")
+        if status in ("complete", "failed", "cancelled", "interrupted"):
+            parts.append("ended_at = :now")
         if current is not None:
             parts.append("progress_current = :cur")
             params["cur"] = current

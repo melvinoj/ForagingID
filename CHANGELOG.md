@@ -8,36 +8,40 @@
 
 ## Current State
 
-WIDGET ARC — COMPLETE (Passes C, D, E + E-fix 1–6, plus mutex diagnostic + dedup-honesty fix). Global process-visibility widget: durable, floating, minimizable, honest per-capability controls (End/Pause/Resume/Dismiss). THREE fixes written this session are NOT yet live — need a server reload/restart (see below).
+## Current State
 
-Shipped earlier (prior sessions, all snapshotted):
-- P1 recovery 17/17 (hash-verified). deleted_hashes/foreclosure proven (delete function NOT broken — hard-delete removes row+file+blacklists atomically). Pass A (global widget display-only, ran in Seasons session, harmless). Pass C (7 invisible processes given bp rows). Pass D (floating widget, scan-row look, top-right, minimize, show/hide, 90s window). Pass E (honest End per-capability; cancel endpoint refuses non-honoring types — kills flip-back lie; dead itis _cancelled check deleted). E-fix 1 (auto_enrich resumable — index from persisted progress_current; refuses resume if species_list lost). E-fix 2 (dismiss verb, terminal/stalled only, refuses running-fresh + paused; single _STALE_WHERE predicate). E-fix 5 (is_stalled reconciled to _STALE_WHERE — one stale definition everywhere). E-fix 6 (min-visible floor 4000ms + FRESH_FINISH_S=5; bp_start silent-None now warns). Killed 4-day-old orphan uvicorn (PID 65515) — was intercepting traffic + had wedged; "wedge" was the ghost, not a deadlock.
+PASS B (job_queue → background_processes store-merge) IN PROGRESS — Phases 1+2 of 4 COMPLETE. Phase 3 (repoint reads) is the DANGEROUS phase and starts a FRESH THREAD next session.
 
-Shipped THIS session:
-- MUTEX RACE — diagnosed, NOT a bug. The pipeline lock works (single asyncio.Lock per process, atomic acquire proven on 3.9, returns honored). The 20 Jul "two P1 batches through the lock" was the orphan process (two processes = two independent locks = zero mutual exclusion), already fixed by killing 65515. No durable/cross-process lock built — correctly deferred to Phase 14 (real advisory locks come with Postgres/hosting). NOT the same root as the p2_delta split.
-- DEDUP-HONESTY FIX — lost dedup race now counts as DUPLICATE not failure (kills session 94's phantom files_failed), and unlinks the loser's orphan pipeline2/ copy. Proves it's a dedup via re-SELECT before swallowing; genuine IntegrityError still raises. Additive-only. Snapshot db_20260721_080125 / a25b5d6c.
-- E-FIX 3 — p2_delta pause survives restart. Shared _find_p2_bp_row() resolves the bp row by 'session:<id> —' detail prefix when the _p2_bp_pid dict is empty. Closed THREE split-causes (pause mirror, delete_session never cleared the row, re-arm orphaned old paused row), not just the one scoped. Snapshot db_20260721_164318 / c21d56dd.
-- E-FIX 4 — widget Pause button for auto_enrich (makes E-fix 1's Resume reachable from UI). Served pausable_types = CANCELLABLE_TYPES ∩ RESUME_ROUTES = {auto_enrich} (server-authoritative, not hard-coded, doesn't over-offer enrichment_run which has no widget Resume). running→[Pause][End], paused→[Resume][End]. Snapshot db_20260721_192653 / c2895a71.
+Pass B — where it stands:
+- PHASE 1 COMPLETE — additive migration. Migration 0051_bp_dualwrite_columns adds 6 nullable cols to background_processes: queue_position (INT), payload (TEXT), created_at (DATETIME), ended_at (DATETIME), label (TEXT), error_text (TEXT). Native ADD COLUMN, no table rewrite, render_as_batch, reversible (downgrade/upgrade round-trip proven, 116 rows preserved). error left as VARCHAR(512) untouched — added error_text instead of widening (widening forces a SQLite batch-rewrite; ADD is native — keeps Phase 14 cheap). status is free-text VARCHAR(16), no CHECK/enum, so 'queued' already storable, no status DDL. Head = 0051. Snapshot db_20260722_070612 / f77d33db.
+- PHASE 2 COMPLETE — dual-write, TYPE (i) ONLY. bp_start extended with keyword-only label/payload/queue_position/created_at (all default None → every existing caller byte-unchanged, cols stay NULL). bp_finish now writes error_text (mirrors error) + ended_at (terminal statuses only — 'paused' correctly leaves ended_at NULL). culinary._create_backfill_job passes the new fields, mirroring the job_queue INSERT. background_processes.py remains sole writer. job_queue UNCHANGED and still authoritative; NO reader repointed; nothing reads the new cols; widget feed shape unchanged. Verified on DB copy: dual rows fill correctly, job_queue twin byte-identical, non-job_queue types (p1_syncthing etc.) leave new cols NULL. Snapshot db_20260722_084247 / 863f938e.
 
-PENDING — do first next session:
-- SERVER RELOAD/RESTART to make the 3 stacked fixes live (dedup-honesty, E-fix 3, E-fix 4). E-fix 4's endpoint already reloaded; JS needs browser refresh. Then eyeball together (see owed verification).
+Pass B — Phase 3 scope (NEXT, fresh thread — dialogue before prompts):
+- REPOINT READERS from job_queue → background_processes, one at a time, each verified before the next. Readers: _jqRenderPanel (scan.html), /api/queue/list + /api/queue/sse consumers, job-status-widget mergeItems, and CRITICALLY culinary._jq_status — a LIVE pause/cancel CONTROL CHANNEL polled inside a running backfill loop. Repointing that changes a live control path mid-flight; get it wrong and a backfill ignores cancel / pauses wrong job. Sub-split Phase 3: display readers first, control channel LAST under its own tight fence.
+- TYPE (ii) DECISION folds in here: filter/identify/enrich are job_queue-ONLY (no bp row). Deferred from Phase 2 because creating bp rows for them surfaces new widget rows = visible change. Phase 3 is where merging the two feeds into one view is the INTENDED visible change — decide then whether they get bp rows.
+- Blocking columns confirmed present (Phase 1): payload (rerun), queue_position (ordering/queued concept), ended_at, created_at, label, error_text. So repoint has everything it needs.
+- PHASE 4 (after 3): retire job_queue — stop writing it, drop client-side de-dup in the widget, eventually drop the table.
 
-BACKLOG — lined up, in order:
-1. Passport/child manual deletes — Melvin's UI job (NOT a Code task): 13623, 13368, 20066, 20053, 20022 (pending) + 19436/19437 (rejected). Foreclosure proven; each Delete removes row+file+forecloses hash. deleted_hashes permanent (no removal path).
-2. File-less-row DB reconciliation census — deliberately after P1 recovery so nothing marks-gone a recovered row. Read-only diagnostic first.
-3. iNaturalist token refresh — EXPIRED (token_expired/HTTP 401); obs identified on PlantNet alone, below threshold. Refresh at inaturalist.org/users/api_token (operational, per CLAUDE.md).
-4. Pass B store-merge (job_queue→background_processes: additive migration [queue_position, payload, ended_at, created_at, label, error→TEXT, queued] → dual-write → repoint reads → retire). Enables uniform Rerun/Top on BP rows. Own thread, not urgent.
+Widget arc — COMPLETE and LIVE (server restarted this session):
+- Passes C/D/E + E-fix 1-6, mutex diagnostic (NOT a bug — was the killed orphan process), dedup-honesty fix (lost race → duplicate not failure + unlinks orphan copy), all live.
+- OWED browser verification (needs real P1 Syncthing files, verifies whenever photos land): E-fix 4 auto_enrich Pause→Resume cycle; 4s visible floor on fast P1 rows; grep "runs unobserved" stays silent; Pass C auto_enrich/archive_scan rows appear; E-fix 3 p2_delta pause+widget/scanpage agree.
 
-Server restarted → the three stacked fixes (dedup-honesty, E-fix 3, E-fix 4) are now live. So "PENDING — reload first" is done; what remains is just the browser eyeball of them (mostly the E-fix 4 Pause→Resume cycle, whenever a real P1 batch fires).
-iNat token refreshed → backlog item 3 is closed. Dual-source ID is back, so new observations get PlantNet + iNaturalist agreement again instead of PlantNet-alone-below-threshold.
+Done this session (backlog cleared):
+- File/row reconciliation census — the scary 11,391 "missing original" = rejection design (deletes original by design, keeps thumb+row for blacklist audit). Only 3 non-rejected missing = recovery cohort 21212/21215/21216 (never_reject, retained). ZERO lost P1 observations on disk.
+- Orphan cleanup — deleted 185 files / 112.2 MB (42 pipeline2 hash-dup litter + 4 test artifacts + 139 orphan thumbnails), all re-verified fresh at delete time, zero collateral, zero DB writes, deleted_hashes unchanged. Records: RECORD_orphan_delete_20260721.txt + RECORD_fileless_rejected_rows_20260721.txt.
+- iNat token REFRESHED (was expired). Server RESTARTED (3 stacked fixes now live).
 
-OWED VERIFICATION (needs real P1 Syncthing files — verifies whenever photos next land):
-- E-fix 4: auto_enrich row shows [Pause][End]; Pause freezes count → [Resume][End]; Resume continues (no reset); End on paused → terminal; other running rows show NO Pause.
-- 4s floor holds a fast P1 row visible ~4s (not flicker).
-- grep "runs unobserved" in uvicorn terminal stays silent.
-- Pass C: real P1 batch → auto_enrich row appears/clears; real archive scan → archive_scan row with session:<id> rolling per year folder.
-- E-fix 3 (partial-verifiable now): run a P2 delta, Pause it, confirm widget row + scan page agree paused (full restart-scenario proven on copy).
-- Dedup-honesty: glance that duplicate files don't show as files_failed on next P1 batch (race-dependent, mostly proven on copy).
+Backlog remaining:
+1. Passport/child manual deletes — Melvin's UI job (13623, 13368, 20066, 20053, 20022 pending + 19436/19437 rejected). Foreclosure proven. NOT a Code task.
+2. 1,229 fully-file-less rejected rows — POLICY question only (row-deletion, not disk). Lean: LEAVE (carry foreclosure audit trail, trivial weight). List in RECORD_fileless_rejected_rows_20260721.txt if ever wanted.
+3. obs 22162 (Malva moschata, 43.6% PlantNet-only because iNat token was expired) — worth a Retry-ID on next review pass now token's back. Not a Code task.
+
+Stale reference to correct: "obs 653 Oenanthe crocata" cited as a retained-hazard row does NOT exist in DB (id 653 below min id 301, zero Oenanthe rows). Drop it from any hazard-reference list.
+
+Two notes for the fresh Phase 3 thread so nothing's lost in the handoff:
+
+Start Phase 3 with dialogue, not a prompt. It's the only phase with live consequences, and how to sub-split it (display readers first, the _jq_status control channel last, the type-(ii) merge decision) is worth talking through before any prompt gets written. I've put the full scope in the state block so a fresh thread picks up cold with everything it needs.
+The migration is reversible — that's the safety floor under this whole merge. If Phase 3 ever goes wrong, Phases 1+2 back out cleanly (downgrade 0051, drop the dual-write) and job_queue is still fully authoritative. Nothing you've built commits you to finishing; the redundancy is the net.
 
 ## Current State — 19 July 2026
 
@@ -420,6 +424,13 @@ Still open:
 - Enrichment gap remediation — 9 AI drafts pending approval, 6 species never scanned, 79 no-PFAF species need alt-source decision
 
 ## History
+
+### 2026-07-22 20:43
+**Snapshot** — End of session — Session ended from Settings page
+DB: `snapshots/db_20260722_204314.sqlite`
+
+### 2026-07-22 20:43
+**Session ended** — Session ended from Settings page
 
 ### 2026-07-22 08:42
 **Snapshot** — Manual snapshot

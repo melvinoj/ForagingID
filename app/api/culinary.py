@@ -3465,17 +3465,24 @@ async def _create_backfill_job(job_type: str, label: str, total: int) -> tuple[i
     from app.services.background_processes import bp_start
     from sqlalchemy import text as _t
 
+    now = datetime.utcnow()
     async with AsyncSessionLocal() as _db:
         result = await _db.execute(
             _t("INSERT INTO job_queue (job_type, label, status, queue_position, "
                "progress_current, progress_total, payload, created_at) "
                "VALUES (:jt, :lbl, 'running', 0, 0, :tot, '{}', :now)"),
-            {"jt": job_type, "lbl": label, "tot": total, "now": datetime.utcnow()},
+            {"jt": job_type, "lbl": label, "tot": total, "now": now},
         )
         await _db.commit()
         jq_id = result.lastrowid
     await _broadcast()
-    pid = await bp_start(job_type, progress_total=total, detail=label)
+    # Pass B Phase 2 dual-write: mirror the job_queue row's shape onto the bp
+    # twin (label, payload='{}', queue_position=0, created_at=same now). No
+    # job_queue write changes; nothing reads these bp columns yet.
+    pid = await bp_start(
+        job_type, progress_total=total, detail=label,
+        label=label, payload="{}", queue_position=0, created_at=now,
+    )
     return jq_id, pid
 
 

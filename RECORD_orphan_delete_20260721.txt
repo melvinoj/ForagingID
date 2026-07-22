@@ -1,0 +1,58 @@
+# ORPHAN FILE DELETE — record (2026-07-21 21:25:55 local)
+# Snapshot before: db_20260721_212105.sqlite / commit 7c65c324
+# Disk-only deletes. NO DB writes. obs_rows 13858 unchanged, deleted_hashes 15 unchanged.
+# Deleted 185 files, 112,219,846 bytes.
+
+## Bucket A — 42 pipeline2 hash-duplicate orphans (DELETED)
+## each byte-identical to a file owned by the listed surviving row id
+photos/pipeline2/f00e8a22b30d4da2b968f6b83b086a52_PXL_20260609_050228975.jpg	(owned copy survives on row 21220)
+photos/pipeline2/5a11c99b0d9e4c6e82ab9f7bcc2bf1c0_PXL_20260718_045338669.jpg	(owned copy survives on row 22144)
+photos/pipeline2/00d3e93984f647108efc24978e256b32_PXL_20260615_115615729.jpg	(owned copy survives on row 21287)
+photos/pipeline2/59df9cd49bfb42a594139b7da01913ae_PXL_20260607_073246632.MP.jpg	(owned copy survives on row 20570)
+photos/pipeline2/137bbaf7eee9418895e528486fb74910_PXL_20260607_072804669.jpg	(owned copy survives on row 20567)
+photos/pipeline2/0815e8cb43874a1f93a988a41a884bc7_PXL_20260615_115824327.jpg	(owned copy survives on row 21288)
+photos/pipeline2/0fbd005a27864f73bb8f5a9e257811c0_PXL_20260607_073257779.MP.jpg	(owned copy survives on row 20571)
+photos/pipeline2/59066dae6a354641a419b696f45ac787_PXL_20260718_053730747.jpg	(owned copy survives on row 22157)
+photos/pipeline2/ae4f5d93c312424392ac88cb301fcd8b_PXL_20260607_072457369.jpg	(owned copy survives on row 20566)
+photos/pipeline2/6ca71220e4d546009817cf1391239bbd_PXL_20260718_185518809.jpg	(owned copy survives on row 22156)
+photos/pipeline2/25330eefa951486eaa3c3185794108a6_PXL_20260605_180207958.jpg	(owned copy survives on row 19809)
+photos/pipeline2/420c56fee785452d980672027752c781_PXL_20260720_175139754.MP.jpg	(owned copy survives on row 22165)
+photos/pipeline2/4a5715e8920e4864942697263981037a_PXL_20260718_190040347.MP.jpg	(owned copy survives on row 22159)
+photos/pipeline2/bdc4c4e49361447c9c305092ac490141_PXL_20260607_072457369.jpg	(owned copy survives on row 20566)
+photos/pipeline2/684a20e83e91489ab70abf26e89923b6_PXL_20260703_171830690.jpg	(owned copy survives on row 21849)
+photos/pipeline2/25ec49f337824fdabc6d6b18ac834875_PXL_20260703_164028696.jpg	(owned copy survives on row 21848)
+photos/pipeline2/68b3e8bc9ea5428b92903cdbadbee6ef_PXL_20260609_050228975.jpg	(owned copy survives on row 21220)
+photos/pipeline2/734ec4fc645c40d9a375da4a55eace08_PXL_20260605_175219942.jpg	(owned copy survives on row 19834)
+photos/pipeline2/db35bfc07f984433939aac33954627bc_PXL_20260605_175259431.jpg	(owned copy survives on row 19832)
+photos/pipeline2/eade3ed85df9445d84a7e8f4985dad8a_PXL_20260718_190718692.jpg	(owned copy survives on row 22153)
+photos/pipeline2/5d537820bbef40358459fdf4b273e596_PXL_20260720_175156391.MP.jpg	(owned copy survives on row 22164)
+photos/pipeline2/6ad7d92e34a44d75b57ea021cacab107_PXL_20260720_175351862.MP.jpg	(owned copy survives on row 22163)
+photos/pipeline2/c59a45b1cfe5425d826bb72a838d84ff_PXL_20260719_173105100.jpg	(owned copy survives on row 22162)
+photos/pipeline2/810d6d45ef9c4e828fd3e45dec8156e6_PXL_20260607_072957398.MP.jpg	(owned copy survives on row 20569)
+photos/pipeline2/87a2ddf349874d7ab60aec32e9b1a4bb_PXL_20260718_045709883.MP.jpg	(owned copy survives on row 22141)
+photos/pipeline2/32f7224c82474a5fbdbfaccafa71d991_PXL_20260703_171732361.MP.jpg	(owned copy survives on row 21850)
+photos/pipeline2/33a8671e23da408095576deb4b15dc88_PXL_20260718_045345426.jpg	(owned copy survives on row 22142)
+photos/pipeline2/2f20d1aad7fc4837bb9b3bfef9296877_PXL_20260607_072418884.jpg	(owned copy survives on row 20568)
+photos/pipeline2/ff9947d99a6b42af8d2fff4394c1cfcf_PXL_20260607_073257779.MP.jpg	(owned copy survives on row 20571)
+photos/pipeline2/be9bc7faf83d4339b42edf409f8e4323_PXL_20260615_115818357.jpg	(owned copy survives on row 21289)
+photos/pipeline2/01610de4b513472f93b06db7bd779670_PXL_20260607_072804669.jpg	(owned copy survives on row 20567)
+photos/pipeline2/8aebbdd0983449d6ae83a54bb1fd28b1_PXL_20260625_183659944.jpg	(owned copy survives on row 21649)
+photos/pipeline2/5d94703cc1d843a294401ff5b679e4e0_PXL_20260609_050913836.jpg	(owned copy survives on row 21221)
+photos/pipeline2/c1aad44ddf1f4a81beae069ecb2b563d_PXL_20260607_073246632.MP.jpg	(owned copy survives on row 20570)
+photos/pipeline2/0090e2cfa73743e7aaef4ea687ee93b3_PXL_20260605_174920839.jpg	(owned copy survives on row 19833)
+photos/pipeline2/3bc72f867234457ea6c146d87c3a8388_PXL_20260609_050913836.jpg	(owned copy survives on row 21221)
+photos/pipeline2/f2cf0d66bbf9434688f5eb182a411037_PXL_20260609_050228975.jpg	(owned copy survives on row 21220)
+photos/pipeline2/87b97d8960004e49bf4632c5a150e813_PXL_20260607_072418884.jpg	(owned copy survives on row 20568)
+photos/pipeline2/a7c3b5a7e9634f23921a4acc72115051_PXL_20260605_175425557.jpg	(owned copy survives on row 19811)
+photos/pipeline2/fd9d76f3ea5347cab98eedbc6fe14121_PXL_20260703_172130669.jpg	(owned copy survives on row 21851)
+photos/pipeline2/913d4e2d03d940cf8454f3f8581b5329_PXL_20260607_072957398.MP.jpg	(owned copy survives on row 20569)
+photos/pipeline2/8ff191e63e4a44a8bd9e76f16888fce3_PXL_20260609_050913836.jpg	(owned copy survives on row 21221)
+
+## Bucket B — 4 tiny synthetic test artifacts (DELETED)
+photos/pipeline2/5e8c5f50ab73468d9c538aced42cd3a0_dedup_src2.png
+photos/pipeline2/643883657a3248fbb52ef712734de287_dedup_src.png
+photos/pipeline2/df93007953154d618cdb2bfe63e21ed9_d_src.png
+photos/pipeline2/890c6a97a2a64a49b963366fdcc6b610_d_src2.png
+
+## Bucket C — 139 orphan thumbnails (DELETED)
+## (no observations row thumbnail_path resolved to these; recomputed at delete time)

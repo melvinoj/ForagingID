@@ -421,6 +421,10 @@ Still open:
 
 ## History
 
+### 2026-07-22 08:42
+**Snapshot** — Manual snapshot
+DB: `snapshots/db_20260722_084247.sqlite`
+
 ### 2026-07-22 07:06
 **Snapshot** — Manual snapshot
 DB: `snapshots/db_20260722_070612.sqlite`

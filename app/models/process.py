@@ -2,7 +2,7 @@
 from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import DateTime, Integer, String
+from sqlalchemy import DateTime, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
@@ -32,3 +32,16 @@ class BackgroundProcess(Base):
     detail:           Mapped[Optional[str]]  = mapped_column(String(255), nullable=True)
     # Last error message when status='failed'
     error:            Mapped[Optional[str]]  = mapped_column(String(512), nullable=True)
+
+    # --- Pass B Phase 1 (dual-write groundwork). All nullable, all UNUSED this
+    # phase: no code reads or writes these yet. Types mirror job_queue (0028) so
+    # the store-merge in Phase 2 is a straight copy. See migration
+    # 0051_bp_dualwrite_columns.
+    queue_position:   Mapped[Optional[int]]      = mapped_column(Integer, nullable=True)
+    payload:          Mapped[Optional[str]]      = mapped_column(Text, nullable=True)
+    created_at:       Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    ended_at:         Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    label:            Mapped[Optional[str]]      = mapped_column(Text, nullable=True)
+    # Unbounded error, mirrors job_queue.error_message. Distinct from `error`
+    # (VARCHAR(512)) above, which stays untouched this phase.
+    error_text:       Mapped[Optional[str]]      = mapped_column(Text, nullable=True)

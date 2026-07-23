@@ -12,50 +12,44 @@
 
 Current State
 
-Pass B Phase 3c COMPLETE (both steps). Phase 3d (parity gate) NEXT — blocked on one live check.
+Pass B Phase 3c COMPLETE. Phase 3d (parity gate) UNBLOCKED — start in a fresh thread.
 
 Pass B — where it stands:
 
-PHASE 1 COMPLETE — migration 0051, 6 nullable cols on background_processes. Reversible, proven.
-PHASE 2 COMPLETE — dual-write, type (i) only. job_queue authoritative, no reader repointed.
-PHASE 3b COMPLETE — migration 0052 source_job_queue_id (nullable INT, transitional, dropped in Phase 4). Round-trip proven, 116 rows preserved. bp_start gained keyword-only source_job_queue_id; bp_patch(process_id, *, status, queue_position, label, payload, heartbeat) added — explicit whitelist, no-op on all-defaults, raises on terminal statuses (bp_finish is sole terminal writer). Key wired on the existing backfill twin (culinary.py:3484). Error-column reconciliation: _row_to_dict now surfaces error_text with fallback to legacy error; error VARCHAR(512) untouched. Snapshot db_20260723_053847 / 9c1edadc.
-PHASE 3c STEP 1 COMPLETE — de-dup switched from type-string to id. mergeItems registers queueIds[j.id]; bp rows with non-null source_job_queue_id suppress by exact id (running-only condition gone). NULL-keyed rows keep the original type-string path byte-for-byte. source_job_queue_id added to /api/processes/active + bp_active_row SELECTs. Snapshot db_20260723_074531 / 7c60f563.
-PHASE 3c STEP 2 COMPLETE — generic queue path dual-written. W1 enqueue → bp_start(status='queued', …); W3 PATCH → bp_patch/bp_progress/bp_finish by branch; W4 cancel → bp_finish; W5 pause / W6 resume → bp_patch; W7 move-to-top → bp_patch(queue_position=0); W8 kill-all → bp_finish per twin; W9 recover_stale_jobs → set-mirror to swept twins (2c — thresholds NOT aligned, 30s queue / 60s bp). status kwarg added to bp_start (default 'running', 16 existing sites byte-unchanged). All mirrors wrapped in _safe_mirror — logs [queue] bp mirror '<name>' failed (job_queue write already committed), never fails the endpoint. Twins resolved via source_job_queue_id; no twin = silent no-op, never created retroactively. Verified ID-level on copies across filter/identify/enrich full lifecycles, kill-all, W9 divergence window, orphan row, untouched p1_syncthing row. Snapshot db_20260723_082009 / 47edb2dc. Head 0052.
-Item A folded in: _create_backfill_job now sets started_at + last_heartbeat at insert (was born stale → flagged interrupted by queue_api's 30s check until first heartbeat).
-2b decision: filters unchanged — queued belongs to the queue feed while job_queue is authoritative. Revisit at Phase 4.
-queueIds registration UNCHANGED — proposed "register terminal ids" fix was verified wrong at the call site and withdrawn (suppression is downstream of registration; it would have made failed jobs render 0 rows).
+PHASE 1 ✅ migration 0051, 6 nullable cols on background_processes, reversible.
+PHASE 2 ✅ dual-write, type (i) only.
+PHASE 3b ✅ migration 0052 source_job_queue_id (nullable INT, transitional — dropped in Phase 4). Round-trip proven, 116 rows preserved. bp_start gained keyword-only source_job_queue_id; bp_patch(process_id, *, status, queue_position, label, payload, heartbeat) added — explicit whitelist, no-op on all-defaults, raises on terminal (bp_finish is sole terminal writer). Key wired on backfill twin (culinary.py:3484). _row_to_dict now surfaces error_text with fallback to legacy error; VARCHAR(512) untouched. Snapshot db_20260723_053847 / 9c1edadc.
+PHASE 3c STEP 1 ✅ de-dup switched from type-string to id. mergeItems registers queueIds[j.id]; bp rows with non-null source_job_queue_id suppress by exact id (running-only condition removed). NULL-keyed rows keep the type-string path byte-for-byte. source_job_queue_id added to /api/processes/active + bp_active_row. Snapshot db_20260723_074531 / 7c60f563.
+PHASE 3c STEP 2 ✅ generic queue path dual-written. W1→bp_start(status='queued'), W3→bp_patch/bp_progress/bp_finish by branch, W4→bp_finish, W5/W6→bp_patch, W7→bp_patch(queue_position=0), W8→bp_finish per twin, W9→set-mirror to swept twins (thresholds NOT aligned: 30s queue / 60s bp). status kwarg on bp_start (default 'running', 16 sites byte-unchanged). All mirrors in _safe_mirror — logs [queue] bp mirror '<name>' failed (job_queue write already committed), never fails the endpoint. No twin = silent no-op, never created retroactively. Snapshot db_20260723_082009 / 47edb2dc. Head 0052.
+Item A: _create_backfill_job sets started_at + last_heartbeat at insert.
+2b decision: status filters unchanged — queued belongs to the queue feed while job_queue is authoritative. Revisit Phase 4.
+queueIds registration UNCHANGED — proposed "register terminal ids" fix verified wrong at the call site and withdrawn.
 
-BLOCKING 3d — the one live check not yet run:
-Enqueue a real queue job (scan page → small folder → Filter; browser tab must stay on /scan, _jqTick runs client-side). Then:
+3d GATE PASSED — live, 23 July. Filter jobs 56/57/58 all carry twins (130/131/132) with matching status and progress. grep "bp mirror" silent across the run. W1 (enqueue), W3 (progress), W5 (pause), W4 (cancel, via POST /api/queue/57/cancel — both sides cancelled, ended_at stamped) all mirrored live on real traffic. Pre-Step-2 rows (55, 54) correctly NULL-twinned.
 
-grep -r "bp mirror" logs/server_20260721_205221.log → silence = mirrors landed
-the job_queue↔bp LEFT JOIN → new row (id 56) with process_id filled and statuses matching
+THREE CONTROL DEFECTS — fold into 3e consolidation, do not patch separately:
 
-Newest queue job is currently id 55, 19 June — nothing has gone through job_queue in over a month, so every NULL twin is expected and the empty grep proves nothing yet. Both checks must be re-run after a real job. Log file confirmed live (server_20260721_205221.log, written 21:10 today).
+Resume enqueues a duplicate (P2 queue jobs). Job 57 paused at 2,650 → Resume created job 58, which ran 0→4,578. Both real job_queue rows, both twinned. Timestamps: 57 created 19:32:36, 58 at 19:33:30. No data harm — second pass hit the hash gate (RECEIVED 6,030, ALREADY DONE 2,211, REJECTED 0, FAILED 0); prefilter did not re-reject or re-delete. Mechanism unread.
+Enrichment Resume was a dead relabel — fixed this session (below), but it's the same class in the other store.
+Per-type control gating is inconsistent — enrichment rows show End but no widget Resume (enrichment_run excluded from RESUME_ROUTES, processes.py:48-56); P2 filter rows show Resume but no End. Consolidation gets one coherent rule.
 
-Enrichment Pause/Resume — FIXED this session (separate from Pass B; enrichment_run is bp-native, no job_queue row):
+Enrichment Pause/Resume — FIXED (bp-native, no job_queue row): root cause was onclick hardcoded to _enrichPauseBg, so "Resume" POSTed /pause at a paused row → 409. FIX 1: _enrichPollBg rewires by state; new _enrichResumeBg POSTs /api/enrichment/run — no cancel step (start route reuses the paused bp row deliberately). FIX 2: _pollEnrichStatus gained a paused branch (was falling through, leaving inline box stuck "Running…" with button permanently disabled). FIX 3: stopped_at persisted to bp row via bp_progress before status flips; precedence memory → bp row → explicit logged fresh start, never a silent zero. Both paths reuse the same process_id. Live-verified. Snapshot db_20260723_204119 / 21cf45c7.
 
-Root cause: banner Resume was a dead relabel — onclick hardcoded to _enrichPauseBg, so "Resume" POSTed /pause at a paused row and got a 409. Resume was never wired, not broken.
-FIX 1: _enrichPollBg rewires by state; new _enrichResumeBg POSTs /api/enrichment/run (the existing working path — reads resume_from, reuses the paused bp row). No cancel step — unlike the queue-backed backfill, enrichment's start route reuses the bp row deliberately; cancelling would terminalise then resurrect it.
-FIX 2: _pollEnrichStatus gained a paused branch — was falling through, leaving the inline box stuck on "Running…" with btn-run-enrich permanently disabled.
-FIX 3: stopped_at persisted to the bp row via bp_progress before status flips to paused (was memory-only → server restart lost it → silent fresh run from 0 across 566 species with re-fetch-all-sources). Precedence: in-memory resume_from → persisted bp row progress_current → explicit logged fresh start. Never a silent zero. Both paths reuse the same process_id, no duplication.
-Live-verified: pause propagates to widget + banner + inline box; resume continues in place.
-Snapshot db_20260723_204119 / 21cf45c7. Head 0052, no schema change.
-OWED (unverified inference, read before acting): the bp_row fallback appears to read via bp_active_row, which admits running as well as paused — a server killed mid-run could leave a stale running row read as a resume point, skipping species. Harm is skipped work, not corrupted data (enrichment writes no verdicts, honours protected_fields).
+OWED (unverified inference): bp_row fallback appears to read via bp_active_row, which admits running — a server killed mid-run could leave a stale running row read as a resume point, skipping species. Harm is skipped work, not corrupted data.
 
-Widget gated to desktop: suppressed below 640px via mount gate, not CSS — startPolling returns early, resize tears down both directions (single setInterval, no SSE in this file; queue SSE lives in scan.html, out of scope). No external dependency on the widget's DOM node. Live-checked visually; Network-tab confirmation that the 3s polls actually stop is still owed (the whole point of a mount gate over CSS).
+Widget gated to ≥640px — mount gate not CSS (startPolling returns early; resize tears down both directions; single setInterval, no SSE in this file). Network-tab confirmation that polls actually stop is still owed.
 
-Scope note for 3d / Phase 4:
+Scope note for 3e / Phase 4:
 
-Server-side serialization — the one-at-a-time guarantee lives in _jqTick in a browser tab. Phase 4 drops job_queue; if serialization hasn't moved server-side first, closing the tab removes the only thing enforcing it. Same missing piece as the P1/P2 concurrency mutex.
-UI consolidation — all status/progress into the widget (enrichment banner deleted, scan queue panel folded in); launchers stay in context (Run enrichment box keeps its checkbox + button); per-job controls move to the widget. Depends on (1). RESUME_ROUTES currently excludes enrichment_run (processes.py:48-56) — correct when nothing could resume it, now stale; revisit here, not in isolation.
-Expanded widget state — design pass (Recraft/Figma), not a code prompt. Phone-width layout formally OUT of scope (upload happens on wifi at the laptop; revisit only at productization).
+Server-side serialization — the one-at-a-time guarantee lives in _jqTick in a browser tab. Phase 4 drops job_queue; if serialization hasn't moved server-side first, closing the tab removes the only thing enforcing it. Same gap as the P1/P2 mutex — and the duplicate-enqueue above is that gap arriving as P2-vs-P2.
+UI consolidation — status/progress into the widget (enrichment banner deleted, scan queue panel folded in); launchers stay in context; per-job controls move to the widget with one consistent gating rule.
+Expanded widget state — design pass (Recraft/Figma). Phone-width layout OUT of scope (upload happens on wifi at the laptop; revisit at productization only).
 
-Carried, unchanged: 3 damaged map rows (17052/17737/18709); Retry-ID buttons absent on below_threshold cards; snapshots gzip option (~700M win); thumbnails_quarantine purge; passport/child manual deletes (UI job, not Code); 1,229 file-less rejected rows (policy only, lean LEAVE); obs 22162 Retry-ID.
+Carried, unchanged: 3 damaged map rows (17052/17737/18709); Retry-ID absent on below_threshold cards; snapshots gzip (~700M win); thumbnails_quarantine purge; passport/child manual deletes (UI job); 1,229 file-less rejected rows (policy only, lean LEAVE); obs 22162 Retry-ID.
 
-New this session: P1 ingest on dodgy wifi produced a batch of transport-failure no-candidate rows (obs 22175–22178+, PlantNet write timeouts + iNat 500s). Fail-quiet design held — files intact, rows routed to needs_review, nothing lost. Same signature as 21562/21770/21771 (19 July) which re-identified cleanly on retry. Worth a Retry-ID pass on a good connection.
+Immediate operational: 2013 folder has 2,367 files ready to Identify — hold until the connection is solid. Earlier P1 ingest on dodgy wifi produced transport-failure no-candidate rows (obs 22175–22178+, PlantNet write timeouts + iNat 500s); fail-quiet design held, files intact, routed to needs_review. Same signature as 21562/21770/21771 which re-identified cleanly on retry — worth a Retry-ID pass on a good connection.
 
-Process note: three inferred defects were promoted to prompt scope before being read at the call site this session (error_text invisibility, terminal-row double-render, enrichment lock). All three were wrong and caught by verify-first instructions. Rule holds: an inferred defect gets a verification step and nothing else until confirmed in code.
+Process note: three inferred defects were promoted to prompt scope before being read at the call site this session (error_text invisibility, terminal-row double-render, enrichment lock), plus one wrong instruction (pressing a non-existent End button on P2 rows). All caught by verify-first instructions. Rule holds: an inferred defect gets a verification step and nothing else until confirmed in code.
 
 ## Current State — 19 July 2026
 
@@ -438,6 +432,13 @@ Still open:
 - Enrichment gap remediation — 9 AI drafts pending approval, 6 species never scanned, 79 no-PFAF species need alt-source decision
 
 ## History
+
+### 2026-07-23 21:40
+**Snapshot** — End of session — Session ended from Settings page
+DB: `snapshots/db_20260723_214021.sqlite`
+
+### 2026-07-23 21:40
+**Session ended** — Session ended from Settings page
 
 ### 2026-07-23 21:14
 **Snapshot** — End of session — Session ended from Settings page

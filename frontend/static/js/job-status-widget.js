@@ -27,6 +27,12 @@
   var WIDGET_ID = 'job-status-widget';
   var STYLE_ID  = 'job-status-widget-css';
 
+  // Desktop-only. Below phone width the widget must neither mount nor poll —
+  // a CSS display:none would still fetch /api/processes/active and
+  // /api/queue/list every POLL_MS. This is a hard init/runtime gate instead.
+  var DESKTOP_MIN_W = 640;
+  function _isDesktop() { return window.innerWidth >= DESKTOP_MIN_W; }
+
   // Rows shown while live (running/paused) plus terminal rows that are still
   // inside the server's recency window. ONE window governs this, and it lives
   // server-side: processes.py _RECENT_WINDOW_S = 90 s. /api/processes/active
@@ -666,6 +672,9 @@
   // ── Poll loop ────────────────────────────────────────────────────────────
 
   function poll() {
+    // Defensive: if the viewport dropped below the breakpoint between ticks,
+    // tear down here too so an in-flight poll can never re-mount the widget.
+    if (!_isDesktop()) { stopPolling(); _hideWidget(); return; }
     fetchBoth().then(function (results) {
       var items = mergeItems(results[0], results[1]);
       _pruneFirstSeen();
@@ -678,6 +687,7 @@
   }
 
   function startPolling() {
+    if (!_isDesktop()) return;   // gated: never poll below the breakpoint
     if (pollTimer) return;
     poll();
     pollTimer = setInterval(poll, POLL_MS);
@@ -691,6 +701,19 @@
     if (document.hidden) stopPolling(); else startPolling();
   });
 
+  // Cross the breakpoint in either direction. Above 640: mount + start polling.
+  // Below: stop the timer AND remove the DOM node. Idempotent — startPolling
+  // no-ops when already polling or below width; stopPolling/_hideWidget no-op
+  // when already torn down — so firing on every resize event needs no debounce.
+  window.addEventListener('resize', function () {
+    if (_isDesktop()) {
+      startPolling();
+    } else {
+      stopPolling();
+      _hideWidget();
+    }
+  });
+
   _loadCancellableTypes();
-  startPolling();
+  startPolling();   // gated by _isDesktop(): a no-op below the breakpoint
 })();

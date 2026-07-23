@@ -4163,7 +4163,16 @@ async function _enrichPollBg() {
     if (detail)  detail.textContent = proc.detail || '';
     if (stalled) stalled.style.display = proc.is_stalled ? '' : 'none';
     if (pauseBtn) {
-      pauseBtn.textContent = proc.status === 'paused' ? '▶ Resume' : '⏸ Pause';
+      // Route the click to the correct action for the current state. When paused
+      // the button must RESUME (POST /api/enrichment/run) — not re-fire /pause,
+      // which 409s on an already-paused row. .onclick overrides the inline attr.
+      if (proc.status === 'paused') {
+        pauseBtn.textContent = '▶ Resume';
+        pauseBtn.onclick = _enrichResumeBg;
+      } else {
+        pauseBtn.textContent = '⏸ Pause';
+        pauseBtn.onclick = _enrichPauseBg;
+      }
       pauseBtn.disabled = false;
     }
     if (banner) banner.style.display = '';
@@ -4189,6 +4198,37 @@ async function _enrichPauseBg() {
     const r = await fetch('/api/processes/' + _epbProcessId + '/pause', { method: 'POST' });
     if (r.ok) {
       if (btn) btn.textContent = '▶ Paused…';
+    } else {
+      if (btn) btn.disabled = false;
+    }
+  } catch (_) {
+    if (btn) btn.disabled = false;
+  }
+}
+
+// Resume from the banner. Calls the existing working path, POST /api/enrichment/run,
+// which reads resume_from and REUSES the paused bp row via bp_set_status. No cancel
+// step: unlike the queue-backed backfill, enrichment's start route reuses the paused
+// row deliberately — cancelling first would terminalise it and then resurrect it.
+async function _enrichResumeBg() {
+  const btn = document.getElementById('epb-pause-btn');
+  if (btn) btn.disabled = true;
+  try {
+    const reEnrichEl = document.getElementById('enrich-opt-reenrich');
+    const reEnrich = reEnrichEl ? reEnrichEl.checked : true;
+    const r = await fetch('/api/enrichment/run', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ re_enrich: reEnrich }),
+    });
+    if (r.ok) {
+      const data = await r.json();
+      // Adopt the resumed job so the inline box's poller tracks it too.
+      _enrichJobId = data.job_id;
+      if (!_enrichPoller) _enrichPoller = setInterval(_pollEnrichStatus, 1500);
+      if (btn) btn.textContent = '▶ Resuming…';
+      // The bg banner poll will observe 'running' on its next tick and re-wire
+      // the button back to Pause.
     } else {
       if (btn) btn.disabled = false;
     }
@@ -4264,6 +4304,19 @@ async function _pollEnrichStatus() {
       clearInterval(_enrichPoller);
       _enrichPoller = null;
       _enrichRunFailed(job.error || 'Unknown error');
+    } else if (job.status === 'paused') {
+      // Previously fell through: the box stayed "Running…" and btn-run-enrich
+      // was left permanently disabled — a dead end. Stop polling, show the
+      // paused state, and re-enable the run control (relabelled Resume). Its
+      // onclick is startEnrichmentRun, which POSTs /api/enrichment/run and
+      // resumes from resume_from, so the box is a live control again.
+      clearInterval(_enrichPoller);
+      _enrichPoller = null;
+      const runBtn = document.getElementById('btn-run-enrich');
+      if (runBtn) { runBtn.disabled = false; runBtn.textContent = '▶ Resume'; }
+      progressLbl.textContent = total > 0
+        ? `⏸ Paused at ${current}/${total} — Resume to continue`
+        : '⏸ Paused — Resume to continue';
     }
   } catch (_) { /* ignore transient network errors while polling */ }
 }

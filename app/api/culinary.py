@@ -2823,7 +2823,17 @@ async def _run_enrichment_job(job_id: str, re_enrich: bool) -> None:
         prog = job["progress"]
 
         if stopped_at is not None:
-            # Loop exited due to pause or cancel — leave BP status as-is (already set by API)
+            # Loop exited due to pause or cancel — leave BP status as-is (already
+            # set by the API). FIX 3: persist the TRUE stopped_at to the bp row's
+            # progress_current so resume survives a restart (the in-memory
+            # resume_from is otherwise the only record). The 5-item heartbeat
+            # cadence means progress_current on disk is a stale multiple of 5;
+            # this overwrites it with the exact resume index. bp_progress is the
+            # progress writer (bp_patch does not carry progress); it updates
+            # progress/detail/heartbeat WITHOUT touching status, so the row stays
+            # 'paused' and is not resurrected to running.
+            await bp_progress(process_id, stopped_at, prog.get("total", 0),
+                              f"Paused at {stopped_at} of {prog.get('total', 0)}")
             job["status"] = "paused"
             job["resume_from"] = stopped_at
         else:
@@ -2881,14 +2891,45 @@ async def start_enrichment_run(
                 },
             )
 
-    # Resume from a paused job if one exists in memory
+    # ── Resume precedence (FIX 3) ────────────────────────────────────────────
+    # 1. in-memory resume_from from a paused job (preferred — most authoritative)
+    # 2. else the paused bp row's persisted progress_current (survives a restart
+    #    that cleared _enrichment_jobs)
+    # 3. else genuine fresh start from 0 — the legitimate "Run now" case, logged
+    #    as a fresh start so a lost resume can never masquerade as one silently.
     resume_from = 0
     paused_job = None
+    resume_pid = None          # non-None ⇒ reuse this paused bp row instead of bp_start
+    resume_source = "fresh"    # 'memory' | 'bp_row' | 'fresh' — surfaced in the response
     for existing in reversed(list(_enrichment_jobs.values())):
         if existing.get("status") == "paused":
             paused_job = existing
             resume_from = existing.get("resume_from", 0)
+            resume_pid = existing.get("process_id")
+            resume_source = "memory"
             break
+
+    if paused_job is None:
+        # Memory has no paused entry (e.g. after a server restart). Recover the
+        # position from a persisted paused bp row rather than silently running
+        # the whole batch again.
+        bp_row = await bp_active_row("enrichment_run")
+        if bp_row and bp_row.get("status") == "paused":
+            resume_pid = bp_row["process_id"]
+            resume_from = bp_row.get("progress_current") or 0
+            resume_source = "bp_row"
+            log.info(
+                "[enrichment] resume recovered from persisted bp row pid=%s at index %d "
+                "(no in-memory job)", resume_pid, resume_from)
+            if resume_from == 0:
+                # A paused row with no usable index — report it rather than
+                # pretend this is a clean resume.
+                log.warning(
+                    "[enrichment] paused bp row pid=%s has progress_current=0 — "
+                    "resume index unknown; this run will re-process from the start",
+                    resume_pid)
+        else:
+            log.info("[enrichment] no paused run found (memory or bp) — fresh start from 0")
 
     job_id = str(uuid.uuid4())
     _enrichment_jobs[job_id] = {
@@ -2905,9 +2946,11 @@ async def start_enrichment_run(
         "process_id":  None,
     }
 
-    # If resuming, reuse the existing paused BP row (update status back to running)
-    if paused_job and paused_job.get("process_id"):
-        process_id = paused_job["process_id"]
+    # If resuming (from memory OR a persisted bp row), REUSE that same paused bp
+    # row — flip it back to running — so it is never duplicated. resume_pid is set
+    # by either resume path above.
+    if resume_pid:
+        process_id = resume_pid
         # Routed through bp_set_status so background_processes.py stays the sole
         # writer of this table. heartbeat=True reproduces the previous raw UPDATE
         # exactly (status + updated_at + last_heartbeat).
@@ -2925,7 +2968,8 @@ async def start_enrichment_run(
         job_id=job_id,
         re_enrich=body.re_enrich,
     )
-    return {"job_id": job_id, "status": "running", "process_id": process_id, "resume_from": resume_from}
+    return {"job_id": job_id, "status": "running", "process_id": process_id,
+            "resume_from": resume_from, "resume_source": resume_source}
 
 
 @router.get("/api/enrichment/status/{job_id}")

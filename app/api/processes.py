@@ -95,7 +95,8 @@ async def get_active_processes():
             rows = (await db.execute(
                 text(
                     "SELECT process_id, process_type, status, started_at, updated_at, "
-                    "       last_heartbeat, progress_current, progress_total, detail, error "
+                    "       last_heartbeat, progress_current, progress_total, detail, error, "
+                    "       error_text "
                     "FROM background_processes "
                     "WHERE status IN ('running', 'paused') "
                     "   OR last_heartbeat >= :cutoff "

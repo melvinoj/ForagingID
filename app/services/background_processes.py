@@ -47,6 +47,7 @@ async def bp_start(
     payload: Optional[str] = None,
     queue_position: Optional[int] = None,
     created_at: Optional[datetime] = None,
+    source_job_queue_id: Optional[int] = None,
 ) -> Optional[int]:
     """
     INSERT a new background_processes row and return its process_id.
@@ -63,6 +64,11 @@ async def bp_start(
       created_at     enqueue time (distinct from started_at). Pass the SAME
                      timestamp used for the job_queue INSERT so the twins agree.
     Nothing reads these columns this phase.
+
+    Pass B Phase 3b (migration 0052) adds source_job_queue_id (keyword-only,
+    default None so existing callers are byte-unchanged and leave it NULL): the
+    explicit id of the job_queue twin, for identity-based de-dup in a later phase.
+    Still unread this phase.
     """
     try:
         now = datetime.utcnow()
@@ -72,13 +78,13 @@ async def bp_start(
                     "INSERT INTO background_processes "
                     "(process_type, status, started_at, updated_at, last_heartbeat, "
                     " progress_current, progress_total, detail, "
-                    " label, payload, queue_position, created_at) "
+                    " label, payload, queue_position, created_at, source_job_queue_id) "
                     "VALUES (:pt, 'running', :now, :now, :now, 0, :total, :detail, "
-                    " :label, :payload, :qpos, :created_at)"
+                    " :label, :payload, :qpos, :created_at, :sjqid)"
                 ),
                 {"pt": process_type, "now": now, "total": progress_total, "detail": detail,
                  "label": label, "payload": payload, "qpos": queue_position,
-                 "created_at": created_at},
+                 "created_at": created_at, "sjqid": source_job_queue_id},
             )
             await db.commit()
             pid = result.lastrowid
@@ -310,6 +316,84 @@ async def recover_stale_processes() -> None:
 TERMINAL_STATUSES = ("complete", "failed", "cancelled", "interrupted")
 
 
+async def bp_patch(
+    process_id: Optional[int],
+    *,
+    status: Optional[str] = None,
+    queue_position: Optional[int] = None,
+    label: Optional[str] = None,
+    payload: Optional[str] = None,
+    heartbeat: bool = False,
+) -> None:
+    """
+    General-purpose mutation helper for a bp row's job_queue-twin columns.
+
+    Fills the gap Pass B Phase 3a found: bp had start/progress/heartbeat/finish/
+    set_status but no way to mutate queue_position/label/payload after creation,
+    so a job_queue reorder/relabel could not propagate to its twin. This is that
+    writer — capability only; NO call sites are added here (wired in Phase 3c).
+
+    Whitelist, not **kwargs: the mutable set is exactly {status, queue_position,
+    label, payload}, named explicitly so a typo can never write an unintended
+    column and the set stays a deliberate decision.
+
+    Rules:
+      • Only non-None params are written. A call with every column param None and
+        heartbeat=False is a pure no-op — it does NOT touch the row (not even
+        updated_at).
+      • Any write always bumps updated_at, matching bp_progress. heartbeat=True
+        additionally stamps last_heartbeat.
+      • This helper is NOT a terminal writer. bp_finish is the single owner of
+        terminal transitions (status in TERMINAL_STATUSES → it also sets
+        ended_at). If a terminal status is passed here, raise ValueError rather
+        than writing a terminal status without the ended_at bp_finish guarantees.
+        The terminal set is TERMINAL_STATUSES — the same tuple bp_finish's
+        ended_at guard and bp_dismiss use.
+    """
+    if process_id is None:
+        return
+    if status is not None and status in TERMINAL_STATUSES:
+        raise ValueError(
+            f"bp_patch cannot write terminal status {status!r}; "
+            "bp_finish is the single terminal writer (it also sets ended_at)"
+        )
+
+    parts: list[str] = []
+    params: dict = {"pid": process_id}
+    if status is not None:
+        parts.append("status = :status")
+        params["status"] = status
+    if queue_position is not None:
+        parts.append("queue_position = :qpos")
+        params["qpos"] = queue_position
+    if label is not None:
+        parts.append("label = :label")
+        params["label"] = label
+    if payload is not None:
+        parts.append("payload = :payload")
+        params["payload"] = payload
+
+    # Nothing to write and no heartbeat requested → true no-op, row untouched.
+    if not parts and not heartbeat:
+        return
+
+    now = datetime.utcnow()
+    params["now"] = now
+    parts.append("updated_at = :now")
+    if heartbeat:
+        parts.append("last_heartbeat = :now")
+
+    try:
+        async with AsyncSessionLocal() as db:
+            await db.execute(
+                text(f"UPDATE background_processes SET {', '.join(parts)} WHERE process_id = :pid"),
+                params,
+            )
+            await db.commit()
+    except Exception:
+        log.exception("background_processes: bp_patch failed (id=%s)", process_id)
+
+
 async def bp_dismiss(process_id: int) -> dict:
     """
     Clear a DEAD row out of the active feed. Never touches live work.
@@ -416,7 +500,8 @@ async def bp_active_row(process_type: str) -> Optional[dict]:
             row = (await db.execute(
                 text(
                     "SELECT process_id, process_type, status, started_at, updated_at, "
-                    "       last_heartbeat, progress_current, progress_total, detail, error "
+                    "       last_heartbeat, progress_current, progress_total, detail, error, "
+                    "       error_text "
                     "FROM background_processes "
                     "WHERE process_type = :pt AND status IN ('running', 'paused') "
                     "ORDER BY started_at DESC LIMIT 1"
@@ -445,6 +530,15 @@ def _row_to_dict(row) -> dict:
     # Shared predicate — same rule, same threshold as the startup sweep and
     # bp_dismiss. started_at (row[3]) participates; it used to be ignored here.
     is_stalled = is_stale_row(status, heartbeat, _dt_parse(row[3]))
+    # Pass B Phase 3b error reconciliation. bp_finish writes BOTH error (row[9],
+    # VARCHAR(512), truncatable) and error_text (row[10], unbounded, the
+    # Phase-4-canonical column). Surface error_text when present — it is the
+    # fuller, untruncated value and survives error's eventual retirement —
+    # falling back to error for pre-Phase-2 rows that never got an error_text.
+    # Defensive on length: a 10-column row (no error_text selected) still works.
+    error_val = row[9]
+    if len(row) > 10 and row[10] is not None:
+        error_val = row[10]
     return {
         "process_id":       row[0],
         "process_type":     row[1],
@@ -455,7 +549,7 @@ def _row_to_dict(row) -> dict:
         "progress_current": row[6] or 0,
         "progress_total":   row[7] or 0,
         "detail":           row[8],
-        "error":            row[9],
+        "error":            error_val,
         "is_stalled":       is_stalled,
         "heartbeat_age_s":  int((now - heartbeat).total_seconds()) if heartbeat else None,
     }

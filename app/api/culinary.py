@@ -3479,9 +3479,12 @@ async def _create_backfill_job(job_type: str, label: str, total: int) -> tuple[i
     # Pass B Phase 2 dual-write: mirror the job_queue row's shape onto the bp
     # twin (label, payload='{}', queue_position=0, created_at=same now). No
     # job_queue write changes; nothing reads these bp columns yet.
+    # Pass B Phase 3b: also pass the freshly-inserted job_queue id as the explicit
+    # join key (source_job_queue_id=jq_id) — still unread this phase.
     pid = await bp_start(
         job_type, progress_total=total, detail=label,
         label=label, payload="{}", queue_position=0, created_at=now,
+        source_job_queue_id=jq_id,
     )
     return jq_id, pid
 

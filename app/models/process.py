@@ -45,3 +45,9 @@ class BackgroundProcess(Base):
     # Unbounded error, mirrors job_queue.error_message. Distinct from `error`
     # (VARCHAR(512)) above, which stays untouched this phase.
     error_text:       Mapped[Optional[str]]      = mapped_column(Text, nullable=True)
+
+    # --- Pass B Phase 3b (migration 0052). Explicit join key from a bp row back
+    # to its job_queue twin, replacing the fragile job_type==process_type de-dup.
+    # TRANSITIONAL: written only by culinary._create_backfill_job this phase, read
+    # by nothing yet; dropped in Phase 4 with the job_queue table.
+    source_job_queue_id: Mapped[Optional[int]]   = mapped_column(Integer, nullable=True)

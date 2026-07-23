@@ -3468,9 +3468,15 @@ async def _create_backfill_job(job_type: str, label: str, total: int) -> tuple[i
     now = datetime.utcnow()
     async with AsyncSessionLocal() as _db:
         result = await _db.execute(
+            # started_at + last_heartbeat set at insert: this row is born
+            # 'running', and without them queue_api._is_stale (30 s) reads it as
+            # 'interrupted' until the worker's first heartbeat. Under Step 2
+            # dual-write that manufactured a job_queue='interrupted' vs
+            # bp='running' divergence (fails 3d parity; W9 could sweep it on a
+            # restart in that window). Born non-stale on both sides.
             _t("INSERT INTO job_queue (job_type, label, status, queue_position, "
-               "progress_current, progress_total, payload, created_at) "
-               "VALUES (:jt, :lbl, 'running', 0, 0, :tot, '{}', :now)"),
+               "progress_current, progress_total, payload, created_at, started_at, last_heartbeat) "
+               "VALUES (:jt, :lbl, 'running', 0, 0, :tot, '{}', :now, :now, :now)"),
             {"jt": job_type, "lbl": label, "tot": total, "now": now},
         )
         await _db.commit()

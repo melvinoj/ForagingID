@@ -501,7 +501,7 @@ async def bp_active_row(process_type: str) -> Optional[dict]:
                 text(
                     "SELECT process_id, process_type, status, started_at, updated_at, "
                     "       last_heartbeat, progress_current, progress_total, detail, error, "
-                    "       error_text "
+                    "       error_text, source_job_queue_id "
                     "FROM background_processes "
                     "WHERE process_type = :pt AND status IN ('running', 'paused') "
                     "ORDER BY started_at DESC LIMIT 1"
@@ -539,6 +539,10 @@ def _row_to_dict(row) -> dict:
     error_val = row[9]
     if len(row) > 10 and row[10] is not None:
         error_val = row[10]
+    # Pass B Phase 3c. The explicit job_queue twin id, surfaced so the widget can
+    # de-dup the two feeds by identity instead of the fragile job_type match.
+    # Defensive on length: a SELECT that stops before this column leaves it None.
+    source_jqid = row[11] if len(row) > 11 else None
     return {
         "process_id":       row[0],
         "process_type":     row[1],
@@ -552,4 +556,5 @@ def _row_to_dict(row) -> dict:
         "error":            error_val,
         "is_stalled":       is_stalled,
         "heartbeat_age_s":  int((now - heartbeat).total_seconds()) if heartbeat else None,
+        "source_job_queue_id": source_jqid,
     }

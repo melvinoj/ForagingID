@@ -389,6 +389,12 @@
   function mergeItems(processes, queueJobs) {
     var items = [];
     var queueRunningTypes = {};
+    // Phase 3c: exact-identity de-dup. Every job_queue row shown in the feed
+    // records its id here; a bp row carrying source_job_queue_id === one of
+    // these ids is its twin and is suppressed on the bp side (job_queue is the
+    // authoritative render). Unlike the type key, this holds for queued and
+    // paused rows too, not just running.
+    var queueIds = {};
 
     queueJobs.forEach(function (j) {
       if (j.status === 'running' || j.status === 'paused' || j.status === 'queued') {
@@ -402,6 +408,7 @@
           type:    j.job_type,
           jobId:   j.id,
         });
+        queueIds[j.id] = true;
         if (j.status === 'running') queueRunningTypes[j.job_type] = true;
       }
     });
@@ -423,7 +430,17 @@
       var live = (p.status === 'running' || p.status === 'paused');
       var recentlyEnded = (p.status === 'failed' || p.status === 'interrupted');
       if (!live && !recentlyEnded && !_holdForFloor(p)) return;
-      if (live && queueRunningTypes[p.process_type]) return;
+      // Phase 3c de-dup. Keyed rows (source_job_queue_id set) use exact id match:
+      // suppressed whenever their job_queue twin is present in the feed, in ANY
+      // shown state (queued/paused/running) — the case the running-only type key
+      // could not handle. Unkeyed rows (source_job_queue_id NULL — pre-3b twins
+      // and every non-queue process) fall back to the original type-string,
+      // running-only rule, so their behaviour is byte-for-byte unchanged.
+      if (p.source_job_queue_id != null) {
+        if (queueIds[p.source_job_queue_id]) return;
+      } else if (live && queueRunningTypes[p.process_type]) {
+        return;
+      }
       _noteSeen(p);
       items.push({
         label:   PROCESS_LABELS[p.process_type] || p.process_type || 'Process',

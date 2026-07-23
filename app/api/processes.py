@@ -96,7 +96,7 @@ async def get_active_processes():
                 text(
                     "SELECT process_id, process_type, status, started_at, updated_at, "
                     "       last_heartbeat, progress_current, progress_total, detail, error, "
-                    "       error_text "
+                    "       error_text, source_job_queue_id "
                     "FROM background_processes "
                     "WHERE status IN ('running', 'paused') "
                     "   OR last_heartbeat >= :cutoff "

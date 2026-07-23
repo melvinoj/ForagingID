@@ -20,7 +20,7 @@ from typing import Optional
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
-from sqlalchemy import text
+from sqlalchemy import text, bindparam
 
 from app.database import AsyncSessionLocal
 
@@ -137,6 +137,62 @@ async def _max_queue_position() -> int:
     return (row[0] or 0)
 
 
+# ── bp dual-write mirror (Phase 3c Step 2) ──────────────────────────────────
+# job_queue stays authoritative. Every writer additionally mirrors its change
+# onto the bp twin, resolved from source_job_queue_id. Two hard rules:
+#   • No twin (rows predating 3b, or any unkeyed job) → silent no-op. Never
+#     create a twin retroactively, never raise.
+#   • The job_queue write has already committed before any mirror runs, and
+#     every mirror is wrapped by _safe_mirror so a bp failure — a failed twin
+#     lookup, a bp helper error, anything — is logged and swallowed, never
+#     propagated to the endpoint. The queue path cannot be failed by the mirror.
+from app.services.background_processes import (        # noqa: E402
+    bp_start, bp_patch, bp_finish, bp_progress, TERMINAL_STATUSES,
+)
+
+
+async def _safe_mirror(what: str, fn) -> None:
+    """Run one bp mirror op; any failure is logged and never re-raised."""
+    try:
+        await fn()
+    except Exception:
+        log.exception("[queue] bp mirror '%s' failed (job_queue write already committed)", what)
+
+
+async def _twin_pid(job_id: int) -> Optional[int]:
+    """process_id of the bp twin for a job_queue id, or None when no twin exists."""
+    async with AsyncSessionLocal() as db:
+        row = (await db.execute(
+            text("SELECT process_id FROM background_processes "
+                 "WHERE source_job_queue_id = :jid ORDER BY process_id DESC LIMIT 1"),
+            {"jid": job_id},
+        )).fetchone()
+    return row[0] if row else None
+
+
+async def _mirror_status(job_id: int, status: str) -> None:
+    """Non-terminal status change → bp_patch. Callers pass 'paused'/'queued' only."""
+    pid = await _twin_pid(job_id)
+    if pid is None:
+        return
+    await bp_patch(pid, status=status)
+
+
+async def _mirror_qpos(job_id: int, queue_position: int) -> None:
+    pid = await _twin_pid(job_id)
+    if pid is None:
+        return
+    await bp_patch(pid, queue_position=queue_position)
+
+
+async def _mirror_finish(job_id: int, status: str, error: str = "") -> None:
+    """Terminal transition → bp_finish (sets ended_at). The ONLY terminal writer."""
+    pid = await _twin_pid(job_id)
+    if pid is None:
+        return
+    await bp_finish(pid, status=status, error=error)
+
+
 # ── Startup recovery ──────────────────────────────────────────────────────────
 
 async def recover_stale_jobs() -> None:
@@ -150,24 +206,53 @@ async def recover_stale_jobs() -> None:
     This is a DB write — once done the interrupted status persists across future
     list calls, so no re-computation is needed.
     """
+    # Same predicate used to CAPTURE the ids and to UPDATE them, so they cannot
+    # diverge. Parameterised on :thresh.
+    _stale_where = (
+        "status='running' AND ("
+        "  (last_heartbeat IS NOT NULL AND last_heartbeat < :thresh) "
+        "  OR (last_heartbeat IS NULL AND started_at IS NOT NULL AND started_at < :thresh) "
+        "  OR (last_heartbeat IS NULL AND started_at IS NULL) "
+        ")"
+    )
     try:
         threshold = datetime.utcnow() - timedelta(seconds=_STALE_THRESHOLD_S)
         async with AsyncSessionLocal() as db:
+            # Capture swept ids first (2c mirror needs them; the UPDATE is not
+            # id-returning), then sweep with the identical predicate.
+            swept_ids = [r[0] for r in (await db.execute(
+                text(f"SELECT id FROM job_queue WHERE {_stale_where}"),
+                {"thresh": threshold})).fetchall()]
             result = await db.execute(
-                text(
-                    "UPDATE job_queue SET status='interrupted', ended_at=:now "
-                    "WHERE status='running' AND ("
-                    "  (last_heartbeat IS NOT NULL AND last_heartbeat < :thresh) "
-                    "  OR (last_heartbeat IS NULL AND started_at IS NOT NULL AND started_at < :thresh) "
-                    "  OR (last_heartbeat IS NULL AND started_at IS NULL) "
-                    ")"
-                ),
+                text(f"UPDATE job_queue SET status='interrupted', ended_at=:now WHERE {_stale_where}"),
                 {"now": datetime.utcnow(), "thresh": threshold},
             )
             await db.commit()
             n = result.rowcount
         if n:
             log.info("[queue] Startup recovery: %d stale running job(s) → interrupted", n)
+
+        # 2c set-mirror. The two staleness thresholds differ ON PURPOSE (queue 30 s
+        # vs bp 60 s), which leaves a window where the job_queue row is swept but
+        # its bp twin is not. Rather than align the thresholds, mirror the sweep:
+        # any non-terminal twin of a swept row follows job_queue to 'interrupted'
+        # (+ended_at). Standalone bp rows keep their own 60 s sweep. Own try so a
+        # mirror failure cannot mask the job sweep above.
+        if swept_ids:
+            try:
+                async with AsyncSessionLocal() as db:
+                    stmt = text(
+                        "UPDATE background_processes "
+                        "SET status='interrupted', ended_at=:now, updated_at=:now "
+                        "WHERE source_job_queue_id IN :ids "
+                        "  AND status NOT IN ('complete','failed','cancelled','interrupted')"
+                    ).bindparams(bindparam("ids", expanding=True))
+                    mres = await db.execute(stmt, {"now": datetime.utcnow(), "ids": swept_ids})
+                    await db.commit()
+                if mres.rowcount:
+                    log.info("[queue] Startup recovery: %d twin(s) mirrored → interrupted", mres.rowcount)
+            except Exception:
+                log.exception("[queue] recover_stale_jobs twin-mirror failed")
     except Exception:
         log.exception("[queue] recover_stale_jobs failed")
 
@@ -211,6 +296,14 @@ async def enqueue(body: EnqueueBody):
         )
         await db.commit()
         job_id = result.lastrowid
+
+    # W1 mirror: born-queued twin. bp_start with status='queued' and the same
+    # id/label/payload/queue_position/created_at, so the twin mirrors the row.
+    await _safe_mirror("enqueue", lambda: bp_start(
+        body.job_type, status="queued", source_job_queue_id=job_id,
+        label=body.label, payload=json.dumps(body.payload or {}),
+        queue_position=pos, created_at=now, detail=body.label,
+    ))
 
     async with AsyncSessionLocal() as db:
         row = (await db.execute(
@@ -310,6 +403,32 @@ async def patch_job(job_id: int, body: PatchBody):
         )
         await db.commit()
 
+    # W3 mirror. Terminal status routes to bp_finish (the single terminal writer,
+    # which also sets ended_at) — NEVER to bp_patch, which raises on terminal by
+    # design. Non-terminal status routes to bp_patch. Progress, when part of the
+    # PATCH, is mirrored via bp_progress from the just-committed authoritative
+    # job_queue values (a partial PATCH may carry only one of the two).
+    async def _mirror_patch():
+        pid = await _twin_pid(job_id)
+        if pid is None:
+            return
+        if body.status is not None and body.status in TERMINAL_STATUSES:
+            await bp_finish(pid, status=body.status, error=body.error_message or "",
+                            current=body.progress_current, total=body.progress_total)
+            return
+        if body.status is not None:            # non-terminal only past the guard above
+            await bp_patch(pid, status=body.status)
+        if body.progress_current is not None or body.progress_total is not None:
+            async with AsyncSessionLocal() as pdb:
+                pr = (await pdb.execute(
+                    text("SELECT progress_current, progress_total FROM job_queue WHERE id = :id"),
+                    {"id": job_id},
+                )).fetchone()
+            if pr:
+                await bp_progress(pid, pr[0] or 0, pr[1] or 0, heartbeat=True)
+
+    await _safe_mirror("patch", _mirror_patch)
+
     await _broadcast()
     return {"ok": True}
 
@@ -330,6 +449,8 @@ async def _set_terminal(job_id: int, status: str, detail: str):
             {"s": status, "now": datetime.utcnow(), "id": job_id},
         )
         await db.commit()
+    # W4 mirror (cancel): terminal → bp_finish (sets ended_at on the twin).
+    await _safe_mirror("cancel", lambda: _mirror_finish(job_id, status))
     await _broadcast()
     return {"ok": True, "status": status}
 
@@ -356,6 +477,8 @@ async def pause_job(job_id: int):
             {"id": job_id},
         )
         await db.commit()
+    # W5 mirror: non-terminal → bp_patch(status='paused').
+    await _safe_mirror("pause", lambda: _mirror_status(job_id, "paused"))
     await _broadcast()
     return {"ok": True, "status": "paused"}
 
@@ -377,6 +500,8 @@ async def resume_job(job_id: int):
             {"id": job_id},
         )
         await db.commit()
+    # W6 mirror: non-terminal → bp_patch(status='queued').
+    await _safe_mirror("resume", lambda: _mirror_status(job_id, "queued"))
     await _broadcast()
     return {"ok": True, "status": "queued"}
 
@@ -398,6 +523,8 @@ async def move_to_top(job_id: int):
             {"id": job_id},
         )
         await db.commit()
+    # W7 mirror: bp_patch(queue_position=0).
+    await _safe_mirror("move-to-top", lambda: _mirror_qpos(job_id, 0))
     await _broadcast()
     return {"ok": True}
 
@@ -415,16 +542,22 @@ async def kill_all_jobs():
     queue panel shows a clean slate on next reload.
     """
     now = datetime.utcnow()
+    _KILL_WHERE = "status IN ('queued','running','paused','interrupted','failed')"
     async with AsyncSessionLocal() as db:
+        # Capture the ids about to be cancelled (same predicate) so each twin can
+        # be mirrored after the bulk write.
+        killed_ids = [r[0] for r in (await db.execute(
+            text(f"SELECT id FROM job_queue WHERE {_KILL_WHERE}"))).fetchall()]
         result = await db.execute(
-            text(
-                "UPDATE job_queue SET status='cancelled', ended_at=:now "
-                "WHERE status IN ('queued','running','paused','interrupted','failed')"
-            ),
+            text(f"UPDATE job_queue SET status='cancelled', ended_at=:now WHERE {_KILL_WHERE}"),
             {"now": now},
         )
         await db.commit()
         n = result.rowcount
     log.info("[queue] kill-all: %d job(s) cancelled", n)
+    # W8 mirror: bp_finish('cancelled') per affected twin. Each wrapped so one
+    # bad twin cannot abort the rest or fail the endpoint.
+    for jid in killed_ids:
+        await _safe_mirror("kill-all", lambda jid=jid: _mirror_finish(jid, "cancelled"))
     await _broadcast()
     return {"ok": True, "cancelled": n}

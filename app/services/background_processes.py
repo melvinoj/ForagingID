@@ -48,6 +48,7 @@ async def bp_start(
     queue_position: Optional[int] = None,
     created_at: Optional[datetime] = None,
     source_job_queue_id: Optional[int] = None,
+    status: str = "running",
 ) -> Optional[int]:
     """
     INSERT a new background_processes row and return its process_id.
@@ -69,6 +70,11 @@ async def bp_start(
     default None so existing callers are byte-unchanged and leave it NULL): the
     explicit id of the job_queue twin, for identity-based de-dup in a later phase.
     Still unread this phase.
+
+    Pass B Phase 3c adds status (keyword-only, default 'running' so every existing
+    caller is byte-unchanged): W1 enqueue mirroring passes status='queued' so a
+    born-queued job_queue row gets a born-queued twin. Written into the INSERT in
+    place of the former hardcoded literal.
     """
     try:
         now = datetime.utcnow()
@@ -79,11 +85,11 @@ async def bp_start(
                     "(process_type, status, started_at, updated_at, last_heartbeat, "
                     " progress_current, progress_total, detail, "
                     " label, payload, queue_position, created_at, source_job_queue_id) "
-                    "VALUES (:pt, 'running', :now, :now, :now, 0, :total, :detail, "
+                    "VALUES (:pt, :status, :now, :now, :now, 0, :total, :detail, "
                     " :label, :payload, :qpos, :created_at, :sjqid)"
                 ),
-                {"pt": process_type, "now": now, "total": progress_total, "detail": detail,
-                 "label": label, "payload": payload, "qpos": queue_position,
+                {"pt": process_type, "status": status, "now": now, "total": progress_total,
+                 "detail": detail, "label": label, "payload": payload, "qpos": queue_position,
                  "created_at": created_at, "sjqid": source_job_queue_id},
             )
             await db.commit()

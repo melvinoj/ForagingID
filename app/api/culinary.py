@@ -2874,7 +2874,9 @@ async def start_enrichment_run(
     """
     if identity.is_guest:
         raise HTTPException(403, "Curator only")
-    from app.services.background_processes import bp_active_count, bp_active_row, bp_start
+    from app.services.background_processes import (
+        bp_active_count, bp_active_row, bp_paused_row, bp_start,
+    )
 
     # Guard: refuse if already running (in-memory fast path)
     for existing in _enrichment_jobs.values():
@@ -2913,7 +2915,16 @@ async def start_enrichment_run(
         # Memory has no paused entry (e.g. after a server restart). Recover the
         # position from a persisted paused bp row rather than silently running
         # the whole batch again.
-        bp_row = await bp_active_row("enrichment_run")
+        #
+        # Reads through bp_paused_row, NOT bp_active_row. bp_active_row admits
+        # running-or-paused and returns only the single most recent by
+        # started_at, so a stale 'running' row left by a killed server shadowed
+        # the resumable paused row underneath it and this fell through to a
+        # silent fresh start from 0. The status guard below is KEPT: it is now
+        # redundant against a paused-only query, but it is the check that made
+        # the stale row non-adoptable in the first place, and it keeps this
+        # branch correct regardless of what the read returns.
+        bp_row = await bp_paused_row("enrichment_run")
         if bp_row and bp_row.get("status") == "paused":
             resume_pid = bp_row["process_id"]
             resume_from = bp_row.get("progress_current") or 0

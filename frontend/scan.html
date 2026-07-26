@@ -2401,6 +2401,31 @@ async function onFilterClick() {
   }
 
   const folderName = _p2PendingFiles.dirHandle?.name || 'folder';
+
+  // A PAUSED filter job for this same folder already exists. Enqueueing here
+  // would silently create a SECOND job for the same work — the 23 Jul 57→58
+  // duplicate, where re-picking after a reload ran the whole folder again and
+  // left 57 stranded. Refuse and surface the paused job instead.
+  //
+  // Match key is the dirHandle basename, the same weak identifier the label is
+  // built from (a dirHandle exposes no path). That is good enough to WARN on —
+  // a same-named different folder only costs a spurious message — but it is not
+  // good enough to carry a progress offset, which is why this guard only informs
+  // and never auto-resumes. Scoped to the same folder so a stale paused job for
+  // a different folder cannot block a legitimate new filter run.
+  const pausedFilter = _jqJobs.find(j =>
+    j.job_type === 'filter' && j.status === 'paused' &&
+    ((j.payload && j.payload.folder) || '') === folderName);
+  if (pausedFilter) {
+    const cur = pausedFilter.progress_current || 0;
+    const tot = pausedFilter.progress_total   || 0;
+    _setP2Status(
+      `Already paused: "${pausedFilter.label}" at ${_n(cur)}${tot ? ' / ' + _n(tot) : ''}. ` +
+      `Use ▶ Resume on it in the queue panel (or ✕ to dismiss it) instead of ` +
+      `starting a second job for the same folder.`);
+    return;
+  }
+
   let job;
   try {
     job = await _jqEnqueue('filter', `Filter — ${folderName}`, { folder: folderName });
@@ -5657,7 +5682,7 @@ function _jqRenderJob(j) {
     actions = `<button class="jq-btn jq-btn-pause"  onclick="_jqPauseJob(${j.id})">⏸ Pause</button>`
             + `<button class="jq-btn jq-btn-cancel" onclick="_jqCancelJob(${j.id})">✕</button>`;
   } else if (j.status === 'paused') {
-    // filter needs dirHandle in _jqMemory; identify synthesises _p2FolderState if needed (Fix 2); enrich has no prereq
+    // filter needs dirHandle in _jqMemory (render-disabled without it); identify requires _p2FolderState, guarded at click time in _jqResumeJob; enrich has no prereq
     const hasMem = j.job_type === 'filter' ? !!_jqMemory[j.id] : true;
     actions = `<button class="jq-btn jq-btn-resume" onclick="_jqResumeJob(${j.id})"${hasMem?'':' disabled title="Re-pick folder to resume"'}>▶ Resume</button>`
             + `<button class="jq-btn jq-btn-cancel"  onclick="_jqCancelJob(${j.id})">✕</button>`;
@@ -5729,29 +5754,18 @@ async function _jqResumeJob(id) {
     await _jqLoadList();
     return;
   }
-  // Fix 2 — page-load resume: if the identify job has no in-memory folder state
-  // (because the page was reloaded after a pause or server restart), synthesise
-  // _p2FolderState from the persisted session so _jqRunIdentify can proceed.
+  // Item 2 — page-load resume guard for identify. The dropped-folder File handles
+  // do NOT survive a reload, so imageFiles cannot be reconstructed from a persisted
+  // session. It was previously synthesised as [] here, which silently skipped every
+  // new file and re-ran only retryableObs — a near-no-op the user was never told
+  // about. Guard at this dispatch point, before /resume: inform via the status line
+  // and stop, matching the onFilterClick "re-select the folder" guard. Re-picking the
+  // same folder via the drop zone re-hashes and recovers all pending work, and the
+  // SHA-256 hash gate makes the re-pick idempotent. Identify jobs that still hold
+  // _p2FolderState (no reload) are unaffected and resume normally below.
   if (job && job.job_type === 'identify' && !_p2FolderState) {
-    const folder  = job.payload?.folder || '';
-    // Prefer a paused/running session whose source_path matches the job folder;
-    // fall back to any paused/running session if source_path isn't stored.
-    const session = _p2Sessions.find(s => ['paused','running'].includes(s.status)
-                                      && (s.source_path || '').trim() === folder.trim())
-                 || _p2Sessions.find(s => ['paused','running'].includes(s.status));
-    if (session) {
-      let retryableObs = [];
-      try {
-        const r = await fetch(`/api/scan/sessions/${session.id}/retryable-obs`);
-        if (r.ok) { retryableObs = (await r.json()).retryable_obs || []; }
-      } catch(_) {}
-      _p2FolderState = {
-        sessionId:    session.id,
-        imageFiles:   [],          // file handles not available after reload
-        retryableObs: retryableObs,
-        sourcePath:   session.source_path || folder,
-      };
-    }
+    _setP2Status('Folder selection was lost on reload — re-select the same folder using the drop zone to resume identifying.');
+    return;
   }
 
   await fetch(`/api/queue/${id}/resume`, { method: 'POST' });

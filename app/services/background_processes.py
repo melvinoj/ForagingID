@@ -522,6 +522,43 @@ async def bp_active_row(process_type: str) -> Optional[dict]:
         return None
 
 
+async def bp_paused_row(process_type: str) -> Optional[dict]:
+    """
+    Most recent PAUSED row for a process_type, or None. Resume-point read only.
+
+    Distinct from bp_active_row, which admits status IN ('running','paused') and
+    returns the single most recent by started_at. Used as a resume point, that
+    shadows: a stale 'running' row (server killed before bp_finish) with a LATER
+    started_at is the row returned, a paused-only guard then rejects it, and the
+    genuinely resumable paused row underneath is never seen — the caller starts
+    from 0 instead of resuming. Filtering to status='paused' in SQL means the
+    stale running row cannot occupy the single returned slot.
+
+    bp_active_row is deliberately unchanged: its other callers want the running
+    row (the 409 already-running detail in culinary.py, and enrich.py's resume
+    route, which reports the actual status back to the user).
+    """
+    try:
+        async with AsyncSessionLocal() as db:
+            row = (await db.execute(
+                text(
+                    "SELECT process_id, process_type, status, started_at, updated_at, "
+                    "       last_heartbeat, progress_current, progress_total, detail, error, "
+                    "       error_text, source_job_queue_id "
+                    "FROM background_processes "
+                    "WHERE process_type = :pt AND status = 'paused' "
+                    "ORDER BY started_at DESC LIMIT 1"
+                ),
+                {"pt": process_type},
+            )).fetchone()
+            if not row:
+                return None
+            return _row_to_dict(row)
+    except Exception:
+        log.exception("background_processes: bp_paused_row failed")
+        return None
+
+
 def _row_to_dict(row) -> dict:
     from datetime import datetime as _dt
     def _dt_parse(v):

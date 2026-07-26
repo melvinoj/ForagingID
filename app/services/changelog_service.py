@@ -38,7 +38,11 @@ def get_current_state() -> str:
         if line.strip() == "## Current State":
             in_section = True
             continue
-        if in_section and line.startswith("## "):
+        # End boundary must not match a duplicate of our own header — otherwise a
+        # stacked "## Current State" line terminates the section immediately and
+        # this returns the empty gap between duplicate headers. Stop only at a
+        # DIFFERENT "## " section ("## Current State — <date>", "## History", …).
+        if in_section and line.startswith("## ") and line.strip() != "## Current State":
             break
         if in_section:
             result.append(line)
@@ -59,12 +63,30 @@ def rewrite_current_state(new_state: str) -> None:
 
     for i, line in enumerate(lines):
         if line.strip() == "## Current State":
-            state_start = i
-        elif state_start is not None and line.startswith("## ") and i > state_start:
+            # Anchor to the FIRST header only. Duplicate "## Current State" lines
+            # then fall through this branch as no-ops, so the replaced span
+            # [state_start, state_end) covers every consecutive duplicate header
+            # plus the stale body beneath them.
+            if state_start is None:
+                state_start = i
+        elif state_start is not None and line.startswith("## ") and line.strip() != "## Current State":
+            # End boundary excludes a duplicate of our own header, so the scan
+            # walks past all duplicates and stops at the next DIFFERENT section
+            # ("## Current State — <date>", "## History", …).
             state_end = i
             break
 
-    new_block = f"## Current State\n\n{new_state.strip()}"
+    # Flaw 2: new_state may already carry its own "## Current State" header (the
+    # CLAUDE.md end-session contract invites "a fresh ## Current State block").
+    # Strip a leading header line + its trailing blanks so exactly one header is
+    # prepended. Idempotent: input with or without the header yields the same block.
+    body_lines = new_state.strip().splitlines()
+    if body_lines and body_lines[0].strip() == "## Current State":
+        body_lines = body_lines[1:]
+        while body_lines and body_lines[0].strip() == "":
+            body_lines = body_lines[1:]
+    body = "\n".join(body_lines).strip()
+    new_block = f"## Current State\n\n{body}"
 
     if state_start is None:
         # Prepend — no existing section

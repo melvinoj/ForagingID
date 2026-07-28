@@ -11,6 +11,7 @@ from typing import Optional
 from sqlalchemy import text
 
 from app.database import AsyncSessionLocal
+from app.services.process_controls import build_controls
 
 log = logging.getLogger(__name__)
 
@@ -586,7 +587,7 @@ def _row_to_dict(row) -> dict:
     # de-dup the two feeds by identity instead of the fragile job_type match.
     # Defensive on length: a SELECT that stops before this column leaves it None.
     source_jqid = row[11] if len(row) > 11 else None
-    return {
+    result = {
         "process_id":       row[0],
         "process_type":     row[1],
         "status":           status,
@@ -601,3 +602,7 @@ def _row_to_dict(row) -> dict:
         "heartbeat_age_s":  int((now - heartbeat).total_seconds()) if heartbeat else None,
         "source_job_queue_id": source_jqid,
     }
+    # Phase 3e-1a: server-resolved control descriptor (additive; parity-checked
+    # client-side against the widget's *Target() functions).
+    result["controls"] = build_controls(result, "process")
+    return result

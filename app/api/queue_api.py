@@ -23,6 +23,7 @@ from pydantic import BaseModel
 from sqlalchemy import text, bindparam
 
 from app.database import AsyncSessionLocal
+from app.services.process_controls import build_controls
 
 log = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/queue", tags=["queue"])
@@ -92,7 +93,7 @@ def _row_to_dict(row) -> dict:
     if _is_stale(raw_status, row[9], row[12]):
         effective_status = "interrupted"
 
-    return {
+    result = {
         "id":               row[0],
         "job_type":         row[1],
         "label":            row[2],
@@ -108,6 +109,10 @@ def _row_to_dict(row) -> dict:
         "error_message":    row[11],
         "last_heartbeat":   str(row[12]) if row[12] else None,
     }
+    # Phase 3e-1a: server-resolved control descriptor (additive; parity-checked
+    # client-side against the widget's *Target() functions).
+    result["controls"] = build_controls(result, "queue")
+    return result
 
 
 async def _list_jobs() -> list[dict]:

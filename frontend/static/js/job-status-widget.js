@@ -413,6 +413,10 @@
           source:  'queue',
           type:    j.job_type,
           jobId:   j.id,
+          // Phase 3e-1a: server-resolved descriptor, carried for the parity gate
+          // in renderRow(). Nothing renders from it — the *Target() functions
+          // still drive every button.
+          controls: j.controls || null,
         });
         queueIds[j.id] = true;
         if (j.status === 'running') queueRunningTypes[j.job_type] = true;
@@ -462,6 +466,9 @@
         // Carried solely so endTarget() can read "session:<id>" out of it for
         // the scan-session types; not rendered.
         detail:  p.detail || '',
+        // Phase 3e-1a: server-resolved descriptor, carried for the parity gate
+        // in renderRow(). Nothing renders from it.
+        controls: p.controls || null,
       });
     });
 
@@ -484,10 +491,65 @@
     return (v || 0).toLocaleString();
   }
 
+  // ── Phase 3e-1a parity gate (non-rendering, diagnostic only) ─────────────
+  // For every row that reaches renderRow(), compute the button set twice: once
+  // from the authoritative *Target() functions (which drive rendering, exactly
+  // as before), once from the server-emitted it.controls. Any divergence on the
+  // four compared keys is logged; NOTHING here alters what renders. `restart` is
+  // excluded — the widget renders no Restart today, so there is nothing to
+  // compare it against (it is verified in 3e-3 when scan.html consumes it).
+  //
+  // Expected transient: the client sets (cancellableProcessTypes / resumeRoutes /
+  // pausableProcessTypes) load asynchronously, so on the first poll before that
+  // fetch lands the *Target() functions fail safe to null while the server has
+  // already resolved a URL. Those brief mismatches are real and self-heal within
+  // one poll; they are information, not a defect in the descriptor.
+  function _targetUrl(t) { return (t && t.url) ? t.url : null; }
+
+  // One-shot notice for the load-race deferral below.
+  var _parityDeferredLogged = false;
+
+  function _controlsParityCheck(it) {
+    // The served sets (cancellableProcessTypes / resumeRoutes / pausableProcessTypes)
+    // load asynchronously; until they land, the *Target() functions fail safe to
+    // null while the server has already resolved URLs. That mismatch is a known,
+    // self-healing transient — and the gate's pass criterion is silence, so a
+    // transient must be EXCLUDED, not merely tolerated as noise. Defer the whole
+    // comparison until the sets are present; comparison then resumes for every
+    // row on the next poll. One info line marks the deferral, module-level so it
+    // fires once rather than per row.
+    if (cancellableProcessTypes === null || resumeRoutes === null) {
+      if (!_parityDeferredLogged) {
+        _parityDeferredLogged = true;
+        console.info('[controls parity] deferred: served sets not yet loaded');
+      }
+      return;
+    }
+
+    var server = it.controls || {};
+    var client = {
+      pause:   _targetUrl(pauseTarget(it)),
+      resume:  _targetUrl(resumeTarget(it)),
+      end:     _targetUrl(endTarget(it)),
+      dismiss: _targetUrl(dismissTarget(it)),
+    };
+    ['pause', 'resume', 'end', 'dismiss'].forEach(function (k) {
+      var s = (server[k] && server[k].url) ? server[k].url : null;
+      if (s !== client[k]) {
+        console.warn('[controls parity] type=' + it.type + ' source=' + it.source +
+                     ' status=' + it.status + ' key=' + k +
+                     ' client=' + client[k] + ' server=' + s);
+      }
+    });
+  }
+
   // Same markup shape as scan.html's _jqRenderJob. The .jq-actions row is
   // rendered only when this row has a real stop route — no button, rather than
   // a disabled or dishonest one, for everything else.
   function renderRow(it, idx) {
+    // Diagnostic side path only — must not influence any value used below.
+    _controlsParityCheck(it);
+
     var prog = '';
     if (it.total > 0) {
       var pct = Math.round(it.current / it.total * 100);

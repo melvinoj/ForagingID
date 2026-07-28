@@ -1,38 +1,19 @@
 ## Current State
 
-Pass B Phase 3d CLOSED — parity gate passed on live traffic (jobs 56/57/58 ↔ twins 130/131/132), status vocabularies identity-mapped, orphan checks empty. Head 0052.
+Pass B Phase 3d CLOSED — parity gate passed on live traffic (jobs 56/57/58 ↔ twins 130/131/132), vocabularies identity-mapped, orphan checks empty. Head 0052.
 
-3e-1 RESUME SEMANTICS READ (read-only diagnostic, all call sites). There is no true resume anywhere in the queue. _jqResumeJob → POST /api/queue/{id}/resume → UPDATE job_queue SET status='queued' (queue_api.py:497-501); _jqTick re-invokes the handler from the top. progress_current is write-only telemetry for all types.
+3e-1 RESUME SEMANTICS READ (read-only, all call sites). No true resume exists in the queue. _jqResumeJob → POST /api/queue/{id}/resume → UPDATE job_queue SET status='queued' (queue_api.py:497-501); _jqTick re-invokes the handler from the top. progress_current is write-only telemetry for all types.
 - filter: _jqRunFilter restarts i=0.
-- identify: _runProcessPass re-POSTs process-delta from the start; SHA-256 hash short-circuit before disk write or re-identification (scan.py:272-309) + UNIQUE-index race backstop. Harmless, wasteful.
-- enrich: /api/enrich/run → _run_enrichment_task(start_from=0); culinary_info row exists → skipped (enrichment.py:88-93). Harmless, wasteful. The position-aware /api/enrich/resume route is never reached from the queue.
+- identify: _runProcessPass re-POSTs process-delta from start; SHA-256 short-circuit (scan.py:272-309) + UNIQUE-index backstop. Harmless, wasteful.
+- enrich: /api/enrich/run → start_from=0; culinary_info exists → skipped (enrichment.py:88-93). The position-aware /api/enrich/resume is never reached from the queue.
+CORRECTION to earlier design: the widget's Resume IS position-aware (source='process', via RESUME_ROUTES → /api/enrich/resume; enrichment_run via bp_paused_row). Two verbs, not one: resume (bp routes) and restart (queue re-entry).
 
-OWED INFERENCE REFUTED at both call sites. bp_active_row does admit status='running' (background_processes.py:512-513), but enrichment_run reads via bp_paused_row (culinary.py:2927, SQL-filtered to paused) and auto_enrich 409s on non-paused (enrich.py:263-271). No path adopts a stale running row as a resume index. Fourth inferred defect correctly not promoted to scope.
+OWED INFERENCE REFUTED at both call sites. bp_active_row admits status='running' (background_processes.py:512-513), but enrichment_run reads via bp_paused_row (culinary.py:2927) and auto_enrich 409s on non-paused (enrich.py:263-271). No path adopts a stale running row as a resume index.
 
 LANDED AND VERIFIED THIS SESSION:
 
-1. CHANGELOG rewrite fix (changelog_service.py). Two flaws fixed: end boundary now startswith("## ") AND line.strip() != "## Current State", with start anchored to the first header, so the replaced span covers consecutive duplicate headers plus stale body; and new_state is normalized (leading header + trailing blanks stripped) before exactly one header is prepended. get_current_state given the identical corrected end condition, signature unchanged. dev.py untouched — normalization lives in the service, caller contract valid both ways.
-Verified: single "## Current State" at line 1; "## Current State — 19 July 2026" intact at line 5; "## History" at 385; bare fragment gone; get_current_state() non-empty; double rewrite (with and without header) byte-identical, sha256 8913256058dada4b, one header each. Stacked headers and stale top body (old lines 1-53) discarded, History and dated archive blocks retained. Repair performed through the fixed function. Backup CHANGELOG.md.bak-20260726_084623 moved to snapshots/.
-
-### 2026-07-26 12:35
-**Snapshot** — End of session — Session ended from Settings page
-DB: `snapshots/db_20260726_123556.sqlite`
-
-### 2026-07-26 12:35
-**Session ended** — Session ended from Settings page
-
-2. Identify reload guard (scan.html). Confirmed defect, read not inferred: _jqResumeJob synthesised _p2FolderState with imageFiles: [] hardcoded (old line 5775) and fell through to the generic tail, so identify Resume after reload silently re-ran only retryableObs. Synthesis block replaced with a click-point guard mirroring onFilterClick: identify + !_p2FolderState → _setP2Status("Folder selection was lost on reload — re-select the same folder using the drop zone to resume identifying.") + return, before any /resume POST. Job stays paused so Resume remains available after re-pick.
-Verified by read-back: guard at scan.html:5766-5769; generic tail byte-unchanged; _JQ_HANDLERS filter/enrich mapping and both handlers unchanged; hasMem expression byte-identical; retryableObs handling in _runProcessPass untouched. Stale render comment at scan.html:5685 corrected same pass.
-
-DESCRIPTOR DESIGN AGREED, NOT BUILT (item 3, next session): one server-declared capability verb per row — restart — collapsing all four client-side lists (CANCELLABLE_TYPES, RESUME_ROUTES, SESSION_PAUSE_TYPES, QUEUE_CANCEL_TYPES). UI label "Restart" plus a gate sub-line; "Resume" removed as inaccurate. Two-layer split held deliberately: the descriptor declares capability (server-knowable); runtime availability (browser holds File objects / dirHandle) stays a thin client precondition layer — the landed onFilterClick and identify guards are that layer. Also folded into item 3: whether identify's Resume button should be render-disabled like filter's, since render-disable vs click-guard is exactly the per-type inconsistency the descriptor collapses — deciding it earlier means deciding it twice.
-
-3e-2 server-side serialization then 3e-3 UI consolidation follow, in that order.
-
-LIVE TESTS OWED (manual, no Code): pause a filter run → reload → re-pick same folder → press Filter → status line appears, no second job enqueued. Reload mid-identify → press Resume → status line appears, no /resume POST. Network-tab confirmation widget polls stop <640px.
-
-Carried unchanged: 3 damaged map rows (17052/17737/18709); Retry-ID absent on below_threshold cards; snapshots gzip; thumbnails_quarantine purge; passport/child manual deletes; 1,229 file-less rejected rows (lean LEAVE); obs 22162 Retry-ID.
-
-Operational: 2013 folder — 2,367 files ready to Identify, hold until solid connection; Retry-ID pass on transport-failure rows (22175–22178+) same session.
+1. CHANGELOG rewrite fix (changelog_service.py). End boundary now startswith("## ") AND strip() != "## Current State", start anchored to first header; new_state normalized before exactly one header is prepended; get_current_state given the identical boundary. dev.py untouched.
+Verified: single "## Current State" at line 1; 19 July block intact at line 5; History at 385; bare fragment gone; get_current_state() non-empty; double rewrite byte-identical, sha256 8913256058dada4b, one header each. Old lines 1-53 discarded, History and dated blocks retained. Repair performed through the fixed
 
 ## Current State — 19 July 2026
 
@@ -415,6 +396,13 @@ Still open:
 - Enrichment gap remediation — 9 AI drafts pending approval, 6 species never scanned, 79 no-PFAF species need alt-source decision
 
 ## History
+
+### 2026-07-28 07:36
+**Snapshot** — End of session — Session ended from Settings page
+DB: `snapshots/db_20260728_073659.sqlite`
+
+### 2026-07-28 07:36
+**Session ended** — Session ended from Settings page
 
 ### 2026-07-23 22:12
 **Snapshot** — Manual snapshot

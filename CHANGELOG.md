@@ -13,7 +13,33 @@ OWED INFERENCE REFUTED at both call sites. bp_active_row admits status='running'
 LANDED AND VERIFIED THIS SESSION:
 
 1. CHANGELOG rewrite fix (changelog_service.py). End boundary now startswith("## ") AND strip() != "## Current State", start anchored to first header; new_state normalized before exactly one header is prepended; get_current_state given the identical boundary. dev.py untouched.
-Verified: single "## Current State" at line 1; 19 July block intact at line 5; History at 385; bare fragment gone; get_current_state() non-empty; double rewrite byte-identical, sha256 8913256058dada4b, one header each. Old lines 1-53 discarded, History and dated blocks retained. Repair performed through the fixed
+Verified: single "## Current State" at line 1; 19 July block intact at line 5; History at 385; bare fragment gone; get_current_state() non-empty; double rewrite byte-identical, sha256 8913256058dada4b, one header each. Old lines 1-53 discarded, History and dated blocks retained. Repair performed through the fixed function. Backup CHANGELOG.md.bak-20260726_084623.
+
+2. Identify reload guard (scan.html). Confirmed defect: _jqResumeJob synthesised _p2FolderState with imageFiles: [] and fell through, so identify Resume after reload silently re-ran only retryableObs. Replaced with click-point guard mirroring onFilterClick: identify + !_p2FolderState → _setP2Status(re-pick folder) + return before any /resume POST. Job stays paused.
+Verified by read-back: guard at scan.html:5766-5769; generic tail byte-unchanged; _JQ_HANDLERS and both handlers unchanged; hasMem byte-identical; retryableObs untouched.
+
+3. Phase 3e-1a — capability descriptor emitted (parity phase, no behaviour change).
+New leaf module app/services/process_controls.py — single build_controls(row, source) returning fully-resolved URLs per key (pause/resume/restart/end/dismiss), null where inapplicable. Session id parsed SERVER-SIDE for p2_delta/archive_scan; unparseable → null + logged. Lazy import of CANCELLABLE_TYPES/RESUME_ROUTES avoids the processes → background_processes → process_controls cycle; the two sets stay defined once in processes.py. enrichment_run resume deliberately null (holds parity; the review.html button is a separate 3e-3 decision).
+"controls" added additively to both _row_to_dict shapes (background_processes.py:603-606, queue_api.py:110-113). All four lists untouched and still authoritative for rendering. Non-rendering parity shim added to job-status-widget.js with a deferred-until-served-sets guard.
+GATE PASSED — exhaustive, in-process: 1848 combinations (11 types × 7 statuses × 2 sources × 2 is_stalled × 2 id-present × 3 detail), ZERO divergences on pause/resume/end/dismiss, presence and exact URL. 227 positive agreements (non-vacuous). Reference transcribed verbatim from the four *Target() functions and quoted for eyeball check; effective-status mapping transcribed independently from mergeItems:455, confirming the server's eff="stalled" derivation matches the client's exactly. restart excluded (nothing to compare — widget renders none today); verified in 3e-3. Script /tmp/parity_check.py, throwaway. Live browser gate abandoned as redundant.
+LIMITATION RECORDED: the gate proves the descriptor matches CURRENT client logic, not that current logic is correct. Where the client is defective the descriptor faithfully reproduces it.
+
+OBSERVED LIVE (browser, 27 July) — 3e-3 scope, not patched:
+- Duplicate render CONFIRMED: "Scan batch" and "identify" rendered as separate rows for the same work, identical progress (90/2367), both STALLED. The de-dup failure predicted in recon Part 2 #3, now observed.
+- Two-surface 409s: POST /api/scan/pause/31 fired from both scan:2468 and job-status-widget.js:671. Same class as POST /api/processes/142/pause 409 from _enrichPauseBg. Two surfaces each believing they own the control.
+- Enrichment banner showed "Pause" while reading "Paused at 15 of 571" — same signature as the 23 July fix, on a surface the rewire didn't cover. VERIFICATION OWED at call site before any scope.
+- Progress diverges across surfaces (widget 14/2367 vs panel 3/2367; "Session re-armed by a later process-delta call" on an INTERRUPTED row). Presentation or state — undiagnosed.
+
+UNRELATED, PRE-OCTOBER: Leaflet blocked by stale SRI hash — https://unpkg.com/leaflet@1.9.4/dist/leaflet.js fails integrity check, resource blocked, maps will not render.
+
+NEXT — 3e-1b (fresh session): client consumes controls; all four lists deleted (CANCELLABLE_TYPES, RESUME_ROUTES, SESSION_PAUSE_TYPES, QUEUE_CANCEL_TYPES); the detail-regex dies with them; the parity shim must be deleted in the same pass (it references the *Target() functions). Fail-closed on a missing controls key — render no buttons, never fall back to a list. Also fold in: _queue_controls tests status 'stalled', a dead branch since the queue surfaces stale running as 'interrupted' (queue_api.py:91-93).
+Then 3e-2 server-side serialization, then 3e-3 UI consolidation.
+
+scan.html:5685 comment verified accurate post-guard (all three clauses check out against current code); an earlier "stale comment" flag was superseded by the item 2 guard and is retired. The historical past-tense note at scan.html:5759 explaining why the guard exists is correct and stays.
+
+Carried unchanged: 3 damaged map rows (17052/17737/18709); Retry-ID absent on below_threshold cards; snapshots gzip; thumbnails_quarantine purge; passport/child manual deletes; 1,229 file-less rejected rows (lean LEAVE); obs 22162 Retry-ID.
+
+Operational: 2013 folder identify partially run this session (~90/2367, interrupted during testing) — resume on a solid connection. Retry-ID pass on transport-failure rows (22175–22178+) same session.
 
 ## Current State — 19 July 2026
 
@@ -396,6 +422,13 @@ Still open:
 - Enrichment gap remediation — 9 AI drafts pending approval, 6 species never scanned, 79 no-PFAF species need alt-source decision
 
 ## History
+
+### 2026-07-29 08:48
+**Snapshot** — End of session — Session ended from Settings page
+DB: `snapshots/db_20260729_084855.sqlite`
+
+### 2026-07-29 08:48
+**Session ended** — Session ended from Settings page
 
 ### 2026-07-28 07:36
 **Snapshot** — End of session — Session ended from Settings page

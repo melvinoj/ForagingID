@@ -12,48 +12,16 @@ from sqlalchemy import text
 
 from app.database import AsyncSessionLocal
 from app.services.background_processes import _row_to_dict, bp_set_status
+# CANCELLABLE_TYPES / RESUME_ROUTES moved to their single home in
+# app.services.process_controls (Phase 3e-1b). The endpoints below enforce them;
+# process_controls builds the widget's per-row control descriptor from the same
+# two constants, so client and server cannot disagree.
+from app.services.process_controls import CANCELLABLE_TYPES, RESUME_ROUTES
 
 router = APIRouter(prefix="/api/processes", tags=["processes"])
 
 # Rows with last_heartbeat within this window are included even if status != running/paused.
 _RECENT_WINDOW_S = 90
-
-# ── Which process types actually honour a pause/cancel signal ────────────────
-# A process is listed here ONLY if its worker loop reads its own
-# background_processes.status and stops when it sees paused/cancelled. Both
-# entries below run through run_enrichment_batch(cancel_check_fn=…), which
-# checks the signal before each species and returns cleanly with stopped_at.
-#
-# This set exists to make one specific lie impossible. Before it, these
-# endpoints accepted ANY process_id: the row flipped to 'cancelled', the worker
-# — which never reads that column — carried on to the end, and its bp_finish
-# then flipped the row to 'complete'. The user saw a cancel that visibly undid
-# itself while the work they cancelled ran to completion. Refusing the request
-# up front is the fix; guarding bp_finish would only have hidden the flip-back
-# while the work still ran.
-#
-# Types NOT listed here are not cancellable *through this endpoint* — some have
-# their own real stop route, which is where their UI must send the signal:
-#   p2_delta, archive_scan            → POST /api/scan/pause/{session_id}
-#   ai_draft_backfill, *_id_notes     → POST /api/queue/{id}/cancel
-# The rest (bulk_*, itis_backfill, fungi_edibility_backfill, reprocess_pending,
-# p1_syncthing, p1_reprocess, folder_scan, rescan_unknown, elevation_enrich)
-# have no cooperative stop at all and must not offer one.
-CANCELLABLE_TYPES = {"enrichment_run", "auto_enrich"}
-
-# ── Which process types can be RESUMED from a paused row, and where ─────────
-# Same principle as CANCELLABLE_TYPES: listed only if a route genuinely restarts
-# the run from its stop index rather than from zero.
-#
-# 'enrichment_run' is deliberately absent even though it does support resume.
-# Its resume is folded into POST /api/enrichment/run — the same route that
-# STARTS a run — which falls back to a fresh run from 0 when it finds no paused
-# job in memory. That is fine behind review.html's own button, which is driven
-# by that page's job state, but a generic Resume button firing it could silently
-# launch a whole new enrichment. Its affordance stays where it is.
-RESUME_ROUTES = {
-    "auto_enrich": "/api/enrich/resume",
-}
 
 
 async def _load_row(process_id: int):

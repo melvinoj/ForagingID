@@ -67,26 +67,16 @@
   // minimizing during a long batch stays minimized when the next job starts.
   var collapsed = false;
 
-  // ── Which rows may offer "End" ───────────────────────────────────────────
-  // An End button appears ONLY where pressing it genuinely stops the work. A
-  // button that flips a status row while the worker carries on is the specific
-  // lie this pass removes, so capability — not convenience — decides.
-  //
-  // Three real stop routes exist, each owned by a different subsystem:
-  //   1. /api/processes/{id}/cancel  — the worker polls its own bp row.
-  //      Membership is served by /api/processes/cancellable-types, read from
-  //      the same constant the endpoint enforces, so the button and the server
-  //      cannot disagree. Never hard-code the set here.
-  //   2. /api/scan/pause/{session_id} — scan sessions; session_id is parsed out
-  //      of the bp row's detail ("session:<id> — …"), written there for exactly
-  //      this purpose.
-  //   3. /api/queue/{id}/cancel — job_queue rows whose runner checks the queue
-  //      status. Only the two AI-draft backfills are listed: the scan page's
-  //      own filter/identify/enrich jobs are driven by that page's open tab, so
-  //      cancelling them from another page would not reliably stop anything.
-  //
-  // Every other type gets NO button. Their endpoint refuses too (409), so a
-  // stale client cannot produce a fake cancel either.
+  // ── Per-row controls come from the server ─────────────────────────────────
+  // Which buttons a row offers, and the exact URL each posts to, is decided
+  // server-side and delivered on the row as `controls` (see
+  // app/services/process_controls.py: pause / resume / end / dismiss, each a
+  // {url} or null). This file renders one button per non-null key and posts its
+  // url verbatim — it holds no type lists, no resume routes, and no session-id
+  // regex of its own. A row with no `controls` object renders no buttons
+  // (fail-closed); it never guesses a route. Every affordance the server omits
+  // (e.g. a type whose /pause or /cancel endpoint would 409) simply never
+  // renders, so client and server cannot disagree.
   // ── Minimum visible duration ─────────────────────────────────────────────
   // A finished process must stay on screen for at least this long after the
   // widget first sees it, so a job that takes less time than one poll interval
@@ -151,89 +141,6 @@
     Object.keys(firstSeenAt).forEach(function (k) {
       if (now - firstSeenAt[k] > 10 * MIN_VISIBLE_MS) delete firstSeenAt[k];
     });
-  }
-
-  var cancellableProcessTypes = null;   // filled from the server; null = unknown
-  var resumeRoutes            = null;   // {process_type: url}, likewise
-  var pausableProcessTypes    = null;   // {process_type: 1}, likewise
-  var SESSION_PAUSE_TYPES = { 'p2_delta': 1, 'archive_scan': 1 };
-  var QUEUE_CANCEL_TYPES  = { 'ai_draft_backfill': 1, 'ai_draft_backfill_id_notes': 1 };
-
-  function _loadCancellableTypes() {
-    fetch('/api/processes/cancellable-types')
-      .then(function (r) { return r.ok ? r.json() : null; })
-      .then(function (d) {
-        if (!d) return;
-        if (d.cancellable_types) {
-          var m = {};
-          d.cancellable_types.forEach(function (t) { m[t] = 1; });
-          cancellableProcessTypes = m;
-        }
-        // Resume is offered ONLY for types the server publishes a route for.
-        // Not hard-coded here, for the same reason End is not: the server owns
-        // which controls are real.
-        if (d.resume_routes) resumeRoutes = d.resume_routes;
-        // Pause likewise. The server only lists a type here when the whole
-        // pause→resume loop is reachable, so a Pause button never strands a row.
-        if (d.pausable_types) {
-          var pm = {};
-          d.pausable_types.forEach(function (t) { pm[t] = 1; });
-          pausableProcessTypes = pm;
-        }
-      })
-      .catch(function () { /* stays null — no controls offered, which fails safe */ });
-  }
-
-  // Returns {url} when this RUNNING row can be cooperatively paused, else null.
-  // Gated by the server-served pausable set (auto_enrich today); never offered
-  // on an already-paused row. Uses the same /pause route review.html uses.
-  function pauseTarget(it) {
-    if (it.status !== 'running' || it.source !== 'process' || !it.pid) return null;
-    if (!pausableProcessTypes || !pausableProcessTypes[it.type]) return null;
-    return { url: '/api/processes/' + it.pid + '/pause' };
-  }
-
-  // Dismiss is for rows that are dead but will not leave on their own: a
-  // 'stalled' row keeps status='running', so it never ages out of the active
-  // feed. A cleanly-finished row needs no Dismiss — it drops itself once its
-  // heartbeat leaves the recency window.
-  //
-  // No client-side rule decides what is dead. The server refuses (409) any row
-  // whose heartbeat is still fresh, using the same staleness predicate the
-  // startup sweep uses, so this button cannot silence live work even if the
-  // widget's view of a row were stale.
-  function dismissTarget(it) {
-    if (it.source !== 'process' || !it.pid) return null;
-    if (it.status !== 'stalled' && it.status !== 'failed' && it.status !== 'interrupted') {
-      return null;
-    }
-    return { url: '/api/processes/' + it.pid + '/dismiss' };
-  }
-
-  // Returns {url} when this PAUSED row can genuinely be resumed, else null.
-  function resumeTarget(it) {
-    if (it.status !== 'paused' || it.source !== 'process') return null;
-    if (!resumeRoutes || !resumeRoutes[it.type]) return null;
-    return { url: resumeRoutes[it.type] };
-  }
-
-  // Returns {url, label} when this row has a real stop route, else null.
-  function endTarget(it) {
-    if (it.status !== 'running' && it.status !== 'paused' && it.status !== 'stalled') return null;
-    if (it.source === 'queue') {
-      return QUEUE_CANCEL_TYPES[it.type] && it.jobId
-        ? { url: '/api/queue/' + it.jobId + '/cancel' }
-        : null;
-    }
-    if (SESSION_PAUSE_TYPES[it.type]) {
-      var m = /session:(\d+)/.exec(it.detail || '');
-      return m ? { url: '/api/scan/pause/' + m[1] } : null;
-    }
-    // Server-declared set only; if the fetch has not landed yet, offer nothing.
-    if (cancellableProcessTypes && cancellableProcessTypes[it.type] && it.pid) {
-      return { url: '/api/processes/' + it.pid + '/cancel' };
-    }
-    return null;
   }
 
   // ── Styles ───────────────────────────────────────────────────────────────
@@ -413,9 +320,8 @@
           source:  'queue',
           type:    j.job_type,
           jobId:   j.id,
-          // Phase 3e-1a: server-resolved descriptor, carried for the parity gate
-          // in renderRow(). Nothing renders from it — the *Target() functions
-          // still drive every button.
+          // Server-resolved control descriptor; renderRow() renders straight
+          // from it (Phase 3e-1b).
           controls: j.controls || null,
         });
         queueIds[j.id] = true;
@@ -463,11 +369,9 @@
         source:  'process',
         type:    p.process_type,
         pid:     p.process_id,
-        // Carried solely so endTarget() can read "session:<id>" out of it for
-        // the scan-session types; not rendered.
-        detail:  p.detail || '',
-        // Phase 3e-1a: server-resolved descriptor, carried for the parity gate
-        // in renderRow(). Nothing renders from it.
+        // Server-resolved control descriptor; renderRow() renders straight
+        // from it (Phase 3e-1b). The session id End needs is parsed server-side
+        // now, so the raw detail string is no longer carried to the client.
         controls: p.controls || null,
       });
     });
@@ -491,65 +395,10 @@
     return (v || 0).toLocaleString();
   }
 
-  // ── Phase 3e-1a parity gate (non-rendering, diagnostic only) ─────────────
-  // For every row that reaches renderRow(), compute the button set twice: once
-  // from the authoritative *Target() functions (which drive rendering, exactly
-  // as before), once from the server-emitted it.controls. Any divergence on the
-  // four compared keys is logged; NOTHING here alters what renders. `restart` is
-  // excluded — the widget renders no Restart today, so there is nothing to
-  // compare it against (it is verified in 3e-3 when scan.html consumes it).
-  //
-  // Expected transient: the client sets (cancellableProcessTypes / resumeRoutes /
-  // pausableProcessTypes) load asynchronously, so on the first poll before that
-  // fetch lands the *Target() functions fail safe to null while the server has
-  // already resolved a URL. Those brief mismatches are real and self-heal within
-  // one poll; they are information, not a defect in the descriptor.
-  function _targetUrl(t) { return (t && t.url) ? t.url : null; }
-
-  // One-shot notice for the load-race deferral below.
-  var _parityDeferredLogged = false;
-
-  function _controlsParityCheck(it) {
-    // The served sets (cancellableProcessTypes / resumeRoutes / pausableProcessTypes)
-    // load asynchronously; until they land, the *Target() functions fail safe to
-    // null while the server has already resolved URLs. That mismatch is a known,
-    // self-healing transient — and the gate's pass criterion is silence, so a
-    // transient must be EXCLUDED, not merely tolerated as noise. Defer the whole
-    // comparison until the sets are present; comparison then resumes for every
-    // row on the next poll. One info line marks the deferral, module-level so it
-    // fires once rather than per row.
-    if (cancellableProcessTypes === null || resumeRoutes === null) {
-      if (!_parityDeferredLogged) {
-        _parityDeferredLogged = true;
-        console.info('[controls parity] deferred: served sets not yet loaded');
-      }
-      return;
-    }
-
-    var server = it.controls || {};
-    var client = {
-      pause:   _targetUrl(pauseTarget(it)),
-      resume:  _targetUrl(resumeTarget(it)),
-      end:     _targetUrl(endTarget(it)),
-      dismiss: _targetUrl(dismissTarget(it)),
-    };
-    ['pause', 'resume', 'end', 'dismiss'].forEach(function (k) {
-      var s = (server[k] && server[k].url) ? server[k].url : null;
-      if (s !== client[k]) {
-        console.warn('[controls parity] type=' + it.type + ' source=' + it.source +
-                     ' status=' + it.status + ' key=' + k +
-                     ' client=' + client[k] + ' server=' + s);
-      }
-    });
-  }
-
   // Same markup shape as scan.html's _jqRenderJob. The .jq-actions row is
-  // rendered only when this row has a real stop route — no button, rather than
-  // a disabled or dishonest one, for everything else.
+  // rendered only when this row has at least one non-null control — no button,
+  // rather than a disabled or dishonest one, for everything else.
   function renderRow(it, idx) {
-    // Diagnostic side path only — must not influence any value used below.
-    _controlsParityCheck(it);
-
     var prog = '';
     if (it.total > 0) {
       var pct = Math.round(it.current / it.total * 100);
@@ -561,23 +410,27 @@
     }
     var err = it.error ? '<div class="jq-error">' + esc(it.error) + '</div>' : '';
 
-    // running → [Pause][End]; paused → [Resume][End]. Pause (running-only) and
-    // Resume (paused-only) are mutually exclusive by status, so at most one of
-    // them renders; End sits after either.
+    // Buttons render straight from the server-resolved descriptor: one per
+    // non-null key. running → [Pause][End]; paused → [Resume][End] — Pause and
+    // Resume are mutually exclusive by status server-side, so at most one shows;
+    // End sits after either. `restart` is present on paused queue rows but is
+    // deliberately NOT rendered here (reserved for 3e-3). A row with no
+    // `controls` object yields {} and therefore no buttons — fail-closed.
+    var c = it.controls || {};
     var buttons = '';
-    if (resumeTarget(it)) {
+    if (c.resume) {
       buttons += '<button type="button" class="jq-btn jq-btn-resume" ' +
                          'onclick="window.__jswResume(' + idx + ', this)">▶ Resume</button>';
     }
-    if (pauseTarget(it)) {
+    if (c.pause) {
       buttons += '<button type="button" class="jq-btn jq-btn-pause" ' +
                          'onclick="window.__jswPause(' + idx + ', this)">⏸ Pause</button>';
     }
-    if (endTarget(it)) {
+    if (c.end) {
       buttons += '<button type="button" class="jq-btn jq-btn-cancel" ' +
                          'onclick="window.__jswEnd(' + idx + ', this)">End</button>';
     }
-    if (dismissTarget(it)) {
+    if (c.dismiss) {
       buttons += '<button type="button" class="jq-btn jq-btn-cancel" ' +
                          'onclick="window.__jswDismiss(' + idx + ', this)">Dismiss</button>';
     }
@@ -602,8 +455,7 @@
   // row where it was.
   window.__jswDismiss = function (idx, btn) {
     var it = lastItems[idx];
-    if (!it) return;
-    var target = dismissTarget(it);
+    var target = it && it.controls && it.controls.dismiss;
     if (!target) return;
     if (btn) { btn.disabled = true; btn.textContent = 'Dismissing…'; }
     fetch(target.url, { method: 'POST' }).then(function (r) {
@@ -622,8 +474,7 @@
   // it is not destructive and is trivially undone by pausing again.
   window.__jswResume = function (idx, btn) {
     var it = lastItems[idx];
-    if (!it) return;
-    var target = resumeTarget(it);
+    var target = it && it.controls && it.controls.resume;
     if (!target) return;
     if (btn) { btn.disabled = true; btn.textContent = 'Resuming…'; }
     fetch(target.url, { method: 'POST' }).then(function (r) {
@@ -644,8 +495,7 @@
   // reflects the real 'paused' state, same honesty rule as End/Resume.
   window.__jswPause = function (idx, btn) {
     var it = lastItems[idx];
-    if (!it) return;
-    var target = pauseTarget(it);
+    var target = it && it.controls && it.controls.pause;
     if (!target) return;
     if (btn) { btn.disabled = true; btn.textContent = 'Pausing…'; }
     fetch(target.url, { method: 'POST' }).then(function (r) {
@@ -662,8 +512,7 @@
 
   window.__jswEnd = function (idx, btn) {
     var it = lastItems[idx];
-    if (!it) return;
-    var target = endTarget(it);
+    var target = it && it.controls && it.controls.end;
     if (!target) return;
     if (!window.confirm('End "' + it.label + '"? It stops at the next safe point; ' +
                         'work already done is kept.')) return;
@@ -776,6 +625,5 @@
     }
   });
 
-  _loadCancellableTypes();
   startPolling();   // gated by _isDesktop(): a no-op below the breakpoint
 })();

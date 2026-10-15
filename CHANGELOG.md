@@ -471,6 +471,22 @@ Still open:
 
 ## History
 
+### 2026-10-15 10:43
+**Snapshot** — Manual snapshot
+DB: `snapshots/db_20261015_104334.sqlite`
+
+### 2026-10-15 10:37
+**Re-ID obs 17188 Anthriscus caucalis -> Daucus carota (correct-species path); Hypericum perforatum (229) edible -> caution, human-verified; snapshot db_20261015_103654**
+
+**Fixed:**
+- obs 17188 now Daucus carota, species_id 9, identified, manually_verified
+- species 229 Hypericum perforatum: edibility_status caution, toxicity none, verified=1 by human; 2 species_edibility_history rows (reason: photosensitivity)
+**Files:** `data/foragingid.db`
+**Pending:**
+- Card 138 Anthriscus caucalis keeps 1 obs; inedible+toxic contradiction still open (Melvin)
+- Backlog cleanup: cards 810, 108 have 0 obs
+- saved_walks id 3 waypoint labels are stale (canadensis, humifusum, caucalis) - stored at save time
+
 ### 2026-10-15 10:36
 **Snapshot** — Manual snapshot
 DB: `snapshots/db_20261015_103654.sqlite`

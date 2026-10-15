@@ -471,6 +471,25 @@ Still open:
 
 ## History
 
+### 2026-10-15 10:51
+**Snapshot** — Manual snapshot
+DB: `snapshots/db_20261015_105153.sqlite`
+
+### 2026-10-15 10:44
+**Rümmelsbühl foray (saved_walks id 4) review applied: snapshot db_20261015_104334 -> 8 re-IDs (correct-species) -> 10 status changes + 41 human verifications -> family/name fixes**
+
+**Fixed:**
+- Re-ID: 21910->H. perforatum, 9442->Knautia arvensis, 22146->Atriplex patula, 17760->Leucanthemum vulgare, 9430/9431/17687->Thymus pulegioides, 22178->Rubus fruticosus
+- Status: 58 Dryopteris toxic/toxic; 194 Tanacetum caution; 98 Artemisia vulgaris caution; 35 Carex + 380 Briza inedible/none; 701 Atriplex patula edible; 677, 702 Hypericum caution; 710 Rosa villosa edible; 794 Sparassis crispa edible
+- 41 species verified human; 52 edibility history rows
+- Families: 58 Dryopteridaceae, 134 Polygonaceae, 329 Fagaceae, 488 Pinaceae, 293/319/710 Rosaceae (710 kingdom Plantae), 142 Lamiaceae, 273 Asteraceae; names: 210 EN Nottingham catchfly, 329 DE Rotbuche (Blutbuche removed), 341 DE Moschus-Malve (Abelmoschus, Indische Hibiscus-Malve removed); 13 history rows
+**Files:** `data/foragingid.db`
+**Pending:**
+- Hold 585 Genista tinctoria: obs 17889 (iNat G. sagittalis 0.951) + 21621 - Melvin to recheck photos
+- Leucanthemum vulgare (214) edible unverified; Knautia arvensis (208) edible unlocked_for_review - Melvin to decide
+- Cleanup backlog: zero-obs cards 108, 491, 744, 810 (+ any others listed)
+- Kingdom NULL on 142 Thymus polytrichus, 319 Rubus gratus
+
 ### 2026-10-15 10:43
 **Snapshot** — Manual snapshot
 DB: `snapshots/db_20261015_104334.sqlite`

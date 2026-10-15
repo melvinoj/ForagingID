@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Plants on this walk</title>
+{{D3}}
+<style>
+/* ── frontend/taxonomy.html <style>, copied verbatim at build time ── */
+{{TAXONOMY_STYLE}}
+/* ── export-only overrides (embedded in the Plants tab iframe) ── */
+.header { padding: 12px 16px; }
+.species-popup { max-width: min(260px, calc(100vw - 32px)); }
+.species-popup-thumb { width: 96px; height: 96px; }
+.species-popup-en { font-weight: 600; color: var(--ink); margin-bottom: 2px; }
+.species-popup-badge { display: inline-block; margin-top: 4px; padding: 2px 8px; border-radius: 10px;
+  font-size: 11px; font-weight: 600; background: rgba(255,255,255,0.08); color: var(--ink); }
+.species-popup-badge.toxic, .species-popup-badge.deadly { background: #d1342b; color: #fff; }
+.species-popup-badge.edible { background: #3f9e52; color: #fff; }
+.species-popup-badge.caution { background: #c8963e; color: #1c1610; }
+.species-popup-badge.apiaceae { background: #b5503f; color: #fff; }
+</style>
+</head>
+<body>
+<div id="wrap">
+  <div class="header">
+    <span class="badge" id="count-badge">—</span>
+  </div>
+  <svg id="tree"></svg>
+  <button id="legend-chip" onclick="toggleLegend()" aria-label="Open legend" aria-haspopup="true" aria-expanded="false">
+    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="3" y="5" width="4" height="4" rx="1"/><line x1="10" y1="7" x2="21" y2="7"/>
+      <rect x="3" y="11" width="4" height="4" rx="1"/><line x1="10" y1="13" x2="21" y2="13"/>
+      <rect x="3" y="17" width="4" height="4" rx="1"/><line x1="10" y1="19" x2="21" y2="19"/>
+    </svg>
+  </button>
+  <div class="legend" id="legend-panel">
+    <button class="legend-close" onclick="closeLegend()" aria-label="Close legend">✕</button>
+    <div class="row"><span class="dot" style="background:var(--plant)"></span> Plant</div>
+    <div class="row"><span class="dot" style="background:var(--fungi)"></span> Fungus</div>
+    <div class="row"><span class="dot" style="background:#d1342b"></span> ☠ Toxic — do not eat</div>
+    <div class="hint">Tap a branch to open it, tap a species for its photo.<br>Drag to move · pinch or scroll to zoom.</div>
+  </div>
+  <div class="controls">
+    <button id="zoom-in" title="Zoom in">+</button>
+    <button id="zoom-out" title="Zoom out">−</button>
+    <button id="reset" title="Reset view">⤢</button>
+  </div>
+  <div class="tip" id="tip"></div>
+  <div class="species-popup" id="species-popup">
+    <button class="species-popup-close" onclick="closeSpeciesPopup()" aria-label="Close">✕</button>
+    <img class="species-popup-thumb" id="species-popup-thumb" alt="">
+    <div class="species-popup-en" id="species-popup-en"></div>
+    <div class="species-popup-name" id="species-popup-name"></div>
+    <div class="species-popup-note" id="species-popup-note"></div>
+    <a class="species-popup-link" id="species-popup-link" href="#" style="display:none"></a>
+  </div>
+</div>
+
+<script>
+{{DATA}}
+// Baked species popup — replaces taxonomy.html's API-backed openSpeciesPopup().
+// Content is only what gates.py let through (names, photo, badge).
+window.__exportSpeciesPopup = function (sci, e) {
+  var info = window.__EXPORT_SPECIES__[sci] || {};
+  var popup = document.getElementById("species-popup");
+  var thumb = document.getElementById("species-popup-thumb");
+  var note  = document.getElementById("species-popup-note");
+  document.getElementById("species-popup-en").textContent =
+    (info.toxic ? "☠ " : "") + (info.en || "") + (info.de ? " · " + info.de : "");
+  document.getElementById("species-popup-name").textContent = sci;
+  note.innerHTML = "";
+  if (info.badge) {
+    var b = document.createElement("span");
+    b.className = "species-popup-badge " + info.badge.kind;
+    b.textContent = info.badge.text;
+    note.appendChild(b);
+    note.classList.add("visible");
+  } else {
+    note.classList.remove("visible");
+  }
+  if (info.thumb) { thumb.src = info.thumb; thumb.classList.add("visible"); }
+  else { thumb.removeAttribute("src"); thumb.classList.remove("visible"); }
+  popup.classList.add("visible");
+  // Keep the popup inside the frame on small screens.
+  var pw = popup.offsetWidth, ph = popup.offsetHeight;
+  var x = Math.min(e.clientX + 14, window.innerWidth - pw - 8);
+  var y = Math.min(e.clientY + 14, window.innerHeight - ph - 8);
+  popup.style.left = Math.max(8, x) + "px";
+  popup.style.top  = Math.max(8, y) + "px";
+};
+</script>
+<script>
+/* ── frontend/taxonomy.html main <script>, copied at build time with the
+      anchored patches listed in export.py TREE_PATCHES ── */
+{{TAXONOMY_SCRIPT}}
+</script>
+</body>
+</html>

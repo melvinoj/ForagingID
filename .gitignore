@@ -69,3 +69,6 @@ photos/*
 !photos/confirmed_plants/
 photos/confirmed_plants/*
 !photos/confirmed_plants/logs/
+
+# Foraging Experience static export output (scripts/experience_export) — published from a separate repo
+dist/

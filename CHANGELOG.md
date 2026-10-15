@@ -471,6 +471,50 @@ Still open:
 
 ## History
 
+### 2026-10-15 13:22
+**Snapshot** — Manual snapshot
+DB: `snapshots/db_20261015_132210.sqlite`
+
+### 2026-10-15 13:09
+**Experience export: Impressum URL + host page set; links open in top window for the Hostinger embed**
+
+**Built:**
+- config: host_page_url https://melvinjarman.co.uk/b, impressum_url https://melvinjarman.co.uk/impressum
+- canonical link to host page; CTA/Contact/Impressum target=_top
+**Files:** `scripts/experience_export/config.json`, `scripts/experience_export/templates/index.html`, `scripts/experience_export/export.py`
+**Pending:**
+- Impressum page must exist on melvinjarman.co.uk before go-live
+- Push to melvinoj/foraging-experience only after explicit OK
+
+### 2026-10-15 13:02
+**Foraging Experience static export built (walk 4 Rümmelsbühl foray) - dist/ preview only, not pushed**
+
+**Built:**
+- scripts/experience_export/: export.py, gates.py (single gate module), config.json, templates/index.html + tree.html
+- dist/index.html: Walk (Leaflet 1.9.4 app SRI, saved route, 26 numbered stops, 4 red ☠ stops), Plants (taxonomy tree iframe + species cards), Recipes (19 teasers), footer disclaimer verbatim from print_pdf.html
+- dist/tree.html: frontend/taxonomy.html style+script reused at build time with 9 anchored patches (fail if anchor count changes); d3 7.8.5 with sha384 SRI
+- Photos: 51 species x (1200px + 400px), re-encoded from pixels, exiftool + PIL: 0 GPS, 0 EXIF
+**Fixed:**
+- dist/ added to .gitignore
+**Files:** `scripts/experience_export/export.py`, `scripts/experience_export/gates.py`, `scripts/experience_export/config.json`, `scripts/experience_export/templates/index.html`, `scripts/experience_export/templates/tree.html`, `.gitignore`
+**Pending:**
+- Impressum URL placeholder - Melvin to supply; do not publish until set
+- Melvin to review preview + teasers (Sambucus raw line, florid old recipes 130/136/137, caution-species recipes Artemisia/Sambucus/H. perforatum)
+- Apiaceae: Aegopodium shows Edible, Anthriscus sylvestris shows Edible with caution (both human-authored edible_parts) - confirm
+- Galium album 183 never reviewed (missed from my Rümmelsbühl table) - shows For identification
+- 7 species lack class/order lineage - not in tree (in list)
+- Push to melvinoj/foraging-experience only after explicit OK
+
+### 2026-10-15 10:52
+**Genista re-ID + final Rümmelsbühl verifications; snapshot db_20261015_105153**
+
+**Fixed:**
+- obs 17889 Genista tinctoria -> Genista sagittalis (correct-species); 21621 stays G. tinctoria
+- 585 Genista tinctoria verified human (status already caution/none - unchanged)
+- 214 Leucanthemum vulgare, 208 Knautia arvensis verified human as-is (edible)
+- kingdom Plantae on 142 Thymus polytrichus, 319 Rubus gratus; 5 history rows
+**Files:** `data/foragingid.db`
+
 ### 2026-10-15 10:51
 **Snapshot** — Manual snapshot
 DB: `snapshots/db_20261015_105153.sqlite`

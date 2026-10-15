@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="{{LANG}}">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="color-scheme" content="light">
+<title>{{TITLE}}</title>
+{{CANONICAL}}
+{{LEAFLET_CSS}}
+<style>
+  :root {
+    --bg: #fbfaf6;
+    --card: #ffffff;
+    --ink: #1e2a22;
+    --ink-dim: #5d6a60;
+    --line: #e2e6dc;
+    --green: #2d5016;
+    --green-soft: #e8f1df;
+    --toxic: #c62828;
+    --toxic-soft: #fdecea;
+    --caution: #8a5a00;
+    --caution-soft: #fdf3dc;
+    --gutter: 16px;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--bg); color: var(--ink);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; line-height: 1.5; }
+  body { overflow-x: hidden; }
+  img { max-width: 100%; display: block; }
+  a { color: var(--green); }
+  .wrap { max-width: 960px; margin: 0 auto; padding: 0 var(--gutter); }
+
+  header.hero { padding: 28px 0 18px; }
+  .hero h1 { margin: 0 0 8px; font-size: clamp(1.5rem, 5vw, 2.2rem); line-height: 1.2; color: var(--green); }
+  .hero p { margin: 0 0 14px; max-width: 62ch; }
+  .meta { font-size: 0.85rem; color: var(--ink-dim); margin-bottom: 16px; }
+  .cta { display: inline-block; background: var(--green); color: #fff; text-decoration: none;
+    padding: 12px 20px; border-radius: 10px; font-weight: 600; }
+  .cta:hover { background: #1f3a0e; }
+
+  nav.tabs { position: sticky; top: 0; z-index: 1000; background: var(--bg);
+    border-bottom: 1px solid var(--line); }
+  .tabs .wrap { display: flex; gap: 4px; }
+  .tab { flex: 1; appearance: none; border: 0; background: none; font: inherit; font-weight: 600;
+    color: var(--ink-dim); padding: 12px 4px; border-bottom: 3px solid transparent; cursor: pointer; }
+  .tab[aria-selected="true"] { color: var(--green); border-bottom-color: var(--green); }
+  section.panel { padding: 18px 0 28px; }
+  section.panel[hidden] { display: none; }
+  h2 { font-size: 1.15rem; margin: 0 0 10px; }
+  .lead { color: var(--ink-dim); margin: 0 0 14px; font-size: 0.92rem; }
+
+  #map { height: 58vh; min-height: 300px; border-radius: 12px; border: 1px solid var(--line); }
+  .stop-pin { width: 28px; height: 28px; border-radius: 50%; background: var(--green); color: #fff;
+    font: 700 13px/28px -apple-system, sans-serif; text-align: center; border: 2px solid #fff;
+    box-shadow: 0 1px 4px rgba(0,0,0,.35); }
+  .stop-pin.toxic { background: var(--toxic); width: 32px; height: 32px; line-height: 32px; font-size: 15px; }
+
+  .stops { display: grid; gap: 10px; margin-top: 16px; }
+  .stop { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; }
+  .stop.toxic { border-color: var(--toxic); }
+  .stop h3 { margin: 0 0 6px; font-size: 0.95rem; display: flex; align-items: center; gap: 8px; cursor: pointer; }
+  .stop-num { display: inline-block; min-width: 24px; height: 24px; border-radius: 12px; background: var(--green);
+    color: #fff; font-size: 0.8rem; line-height: 24px; text-align: center; }
+  .stop.toxic .stop-num { background: var(--toxic); }
+  .sp-row { display: flex; gap: 10px; align-items: center; padding: 6px 0; border-top: 1px solid var(--line); }
+  .sp-row:first-of-type { border-top: 0; }
+  .sp-row img, .sp-row .noimg { width: 52px; height: 52px; border-radius: 8px; object-fit: cover; flex: 0 0 auto;
+    background: var(--green-soft); }
+  .sp-names { min-width: 0; }
+  .sp-en { font-weight: 600; }
+  .sp-de, .sp-sci { font-size: 0.82rem; color: var(--ink-dim); }
+  .sp-sci { font-style: italic; }
+
+  .badge { display: inline-block; font-size: 0.75rem; font-weight: 700; padding: 2px 8px; border-radius: 10px;
+    background: #eef0ea; color: var(--ink-dim); margin-top: 3px; }
+  .badge.edible { background: var(--green-soft); color: var(--green); }
+  .badge.caution { background: var(--caution-soft); color: var(--caution); }
+  .badge.toxic, .badge.deadly { background: var(--toxic); color: #fff; }
+  .badge.apiaceae { background: var(--toxic-soft); color: var(--toxic); }
+
+  #tree-frame-wrap { height: 70vh; min-height: 360px; border-radius: 12px; overflow: hidden;
+    border: 1px solid var(--line); background: #14100c; }
+  #tree-frame-wrap iframe { width: 100%; height: 100%; border: 0; display: block; }
+
+  .grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(min(100%, 260px), 1fr));
+    margin-top: 18px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+  .card.toxic { border: 2px solid var(--toxic); }
+  .card .photo { aspect-ratio: 4 / 3; width: 100%; object-fit: cover; background: var(--green-soft); cursor: zoom-in; }
+  .card .body { padding: 10px 12px 12px; }
+  .card .fam { font-size: 0.78rem; color: var(--ink-dim); }
+  .warn { margin-top: 8px; font-size: 0.85rem; border-radius: 8px; padding: 8px 10px; }
+  .warn.toxic { background: var(--toxic-soft); color: #7f1d1d; border-left: 4px solid var(--toxic); }
+  .warn.lookalike { background: var(--caution-soft); color: #5c3d00; border-left: 4px solid #c8963e; }
+  .warn strong { display: block; margin-bottom: 2px; }
+
+  .recipe .dish { font-weight: 700; margin: 0 0 4px; }
+  .recipe .line { margin: 0 0 6px; font-style: italic; color: #39463c; }
+  .note-box { background: var(--green-soft); border-radius: 10px; padding: 10px 12px; font-weight: 600; color: var(--green); }
+
+  footer { border-top: 1px solid var(--line); padding: 22px 0 36px; font-size: 0.85rem; color: #333; }
+  footer h2 { font-size: 0.95rem; color: var(--green); }
+  footer p { margin: 0 0 10px; }
+  .footer-links { display: flex; flex-wrap: wrap; gap: 6px 18px; margin-top: 14px; }
+  .placeholder { color: var(--toxic); font-weight: 700; }
+
+  .lightbox { position: fixed; inset: 0; background: rgba(0,0,0,.88); z-index: 2000; display: none;
+    align-items: center; justify-content: center; padding: var(--gutter); }
+  .lightbox.open { display: flex; }
+  .lightbox img { max-height: 90vh; border-radius: 8px; }
+  .leaflet-popup-content { margin: 10px 12px; min-width: 200px; }
+</style>
+</head>
+<body>
+<header class="hero">
+  <div class="wrap">
+    <h1 id="title"></h1>
+    <p id="intro"></p>
+    <div class="meta" id="meta"></div>
+    <a class="cta" id="cta" href="#" target="_top" rel="noopener"></a>
+  </div>
+</header>
+
+<nav class="tabs" aria-label="Sections">
+  <div class="wrap" role="tablist">
+    <button class="tab" role="tab" id="tab-walk" aria-controls="panel-walk" aria-selected="true">Walk</button>
+    <button class="tab" role="tab" id="tab-plants" aria-controls="panel-plants" aria-selected="false">Plants</button>
+    <button class="tab" role="tab" id="tab-recipes" aria-controls="panel-recipes" aria-selected="false">Recipes</button>
+  </div>
+</nav>
+
+<main>
+  <section class="panel" id="panel-walk" role="tabpanel" aria-labelledby="tab-walk">
+    <div class="wrap">
+      <h2>The route</h2>
+      <p class="lead">Numbered stops follow the walk. <strong style="color:var(--toxic)">☠ red stops</strong> have a poisonous plant — look, don't pick.</p>
+      <div id="map" role="region" aria-label="Walk map"></div>
+      <div class="stops" id="stops"></div>
+    </div>
+  </section>
+
+  <section class="panel" id="panel-plants" role="tabpanel" aria-labelledby="tab-plants" hidden>
+    <div class="wrap">
+      <h2>Plants on this walk</h2>
+      <p class="lead">A family tree of everything we meet on the way. Tap a branch to open it, tap a species for its photo.</p>
+      <div id="tree-frame-wrap"></div>
+      <div class="grid" id="species-grid"></div>
+    </div>
+  </section>
+
+  <section class="panel" id="panel-recipes" role="tabpanel" aria-labelledby="tab-recipes" hidden>
+    <div class="wrap">
+      <h2>From the walk to the plate</h2>
+      <p class="note-box">A taste of what we cook — full recipes on the day.</p>
+      <div class="grid" id="recipe-grid"></div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <h2 id="disclaimer-h"></h2>
+    <div id="disclaimer"></div>
+    <div class="footer-links" id="footer-links"></div>
+  </div>
+</footer>
+
+<div class="lightbox" id="lightbox" role="dialog" aria-label="Photo"><img alt=""></div>
+
+<script>
+window.DATA = {{DATA}};
+</script>
+{{LEAFLET_JS}}
+<script>
+(function () {
+  "use strict";
+  var D = window.DATA;
+  var byId = {};
+  D.species.forEach(function (s) { byId[s.id] = s; });
+
+  function esc(s) {
+    return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) {
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
+    });
+  }
+  function badge(s) { return '<span class="badge ' + esc(s.badge.kind) + '">' + esc(s.badge.text) + "</span>"; }
+  function img(src, alt, cls) {
+    return src ? '<img src="' + esc(src) + '" alt="' + esc(alt) + '" loading="lazy"' + (cls ? ' class="' + cls + '"' : "") + ">"
+               : '<div class="noimg' + (cls ? " " + cls : "") + '"></div>';
+  }
+  function spRow(s) {
+    return '<div class="sp-row">' + img(s.thumb, s.en || s.sci) +
+      '<div class="sp-names"><div class="sp-en">' + (s.toxic ? "☠ " : "") + esc(s.en || s.sci) + "</div>" +
+      (s.de ? '<div class="sp-de">' + esc(s.de) + "</div>" : "") +
+      '<div class="sp-sci">' + esc(s.sci) + "</div>" + badge(s) + "</div></div>";
+  }
+
+  // ── header ──
+  document.title = D.title;
+  document.getElementById("title").textContent = D.title;
+  document.getElementById("intro").textContent = D.intro;
+  var km = D.walk.distance_m ? (D.walk.distance_m / 1000).toFixed(1) + " km" : "";
+  var hrs = D.walk.duration_min ? "about " + (Math.round(D.walk.duration_min / 30) / 2) + " h walking" : "";
+  document.getElementById("meta").textContent =
+    [km, hrs, D.walk.stops.length + " stops", D.species.length + " species"].filter(Boolean).join(" · ");
+  var cta = document.getElementById("cta");
+  cta.textContent = D.cta_label; cta.href = D.contact_url;
+
+  // ── tabs ──
+  var tabs = ["walk", "plants", "recipes"];
+  var treeLoaded = false, map = null;
+  function show(name) {
+    if (tabs.indexOf(name) < 0) name = "walk";
+    tabs.forEach(function (t) {
+      document.getElementById("tab-" + t).setAttribute("aria-selected", t === name ? "true" : "false");
+      document.getElementById("panel-" + t).hidden = t !== name;
+    });
+    if (name === "plants" && !treeLoaded) {
+      // Created on first open so the tree lays out at its real size.
+      var f = document.createElement("iframe");
+      f.src = "tree.html"; f.title = "Plant family tree"; f.loading = "eager";
+      document.getElementById("tree-frame-wrap").appendChild(f);
+      treeLoaded = true;
+    }
+    if (name === "walk" && map) setTimeout(function () { map.invalidateSize(); }, 0);
+    if (location.hash !== "#" + name) history.replaceState(null, "", "#" + name);
+  }
+  tabs.forEach(function (t) {
+    document.getElementById("tab-" + t).addEventListener("click", function () { show(t); });
+  });
+
+  // ── walk ──
+  var stopsEl = document.getElementById("stops");
+  stopsEl.innerHTML = D.walk.stops.map(function (st) {
+    return '<div class="stop' + (st.toxic ? " toxic" : "") + '" id="stop-' + st.n + '">' +
+      '<h3 data-stop="' + st.n + '"><span class="stop-num">' + (st.toxic ? "☠" : st.n) + "</span>Stop " + st.n +
+      (st.toxic ? ' <span class="badge toxic">Poisonous plant here</span>' : "") + "</h3>" +
+      st.species.map(function (id) { return spRow(byId[id]); }).join("") + "</div>";
+  }).join("");
+
+  var markers = {};
+  if (window.L) {
+    map = L.map("map", { scrollWheelZoom: false });
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      attribution: '© <a href="https://openstreetmap.org/copyright">OpenStreetMap</a> contributors', maxZoom: 19
+    }).addTo(map);
+    var bounds = [];
+    if (D.walk.line) {
+      var ll = D.walk.line.map(function (c) { return [c[1], c[0]]; });
+      L.polyline(ll, { color: "#2d5016", weight: 4, opacity: 0.85 }).addTo(map);
+      bounds = bounds.concat(ll);
+    }
+    D.walk.stops.forEach(function (st) {
+      var icon = L.divIcon({ className: "", iconSize: st.toxic ? [32, 32] : [28, 28],
+        html: '<div class="stop-pin' + (st.toxic ? " toxic" : "") + '">' + (st.toxic ? "☠" : st.n) + "</div>" });
+      var m = L.marker([st.lat, st.lng], { icon: icon, title: "Stop " + st.n, zIndexOffset: st.toxic ? 1000 : 0 })
+        .addTo(map)
+        .bindPopup('<strong>Stop ' + st.n + "</strong>" + st.species.map(function (id) { return spRow(byId[id]); }).join(""),
+                   { maxWidth: 280 });
+      markers[st.n] = m;
+      bounds.push([st.lat, st.lng]);
+    });
+    if (bounds.length) map.fitBounds(bounds, { padding: [20, 20] });
+  } else {
+    document.getElementById("map").innerHTML = '<p class="lead" style="padding:12px">Map could not load (offline?).</p>';
+  }
+  stopsEl.addEventListener("click", function (e) {
+    var h = e.target.closest("h3[data-stop]");
+    if (!h || !map) return;
+    var m = markers[h.getAttribute("data-stop")];
+    document.getElementById("map").scrollIntoView({ behavior: "smooth", block: "center" });
+    map.setView(m.getLatLng(), Math.max(map.getZoom(), 16));
+    m.openPopup();
+  });
+
+  // ── plants ──
+  document.getElementById("species-grid").innerHTML = D.species.map(function (s) {
+    var w = "";
+    if (s.safety.toxic) w += '<div class="warn toxic"><strong>☠ Not safe to eat</strong>' + esc(s.safety.toxic) + "</div>";
+    if (s.safety.look_alike) w += '<div class="warn lookalike"><strong>Look-alikes</strong>' + esc(s.safety.look_alike) + "</div>";
+    return '<article class="card' + (s.toxic ? " toxic" : "") + '">' +
+      (s.photo ? '<img class="photo" src="' + esc(s.thumb) + '" data-full="' + esc(s.photo) + '" alt="' + esc(s.en || s.sci) + '" loading="lazy">'
+               : '<div class="photo"></div>') +
+      '<div class="body"><div class="sp-en">' + (s.toxic ? "☠ " : "") + esc(s.en || s.sci) + "</div>" +
+      (s.de ? '<div class="sp-de">' + esc(s.de) + "</div>" : "") +
+      '<div class="sp-sci">' + esc(s.sci) + "</div>" +
+      (s.family ? '<div class="fam">' + esc(s.family) + "</div>" : "") + badge(s) + w + "</div></article>";
+  }).join("");
+
+  // ── recipes (teasers only) ──
+  var rg = document.getElementById("recipe-grid");
+  rg.innerHTML = D.recipes.length ? D.recipes.map(function (r) {
+    var s = byId[r.species_id];
+    return '<article class="card recipe">' +
+      (s.photo ? '<img class="photo" src="' + esc(s.thumb) + '" data-full="' + esc(s.photo) + '" alt="' + esc(s.en || s.sci) + '" loading="lazy">' : "") +
+      '<div class="body"><p class="dish">' + esc(r.dish) + "</p>" +
+      '<p class="line">' + esc(r.line) + "</p>" +
+      '<div class="sp-de">' + esc(s.en || s.sci) + (s.de ? " · " + esc(s.de) : "") + "</div>" + badge(s) + "</div></article>";
+  }).join("") : '<p class="lead">Recipes to follow.</p>';
+
+  // ── footer: disclaimer text is print_pdf.html's, unchanged ──
+  document.getElementById("disclaimer-h").textContent = D.disclaimer.heading;
+  document.getElementById("disclaimer").innerHTML = D.disclaimer.paras.map(function (p) { return "<p>" + esc(p) + "</p>"; }).join("");
+  document.getElementById("footer-links").innerHTML =
+    '<a href="' + esc(D.contact_url) + '" target="_top" rel="noopener">Contact</a>' +
+    (D.impressum_url ? '<a href="' + esc(D.impressum_url) + '" target="_top" rel="noopener">Impressum</a>'
+                     : '<span class="placeholder">Impressum (link to follow)</span>');
+
+  // ── photo lightbox ──
+  var lb = document.getElementById("lightbox");
+  document.addEventListener("click", function (e) {
+    var t = e.target;
+    if (t.matches && t.matches("img[data-full]")) { lb.querySelector("img").src = t.getAttribute("data-full"); lb.classList.add("open"); }
+    else if (t === lb || t.parentNode === lb) { lb.classList.remove("open"); }
+  });
+
+  show((location.hash || "#walk").slice(1));
+})();
+</script>
+</body>
+</html>

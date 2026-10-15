@@ -471,6 +471,21 @@ Still open:
 
 ## History
 
+### 2026-10-15 10:36
+**Snapshot** — Manual snapshot
+DB: `snapshots/db_20261015_103654.sqlite`
+
+### 2026-10-15 10:33
+**Re-ID obs 24234 Hypericum humifusum -> Hypericum perforatum via correct-species path; snapshot db_20261015_103337**
+
+**Fixed:**
+- obs 24234 now H. perforatum, species_id 229, identified, manually_verified, human_corrected=1
+**Files:** `data/foragingid.db`
+**Pending:**
+- Backlog cleanup: card 810 Hypericum humifusum and card 108 Sambucus canadensis now have 0 observations
+- SAFETY: Hypericum perforatum (229) edibility edible, unverified, toxicity none - now on little foray walk; Melvin to decide (caution/photosensitivity like 810/381?)
+- Anthriscus caucalis (138) hold: walk obs 17188 photo check (A. sylvestris / Chaerophyllum temulum?)
+
 ### 2026-10-15 10:33
 **Snapshot** — Manual snapshot
 DB: `snapshots/db_20261015_103337.sqlite`

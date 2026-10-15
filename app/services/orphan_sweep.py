@@ -124,6 +124,10 @@ async def sweep_identify_orphans(dry_run: bool = False) -> dict:
         return {"skipped": True, "reason": f"mutex held by {pipeline_holder()}",
                 "found": 0, "requeued": 0}
 
+    # Ingest takes priority: queued auto-enrichment waits while the sweep
+    # re-identifies (enrich_gate). Deregistered in the finally below.
+    from app.services.enrich_gate import ingest_active, ingest_done
+
     try:
         orphans = await find_identify_orphans()
         if not orphans:
@@ -140,6 +144,7 @@ async def sweep_identify_orphans(dry_run: bool = False) -> dict:
 
         requeued = []
         for obs_id, created_at in orphans:
+            ingest_active("orphan_sweep")   # per-item liveness (in-memory)
             try:
                 async with AsyncSessionLocal() as session:
                     obs = await session.get(Observation, obs_id)
@@ -178,6 +183,7 @@ async def sweep_identify_orphans(dry_run: bool = False) -> dict:
         log.exception("[orphan_sweep] cycle failed")
         return {"skipped": False, "found": 0, "requeued": 0, "error": True}
     finally:
+        ingest_done("orphan_sweep")
         pipeline_release()
 
 

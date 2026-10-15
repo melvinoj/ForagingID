@@ -159,13 +159,15 @@ async def score_image(
                 PlantNet does not accept coordinates (see A2); this is iNat-only.
     observed_on — optional ISO date (YYYY-MM-DD) for seasonal weighting.
 
-    Location bias is RANKING-ONLY and safe for auto-approval:
+    Location bias ranks and can only demote — safe for auto-approval:
       - candidates are ordered by the geo-weighted `combined_score` (geo_score);
       - the `score` field used downstream for confidence thresholds and the
         dual-source auto-approve gate is min(combined_score, vision_score), so
         geo can only DEMOTE a candidate, never inflate it above its pure visual
         score. Location bias can therefore never cause a new auto-approval
         (Fix E safety check #4). With no coordinates, behaviour is unchanged.
+      - each candidate also carries vision_score and geo_score (= combined)
+        separately so callers can store both.
 
     Returns empty list (never raises by default) so PlantNet failures don't cascade.
     """
@@ -266,13 +268,16 @@ async def score_image(
         combined = float(raw_combined) / 100.0
         raw_vision = item.get("vision_score")
         vision = float(raw_vision) / 100.0 if raw_vision is not None else combined
-        # GATING score: the pure visual confidence, geo-independent. This is what
-        # all downstream threshold / dual-source auto-approve logic reads, so
-        # location is RANKING-ONLY and leaves gating untouched (#2: "ranking bias
-        # only — do not change confidence thresholds"). It can therefore never
-        # create OR suppress an auto-approval (#4). With no coordinates the API
-        # returns combined == vision, so this matches legacy behaviour exactly.
-        gate = vision
+        # GATING score: min(combined_score, vision_score). This is what all
+        # downstream threshold / dual-source auto-approve logic reads.
+        # Location can therefore only DEMOTE a candidate — a locally implausible
+        # species loses confidence — and can never lift it above its pure visual
+        # score: fewer auto-approvals, never more (Fix E safety check #4).
+        # Changed 15 Oct 2026 from `gate = vision`, which let location affect
+        # ranking only and contradicted this documented rule. With no
+        # coordinates the API returns combined == vision, so behaviour without
+        # GPS is unchanged.
+        gate = min(vision, combined)
         pref_common = taxon.get("preferred_common_name")
         candidates.append(INatCandidate(
             scientific_name=sci,

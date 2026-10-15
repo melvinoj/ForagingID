@@ -166,6 +166,15 @@ async def lifespan(app: FastAPI):
     task.cancel()
     sweep_task.cancel()
 
+    # Stop the ngrok tunnel this server started (Settings → Start sharing), so
+    # no graceful shutdown — including a --reload worker restart — leaves it
+    # running. Only the app's own subprocess; never an externally started one.
+    try:
+        from app.api.sharing import stop_ngrok_subprocess
+        await stop_ngrok_subprocess()
+    except Exception:
+        logging.getLogger(__name__).exception("lifespan: stopping ngrok failed")
+
 
 app = FastAPI(
     title="ForagingID",

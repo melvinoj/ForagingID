@@ -116,7 +116,9 @@ Durable batch state written to `scan_sessions` (pipeline=2) via `scan_sessions.p
 ### Shared identification core
 `scan._identify_scanned()` handles both pipelines. It:
 1. Runs PlantNet and iNaturalist in parallel
-2. Merges candidates (score = `min(combined_score, vision_score)` so geo-weighting is ranking-only)
+2. Merges candidates. iNat's gating score = `min(combined_score, vision_score)` (`inaturalist.py`, enforced since 15 Oct 2026 — previously the code used `vision` alone): location can only DEMOTE a candidate, never raise it, so it can only reduce auto-approvals. Both raw iNat scores are stored per candidate (`inat_vision_score`, `inat_combined_score`).
+   - **Disagreement promotion:** when PlantNet's and iNat's top names differ and iNat's location-ranked #1 is in PlantNet's top 5, it becomes the top/suggested ID (keeping its own PlantNet score). It is a suggestion only: always `needs_review`, never counted toward dual agreement or auto-approve.
+   - `dual_source_agreement`: 1 = top names agree, 0 = disagree or single source, NULL = no candidates.
 3. Checks dual-API agreement for auto-approve (P1 only)
 4. Calls `_upsert_species_card()` → `_enrich_new_species_card()` for new species
 

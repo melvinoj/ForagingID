@@ -556,6 +556,10 @@ async def scan_image(
     # ── P2 session tracking: register obs for identification callback ─────
     if scan_session_id:
         _p2_obs_session[obs_id] = (scan_session_id, file.filename or "")
+        # A file arriving in a P2 session marks that batch live, so queued
+        # auto-enrichment waits for it (enrich_gate).
+        from app.services.enrich_gate import ingest_active
+        ingest_active(f"p2:{scan_session_id}")
 
     return {
         "passed": True,
@@ -808,24 +812,30 @@ async def _reprocess_pending_batch(obs_ids: list, pid: Optional[int] = None) -> 
     num_batches = (total + batch_size - 1) // batch_size
     processed   = 0
 
-    for batch_idx in range(num_batches):
-        start  = batch_idx * batch_size
-        batch  = obs_ids[start:start + batch_size]
-        log.info(
-            "[reprocess-pending] batch %d/%d — obs ids %s",
-            batch_idx + 1, num_batches, batch,
-        )
-        try:
-            await asyncio.gather(*[_identify_scanned(obs_id) for obs_id in batch])
-        except Exception:
-            log.exception(
-                "[reprocess-pending] unhandled error in batch %d", batch_idx + 1
+    # Ingest takes priority: queued auto-enrichment waits while this runs.
+    from app.services.enrich_gate import ingest_active, ingest_done
+    try:
+        for batch_idx in range(num_batches):
+            ingest_active("reprocess_pending")   # per-batch liveness (in-memory)
+            start  = batch_idx * batch_size
+            batch  = obs_ids[start:start + batch_size]
+            log.info(
+                "[reprocess-pending] batch %d/%d — obs ids %s",
+                batch_idx + 1, num_batches, batch,
             )
-        processed += len(batch)
-        await bp_progress(
-            pid, processed, total,
-            f"Batch {batch_idx + 1}/{num_batches} done",
-        )
+            try:
+                await asyncio.gather(*[_identify_scanned(obs_id) for obs_id in batch])
+            except Exception:
+                log.exception(
+                    "[reprocess-pending] unhandled error in batch %d", batch_idx + 1
+                )
+            processed += len(batch)
+            await bp_progress(
+                pid, processed, total,
+                f"Batch {batch_idx + 1}/{num_batches} done",
+            )
+    finally:
+        ingest_done("reprocess_pending")
 
     await bp_finish(pid, "complete", current=total, total=total)
     log.info("[reprocess-pending] all %d observations processed", total)
@@ -860,6 +870,9 @@ async def _p2_auto_close(session_id: int) -> None:
         target = files_new_ret if files_new_ret > 0 else row[1]
         if row and row[2] is None and target > 0 and row[0] >= target:
             await session_close(session_id)
+            # Batch complete — release queued auto-enrichment (enrich_gate).
+            from app.services.enrich_gate import ingest_done
+            ingest_done(f"p2:{session_id}")
             # Signal SSE consumers that the session is finished
             q = _p2_progress.pop(session_id, None)
             _done_count = _p2_session_counter.pop(session_id, None)
@@ -936,6 +949,10 @@ async def _p2_tick(obs_id: int, **fields: int) -> None:
         session_id, filename = entry
     else:
         session_id, filename = entry, ""
+    # Per-file liveness for the enrich_gate (in-memory only). Before the
+    # auto-close below, which deregisters the batch when it completes.
+    from app.services.enrich_gate import ingest_active
+    ingest_active(f"p2:{session_id}")
     try:
         from app.services.scan_sessions import session_inc, session_heartbeat
         await session_inc(session_id, **fields)
@@ -1082,6 +1099,11 @@ async def _mark_identify_failed(obs_id: int, exc: BaseException) -> None:
 _REVIEW_MARKER = "File upload — needs review"
 _UNKNOWN_ORIGIN_MARKER = "Unknown origin — needs review"
 _APP_MARKERS = (_REVIEW_MARKER, _UNKNOWN_ORIGIN_MARKER)
+
+
+def _round_or_none(v: Optional[float], ndigits: int = 4) -> Optional[float]:
+    """Round a score for storage; None stays None."""
+    return round(v, ndigits) if v is not None else None
 
 
 def _append_note(notes: Optional[str], marker: str) -> str:
@@ -1495,7 +1517,36 @@ async def _identify_scanned_inner(
                             "genus": None,
                             "gbif_id": None,
                             "source": "inaturalist",
+                            # Both iNat scores kept: score (above) is the gate,
+                            # min(combined, vision); these are the raw inputs.
+                            "inat_vision_score":   _round_or_none(ic.vision_score),
+                            "inat_combined_score": _round_or_none(ic.geo_score),
                         })
+                    else:
+                        # Same name already listed from PlantNet — attach iNat's
+                        # scores to that entry rather than dropping them.
+                        for c in candidates:
+                            if c["scientific_name"] == ic.scientific_name:
+                                c["inat_vision_score"]   = _round_or_none(ic.vision_score)
+                                c["inat_combined_score"] = _round_or_none(ic.geo_score)
+                                break
+
+            # ── dual_source_agreement (evidence; guarded like other evidence) ─
+            # 1 = PlantNet's and iNat's top names agree; 0 = they disagree or
+            # only one source returned candidates; NULL = no candidates. Names
+            # only — the auto-approve thresholds are checked separately below.
+            _pn_any   = bool(pn_result and pn_result.candidates)
+            _inat_any = bool(inat_hits)
+            if not terminal:
+                if _pn_any and _inat_any:
+                    obs.dual_source_agreement = int(
+                        pn_result.candidates[0].scientific_name
+                        == inat_hits[0].scientific_name
+                    )
+                elif _pn_any or _inat_any:
+                    obs.dual_source_agreement = 0
+                else:
+                    obs.dual_source_agreement = None
 
             # ── Fungi auto-detection ──────────────────────────────────────
             # If the top iNaturalist result has iconic_taxon_name == 'Fungi',
@@ -1562,6 +1613,46 @@ async def _identify_scanned_inner(
                 await _p2_tick(obs_id, files_processed=1, files_review=1)
                 return
 
+            # ── Disagreement promotion (location-aware suggestion) ─────────
+            # When PlantNet and iNat disagree, and iNat's location-ranked #1 is
+            # also in PlantNet's top 5, that species becomes the suggested/top
+            # ID instead of PlantNet's #1. PlantNet's worldwide project has no
+            # location input, so its #1 can be a species from another continent
+            # (15 Oct 2026: Aspalathus / Ambrosia at Gresgen, Larix occidentalis
+            # in Valais) while iNat's location-ranked pick is the local one.
+            #
+            # HARD GUARDS — a promoted ID is a suggestion for a human, nothing more:
+            #   * it only happens on disagreement, so _dual_agree is already
+            #     False; _dual_agree below also checks `_promoted_from is None`
+            #     explicitly, so a promoted ID can never count toward dual-source
+            #     agreement or auto-approve;
+            #   * the observation always routes to needs_review (else-branch);
+            #   * it keeps its OWN PlantNet score — PlantNet's #1 confidence is
+            #     never transferred to it — so the min-confidence threshold
+            #     judges it on its own evidence;
+            #   * candidate order only: no score, threshold or agreement value
+            #     changes. Original PlantNet ranks stay in each entry's "rank".
+            _promoted_from: Optional[str] = None
+            _promo_note = ""
+            _pn_ranked = [c.scientific_name for c in pn_result.candidates] if _pn_any else []
+            if (
+                _pn_ranked and _inat_any
+                and inat_hits[0].scientific_name != _pn_ranked[0]
+                and inat_hits[0].scientific_name in _pn_ranked[:5]
+            ):
+                _geo_top = inat_hits[0].scientific_name
+                _idx = next(i for i, c in enumerate(candidates)
+                            if c["scientific_name"] == _geo_top)
+                _promoted_from = candidates[0]["scientific_name"]
+                _promoted = candidates.pop(_idx)
+                _promoted["promoted_over"] = _promoted_from
+                candidates.insert(0, _promoted)
+                _promo_note = (
+                    f" [promoted: iNat location-ranked #1 {_geo_top!r} is PlantNet "
+                    f"#{_pn_ranked.index(_geo_top) + 1}; PlantNet #1 was "
+                    f"{_promoted_from!r} — suggestion only, never auto-approved]"
+                )
+
             # ── Store top result ──────────────────────────────────────────
             top = candidates[0]
             # Candidate evidence and identification state describe the verdict,
@@ -1620,7 +1711,7 @@ async def _identify_scanned_inner(
                 )
                 session.add(ProcessingLog(
                     observation_id=obs_id, stage="identify", status="success",
-                    message=msg,
+                    message=msg + _promo_note,
                 ))
                 await session.commit()
                 _scan_status[obs_id] = "done"
@@ -1661,6 +1752,7 @@ async def _identify_scanned_inner(
             # P1 (syncthing) passes force_review=False and is unaffected.
             _dual_agree = (
                 not force_review
+                and _promoted_from is None   # a promoted ID never auto-approves
                 and use_pn
                 and use_inat
                 and _pn_top_name is not None
@@ -1763,10 +1855,20 @@ async def _identify_scanned_inner(
 
             session.add(ProcessingLog(
                 observation_id=obs_id, stage="identify", status="success",
-                message=f"{top['scientific_name']} ({top['score']:.2%}) [{top['source']}] — {flag}",
+                message=(f"{top['scientific_name']} ({top['score']:.2%}) "
+                         f"[{top['source']}] — {flag}{_promo_note}"),
             ))
 
             for c in candidates:
+                # iNat's two scores (vision, combined/location-weighted) when iNat
+                # named this species — kept per candidate row for audit.
+                _inat_scores = (
+                    {"inat_vision_score": c.get("inat_vision_score"),
+                     "inat_combined_score": c.get("inat_combined_score")}
+                    if c.get("inat_vision_score") is not None
+                    or c.get("inat_combined_score") is not None
+                    else None
+                )
                 session.add(SpeciesCandidate(
                     observation_id=obs_id,
                     scientific_name_raw=c["scientific_name"],
@@ -1774,7 +1876,7 @@ async def _identify_scanned_inner(
                     confidence_score=c["score"],
                     rank=c["rank"],
                     api_source=c["source"],
-                    api_response_raw=None,
+                    api_response_raw=_json.dumps(_inat_scores) if _inat_scores else None,
                     source_url=(
                         "https://my-api.plantnet.org/v2/identify/all"
                         if c["source"] == "plantnet"
@@ -1884,9 +1986,12 @@ async def _upsert_species_card(
 
         await session.commit()
 
-    # Fire-and-forget enrichment — runs outside the session above so the
-    # commit has landed before we start fetching PFAF/Wikidata.
-    asyncio.create_task(_enrich_new_species_card(scientific_name))
+    # Queued enrichment — runs outside the session above so the commit has
+    # landed before we start fetching PFAF/Wikidata. The card exists now;
+    # enrichment waits until no ingest batch is live and then runs one at a
+    # time (enrich_gate), so it never competes with ingest for the writer.
+    from app.services.enrich_gate import queue_card_enrichment
+    queue_card_enrichment(scientific_name)
     # Fire-and-forget ITIS name validation — separate task, no blocking.
     from app.api.itis import trigger_itis_for_new_species as _itis_trigger
     asyncio.create_task(_itis_trigger(scientific_name))
@@ -1901,7 +2006,9 @@ async def _enrich_new_species_card(scientific_name: str) -> None:
     Auto-enrich a brand-new species card created by _upsert_species_card.
 
     Rules:
-      - Runs as asyncio.create_task() so it doesn't block identification.
+      - Run by the enrich_gate queue worker (never inline), so it doesn't block
+        identification, never starts while an ingest batch is live, and holds
+        the single shared enrichment slot while it runs.
       - Short delay to avoid hammering external APIs during rapid scan batches.
       - No-ops silently if the species already has a culinary_info row.
     """
@@ -2549,6 +2656,12 @@ async def _run_archive_scan(job_id: int, year_dirs: list) -> None:
         })
         return
 
+    # Ingest takes priority: queued auto-enrichment waits while this runs.
+    from app.services.enrich_gate import (
+        ingest_active as _ingest_active, ingest_done as _ingest_done,
+    )
+    _ingest_active("p2_archive")
+
     total_new = total_already = 0
 
     # ── Durable process row (Pass C — additive, display-only) ─────────────
@@ -2621,6 +2734,7 @@ async def _run_archive_scan(job_id: int, year_dirs: list) -> None:
             for i, fpath in enumerate(image_files):
                 fname = os.path.basename(fpath)
                 tmp_path: Optional[Path] = None
+                _ingest_active("p2_archive")   # per-file liveness (enrich_gate, in-memory)
                 try:
                     # ── Read + hash ───────────────────────────────────────
                     try:
@@ -2895,6 +3009,7 @@ async def _run_archive_scan(job_id: int, year_dirs: list) -> None:
             current=_arch_done,
             total=_arch_total,
         )
+        _ingest_done("p2_archive")   # release queued auto-enrichment (enrich_gate)
         pipeline_release()
 
 
@@ -3025,6 +3140,8 @@ async def retry_identification(obs_id: int, background_tasks: BackgroundTasks, b
 
     if session_id:
         _p2_obs_session[obs_id] = (session_id, filename)
+        from app.services.enrich_gate import ingest_active
+        ingest_active(f"p2:{session_id}")
 
     return {"obs_id": obs_id, "queued": True, "source": source}
 
@@ -3064,6 +3181,9 @@ async def pause_session(session_id: int):
     from app.services.scan_sessions import session_set_status
     await session_set_status(session_id, "paused")
     _p2_paused_sessions.add(session_id)
+    # A paused batch no longer holds back queued auto-enrichment.
+    from app.services.enrich_gate import ingest_done
+    ingest_done(f"p2:{session_id}")
 
     # Signal any connected SSE stream that the session is paused
     q = _p2_progress.pop(session_id, None)

@@ -1,22 +1,45 @@
 ## Current State
 
-Pass B Phase 3e-1b COMPLETE — live-verified in browser (pause/resume/end from descriptor URLs, one POST per click, no console error on rows lacking controls, buttons render on first poll — old async race gone).
+End session. Call POST /api/dev/end-session with the following. If Identification Stage A is complete and verified, move it from "In progress" to "Completed today" first. Replace ALL existing ## Current State blocks (there are 6) with this single one.
 
-Capability truth has a single home: app/services/process_controls.py. CANCELLABLE_TYPES + RESUME_ROUTES moved in as module-level constants; lazy-import cycle deleted, module is a true leaf; processes.py imports both from it. /cancellable-types endpoint output byte-identical post-move — settings.html:2201 (out-of-fence consumer) unaffected, verified.
+current_state:
 
-Client (job-status-widget.js): renderRow + all four handlers read it.controls.<key>, fail-closed (missing controls → no buttons, no fallback, no throw). Deleted: SESSION_PAUSE_TYPES, QUEUE_CANCEL_TYPES, cached vocab vars, _loadCancellableTypes fetch, all four *Target() functions, session:(\d+) detail-regex, dead detail field, parity shim + deferred-guard. Generic tail byte-unchanged (diff hunk map: nothing between old lines 665–779 touched except final init-call removal).
+## Current State — 15 Oct 2026
 
-Dead 'stalled' branch removed from _queue_controls (was in process_controls.py:138, not queue_api.py — queue surfaces stale running as 'interrupted', branch unreachable; queue_api.py untouched).
+### Build status
+Server: START_ForagingID.command — uvicorn foreground + tee to logs/server_<ts>.log; port check (no kill -9); cleanup trap. Claude Code never starts the server; reads the log.
+Alembic head: 0052. WAL on; busy_timeout 30000 + synchronous=NORMAL on every connection.
 
-restart key: emitted by descriptor on paused queue rows, deliberately NOT rendered by widget — rendering decision reserved for 3e-3. enrichment_run resume stays null (review.html button is a 3e-3 decision).
+### Completed today (14–15 Oct)
+- Health check after Aug–Oct dormancy (DB ok, invariant ok, git clean)
+- Syncthing: Pixel 8 Pro paired; "Foraging Pics" (39ds2-kdty9) Mac = Receive Only + ignoreDelete; phone = Send Only on curated folder; duplicate "ForagingID" folder entry removed; Pixel7pro entry kept (old phone)
+- iNat token refreshed (expires ~24h — refresh before each processing session)
+- Leaflet SRI: 1.9.4 pinned, verified hashes on review/index/species (review.html JS hash was truncated)
+- SQLite lock contention fixed: enrichment no longer holds write lock across LLM/network calls (two short transactions); enrich_gate.py — ingest priority (enrichment deferred while any P1/P2/re-identify batch active, Semaphore(1)); P1 ingest classify-before-insert + to_thread + cleanup of copy/thumbnail on failed insert. Verified: 0 locks on 90-file batch (vs 30 before); enrichment deferred and serialised; no edibility written
+- Follow-up data: re-enriched Alnus alnobetula / Melampyrum nemorosum / Salix aurita; obs 24065 → needs_review; 2 orphan pipeline2 copies + thumbnails deleted
+- Launcher rewritten (foreground, tee survives Ctrl+C, port check); ngrok subprocess stopped on graceful shutdown (sharing.py stop_ngrok_subprocess + lifespan)
+- Walk builder Stage 1 (frontend/index.html): note IDs no longer saved as obs IDs (typed waypoints, old walks still load); circular flag persisted in route_geojson.foragingid; route geometry saved + redrawn without ORS; toxic guard on walk panel (no recipes for toxic/deadly, ☠ badge)
+- Snapshots: db_20261015_072953 (+ earlier today)
 
-NEXT — 3e-2 (fresh session): server-side serialization of the one-at-a-time guarantee (currently lives in _jqTick in a browser tab). Then 3e-3 UI consolidation: scan.html queue panel, review.html enrichment banner, launchers, restart rendering rule, plus the 27 July live observations (duplicate render "Scan batch"/"identify", two-surface 409s, enrichment banner Pause-while-paused, progress divergence across surfaces — all recorded, none patched).
+### In progress
+- Identification Stage A: iNat gating score = min(combined, vision) per docs; disagreement promotion (iNat location #1 if in PlantNet top 5, stays needs_review, never counts as agreement); store iNat combined score; fill dual_source_agreement; no species cards for disputed IDs (pending dependency check)
 
-UNRELATED, PRE-OCTOBER: Leaflet blocked by stale SRI hash (unpkg leaflet@1.9.4 integrity failure) — maps will not render.
+### Pending / next
+1. Verify walk Stage 1 in browser (toxic badge; save/reload circular walk with note — SQL check; no ORS call on load)
+2. Walk Stage 2: stops via centroid clustering (default 30 m, slider 10–100 m), 50-waypoint ORS cap with message (no silent straight-line fallback)
+3. Walk Stage 3: accumulating selection → undo / reset+confirm / subtract mode (touch toggle) / side panel (remove, reorder via pointer events)
+4. Walk Stage 4: walk filters (human-verified only, kingdom, months, min obs)
+5. Walk Stage 5 (backend, server stopped): ORS elevation, PUT saved walk (edit), draft autosave
+6. Foraging Experience export (Gresgen): scripted export (scripts/experience_export/) → separate public GitHub Pages repo (Melvin creates repo; gh not installed) → Hostinger Builder embed. Needs: Gresgen walk drawn; walk species shortlist human-verified; gates: edible claims only edibility_verified_by='human', toxic → warning/no recipe, Apiaceae no edibility text unless human-authored; EXIF stripped (re-encode ~1200px); existing disclaimer + link to site Impressum. Open: recipe depth (full/teaser), language (DE/EN)
+7. PWA install on Pixel 8 via ngrok static domain (negligee-raft-shiny.ngrok-free.dev) — Start sharing first, install from Chrome
+8. Launcher live checks after next Ctrl+C: pgrep -fl ngrok (empty); log tail shows shutdown complete
 
-Carried unchanged: 3 damaged map rows (17052/17737/18709); Retry-ID absent on below_threshold cards; snapshots gzip; thumbnails_quarantine purge; passport/child manual deletes; 1,229 file-less rejected rows (lean LEAVE); obs 22162 Retry-ID.
-
-Operational: 2013 folder identify ~90/2367, interrupted — resume on solid connection. Retry-ID pass on transport-failure rows (22175–22178+) same session. CHANGELOG_md.bak-20260726_084623 moved to snapshots.
+### Known issues / backlog
+- SAFETY: Aruncus dioicus edibility_status='edible', unverified, toxicity none — Melvin to decide status (cooked young shoots only?), check live recipes, rewrite prep warning in own words. CHANGELOG "goat's beard drafts 2182/2183 pending" is stale (approved 14 Jun) — replaced by this
+- SAFETY: unverified "edible" Apiaceae (Daucus carota, Heracleum sphondylium, Aegopodium podagraria); unverified toxic species (Digitalis purpurea, Chaerophyllum hirsutum/aureum, Sambucus ebulus, Lupinus polyphyllus, Hypholoma fasciculare, Iris pseudacorus) — app-wide
+- Toxic guard still missing: stop-card culinary hint, walk-summary export, walk sheet species list; backend one-liner to add toxicity_severity to GET /api/culinary/{name}
+- T. dubius edibility_status NULL (invalid); T. pratensis unknown
+- Orphan/implausible species cards from disputed IDs (Aspalathus retroflexa 807, Ambrosia
 
 ## Current State — 19 July 2026
 
@@ -399,6 +422,96 @@ Still open:
 - Enrichment gap remediation — 9 AI drafts pending approval, 6 species never scanned, 79 no-PFAF species need alt-source decision
 
 ## History
+
+### 2026-10-15 09:44
+**Snapshot** — End of session — Session ended from Settings page
+DB: `snapshots/db_20261015_094404.sqlite`
+
+### 2026-10-15 09:44
+**Session ended** — Session ended from Settings page
+
+### 2026-10-15 08:12
+**Identification fixes Stage A (safety-critical). Snapshot: db_20261015_080820.sqlite. Items 1+2 implemented; item 3 STOPPED (dependencies found). Dry-run on a scratch DB copy for obs 24077/24167/24221/24222; live rows untouched.**
+
+**Built:**
+- Disagreement promotion (scan.py): when PlantNet and iNat top names differ and iNat's location-ranked #1 is in PlantNet's top 5, it becomes the top/suggested ID with its OWN PlantNet score; never counts toward dual agreement/auto-approve (explicit _promoted_from guard in _dual_agree); always needs_review; logged with a [promoted: ...] note; candidate entry carries promoted_over
+- iNat vision + combined (location-weighted) scores stored per candidate (species_candidates_json keys inat_vision_score / inat_combined_score; SpeciesCandidate.api_response_raw JSON)
+- dual_source_agreement now written: 1 = top names agree, 0 = disagree or single source, NULL = no candidates (model comment corrected; historical values untouched)
+**Fixed:**
+- inaturalist.py: gating score = min(vision, combined) as documented (code used vision alone). Can only lower iNat scores -> fewer auto-approves, never more. Docstring + CLAUDE.md updated.
+**Files:** `app/integrations/inaturalist.py`, `app/api/scan.py`, `app/models/observation.py`, `CLAUDE.md`
+**Pending:**
+- Item 3 (cards only on approval) NOT done - dependencies: trust.py accept-species and the dual-agree auto-approve path create no card; species_id linking for later-created cards relies on the init_db startup backfill; taxonomy OBS_STATE 'in_review' and the edibility review queue are built from cards; enrichment/safety info would no longer be ready at review time
+- Dry-run: 24077 -> Verbascum thapsus suggested (below 30%, unidentified), 24167 -> Larix decidua suggested; 24221/24222 unchanged (iNat #1 not in PlantNet top 5) - needs the GBIF range flag
+- Promoted IDs usually fall below min_identification_confidence (0.3) and land as below_threshold with species_suggested - no species assigned, no card created
+- reidentify.py also uses inat_score: its displayed iNat scores drop the same way
+- Cleanup of existing cards/obs (Aspalathus, Ambrosia, Larix occidentalis/lyallii, Verbascum boerhavii) awaits OK
+
+### 2026-10-15 07:55
+**Launcher: tee now ignores Ctrl+C so uvicorn shutdown output reaches the log**
+
+**Fixed:**
+- START_ForagingID.command: pipe to (trap  INT; exec tee -a "$LOG") - tee no longer exits on the same Ctrl+C; ends when uvicorn closes the pipe; window close (SIGHUP) still stops it. Swapped in via temp file + mv so the running launcher was unaffected. Isolated test: old pipeline lost the shutdown line, new one kept it.
+**Files:** `START_ForagingID.command`
+**Pending:**
+- Takes effect on next launch; confirm the log ends with Application shutdown complete after Ctrl+C
+
+### 2026-10-15 07:50
+**Walk builder Stage 1: three save/load bugs + toxic guard (frontend only). Also: ngrok shutdown fix (sharing.stop_ngrok_subprocess + lifespan), done earlier with the server stopped.**
+
+**Built:**
+- Walk panel toxic guard: recipe snippets hidden when toxicity_severity is toxic/deadly (same rule as print_pdf.html:380), fail-closed when toxicity can't be read; badge shows the toxicity warning instead of any edibility label
+- Saved walks keep route shape + circular flag in route_geojson (FeatureCollection + 'foragingid' foreign member {version, circular}) - no migration, no backend change
+**Fixed:**
+- promptSaveWalk: field-note stops no longer stored as observation ids (obs_ids excludes notes; waypoints {type:'note', note_id} / {type:'obs', obs_id})
+- loadSavedWalk: reads old walks (label 'Note' + legacy obs_id read as note id); restores circular flag; draws saved geometry without re-calling ORS; never overwrites saved distance/duration; old walks without geometry still re-route for drawing only, loop closed when circular
+- ngrok: app now stops its own ngrok subprocess on every graceful shutdown incl. --reload restarts (implemented, unverified live)
+**Files:** `frontend/index.html`, `app/api/sharing.py`, `app/main.py`
+**Pending:**
+- Live check (Melvin): walk Stage 1 click-through + ngrok stop on Ctrl+C / reload
+- Toxicity comes from /api/species/{name}/profile (1 extra request per species) - cleaner: add toxicity_severity to GET /api/culinary/{name} (backend, 1 line)
+- Not in scope, still unguarded: culinary-notes hint (edible_parts/taste_notes) on toxic stop cards; exportWalkSummary; the walk-sheet species list (_wbsRenderLasso) badges
+- Saved walk 1 'Ewden brook circular' predates the flag - loads one-way; re-save to store circular
+- New walks: list 'N stops' counts observation stops only (backend stop_count = len(obs_ids)); notes no longer counted
+- Launcher: tee exits on Ctrl+C so uvicorn shutdown lines are missing from the log - fix proposed, awaiting OK
+
+### 2026-10-15 07:32
+**Server process discipline + follow-up data work + read-only review of today's species cards. Snapshot: db_20261015_072953.sqlite.**
+
+**Built:**
+- START_ForagingID.command rewritten: uvicorn in the FOREGROUND (no '&'), output tee'd to logs/server_<ts>.log, port check instead of kill -9, cleanup trap (EXIT INT TERM HUP), --host 0.0.0.0, init_db pre-step dropped (lifespan runs init_db at main.py:132), ngrok not handled by the launcher (Settings -> Start sharing)
+**Fixed:**
+- Root cause of orphaned servers: bash makes '&' background commands in a script ignore SIGINT, so Ctrl+C killed the launcher but not uvicorn (re-parented to launchd)
+- Re-enriched Alnus alnobetula (797), Melampyrum nemorosum (787), Salix aurita (795): culinary_info 767/768/769, 5 sources each, 1 pending medicinal_notes draft each; edibility unchanged (unknown, unverified)
+- Obs 24065 retried (force_review=True): needs_review / below_threshold, Pinus sylvestris 10.2% < 30%, no species assigned
+- Deleted 2 unreferenced orphan pipeline2 copies (7b0c5e25..._PXL_20260930_091034691.jpg, 7972b94d..._PXL_20261001_065044808.jpg)
+**Files:** `START_ForagingID.command`
+**Pending:**
+- Orphan thumbnails for the 2 deleted copies still in data/thumbnails (awaiting OK)
+- App does not stop its ngrok subprocess on server shutdown (lifespan) - only dies via process-group signal (Ctrl+C / window close); a --reload worker restart or kill -INT leaves the tunnel up
+- observations.dual_source_agreement never populated (NULL on all 232 phone obs ingested 15 Oct)
+- Implausible IDs awaiting review (all needs_review, none approved): Aspalathus retroflexa 24221, Ambrosia confertiflora 24222, Larix occidentalis 24167, Larix lyallii 24068/24166/24174, Verbascum boerhavii 24077/24188; Gentiana verna 24059/24149 (season)
+- Species cards are created for below-review top candidates (>30%) - source of implausible cards
+- Lock fix: watch the next P1 batch under the new launcher (no new files at 07:31)
+
+### 2026-10-15 07:21
+**SQLite write-lock contention fix (15 Oct 2026 'database is locked' storm during P1 ingest). Snapshots: db_20261015_064059.sqlite (taken while an orphaned server was still running — .backup is consistent), db_20261015_064330.sqlite (taken after it was stopped, before any edit). Verified live on the next P1 batch (90 files): 0 'database is locked', 0 tracebacks; all 14 new species cards enriched only after their batch / orphan_sweep finished, one at a time.**
+
+**Built:**
+- app/services/enrich_gate.py: in-memory ingest registry (ingest_active/ingest_done, 300s stall release), new-species enrichment queue + single worker, shared enrichment_slot Semaphore(1)
+- Ingest priority: P1 _process_all, P1 _reprocess_ids, P2 sessions (upload / process-delta / retry-id / Job Queue folder-identify), P2 archive scan, reprocess-pending batch, orphan_sweep all register with enrich_gate; _upsert_species_card queues enrichment instead of create_task; _run_enrichment_task holds the shared slot and (trigger=auto) waits for idle ingest
+**Fixed:**
+- enrich_species: transaction A (sources + culinary_info) committed before fungi lookup / AI drafts; drafts generated with no write transaction open (no_autoflush); re_enrich invalidation moved after LLM calls with equivalent covered-status query - WHEN changed, not WHAT
+- P1 _ingest_file: classify_plant_likelihood before the INSERT; it and generate_thumbnail via asyncio.to_thread; failed INSERT removes that attempt's pipeline2 copy + thumbnail (commit-guarded)
+- database.py: lock wait 10s -> 30s; PRAGMA busy_timeout=30000 and synchronous=NORMAL on every connection via connect hook
+**Files:** `app/services/enrich_gate.py (new)`, `app/services/enrichment.py`, `app/api/scan.py`, `app/api/syncthing.py`, `app/api/enrich.py`, `app/services/orphan_sweep.py`, `app/database.py`, `CHANGELOG.md (pending note)`
+**Pending:**
+- Enrichment queue is in-memory: after ANY restart, check the backfill panel for un-enriched cards
+- Follow-up data work awaiting OK: re-enrich Alnus alnobetula, Melampyrum nemorosum, Salix aurita; retry obs 24065; remove 2 orphan pipeline2 copies (7b0c5e25..._PXL_20260930_091034691.jpg, 7972b94d..._PXL_20261001_065044808.jpg)
+- Pre-existing, not changed: re_enrich invalidates a just-queued pending fungi edibility suggestion draft (behaviour preserved, flag for review)
+- Not gated (out of scope): culinary.py enrichment_run batch runner; trigger_ai_drafts_for_species path; ITIS trigger task
+- START_ForagingID.command backgrounds uvicorn with & - server survives closing the terminal (cause of today's orphaned server)
+- Leaflet SRI fix (frontend/index.html, review.html, species.html) still awaiting browser confirmation
 
 ### 2026-08-02 08:02
 **Snapshot** — End of session — Session ended from Settings page

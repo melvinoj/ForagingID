@@ -636,6 +636,10 @@ async def _reprocess_ids(ids: List[int]) -> None:
     _rp_done = 0
     _rp_ok = False
 
+    # Ingest takes priority: queued auto-enrichment waits while this runs.
+    from app.services.enrich_gate import ingest_active, ingest_done
+    ingest_active("p1_reprocess")
+
     async def _one(oid: int) -> None:
         nonlocal _rp_done
         _state["in_flight"] += 1
@@ -649,6 +653,7 @@ async def _reprocess_ids(ids: List[int]) -> None:
                 _state["errors"] = _state["errors"][-_MAX_ERRORS:]
         finally:
             _state["in_flight"] -= 1
+            ingest_active("p1_reprocess")   # per-item liveness (in-memory)
             # Same completion point the in-memory counters use; one durable
             # write per 10 observations, matching the P1 ingest cadence.
             _rp_done += 1
@@ -663,6 +668,7 @@ async def _reprocess_ids(ids: List[int]) -> None:
         _rp_ok = True
     finally:
         _state["processing"] = False
+        ingest_done("p1_reprocess")
         await bp_finish(
             _rp_pid,
             "complete" if _rp_ok else "failed",
@@ -696,6 +702,12 @@ async def _process_all(files: List[Path]) -> None:
     global _batch_new_species, _current_p1_session_id
     _state["processing"] = True
     _batch_new_species = set()
+
+    # Ingest takes priority: queued auto-enrichment waits while this batch
+    # runs. Deregistered in the finally below (normal end or failure); a hung
+    # batch stops reporting per-file liveness and is released after 5 min.
+    from app.services.enrich_gate import ingest_active, ingest_done
+    ingest_active("p1")
 
     # ── Open a persisted session row (additive observer only) ──────────────
     # session_open_p1 coalesces into the previous session when a phone batch
@@ -743,6 +755,7 @@ async def _process_all(files: List[Path]) -> None:
     finally:
         _state["processing"] = False
         _state["session_files_received"] = 0
+        ingest_done("p1")
         await session_close(_current_p1_session_id)
         _current_p1_session_id = None
         # Terminal either way; 'failed' only if we never reached the line above.
@@ -807,6 +820,9 @@ async def _process_one(
             await heartbeat_cb()
     finally:
         _state["in_flight"] -= 1
+        # Per-file liveness for enrich_gate (in-memory only, no DB write).
+        from app.services.enrich_gate import ingest_active
+        ingest_active("p1")
 
 
 async def _ingest_file(file_path: Path) -> Union[int, str, None]:
@@ -892,10 +908,13 @@ async def _ingest_file(file_path: Path) -> Union[int, str, None]:
     except Exception as exc:
         raise RuntimeError(f"Could not copy {file_path.name} to pipeline2 store: {exc}")
 
-    # Generate thumbnail from the local copy (source may become unavailable)
+    # Generate thumbnail from the local copy (source may become unavailable).
+    # Off the event loop: PIL decode/resize is CPU-bound and used to stall every
+    # other coroutine — including whichever one held the DB write lock.
     try:
         from app.services.settings_service import get_setting as _gs_st
-        thumb = generate_thumbnail(
+        thumb = await asyncio.to_thread(
+            generate_thumbnail,
             local_path,
             thumbnails_dir=Path(settings.thumbnails_dir),
             size=_gs_st("thumbnail_size"),
@@ -903,6 +922,54 @@ async def _ingest_file(file_path: Path) -> Union[int, str, None]:
     except Exception:
         thumb = None
 
+    # Lenient pre-filter — rejects only clear non-biological subjects.
+    # Runs BEFORE the INSERT (and off the event loop): it used to run after
+    # session.flush(), i.e. while this connection held the SQLite write lock.
+    # Same inputs, same fallback, same result — only when it runs changed.
+    try:
+        is_plant, conf, category = await asyncio.to_thread(
+            classify_plant_likelihood,
+            file_path,
+            has_gps=(exif.latitude is not None),
+        )
+    except Exception:
+        is_plant, conf, category = True, 0.5, "plant"
+
+    # If the INSERT fails (e.g. "database is locked"), nothing references this
+    # attempt's pipeline2 copy or thumbnail — remove both, so the next
+    # auto-scan retry starts clean instead of leaving an orphan copy behind
+    # per attempt. Guarded by commit_state: never runs once a commit landed.
+    commit_state = {"committed": False}
+    try:
+        return await _ingest_file_db_section(
+            file_path, local_path, thumb, sha, content, ext, exif,
+            conf, category, commit_state,
+        )
+    except Exception:
+        if not commit_state["committed"]:
+            for _p in (local_path, thumb):
+                try:
+                    if _p is not None and Path(_p).exists():
+                        Path(_p).unlink()
+                except Exception:
+                    log.warning("[P1 pipeline] could not remove failed-ingest file %s", _p)
+            log.info(
+                "[P1 pipeline] insert failed for %s — removed this attempt's copy "
+                "and thumbnail; the file stays unrecorded and is retried on the "
+                "next auto-scan", file_path.name,
+            )
+        raise
+
+
+async def _ingest_file_db_section(
+    file_path: Path, local_path: Path, thumb, sha, content: bytes, ext: str, exif,
+    conf: float, category: str, commit_state: dict,
+) -> Union[int, str]:
+    """
+    The DB half of _ingest_file — unchanged logic, moved out only so the caller
+    can clean up this attempt's files when the INSERT fails. The pre-filter
+    result (conf, category) is computed by the caller before any write.
+    """
     async with AsyncSessionLocal() as session:
         # Secondary duplicate check by hash (race guard — another worker may
         # have ingested the same file while we were copying)
@@ -941,14 +1008,8 @@ async def _ingest_file(file_path: Path) -> Union[int, str, None]:
             session.add(obs)
             await session.flush()
 
-            # Lenient pre-filter — rejects only clear non-biological subjects
-            try:
-                is_plant, conf, category = classify_plant_likelihood(
-                    file_path,
-                    has_gps=(exif.latitude is not None),
-                )
-            except Exception:
-                is_plant, conf, category = True, 0.5, "plant"
+            # Pre-filter result (conf, category) was computed by _ingest_file
+            # before this transaction opened — see the comment there.
 
             gps_note = "GPS present" if exif.latitude is not None else "GPS missing"
 
@@ -971,6 +1032,7 @@ async def _ingest_file(file_path: Path) -> Union[int, str, None]:
                     ),
                 ))
                 await session.commit()
+                commit_state["committed"] = True
                 _state["session_total"] += 1
                 return "prefilter"   # skip _run_identification; obs is saved and recoverable
             else:
@@ -987,6 +1049,7 @@ async def _ingest_file(file_path: Path) -> Union[int, str, None]:
                     ),
                 ))
                 await session.commit()
+                commit_state["committed"] = True
                 _state["session_total"] += 1
                 return obs.id
         except IntegrityError:

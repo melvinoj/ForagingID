@@ -13,7 +13,8 @@
   <link rel="icon" type="image/svg+xml" href="/static/icons/dandelion-icon.svg">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
   <title>LandMemory — Confirmed Sightings</title>
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+        integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" />
   <link rel="stylesheet" href="/static/css/tokens.css">
@@ -2558,7 +2559,8 @@
   <button id="undo-toast-btn" onclick="undoRemovePhoto()">Undo</button>
 </div>
 
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+        integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
 <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
 <script src="https://unpkg.com/leaflet.heat@0.2.0/dist/leaflet-heat.js"></script>
 <script src="/static/js/gps.js"></script>
@@ -5060,6 +5062,7 @@ let _walkOrsFallback  = false;   // true when ORS was unavailable
 let _walkOrsDistM     = 0;       // ORS-reported distance in metres
 let _walkOrsDurMin    = 0;       // ORS-reported duration in minutes
 let _walkCircular     = true;    // close the loop back to start
+let _walkRouteGeom    = null;    // ORS LineString geometry of the current route (saved with the walk)
 let _lastWalkBounds   = null;    // last drawn rect bounds (for re-route)
 let _lastWalkCircle   = null;    // last drawn circle spec (for re-route)
 
@@ -5497,8 +5500,8 @@ function _nnRoute(stops) {
   return route;
 }
 
-function toggleWalkLoop() {
-  _walkCircular = !_walkCircular;
+// Reflect _walkCircular in the loop button + hint (also used when a saved walk loads).
+function _syncWalkLoopUi() {
   const btn  = document.getElementById('walk-loop-btn');
   const hint = document.getElementById('walk-loop-hint');
   if (btn) {
@@ -5506,8 +5509,41 @@ function toggleWalkLoop() {
     btn.style.background = _walkCircular ? '#e8f4e0' : '#f0f4e8';
   }
   if (hint) hint.textContent = _walkCircular ? 'Returns to start' : 'One-way route';
+}
+
+function toggleWalkLoop() {
+  _walkCircular = !_walkCircular;
+  _syncWalkLoopUi();
   // Re-route without repositioning the map
   if (_lastWalkBounds || _lastWalkCircle) _buildWalkRoute(_lastWalkBounds, _lastWalkCircle, true);
+}
+
+// Culinary profile + toxicity for each species on a walk.
+// toxicity_severity is not in /api/culinary/{name} (nor on map pins), so it is
+// read from /api/species/{name}/profile and stored on the entry as _toxicity:
+// 'none' | 'toxic' | 'deadly', or null when it could not be read. The walk panel
+// treats null as unknown and fails closed (recipes hidden).
+async function _fetchWalkEnrich(names) {
+  const enrichMap = {};
+  await Promise.allSettled(names.map(async name => {
+    const enc = encodeURIComponent(name);
+    const [cr, pr] = await Promise.allSettled([
+      fetch(`/api/culinary/${enc}`),
+      fetch(`/api/species/${enc}/profile`),
+    ]);
+    let entry = {};
+    try { if (cr.status === 'fulfilled' && cr.value.ok) entry = await cr.value.json(); } catch (_) {}
+    let sev = null;
+    try {
+      if (pr.status === 'fulfilled' && pr.value.ok) {
+        const prof = await pr.value.json();
+        sev = (prof && prof.species && prof.species.toxicity_severity) || null;
+      }
+    } catch (_) {}
+    entry._toxicity = sev;
+    enrichMap[name] = entry;
+  }));
+  return enrichMap;
 }
 
 async function _buildWalkRoute(bounds, circle, suppressFitBounds = false) {
@@ -5555,6 +5591,7 @@ async function _buildWalkRoute(bounds, circle, suppressFitBounds = false) {
   _walkOrsFallback = false;
   _walkOrsDistM    = 0;
   _walkOrsDurMin   = 0;
+  _walkRouteGeom   = null;
   let orsPolyLL    = null; // [[lat, lng], ...] for Leaflet polyline
 
   if (route.length >= 2) {
@@ -5574,6 +5611,7 @@ async function _buildWalkRoute(bounds, circle, suppressFitBounds = false) {
           const feat = orsData.features?.[0];
           if (feat?.geometry?.coordinates) {
             orsPolyLL = feat.geometry.coordinates.map(([lng, lat]) => [lat, lng]);
+            _walkRouteGeom = feat.geometry;   // kept so Save stores the exact shape
           }
           const summary = feat?.properties?.summary;
           if (summary) {
@@ -5621,15 +5659,9 @@ async function _buildWalkRoute(bounds, circle, suppressFitBounds = false) {
     map.fitBounds(L.latLngBounds(latLngs), { padding: [50, 50], maxZoom: 15 });
   }
 
-  // ── Culinary enrichment ────────────────────────────────────────────────────
-  const enrichMap = {};
+  // ── Culinary enrichment (+ toxicity, for the walk panel's toxic guard) ─────
   const uniqueSpecies = [...new Set(route.map(s => s.p.species_primary).filter(Boolean))];
-  await Promise.allSettled(uniqueSpecies.map(async name => {
-    try {
-      const r = await fetch(`/api/culinary/${encodeURIComponent(name)}`);
-      if (r.ok) { const d = await r.json(); enrichMap[name] = d; }
-    } catch (_) {}
-  }));
+  const enrichMap = await _fetchWalkEnrich(uniqueSpecies);
 
   // ── Show panel ─────────────────────────────────────────────────────────────
   _closeTabPanels();
@@ -5766,10 +5798,20 @@ function renderWalkPanel(route, enrichMap) {
       distFromPrev < 1000 ? `${Math.round(distFromPrev)}m` : `${(distFromPrev/1000).toFixed(1)}km`
     );
 
+    // Toxic guard — same rule as print_pdf.html (recipe only when
+    // toxicity_severity not in ('deadly','toxic')). Fails closed: if toxicity
+    // could not be read (_toxicity null/undefined), recipes are hidden too.
+    const _sev       = _enrichData ? _enrichData._toxicity : null;
+    const _isToxic   = _sev === 'toxic' || _sev === 'deadly';
+    const _sevKnown  = typeof _sev === 'string';
+    const _recipesOk = _sevKnown && !_isToxic;
+
     // Recipe: prefer recipe bank (current season), fall back to legacy culinary fields
     let recipeHtml = '';
-    const picked = _pickSeasonalRecipe(recipes, _season);
-    if (picked) {
+    const picked = _recipesOk ? _pickSeasonalRecipe(recipes, _season) : null;
+    if (!_recipesOk) {
+      // no recipe snippet for toxic/deadly or unknown-toxicity species
+    } else if (picked) {
       const rtitle = picked.title || (picked.is_medicinal_prep ? '🌿 Preparation' : '💡 Recipe');
       const rbody  = picked.body || '';
       const rsnip  = rbody.length > 160 ? rbody.slice(0, 157) + '…' : rbody;
@@ -5786,7 +5828,12 @@ function renderWalkPanel(route, enrichMap) {
       }
     }
 
-    const edibBadge = edib
+    // Toxic/deadly species: the badge is the toxicity warning, never an
+    // edibility label (whatever edibility_status says).
+    const edibBadge = _isToxic
+      ? `<span style="font-size:0.68rem;padding:1px 6px;border-radius:4px;font-weight:700;
+           background:#dc2626;color:#fff">☠ ${_sev === 'deadly' ? 'DEADLY' : 'toxic'}</span>`
+      : edib
       ? `<span style="font-size:0.68rem;padding:1px 6px;border-radius:4px;font-weight:600;
            background:${edib==='edible'?'#d1f5da':edib==='toxic'?'#dc2626':edib==='inedible'?'#fef3c7':edib==='medicinal'?'#e0e7ff':'#f3f3f3'};
            color:${edib==='edible'?'#166534':edib==='toxic'?'#fff':edib==='inedible'?'#854d0e':edib==='medicinal'?'#3730a3':'#555'}">
@@ -5943,13 +5990,23 @@ async function promptSaveWalk() {
 
   const payload = {
     name: name.trim(),
-    obs_ids:     _activeWalkRoute.map(s => s.p.id).filter(Boolean),
-    waypoints:   _activeWalkRoute.map((s, i) => ({
-      lat: s.lat, lng: s.lng,
-      obs_id: s.p.id || null,
-      label: s.p.species_primary || (s.p.is_note ? 'Note' : `Stop ${i+1}`),
-    })),
-    route_geojson: null,   // ORS GeoJSON not stored client-side (re-fetched on reload)
+    // Observation ids only — field-note stops carry a NOTE id in p.id and must
+    // never be stored as observation ids.
+    obs_ids:     _activeWalkRoute.filter(s => !s.p.is_note).map(s => s.p.id).filter(Boolean),
+    waypoints:   _activeWalkRoute.map((s, i) => s.p.is_note
+      ? { type: 'note', lat: s.lat, lng: s.lng, note_id: s.p.id || null, label: 'Note' }
+      : { type: 'obs',  lat: s.lat, lng: s.lng, obs_id: s.p.id || null,
+          label: s.p.species_primary || `Stop ${i+1}` }),
+    // Route shape + walk options, stored without a migration (route_geojson is
+    // a free-form JSON column). `foragingid` is a GeoJSON foreign member holding
+    // our own metadata; features is empty when ORS was unavailable.
+    route_geojson: {
+      type: 'FeatureCollection',
+      features: _walkRouteGeom
+        ? [{ type: 'Feature', geometry: _walkRouteGeom, properties: {} }]
+        : [],
+      foragingid: { version: 1, circular: !!_walkCircular },
+    },
     distance_m:  Math.round(distM),
     duration_min: _walkOrsDurMin > 0 ? _walkOrsDurMin : Math.round(distM / 80),
   };
@@ -6006,15 +6063,31 @@ async function loadSavedWalk(id) {
       alert('This saved walk has no waypoints.');
       return;
     }
-    // Rebuild route array matching _buildWalkRoute output shape
-    const route = w.waypoints.map(wp => ({
-      lat: wp.lat, lng: wp.lng,
-      p: { species_primary: wp.label === 'Note' ? null : wp.label,
-           is_note: wp.label === 'Note', id: wp.obs_id }
-    }));
+    // Rebuild route array matching _buildWalkRoute output shape.
+    // New walks: waypoints carry type 'obs' (obs_id) or 'note' (note_id).
+    // Old walks (no type): a note is label 'Note', and its note id was stored
+    // in obs_id — read it as the note id, never as an observation id.
+    const route = w.waypoints.map(wp => {
+      const isNote = wp.type === 'note' || (!wp.type && wp.label === 'Note');
+      return {
+        lat: wp.lat, lng: wp.lng,
+        p: isNote
+          ? { species_primary: null, is_note: true,
+              id: wp.note_id != null ? wp.note_id : (wp.obs_id != null ? wp.obs_id : null) }
+          : { species_primary: wp.label, is_note: false, id: wp.obs_id },
+      };
+    });
+    // Saved shape + options (new walks); old walks have neither → one-way, re-route.
+    const _meta      = (w.route_geojson && w.route_geojson.foragingid) || null;
+    const _savedGeom = w.route_geojson && w.route_geojson.features
+                       && w.route_geojson.features[0] && w.route_geojson.features[0].geometry;
+    _walkCircular     = _meta ? !!_meta.circular : false;
+    _syncWalkLoopUi();
+    _walkRouteGeom    = _savedGeom || null;
     _activeWalkRoute  = route;
     _activeWalkEnrich = {};
-    _walkOrsFallback  = !w.route_geojson;
+    _walkOrsFallback  = !_savedGeom;
+    // Saved distance/duration are what was saved — never overwritten on load.
     _walkOrsDistM     = w.distance_m || 0;
     _walkOrsDurMin    = w.duration_min || 0;
     // Enter walk mode so clear-btn and proximity watch work correctly
@@ -6043,51 +6116,52 @@ async function loadSavedWalk(id) {
     });
 
     if (latLngs.length > 1) {
-      // Try ORS for a road-following route (succeeds if key is configured)
       let orsPolyLL = null;
-      try {
-        const orsResp = await fetch('/api/walk/ors-route', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ coordinates: route.map(s => [s.lng, s.lat]) }),
-        });
-        if (orsResp.ok) {
-          const orsData = await orsResp.json();
-          if (!orsData.fallback) {
-            const feat = orsData.features?.[0];
-            if (feat?.geometry?.coordinates) {
-              orsPolyLL = feat.geometry.coordinates.map(([lng, lat]) => [lat, lng]);
-              const sum = feat?.properties?.summary;
-              if (sum) {
-                _walkOrsDistM    = sum.distance || 0;
-                _walkOrsDurMin   = Math.round((sum.duration || 0) / 60);
+      if (_savedGeom && Array.isArray(_savedGeom.coordinates)) {
+        // Draw exactly the shape that was saved — no ORS call.
+        orsPolyLL = _savedGeom.coordinates.map(([lng, lat]) => [lat, lng]);
+      } else {
+        // Old walk (no saved shape): ask ORS for a road-following route to DRAW
+        // only. Saved distance/duration are kept, never overwritten.
+        try {
+          const coords = route.map(s => [s.lng, s.lat]);
+          if (_walkCircular) coords.push(coords[0]);       // close the loop
+          const orsResp = await fetch('/api/walk/ors-route', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ coordinates: coords }),
+          });
+          if (orsResp.ok) {
+            const orsData = await orsResp.json();
+            if (!orsData.fallback) {
+              const feat = orsData.features?.[0];
+              if (feat?.geometry?.coordinates) {
+                orsPolyLL = feat.geometry.coordinates.map(([lng, lat]) => [lat, lng]);
+                _walkRouteGeom   = feat.geometry;
                 _walkOrsFallback = false;
               }
             }
           }
-        }
-      } catch (_) {}
+        } catch (_) {}
+      }
 
       if (orsPolyLL) {
         L.polyline(orsPolyLL, { color: '#2d5016', weight: 3.5, opacity: 0.85 })
           .addTo(_walkRouteLayer);
       } else {
-        // Fallback: solid line between waypoints (same weight/colour as ORS route)
-        L.polyline(latLngs, { color: '#2d5016', weight: 3.5, opacity: 0.85 })
+        // Fallback: solid line between waypoints (same weight/colour as ORS route),
+        // closed back to the start for a circular walk.
+        const fallbackLL = _walkCircular ? [...latLngs, latLngs[0]] : latLngs;
+        L.polyline(fallbackLL, { color: '#2d5016', weight: 3.5, opacity: 0.85 })
           .addTo(_walkRouteLayer);
       }
     }
     // Fit map to show the full route
     if (latLngs.length) map.fitBounds(L.latLngBounds(latLngs), { padding: [50, 50], maxZoom: 15 });
 
-    // Enrich species
+    // Enrich species (+ toxicity, for the walk panel's toxic guard)
     const uniqueSpecies = [...new Set(route.map(s => s.p.species_primary).filter(Boolean))];
-    await Promise.allSettled(uniqueSpecies.map(async name => {
-      try {
-        const res = await fetch(`/api/culinary/${encodeURIComponent(name)}`);
-        if (res.ok) { const d = await res.json(); _activeWalkEnrich[name] = d; }
-      } catch (_) {}
-    }));
+    _activeWalkEnrich = await _fetchWalkEnrich(uniqueSpecies);
 
     // Show walk panel — sheet is opened by _buildWalkRoute and renderWalkPanel
     _closeTabPanels();

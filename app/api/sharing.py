@@ -43,6 +43,30 @@ _tunnel_url: Optional[str] = None
 _started_at: Optional[datetime] = None
 
 
+async def stop_ngrok_subprocess() -> None:
+    """
+    Stop the ngrok process THIS server started (Settings → Start sharing), if
+    any: terminate, wait up to 3 s, then kill. Never touches an ngrok started
+    outside the app — stop_sharing() adds the `pkill -x ngrok` for that.
+
+    Called by stop_sharing() and by the app lifespan on every graceful shutdown
+    (main.py). Before 15 Oct 2026 shutdown did not stop it: a stop that does
+    not signal the whole process group — `kill -INT <pid>`, or a --reload
+    worker restart — left the tunnel up while the app reported "not sharing".
+    """
+    global _ngrok_proc
+    if _ngrok_proc:
+        try:
+            _ngrok_proc.terminate()
+            await asyncio.wait_for(_ngrok_proc.wait(), timeout=3.0)
+        except (asyncio.TimeoutError, ProcessLookupError):
+            try:
+                _ngrok_proc.kill()
+            except Exception:
+                pass
+        _ngrok_proc = None
+
+
 # ---------------------------------------------------------------------------
 # Guest detection — imported by main.py middleware
 # ---------------------------------------------------------------------------
@@ -222,16 +246,7 @@ async def start_sharing(request: Request):
 @router.post("/api/sharing/stop")
 async def stop_sharing():
     global _ngrok_proc, _tunnel_url, _started_at
-    if _ngrok_proc:
-        try:
-            _ngrok_proc.terminate()
-            await asyncio.wait_for(_ngrok_proc.wait(), timeout=3.0)
-        except (asyncio.TimeoutError, ProcessLookupError):
-            try:
-                _ngrok_proc.kill()
-            except Exception:
-                pass
-        _ngrok_proc = None
+    await stop_ngrok_subprocess()
     # Also kill any externally-started ngrok so the local API goes dark
     # and GET /api/sharing/status returns active=false immediately.
     try:

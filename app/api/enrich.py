@@ -354,10 +354,43 @@ async def _run_enrichment_task(
     start_from skips the first N species via run_enrichment_batch's existing
     slice, and process_id re-uses the paused row instead of opening a new one,
     so one logical run stays one row. Both default to a fresh run from 0.
+
+    Scheduling (enrich_gate): holds the single shared auto-enrichment slot for
+    the whole run, so it never overlaps the per-card enrichment queue. An
+    automatic run (trigger="auto", queued at the end of a P1 batch) also
+    waits until no ingest batch is live before it starts. The already-running
+    guard below is unchanged: it is claimed immediately, so a second call
+    while this one waits still returns at once, exactly as before.
     """
     if _state["running"]:
         return
 
+    _state["running"] = True
+    try:
+        from app.services.enrich_gate import enrichment_slot, wait_for_ingest_idle
+        if trigger == "auto":
+            await wait_for_ingest_idle(f"enrichment run ({trigger})")
+        async with enrichment_slot():
+            if trigger == "auto":
+                # The slot may have been held while a new batch started.
+                await wait_for_ingest_idle(f"enrichment run ({trigger})")
+            await _run_enrichment_task_inner(
+                species_list, trigger, re_enrich, fill_empty_only,
+                start_from, process_id,
+            )
+    finally:
+        _state["running"] = False
+
+
+async def _run_enrichment_task_inner(
+    species_list: Optional[list],
+    trigger: str,
+    re_enrich: bool,
+    fill_empty_only: bool,
+    start_from: int,
+    process_id: Optional[int],
+) -> None:
+    """Body of _run_enrichment_task, run under the shared enrichment slot."""
     _state["running"]  = True
     _state["current"]  = 0
     _state["total"]    = 0

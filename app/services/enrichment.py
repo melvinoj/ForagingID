@@ -242,12 +242,6 @@ async def enrich_species(
     if culinary_link_results is not None:
         _apply_culinary_links(ci, culinary_link_results)
 
-    # ── Fungi edibility enrichment (Phase 12 Prompt 1) ───────────────────
-    # Only runs for fungi species; never touches plant species.
-    # Runs after PFAF/Wikidata so those sources take precedence for plants,
-    # and after ci is upserted so we have a culinary_info_id for history rows.
-    await _maybe_enrich_fungi_edibility(session, species, ci)
-
     # ── Mark AI-generated fields ──────────────────────────────────────────
     ci.ai_generated_fields_json = json.dumps(_AI_GENERATED_FIELDS)
 
@@ -261,20 +255,49 @@ async def enrich_species(
     found_count = sum(1 for r in [wikidata_result, pfaf_result] if r is not None)
     ci.data_confidence = 1.0 if found_count == 2 else (0.6 if found_count == 1 else 0.0)
 
+    # ── Transaction A: source data + culinary_info, committed now ─────────
+    # Everything above is written and committed BEFORE any further network
+    # call, so the SQLite write lock is held for milliseconds rather than for
+    # the duration of the fungi lookups and LLM draft calls below. Before
+    # 15 Oct 2026 this was a flush, and the lock stayed held until the caller
+    # committed — across every Ollama/DeepSeek/Claude call — which is what
+    # timed out concurrent ingest writes ("database is locked").
+    # If draft generation below fails, culinary_info stays and the missing
+    # drafts are left for the existing backfill. Only WHEN things are written
+    # changed here — not WHAT.
     await session.flush()
+    await session.commit()
 
-    # ── AI draft generation ───────────────────────────────────────────────
-    # Only generate if we have some source data to work from, and only if
-    # there are no current pending/approved drafts (unless re_enrich=True)
-    await _maybe_generate_ai_drafts(
-        session=session,
-        species=species,
-        ci=ci,
-        re_enrich=re_enrich,
-        inat_result=inat_result,
-        trompenburg_result=trompenburg_result,
-        common_names=common_names_raw,
-    )
+    # ── Transaction B: drafts, generated with no write transaction open ───
+    # no_autoflush: a pending draft added by the fungi lookup must not be
+    # flushed by the reads inside _maybe_generate_ai_drafts — that would take
+    # the write lock and hold it across the LLM calls. Neither function's reads
+    # look at the rows the other adds (fungi writes an 'edibility_status'
+    # draft; the AI-draft reads cover only the four text-draft fields, history
+    # and edibility conditions), so results are unchanged. Explicit flush()
+    # calls still run; the caller's commit ends transaction B.
+    with session.no_autoflush:
+        # ── Fungi edibility enrichment (Phase 12 Prompt 1) ───────────────
+        # Only runs for fungi species; never touches plant species.
+        # Runs after PFAF/Wikidata so those sources take precedence for plants,
+        # and after ci is upserted so we have a culinary_info_id for history rows.
+        # It only queues a pending SpeciesAIDraft (never writes edibility), and
+        # touches none of the ci fields set above, so running it after them is
+        # order-neutral.
+        await _maybe_enrich_fungi_edibility(session, species, ci)
+
+        # ── AI draft generation ───────────────────────────────────────────
+        # Only generate if we have some source data to work from, and only if
+        # there are no current pending/approved drafts (unless re_enrich=True)
+        await _maybe_generate_ai_drafts(
+            session=session,
+            species=species,
+            ci=ci,
+            re_enrich=re_enrich,
+            inat_result=inat_result,
+            trompenburg_result=trompenburg_result,
+            common_names=common_names_raw,
+        )
 
     # A5 — if no medicinal data exists from any source, record the standard
     # "no known uses" note and mark it reviewed so it never enters a review queue.
@@ -1276,9 +1299,23 @@ async def _maybe_generate_ai_drafts(
         log.info("[AI drafts] Skipping generation for toxic species: %r", species.scientific_name)
         return
 
-    # If re_enrich: invalidate any existing pending drafts
-    if re_enrich:
+    # If re_enrich: invalidate any existing pending drafts.
+    #
+    # WHEN, not WHAT: this UPDATE used to run here, before the LLM calls below,
+    # which opened a write transaction and held the SQLite write lock across
+    # every synonym / Ollama / DeepSeek / Claude call. It now runs at the end
+    # (_apply_invalidation), at every exit point that previously came after it,
+    # so the same rows end up invalidated. The "covered" query below excludes
+    # 'pending' when re_enrich is set — exactly the set it saw before, when
+    # those pending rows had already been flipped to 'invalidated'.
+    async def _apply_invalidation() -> None:
+        if not re_enrich:
+            return
         from sqlalchemy import update as _upd
+        # Flush first so the UPDATE sees the same rows it did when it ran
+        # after enrich_species' flush (e.g. a pending draft just queued by the
+        # fungi edibility lookup).
+        await session.flush()
         await session.execute(
             _upd(SpeciesAIDraft)
             .where(SpeciesAIDraft.species_id == species.id)
@@ -1292,7 +1329,11 @@ async def _maybe_generate_ai_drafts(
     # includes 'rejected'; when reprocess_rejected=True (backfill), a rejected
     # field is treated as outstanding and eligible for a fresh draft.
     _DRAFT_FIELDS = ["taste_notes", "medicinal_notes", "recipe", "medicinal_folklore"]
-    _covered_statuses = ["pending", "approved", "edited_approved"]
+    _covered_statuses = ["approved", "edited_approved"]
+    if not re_enrich:
+        # Pending drafts are about to be invalidated when re_enrich is set, so
+        # they do not cover a field (see _apply_invalidation above).
+        _covered_statuses.insert(0, "pending")
     if not reprocess_rejected:
         _covered_statuses.append("rejected")
     existing_drafts = (await session.execute(
@@ -1324,6 +1365,7 @@ async def _maybe_generate_ai_drafts(
 
     if not fields_needed:
         log.info("[AI drafts] All 3 draft fields already exist for %r — skipping", species.scientific_name)
+        await _apply_invalidation()
         return
 
     log.info("Generating AI drafts for %r: %s", species.scientific_name, fields_needed)
@@ -1539,6 +1581,7 @@ async def _maybe_generate_ai_drafts(
                 "[AI drafts] ANTHROPIC_API_KEY not set and Ollama unavailable — skipping drafts for %r",
                 species.scientific_name,
             )
+            await _apply_invalidation()
             return
         draft_result = await generate_ai_drafts(
             api_key=settings.anthropic_api_key,
@@ -1549,7 +1592,11 @@ async def _maybe_generate_ai_drafts(
 
     if not draft_result:
         log.warning("AI draft generation returned no result for %r", species.scientific_name)
+        await _apply_invalidation()
         return
+
+    # All network calls are done — from here on, only writes (transaction B).
+    await _apply_invalidation()
 
     ctx_json = json.dumps(draft_result.context_used)
 

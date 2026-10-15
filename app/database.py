@@ -17,11 +17,19 @@ class Base(DeclarativeBase):
 # Scope them to the sqlite backend so a future Postgres URL (Phase 14) skips
 # them. SQLite path is unchanged: same args, same values.
 _is_sqlite = sqlalchemy.make_url(settings.database_url).get_backend_name() == "sqlite"
+
+# Lock wait, in seconds. Raised 10 → 30 on 15 Oct 2026 as a stopgap margin:
+# the real fix is that no code path holds the write lock across a network call
+# (enrichment.py transaction A/B split, enrich_gate scheduling). Applied twice,
+# deliberately: as sqlite3's connect timeout AND as PRAGMA busy_timeout in the
+# connect hook below, so every pooled connection carries the same value.
+_SQLITE_BUSY_TIMEOUT_S = 30
+
 _connect_args = (
     {
         "check_same_thread": False,
-        # 10-second busy timeout so concurrent requests wait rather than crash.
-        "timeout": 10,
+        # Busy timeout so concurrent requests wait rather than crash.
+        "timeout": _SQLITE_BUSY_TIMEOUT_S,
     }
     if _is_sqlite
     else {}
@@ -38,9 +46,17 @@ engine = create_async_engine(
 # enforces FKs and has no such PRAGMA, so registering this on a Postgres engine
 # would raise on every connect). FK violations were confirmed absent before
 # enabling (migration 0005 check).
+#
+# busy_timeout and synchronous are per-connection settings (unlike
+# journal_mode=WAL, which is stored in the DB file). synchronous=NORMAL was
+# previously set only on the one connection that switched the file to WAL, so
+# every other pooled connection ran at the default FULL. Both now apply to
+# every connection. NORMAL is the documented-safe level under WAL.
 def _set_fk_pragma(dbapi_conn, _connection_record):
     cursor = dbapi_conn.cursor()
     cursor.execute("PRAGMA foreign_keys = ON")
+    cursor.execute(f"PRAGMA busy_timeout = {_SQLITE_BUSY_TIMEOUT_S * 1000}")
+    cursor.execute("PRAGMA synchronous = NORMAL")
     cursor.close()
 
 if engine.dialect.name == "sqlite":

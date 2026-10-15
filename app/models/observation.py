@@ -191,7 +191,10 @@ class Observation(Base):
     # top_score: confidence score of the top candidate (candidates[0].score).
     # Cached here so Data Trust queries never need to parse JSON.
     top_score: Mapped[Optional[float]] = mapped_column(Float)
-    # dual_source_agreement: 1=both PlantNet+iNat present, 0=single source, NULL=no candidates.
+    # dual_source_agreement: 1=PlantNet's and iNat's TOP names agree, 0=they disagree or
+    # only one source returned candidates, NULL=no candidates (or never identified).
+    # Written by scan._identify_scanned_inner since 15 Oct 2026; names only — the
+    # auto-approve thresholds are a separate check.
     dual_source_agreement: Mapped[Optional[int]] = mapped_column(Integer)
     # routing_reason: most-recent processing_log message for this observation.
     # Records why it was approved/queued/rejected (best-effort, may be NULL).

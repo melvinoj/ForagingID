@@ -2334,6 +2334,8 @@
             style="background:#f0f4e8;color:#2d5016;border:1px solid #b8d48a;cursor:pointer"
             title="Generate a printable / shareable summary page">📋 Export summary</button>
         </div>
+        <div id="walk-save-status" role="status"
+             style="display:none;padding:2px 10px 4px;font-size:0.78rem;font-weight:600"></div>
         <div style="display:flex;align-items:center;gap:8px;padding:4px 10px 2px;flex-shrink:0">
           <button id="walk-loop-btn" onclick="toggleWalkLoop()"
             style="font-size:0.72rem;font-weight:600;padding:3px 10px;border-radius:12px;cursor:pointer;
@@ -5089,6 +5091,8 @@ let _walkRouteStatus  = null;    // {kind:'ok'|'single'|'capped'|'failed', reaso
 let _walkStraightLine = false;   // user chose the straight-line fallback after an ORS failure
 let _walkBuildSeq     = 0;       // guards against stale ORS responses after a regroup
 let _walkRadiusTimer  = null;    // debounce for the radius slider
+let _walkSaved        = null;    // {id, name, sig} — walk last saved or loaded; header shows its name while the route still matches sig
+let _walkSaving       = false;   // a save is in progress (prompt or request) — blocks a second save
 let _lastWalkBounds   = null;    // last drawn rect bounds (for re-route)
 let _lastWalkCircle   = null;    // last drawn circle spec (for re-route)
 
@@ -5128,6 +5132,7 @@ function _exitWalkMode() {
   _walkSelected = [];
   _walkLastPins = null;
   _walkRouteStatus = null;
+  _walkSaved = null;
   _walkStraightLine = false;
   _walkBuildSeq++;              // any ORS response still in flight is now stale
   clearTimeout(_walkRadiusTimer);
@@ -5611,6 +5616,41 @@ function _clusterStops(pins, radiusM) {
       });
     }
   }
+  // Second pass — centre drift. A centre moves as later pins join, so an early
+  // pin can end up further than R from its stop's FINAL centre. Any such pin
+  // moves to the nearest other stop within R, or starts a new stop; centres are
+  // then recomputed and the check repeats until nothing moves (capped — the
+  // Gresgen test boxes settle in ≤ 4 passes).
+  for (let pass = 0; pass < 10; pass++) {
+    let moved = 0;
+    for (const s of stops.slice()) {
+      for (const pin of s.pins.slice()) {
+        if (_haversineM(s.lat, s.lng, pin.lat, pin.lng) <= radiusM) continue;
+        let best = null, bestD = Infinity;
+        for (const t of stops) {
+          if (t === s || !t.pins.length) continue;
+          const d = _haversineM(t.lat, t.lng, pin.lat, pin.lng);
+          if (d < bestD) { bestD = d; best = t; }
+        }
+        s.pins.splice(s.pins.indexOf(pin), 1);
+        if (best && bestD <= radiusM) best.pins.push(pin);
+        else stops.push({ lat: pin.lat, lng: pin.lng, p: pin.p, pins: [pin], species: [], obs_ids: [] });
+        moved++;
+      }
+    }
+    for (let i = stops.length - 1; i >= 0; i--) if (!stops[i].pins.length) stops.splice(i, 1);
+    for (const s of stops) {
+      s.lat = s.pins.reduce((t, x) => t + x.lat, 0) / s.pins.length;
+      s.lng = s.pins.reduce((t, x) => t + x.lng, 0) / s.pins.length;
+    }
+    if (!moved) break;
+  }
+  // Rebuild each stop's species / obs ids / representative pin from its final pins.
+  for (const s of stops) {
+    s.p       = s.pins[0].p;
+    s.species = [...new Set(s.pins.map(x => x.p.species_primary))];
+    s.obs_ids = s.pins.filter(x => x.p.id != null).map(x => x.p.id);
+  }
   for (const n of notePins) {
     stops.push({ lat: n.lat, lng: n.lng, p: n.p, pins: null, species: [], obs_ids: [] });
   }
@@ -5954,7 +5994,7 @@ function renderWalkPanel(route, enrichMap) {
 
   const titleEl = document.getElementById('walk-title');
   const subEl   = document.getElementById('walk-sub');
-  if (titleEl) titleEl.textContent = `🥾 Walk Route (${route.length} stop${route.length !== 1 ? 's' : ''})`;
+  if (titleEl) titleEl.textContent = _walkTitleText(route);
 
   // Show the header block on desktop (phone uses wbs-summary instead)
   const hdrBlock = document.getElementById('wbs-header-block');
@@ -6138,10 +6178,44 @@ function _wbsUpdateSummary(route) {
   const durMin = _walkOrsDurMin > 0 ? _walkOrsDurMin : Math.round(totalM / 80);
 
   document.getElementById('wbs-summary-title').textContent =
-    `🥾 Walk route · ${route.length} ${stopWord}`;
+    _walkSavedNameFor(route) ? _walkTitleText(route) : `🥾 Walk route · ${route.length} ${stopWord}`;
   document.getElementById('wbs-summary-sub').textContent =
     `${uniqSp} species · ${distStr} · ~${durMin} min`;
-  el.style.display = 'block';
+  // Phone only — on laptop the walk-title header block shows the same thing.
+  el.style.display = isMobile() ? 'block' : 'none';
+}
+
+// ── Walk title: saved name while the route is the one saved/loaded ─────────
+// Signature = stop positions + circular flag. Regrouping (radius slider) or a
+// new selection changes it, and the title falls back to the stop count.
+function _walkRouteSig(route) {
+  return (_walkCircular ? 'c|' : 'o|') +
+    (route || []).map(s => `${s.lat.toFixed(6)},${s.lng.toFixed(6)}`).join(';');
+}
+
+function _walkSavedNameFor(route) {
+  return _walkSaved && route && route.length && _walkSaved.sig === _walkRouteSig(route)
+    ? _walkSaved.name : null;
+}
+
+function _walkTitleText(route) {
+  const name = _walkSavedNameFor(route);
+  if (name) return `🥾 ${name}`;
+  const n = route ? route.length : 0;
+  return `🥾 Walk Route (${n} stop${n !== 1 ? 's' : ''})`;
+}
+
+// Re-title header, phone summary and minimise bar without re-rendering stops.
+function _walkRefreshTitles() {
+  const route = _activeWalkRoute;
+  if (!route || !route.length) return;
+  const titleEl = document.getElementById('walk-title');
+  if (titleEl) titleEl.textContent = _walkTitleText(route);
+  _wbsUpdateSummary(route);
+  const bar = document.getElementById('walk-min-bar');
+  if (bar && bar.classList.contains('visible')) {
+    document.getElementById('wmb-name').textContent = _walkTitleText(route).replace('🥾 ', '');
+  }
 }
 
 // ── Walk bottom sheet: lasso-selected species ──────────────────────────────
@@ -6231,11 +6305,59 @@ async function promptSaveWalk() {
     alert('No walk route to save. Draw a selection area first.');
     return;
   }
+  // One save at a time — a second click while the prompt or request is open is ignored.
+  if (_walkSaving) return;
+  _walkSaving = true;
+  const btn = document.getElementById('walk-save-btn');
+  if (btn) btn.disabled = true;
+  let saved = false;
+  try {
+    await _saveWalk(btn, () => { saved = true; });
+  } finally {
+    _walkSaving = false;
+    if (btn) {
+      btn.disabled = false;
+      if (!saved) btn.textContent = '💾 Save walk';
+    }
+  }
+}
+
+function _showWalkSaveStatus(text, ok) {
+  const el = document.getElementById('walk-save-status');
+  if (!el) return;
+  el.textContent = text;
+  el.style.color = ok ? '#166534' : '#b91c1c';
+  el.style.display = 'block';
+  clearTimeout(_showWalkSaveStatus._t);
+  _showWalkSaveStatus._t = setTimeout(() => { el.style.display = 'none'; }, 8000);
+}
+
+async function _saveWalk(btn, onSaved) {
+  const sig = _walkRouteSig(_activeWalkRoute);
+  // Same route as the walk just saved / loaded → warn before making a copy.
+  if (_walkSaved && _walkSaved.sig === sig &&
+      !confirm(`This route is already saved as "${_walkSaved.name}".\n\nSave another copy?`)) {
+    return;
+  }
+
   const name = prompt('Name this walk:');
   if (!name || !name.trim()) return;
 
-  const btn = document.getElementById('walk-save-btn');
-  if (btn) { btn.disabled = true; btn.textContent = '⏳ Saving…'; }
+  // Same name already in the saved list → warn (the list is the source of truth,
+  // so this also catches copies saved in an earlier session).
+  try {
+    const lr = await fetch('/api/walk/saves');
+    if (lr.ok) {
+      const { walks } = await lr.json();
+      const lower = name.trim().toLowerCase();
+      const n = (walks || []).filter(w => (w.name || '').trim().toLowerCase() === lower).length;
+      if (n && !confirm(`${n === 1 ? 'A walk' : n + ' walks'} named "${name.trim()}" already saved.\n\nSave another with the same name?`)) {
+        return;
+      }
+    }
+  } catch (_) { /* list unavailable — save anyway, the POST reports real failures */ }
+
+  if (btn) btn.textContent = '⏳ Saving…';
 
   // Straight-line distance fallback
   let distM = _walkOrsDistM;
@@ -6282,11 +6404,19 @@ async function promptSaveWalk() {
       body: JSON.stringify(payload),
     });
     if (!r.ok) throw new Error((await r.json().catch(() => ({}))).detail || `HTTP ${r.status}`);
+    const d = await r.json();
+    _walkSaved = { id: d.id, name: d.name || payload.name, sig };
+    onSaved();
+    if (btn) {
+      btn.textContent = '✓ Saved';
+      setTimeout(() => { if (!_walkSaving) btn.textContent = '💾 Save walk'; }, 4000);
+    }
+    _showWalkSaveStatus(`✓ Saved as "${_walkSaved.name}"`, true);
+    _walkRefreshTitles();
     loadSavedWalksList();
   } catch (e) {
+    _showWalkSaveStatus('Save failed: ' + e.message, false);
     alert('Save failed: ' + e.message);
-  } finally {
-    if (btn) { btn.disabled = false; btn.textContent = '💾 Save walk'; }
   }
 }
 
@@ -6365,6 +6495,8 @@ async function loadSavedWalk(id) {
     _activeWalkRoute  = route;
     _walkSelected     = route;
     _activeWalkEnrich = {};
+    // Header shows the walk's name (after _walkCircular is set — it is part of the signature).
+    _walkSaved        = { id: w.id, name: w.name, sig: _walkRouteSig(route) };
     // Saved distance/duration are what was saved — never overwritten on load.
     _walkOrsDistM     = w.distance_m || 0;
     _walkOrsDurMin    = w.duration_min || 0;
@@ -6406,6 +6538,10 @@ async function deleteSavedWalk(id) {
   try {
     const r = await fetch(`/api/walk/saves/${id}`, { method: 'DELETE' });
     if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    if (_walkSaved && _walkSaved.id === id) {
+      _walkSaved = null;          // the shown walk is no longer saved — title back to stop count
+      _walkRefreshTitles();
+    }
     loadSavedWalksList();
   } catch (e) {
     alert('Delete failed: ' + e.message);

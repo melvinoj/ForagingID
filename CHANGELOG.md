@@ -471,6 +471,27 @@ Still open:
 
 ## History
 
+### 2026-10-15 10:19
+**Snapshot** — Manual snapshot
+DB: `snapshots/db_20261015_101900.sqlite`
+
+### 2026-10-15 10:08
+**Daucus carota verification audit (read-only) + walk builder fixes a-d from Melvin's browser test; 2e duplicates already deleted**
+
+**Built:**
+- Walk save: in-flight guard (second click ignored while prompt/request open), 'Saved as <name>' status line + button '✓ Saved', warn if same route already saved/loaded (route signature) or same name already in saved list
+- Walk header/summary/minimise bar show the saved or loaded walk's name while the route matches it; falls back to 'Walk Route (N stops)' after regroup/loop toggle/new selection or deletion
+- Centroid clustering second pass: pins > R from their stop's final centre move to nearest stop within R or start a new stop; repeat until stable (cap 10)
+**Fixed:**
+- Duplicate summary header: #wbs-summary now phone-only (laptop shows walk-title header only)
+- Centre drift: Gresgen ±0.02° box R=30 max 42.1->29.7 m, R=100 max 141.0->97.5 m; 'little foray' pins had no drift (max 26.6 m at R=30, unchanged)
+**Files:** `frontend/index.html`
+**Pending:**
+- Melvin to verify walk fixes a-d live
+- Daucus carota: edibility_verified=0, verified_by NULL, no species_edibility_history rows (table empty for ALL species). No UI path can verify an already-'edible' species: Edibility Review queue excludes edible; species-card dialog sends 'edible' status-only (verified untouched). Needs a decision/backend change (app/)
+- saved_walks: only id 3 'little foray' remains (ids 2 and 4 deleted via UI DELETE in server_20261015_081452.log)
+- Backend: GET /api/walk/saves stop_count counts obs_ids (39) not waypoints (20) for v2 walks
+
 ### 2026-10-15 10:02
 **Snapshot** — End of session — Session ended from Settings page
 DB: `snapshots/db_20261015_100246.sqlite`

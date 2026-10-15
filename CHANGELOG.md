@@ -1,6 +1,26 @@
 ## Current State
 
-current_state:
+continued...
+## Known issues / backlog
+- SAFETY: Aruncus dioicus 'edible', unverified, toxicity none — Melvin to decide
+- SAFETY: remaining unverified "edible"/toxic species app-wide (Heracleum sphondylium, Chaerophyllum hirsutum, Sambucus ebulus, Hypholoma fasciculare, Iris pseudacorus …) — verify walk-by-walk or in a sweep
+- No UI path to human-verify an already-'edible' species (verification done via SQL with history rows today)
+- Toxic guard missing: stop-card culinary hint, walk-summary export, walk sheet species list; backend toxicity_severity on GET /api/culinary/{name}
+- Re-ID sweep: remaining obs of H. perfoliatum (5), Knautia arvernensis (4), Thymus serpyllum (4), T. praecox (11), T. polytrichus (2), Rubus gratus (1) outside the walks
+- Anthriscus caucalis (138): inedible + toxicity 'toxic' contradiction; 1 obs left
+- Junk/zero-obs cards (cleanup needs OK): 108, 810, 491, 744, 279, 754, 755, 792, 807, 808, 803, 791; keep 653 Oenanthe crocata (reference)
+- Identification Stage B: GBIF out-of-range flag (~150 km); test PlantNet weurope vs all
+- 7 species lacked class/order lineage (backfill status to confirm); Erigeron family fixed
+- Enrichment paths not gated: culinary.py batch, trigger_ai_drafts_for_species, ITIS task; enrichment queue in-memory
+- Re-enrich of fungus wipes pending edibility suggestion
+- Identify — 2013 job at 90/2367
+- Google Drive token invalid; Ollama 'mistral' not installed
+- Disk tight — move exports/old snapshots to DIGIERA
+- Docs drift: CLAUDE.md Alembic head, PhoneForaging path
+- Tracked leftovers: your_db.db, current.txt; review_status 'not_applicable' (1 row)
+
+session_summary:
+Walk builder fixes; human verification + re-ID review of two Gresgen walks (~62 species verified, audit trail started, deadly nightshade/male fern/tansy corrected); Foraging Experience export built and published to GitHub Pages (walk map with layers + locate, plants grid, recipe teasers, taxonomy tree, 500px embed card for /b).
 
 ## Current State — 15 Oct 2026 (end of session 3)
 
@@ -502,6 +522,13 @@ Still open:
 - Enrichment gap remediation — 9 AI drafts pending approval, 6 species never scanned, 79 no-PFAF species need alt-source decision
 
 ## History
+
+### 2026-10-15 14:12
+**Snapshot** — End of session — Session ended from Settings page
+DB: `snapshots/db_20261015_141159.sqlite`
+
+### 2026-10-15 14:11
+**Session ended** — Session ended from Settings page
 
 ### 2026-10-15 14:10
 **Snapshot** — End of session — Session ended from Settings page

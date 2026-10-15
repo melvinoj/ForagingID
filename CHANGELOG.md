@@ -471,6 +471,24 @@ Still open:
 
 ## History
 
+### 2026-10-15 10:26
+**Snapshot** — Manual snapshot
+DB: `snapshots/db_20261015_102637.sqlite`
+
+### 2026-10-15 10:19
+**Human edibility verification of 'little foray' walk species (Melvin-approved list); snapshot db_20261015_101900 first**
+
+**Fixed:**
+- Verified as-is (status unchanged, verified_by=human): 690, 185, 376, 9, 670, 201, 346, 273, 186, 189, 6, 369, 93, 107
+- Status set + verified: 763 Atropa bella-donna unknown->toxic/deadly; 719 Senecio ovatus unknown->toxic/toxic; 764 Artemisia absinthium unknown->caution; 810 Hypericum humifusum unknown->caution (photosensitivity); 381 Hypericum tetrapterum edible->caution (photosensitivity); 762 Melampyrum pratense unknown->inedible
+- 28 species_edibility_history rows written (changed_by=human); direct SQL, no drafts/enrichment triggered; all 20 rows re-queried by ID
+**Files:** `data/foragingid.db`
+**Pending:**
+- Hold: 108 Sambucus canadensis - obs 17807 on walk (also 9392 Gresgen, 8345/20881 Sheffield) likely S. nigra, Melvin to re-ID
+- Hold: 138 Anthriscus caucalis inedible+toxic contradiction - Melvin to decide
+- Backlog: Erigeron annuus (273) family='Erigeron' should be Asteraceae
+- Backlog: species_edibility_history was empty for all species before today (23 human-verified species had no audit rows)
+
 ### 2026-10-15 10:19
 **Snapshot** — Manual snapshot
 DB: `snapshots/db_20261015_101900.sqlite`

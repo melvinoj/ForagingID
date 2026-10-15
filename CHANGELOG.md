@@ -471,6 +471,21 @@ Still open:
 
 ## History
 
+### 2026-10-15 10:33
+**Snapshot** — Manual snapshot
+DB: `snapshots/db_20261015_103337.sqlite`
+
+### 2026-10-15 10:26
+**Re-ID Sambucus canadensis -> Sambucus nigra (obs 17807, 9392, 8345, 20881) via PATCH /api/observations/{id}/correct; snapshot db_20261015_102637**
+
+**Fixed:**
+- 4 obs now Sambucus nigra, species_id 107, identified, manually_verified, human_corrected=1; observation_edits rows 19516-19523; 0 Sambucus canadensis obs remain
+**Files:** `data/foragingid.db`
+**Pending:**
+- Anthriscus caucalis (138): Melvin to choose toxicity (none/caution/toxic) - placeholder not filled, nothing written
+- Species card 108 Sambucus canadensis now has 0 observations - add to junk-card cleanup (needs OK)
+- saved_walks id 3 waypoint labels still say Sambucus canadensis (stored at save time)
+
 ### 2026-10-15 10:26
 **Snapshot** — Manual snapshot
 DB: `snapshots/db_20261015_102637.sqlite`

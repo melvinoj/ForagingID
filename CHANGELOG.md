@@ -2,6 +2,38 @@
 
 current_state:
 
+## Current State — 15 Oct 2026 (end of session 3)
+
+### Build status
+Server: START_ForagingID.command — uvicorn foreground + tee to logs/server_<ts>.log; port check; cleanup trap. Claude Code never starts the server.
+Alembic head 0052. WAL; busy_timeout 30000; synchronous=NORMAL per connection.
+
+### Completed 14–15 Oct
+- Revival health check; Syncthing re-paired to Pixel 8 Pro ("Foraging Pics" 39ds2-kdty9: Mac Receive Only + ignoreDelete; phone Send Only curated folder)
+- iNat token refreshed (expires ~24h); Leaflet SRI fixed
+- SQLite lock contention fixed (two-transaction enrichment; enrich_gate.py ingest priority; P1 classify-before-insert + cleanup). Verified 0 locks
+- Launcher rewritten (foreground, tee survives Ctrl+C); ngrok stopped on graceful shutdown
+- Identification Stage A: iNat gate = min(combined, vision); disagreement promotion (iNat location #1 if in PlantNet top 5 → suggested, needs_review, never agreement); scores + dual_source_agreement stored. Cards-on-approval DECLINED
+- Walk builder Stage 1 (typed waypoints, circular + geometry persisted, toxic guard) + Stage 2 (centroid stops 30 m default, slider 10–100, 50-cap, honest ORS errors, Google 10-point notice) + fixes (save confirmation / duplicate guard, saved name in header, single header, centre-drift second pass)
+- Saved walks: "little foray" (id 3), "Rümmelsbühl foray" (id 4, 26 stops, 51 species, 6.4 km)
+- Edibility audit trail started: species_edibility_history now written (was 0 rows for all species before today)
+- Human verification: all species on walks 3 and 4 verified (~62 species); status changes incl. Atropa → toxic/deadly, Senecio ovatus → toxic, Dryopteris filix-mas → toxic, Tanacetum/Artemisia vulgaris/absinthium → caution, all Hypericum → caution (photosensitivity), Carex caryophyllea/Briza media → inedible/none, Galium album → edible
+- Re-IDs (correct-species path): S. canadensis → S. nigra (4 obs); 24234 → H. perforatum; 17188 → Daucus carota; perfoliatum → perforatum; arvernensis → K. arvensis; A. oblongifolia → A. patula; L. heterophyllum → L. vulgare; 3 thyme obs → T. pulegioides; R. gratus → R. fruticosus; 17889 → Genista sagittalis
+- Family/name fixes: 9 families, 2 kingdoms, names (Silene nutans, Silene vulgaris "Bladder campion", Fagus DE, Malva DE)
+- Foraging Experience export LIVE: scripts/experience_export/ (export.py, config.json, gates.py, app_styles.py, templates) → dist/ → separate repo melvinoj/foraging-experience (clone at ~/foraging-experience) → GitHub Pages https://melvinoj.github.io/foraging-experience/. Tabs: Walk (OSM/Satellite/Topo, locate-me, plain numbered stops) · Plants (photo grid, walk order, filter chips, preview panel) · Recipes (teasers) · Taxonomy (tree, Bryopsida anchor patch). preview.html = 500px embed card for melvinjarman.co.uk/b. Gates: edible claims only human-verified; toxic → badge, never recipe (build fails otherwise); Apiaceae page-level look-alike cards; no AI descriptions; no medicinal; EXIF stripped (208 photos, 24.8 MB). Publish: re-run export → rsync dist/ → commit/push in clone
+
+### Pending / next
+1. Hostinger: embed preview.html iframe on /b (Builder embed element, height 500) — check live on phone
+2. Impressum + Datenschutz pages on melvinjarman.co.uk (footer links to /impressum) — before linking/QR; Claude to draft DE/EN if asked
+3. "Publish as experience" button on a saved walk (export + preview + push on confirm; small overrides panel: hero, teasers, hidden stops) — on the simmer
+4. Walk Stage 3: accumulating selection → undo / reset+confirm / subtract / side panel (remove, reorder)
+5. Walk Stage 4 filters; Stage 5 backend (ORS elevation, PUT saved walk, draft autosave)
+6. Saved walks should resolve stop labels from observations at load (stale labels after re-ID)
+7. PWA install on Pixel 8 via negligee-raft-shiny.ngrok-free.dev (Start sharing first)
+8. Launcher live checks after next Ctrl+C: pgrep -fl ngrok empty; log tail shows shutdown
+
+### Known
+
 ## Current State — 15 Oct 2026 (end of session 2)
 
 ### Build status
@@ -470,6 +502,74 @@ Still open:
 - Enrichment gap remediation — 9 AI drafts pending approval, 6 species never scanned, 79 no-PFAF species need alt-source decision
 
 ## History
+
+### 2026-10-15 14:10
+**Snapshot** — End of session — Session ended from Settings page
+DB: `snapshots/db_20261015_141051.sqlite`
+
+### 2026-10-15 14:10
+**Session ended** — Session ended from Settings page
+
+### 2026-10-15 14:07
+**Pushed Foraging Experience update to melvinoj/foraging-experience (4 tabs, plant grid + panel, walk order)**
+
+**Files:** `(separate repo) foraging-experience: index.html, +106 photos`
+**Pending:**
+- Check live site after Pages rebuild
+
+### 2026-10-15 14:06
+**Experience export: species listed in walk order (first stop met) instead of toxic-first**
+
+**Fixed:**
+- export.py species sort = first stop on route, then name; toxicity shown on the plant only. Verified: 4 toxic species keep ☠ badge + warning, 0 recipes for toxic species (build also fails if one appears)
+**Files:** `scripts/experience_export/export.py`
+**Pending:**
+- Push only after explicit OK
+
+### 2026-10-15 14:04
+**Experience export: tabs Walk · Plants · Recipes · Taxonomy; new Plants grid + filter chips + preview panel**
+
+**Built:**
+- Taxonomy tab: existing tree iframe moved unchanged (lazy on first open)
+- Plants tab: app species-card grid (400px thumbs), EN/DE/Latin, family, gated badge; chips All/Edible/Caution/Toxic
+- Preview panel: main photo + up to 3 more walk photos (800px + 400px thumbs, re-encoded, EXIF-stripped, gated obs only), names, family, months seen on this walk, badge, recipe teaser, toxic warning, look-alike only if human-authored; Esc/scrim close, keyboard open
+- export: extra_photos_per_species 3, extra_photo_long_edge 800, months from photo_taken_at
+**Files:** `scripts/experience_export/export.py`, `scripts/experience_export/templates/index.html`, `scripts/experience_export/config.json`
+**Pending:**
+- Melvin to check Plants grid/panel + Taxonomy tab live
+- Push only after explicit OK (rsync dist/ into /Users/melvinjarman/foraging-experience)
+
+### 2026-10-15 13:52
+**Foraging Experience pushed to github.com/melvinoj/foraging-experience (main 14c1f5f)**
+
+**Built:**
+- Clone at /Users/melvinjarman/foraging-experience (outside ForagingID); dist/ contents copied: index.html, tree.html, preview.html, photos/ (102); README.md kept from initial commit
+**Files:** `(separate repo) foraging-experience`
+**Pending:**
+- Melvin: enable GitHub Pages (main / root)
+- Check live index + preview URLs; add Builder embed on melvinjarman.co.uk/b
+- Create Impressum page before go-live
+- Re-publish = rerun export, rsync dist/ into the clone, commit, push
+
+### 2026-10-15 13:51
+**Experience export: map tile seams (dark lines = real gaps showing container bg)**
+
+**Fixed:**
+- Tiles overlap by 0.5px (256.5px !important) with mix-blend-mode normal (plus-lighter would add colours in the overlap); map square corners; container bg dark. Cause: map at fractional pixel position (58vh, non-integer line heights above). Unverified live
+**Files:** `scripts/experience_export/templates/index.html`
+**Pending:**
+- Melvin to refresh and confirm seams gone, then push
+
+### 2026-10-15 13:46
+**Experience export: map tile grid-line mitigation; Silene vulgaris EN name; rebuilt (push pending Melvin map check)**
+
+**Fixed:**
+- Page img rule scoped away from Leaflet (img:not(.leaflet-container img)); .leaflet-container background set to app deep shell (Leaflet default #ddd shows through sub-pixel tile seams as near-white lines). Evidence: leaflet.css 1.9.4 already forces max-width/padding none !important on tiles and absolute tiles are blockified, so the img rule alone cannot cause seams - cause unconfirmed without a browser
+- 164 Silene vulgaris preferred_common_name maidenstears -> Bladder campion (history row 135; snapshot db_20261015_134551)
+**Files:** `scripts/experience_export/templates/index.html`, `data/foragingid.db`
+**Pending:**
+- Melvin to refresh and confirm map grid lines gone
+- Then push to melvinoj/foraging-experience + GitHub Pages steps
 
 ### 2026-10-15 13:45
 **Snapshot** — Manual snapshot

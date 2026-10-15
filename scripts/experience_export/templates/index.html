@@ -42,12 +42,22 @@
   section.panel[hidden] { display: none; }
   #list-view h2 { font-family: var(--font-display); font-weight: 400; }
 
-  #map { height: 58vh; min-height: 300px; border-radius: 8px; border: 1px solid rgba(255,255,255,.12); }
+  /* Square corners on purpose: border-radius + Leaflet's overflow:hidden makes Chrome
+     composite the tile layer as a clipped layer, a known source of hairline tile seams. */
+  #map { height: 58vh; min-height: 300px; border: 1px solid rgba(255,255,255,.12); }
   /* Leaflet's default container colour is #ddd; any hairline gap between tiles
      (fractional-pixel tile positions) shows that through as a near-white grid line.
      Dark here so a gap, if any, matches the page instead. */
   .leaflet-container { background: var(--app-shell-deep); }
   .leaflet-container img { box-sizing: content-box; }
+  /* Tile seams: on this page the map sits at a fractional pixel position (58vh height,
+     text above with non-integer line heights), so 256px tiles can leave hairline gaps
+     that show the container colour (seen as dark lines, 15 Oct 2026). Fix: overlap
+     each tile by half a pixel so no gap can open. Leaflet 1.9.4's plus-lighter blending
+     would ADD colours in that overlap (a bright line), so tiles use normal blending —
+     the overlap simply covers. */
+  .leaflet-container img.leaflet-tile { mix-blend-mode: normal;
+    width: 256.5px !important; height: 256.5px !important; }
   .stop-pin { width: 26px; height: 26px; border-radius: 50%; background: var(--app-forest); color: #fff;
     font: 700 12px/26px var(--font-ui); text-align: center; border: 2px solid var(--paper);
     box-shadow: 0 1px 4px rgba(0,0,0,.4); }
@@ -61,6 +71,37 @@
   .walk-stop-sp img, .walk-stop-sp .noimg { width: 52px; height: 52px; border-radius: 6px; object-fit: cover;
     flex: 0 0 auto; background: var(--leaf-pale); }
   .walk-stop-species { font-family: var(--font-display); font-style: italic; }
+
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 4px 0 4px; }
+  .chip { min-height: 36px; padding: 0 14px; border-radius: 18px; border: 1px solid rgba(255,255,255,.18);
+    background: transparent; color: var(--leaf-pale); font: 600 .82rem var(--font-ui); cursor: pointer; }
+  .chip[aria-pressed="true"] { background: var(--app-forest); border-color: var(--leaf); color: var(--paper); }
+  .species-card.pick { cursor: pointer; }
+  .species-card.pick:focus-visible { outline: 3px solid var(--leaf); outline-offset: 2px; }
+  .species-card[hidden] { display: none; }
+
+  body.sp-open { overflow: hidden; }
+  .sp-scrim { position: fixed; inset: 0; background: rgba(0,0,0,.55); z-index: 1500; }
+  .sp-panel { position: fixed; z-index: 1600; left: 0; right: 0; bottom: 0; max-height: 90vh; overflow-y: auto;
+    background: var(--app-shell); border-top: 2px solid var(--app-forest); border-radius: 14px 14px 0 0;
+    box-shadow: 0 -6px 24px rgba(0,0,0,.4); padding: 0 0 20px; }
+  .sp-panel[hidden], .sp-scrim[hidden] { display: none; }
+  @media (min-width: 760px) {
+    .sp-panel { left: 50%; right: auto; bottom: auto; top: 50%; transform: translate(-50%, -50%);
+      width: min(640px, 92vw); max-height: 88vh; border-radius: 12px; border: 1px solid rgba(255,255,255,.12); }
+  }
+  .sp-close { position: sticky; top: 8px; float: right; margin: 8px 8px -52px 0; z-index: 2;
+    width: var(--touch-min); height: var(--touch-min); border-radius: 50%; border: 0;
+    background: rgba(30,43,40,.85); color: var(--paper); font-size: 1.1rem; cursor: pointer; }
+  .sp-main { width: 100%; max-height: 52vh; object-fit: cover; cursor: zoom-in; background: var(--app-shell-deep); }
+  .sp-thumbs { display: flex; gap: 8px; padding: 10px 16px 0; overflow-x: auto; }
+  .sp-thumb { flex: 0 0 auto; width: 64px; height: 64px; padding: 0; border: 2px solid transparent; border-radius: 6px;
+    background: none; cursor: pointer; overflow: hidden; }
+  .sp-thumb.on { border-color: var(--leaf); }
+  .sp-thumb img { width: 100%; height: 100%; object-fit: cover; }
+  .sp-text.species-card { background: none; border: 0; padding: 12px 16px 0; cursor: default; }
+  .sp-text .common { font-size: 1.3rem; }
+  .sp-text .badge { margin-top: 8px; }
 
   #tree-frame-wrap { height: 70vh; min-height: 360px; border-radius: 8px; overflow: hidden;
     border: 1px solid rgba(255,255,255,.12); background: var(--app-shell-deep); }
@@ -117,6 +158,7 @@
     <button class="tab" role="tab" id="tab-walk" aria-controls="panel-walk" aria-selected="true">Walk</button>
     <button class="tab" role="tab" id="tab-plants" aria-controls="panel-plants" aria-selected="false">Plants</button>
     <button class="tab" role="tab" id="tab-recipes" aria-controls="panel-recipes" aria-selected="false">Recipes</button>
+    <button class="tab" role="tab" id="tab-taxonomy" aria-controls="panel-taxonomy" aria-selected="false">Taxonomy</button>
   </div>
 </nav>
 
@@ -133,8 +175,13 @@
   <section class="panel" id="panel-plants" role="tabpanel" aria-labelledby="tab-plants" hidden>
     <div class="wrap">
       <h2>Plants on this walk</h2>
-      <p class="subtitle">A family tree of everything we meet on the way. Tap a branch to open it, tap a species for its photo.</p>
-      <div id="tree-frame-wrap"></div>
+      <p class="subtitle">Tap a plant for more photos and details.</p>
+      <div class="chips" role="group" aria-label="Filter plants">
+        <button class="chip" data-filter="all" aria-pressed="true">All</button>
+        <button class="chip" data-filter="edible" aria-pressed="false">Edible</button>
+        <button class="chip" data-filter="caution" aria-pressed="false">Caution</button>
+        <button class="chip" data-filter="toxic" aria-pressed="false">☠ Toxic</button>
+      </div>
       <div class="grid" id="species-grid"></div>
     </div>
   </section>
@@ -146,7 +193,21 @@
       <div class="grid" id="recipe-grid"></div>
     </div>
   </section>
+
+  <section class="panel" id="panel-taxonomy" role="tabpanel" aria-labelledby="tab-taxonomy" hidden>
+    <div class="wrap">
+      <h2>Family tree</h2>
+      <p class="subtitle">How everything we meet on the way is related. Tap a branch to open it, tap a species for its photo.</p>
+      <div id="tree-frame-wrap"></div>
+    </div>
+  </section>
 </main>
+
+<div class="sp-scrim" id="sp-scrim" hidden></div>
+<div class="sp-panel" id="sp-panel" role="dialog" aria-modal="true" aria-labelledby="sp-panel-title" hidden>
+  <button class="sp-close" id="sp-close" aria-label="Close">✕</button>
+  <div id="sp-panel-body"></div>
+</div>
 
 <footer>
   <div class="wrap">
@@ -199,7 +260,7 @@ window.DATA = {{DATA}};
   cta.textContent = D.cta_label; cta.href = D.contact_url;
 
   // ── tabs ──
-  var tabs = ["walk", "plants", "recipes"];
+  var tabs = ["walk", "plants", "recipes", "taxonomy"];
   var treeLoaded = false, map = null;
   function show(name) {
     if (tabs.indexOf(name) < 0) name = "walk";
@@ -207,7 +268,7 @@ window.DATA = {{DATA}};
       document.getElementById("tab-" + t).setAttribute("aria-selected", t === name ? "true" : "false");
       document.getElementById("panel-" + t).hidden = t !== name;
     });
-    if (name === "plants" && !treeLoaded) {
+    if (name === "taxonomy" && !treeLoaded) {
       // Created on first open so the tree lays out at its real size.
       var f = document.createElement("iframe");
       f.src = "tree.html"; f.title = "Plant family tree";
@@ -306,19 +367,90 @@ window.DATA = {{DATA}};
     m.openPopup();
   });
 
-  // ── plants: the app's species cards ──
-  document.getElementById("species-grid").innerHTML = D.species.map(function (s) {
+  // ── plants: the app's species cards; tap → preview panel ──
+  var MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  var recipeBySpecies = {};
+  D.recipes.forEach(function (r) { recipeBySpecies[r.species_id] = r; });
+  function filterGroup(s) {
+    var k = s.badge.kind;
+    return (k === "toxic" || k === "deadly") ? "toxic" : (k === "edible" || k === "caution") ? k : "other";
+  }
+  var grid = document.getElementById("species-grid");
+  grid.innerHTML = D.species.map(function (s) {
+    return '<article class="species-card pick' + (s.toxic ? " toxic" : "") + '" role="button" tabindex="0"' +
+      ' data-sid="' + s.id + '" data-group="' + filterGroup(s) + '" aria-label="' + esc(s.en || s.sci) + '">' +
+      (s.thumb ? '<img class="photo" src="' + esc(s.thumb) + '" alt="" loading="lazy">' : '<div class="photo"></div>') +
+      '<div class="body"><div class="common">' + (s.toxic ? "☠ " : "") + esc(s.en || s.sci) + "</div>" +
+      (s.de ? '<div class="common-de">' + esc(s.de) + "</div>" : "") +
+      '<div class="sci-name">' + esc(s.sci) + "</div>" +
+      (s.family ? '<div class="family">' + esc(s.family) + "</div>" : "") + badge(s) + "</div></article>";
+  }).join("");
+
+  var chips = document.querySelectorAll(".chip");
+  Array.prototype.forEach.call(chips, function (c) {
+    c.addEventListener("click", function () {
+      var f = c.getAttribute("data-filter");
+      Array.prototype.forEach.call(chips, function (x) { x.setAttribute("aria-pressed", x === c ? "true" : "false"); });
+      Array.prototype.forEach.call(grid.children, function (card) {
+        card.hidden = !(f === "all" || card.getAttribute("data-group") === f);
+      });
+    });
+  });
+
+  var panel = document.getElementById("sp-panel"), scrim = document.getElementById("sp-scrim");
+  var panelBody = document.getElementById("sp-panel-body"), lastFocus = null;
+  function openPanel(sid) {
+    var s = byId[sid]; if (!s) return;
+    var photos = (s.photo ? [{ photo: s.photo, thumb: s.thumb }] : []).concat(s.extra || []);
+    var r = recipeBySpecies[s.id];
     var w = "";
     if (s.safety.toxic) w += '<div class="warn toxic"><strong>☠ Not safe to eat</strong>' + esc(s.safety.toxic) + "</div>";
     if (s.safety.look_alike) w += '<div class="warn lookalike"><strong>Look-alikes</strong>' + esc(s.safety.look_alike) + "</div>";
-    return '<article class="species-card' + (s.toxic ? " toxic" : "") + '">' +
-      (s.photo ? '<img class="photo" src="' + esc(s.thumb) + '" data-full="' + esc(s.photo) + '" alt="' + esc(s.en || s.sci) + '" loading="lazy">'
-               : '<div class="photo"></div>') +
-      '<div class="body"><div class="common">' + (s.toxic ? "☠ " : "") + esc(s.en || s.sci) + "</div>" +
-      '<div class="sci-name">' + esc(s.sci) + "</div>" +
+    panelBody.innerHTML =
+      (photos.length ? '<img class="sp-main" id="sp-main" src="' + esc(photos[0].photo) + '" data-full="' + esc(photos[0].photo) + '" alt="' + esc(s.en || s.sci) + '">' : "") +
+      (photos.length > 1 ? '<div class="sp-thumbs">' + photos.map(function (p, i) {
+        return '<button class="sp-thumb' + (i === 0 ? " on" : "") + '" data-photo="' + esc(p.photo) + '" aria-label="Photo ' + (i + 1) + '">' +
+               '<img src="' + esc(p.thumb) + '" alt=""></button>';
+      }).join("") + "</div>" : "") +
+      '<div class="sp-text species-card">' +
+      '<div class="common" id="sp-panel-title">' + (s.toxic ? "☠ " : "") + esc(s.en || s.sci) + "</div>" +
       (s.de ? '<div class="common-de">' + esc(s.de) + "</div>" : "") +
-      (s.family ? '<div class="family">' + esc(s.family) + "</div>" : "") + badge(s) + w + "</div></article>";
-  }).join("");
+      '<div class="sci-name">' + esc(s.sci) + "</div>" +
+      (s.family ? '<div class="family">' + esc(s.family) + "</div>" : "") +
+      (s.months && s.months.length ? '<div class="family">Seen on this walk: ' + s.months.map(function (m) { return MONTHS[m - 1]; }).join(", ") + "</div>" : "") +
+      badge(s) +
+      (r ? '<div class="walk-stop-recipe"><strong>' + esc(r.dish) + '</strong><div class="line">' + esc(r.line) + "</div></div>" : "") +
+      w + "</div>";
+    lastFocus = document.activeElement;
+    panel.hidden = false; scrim.hidden = false;
+    document.body.classList.add("sp-open");
+    document.getElementById("sp-close").focus();
+  }
+  function closePanel() {
+    panel.hidden = true; scrim.hidden = true;
+    document.body.classList.remove("sp-open");
+    if (lastFocus && lastFocus.focus) lastFocus.focus();
+  }
+  grid.addEventListener("click", function (e) {
+    var card = e.target.closest(".species-card.pick");
+    if (card) openPanel(+card.getAttribute("data-sid"));
+  });
+  grid.addEventListener("keydown", function (e) {
+    var card = e.target.closest(".species-card.pick");
+    if (card && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); openPanel(+card.getAttribute("data-sid")); }
+  });
+  panelBody.addEventListener("click", function (e) {
+    var b = e.target.closest(".sp-thumb");
+    if (!b) return;
+    var main = document.getElementById("sp-main");
+    main.src = b.getAttribute("data-photo"); main.setAttribute("data-full", b.getAttribute("data-photo"));
+    Array.prototype.forEach.call(panelBody.querySelectorAll(".sp-thumb"), function (x) { x.classList.toggle("on", x === b); });
+  });
+  document.getElementById("sp-close").addEventListener("click", closePanel);
+  scrim.addEventListener("click", closePanel);
+  document.addEventListener("keydown", function (e) {
+    if (e.key === "Escape" && !panel.hidden && !document.getElementById("lightbox").classList.contains("open")) closePanel();
+  });
 
   // ── recipes: teaser in the app's walk-panel recipe strip ──
   var rg = document.getElementById("recipe-grid");

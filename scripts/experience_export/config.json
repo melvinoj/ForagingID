@@ -48,6 +48,9 @@
   "preview_recipe_ids": [],
 
   "photo_long_edge": 1200,
+  "_extra_photos_note": "Plants preview panel: up to N more photos per species from this walk's approved observations.",
+  "extra_photos_per_species": 3,
+  "extra_photo_long_edge": 800,
   "thumb_long_edge": 400,
   "jpeg_quality": 82
 }

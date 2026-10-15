@@ -373,7 +373,7 @@ def main():
     # Observations, in walk order
     q = ",".join("?" * len(obs_ids))
     rows = {r["id"]: dict(r) for r in conn.execute(
-        f"SELECT id, species_id, species_primary, review_status, identification_status, file_path "
+        f"SELECT id, species_id, species_primary, review_status, identification_status, file_path, photo_taken_at "
         f"FROM observations WHERE id IN ({q})", obs_ids)}
     obs_order = [rows[i] for i in obs_ids if i in rows]
     missing_obs = [i for i in obs_ids if i not in rows]
@@ -428,6 +428,23 @@ def main():
         photo_paths += [big, thumb]
         species[sid]["_photo"] = {"obs_id": chosen["id"]}
         photo_report.append((sid, chosen["id"]))
+        # Up to N more photos of this species from THIS walk's passing observations
+        # (same gate as everything else), for the Plants preview panel. Distinct files only.
+        seen, extras = {chosen["file_path"]}, []
+        for o in candidates:
+            if len(extras) >= cfg.get("extra_photos_per_species", 3):
+                break
+            fp = o["file_path"]
+            if o is chosen or not fp or fp in seen or not Path(fp).is_file():
+                continue
+            seen.add(fp)
+            n = len(extras) + 1
+            ex_big, ex_thumb = DIST / "photos" / f"{sid}_{n}.jpg", DIST / "photos" / f"{sid}_{n}_t.jpg"
+            encode_photo(Path(fp), ex_big, cfg.get("extra_photo_long_edge", 800), cfg["jpeg_quality"])
+            encode_photo(Path(fp), ex_thumb, cfg["thumb_long_edge"], cfg["jpeg_quality"])
+            photo_paths += [ex_big, ex_thumb]
+            extras.append({"photo": f"photos/{sid}_{n}.jpg", "thumb": f"photos/{sid}_{n}_t.jpg"})
+        species[sid]["_extras"] = extras
 
     # Per-species public record (everything through gates)
     pub = {}
@@ -449,6 +466,10 @@ def main():
             "photo": f"photos/{sid}.jpg" if sp.get("_photo") else None,
             "thumb": f"photos/{sid}_t.jpg" if sp.get("_photo") else None,
             "n_obs": len(sp_obs[sid]),
+            "extra": sp.get("_extras") or [],
+            # Months this species was photographed on THIS walk (from passing obs).
+            "months": sorted({int(str(o["photo_taken_at"])[5:7]) for o in sp_obs[sid]
+                              if o.get("photo_taken_at") and str(o["photo_taken_at"])[5:7].isdigit()}),
         }
 
     # Recipes — one teaser per species. Order: config recipe_source_priority
@@ -500,6 +521,14 @@ def main():
         stops.append({"n": len(stops) + 1, "lat": wp["lat"], "lng": wp["lng"], "species": sids,
                       "toxic": any(pub[s]["toxic"] for s in sids)})
 
+    first_stop = {}
+    for st in stops:
+        for sid in st["species"]:
+            first_stop.setdefault(sid, st["n"])
+    missing_from_stops = [pub[s]["sci"] for s in pub if s not in first_stop]
+    if missing_from_stops:
+        warnings.append(f"species not on any stop (listed last): {missing_from_stops}")
+
     line = None
     for f in route.get("features") or []:
         if (f.get("geometry") or {}).get("type") == "LineString":
@@ -544,7 +573,9 @@ def main():
         "impressum_url": None if impressum_placeholder else impressum,
         "walk": {"name": walk["name"], "distance_m": walk["distance_m"], "duration_min": walk["duration_min"],
                  "line": line, "stops": stops},
-        "species": [pub[s] for s in sorted(pub, key=lambda s: (not pub[s]["toxic"], pub[s]["en"] or pub[s]["sci"]))],
+        # Walk order: the order plants are first met along the route (Melvin, 15 Oct 2026).
+        # Toxicity is shown on each plant (badge/☠), never by list position.
+        "species": [pub[s] for s in sorted(pub, key=lambda s: (first_stop.get(s, len(stops) + 1), pub[s]["en"] or pub[s]["sci"]))],
         "recipes": recipes_out,
         "disclaimer": cfg.get("disclaimer_override") or {"heading": texts["disclaimer_heading"],
                                                          "paras": texts["disclaimer_paras"]},
@@ -616,7 +647,8 @@ def main():
           f"inedible {style_report['badges']['inedible'][0]}")
     print(f"Preview: hero {preview_info['hero']}; teasers {preview_info['recipes']}")
     print(f"Stops: {len(stops)} ({sum(s['toxic'] for s in stops)} with ☠)")
-    print(f"Images: {meta['files']} written ({len(photo_report)} species × 2 sizes); "
+    n_extra = sum(len(p["extra"]) for p in pub.values())
+    print(f"Images: {meta['files']} written ({len(photo_report)} species × 2 sizes + {n_extra} extra photos × 2 sizes); "
           f"GPS tags exiftool={meta['exiftool_gps_tags']} PIL={meta['pil_gps_tags']}; "
           f"files with any EXIF: {len(meta['files_with_any_exif'])} {meta['files_with_any_exif'][:5]}")
     print(f"dist size: {size/1024/1024:.2f} MB  ({DIST})")

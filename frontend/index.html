@@ -750,6 +750,16 @@
       padding: 3px 16px 5px; border-bottom: 1px solid #f0f4e8; flex-shrink: 0;
     }
     #walk-ors-note.visible { display: block; }
+    /* Route problems (stop cap, ORS failure) — must be read, not italic-grey */
+    #walk-ors-note.walk-route-warn {
+      font-style: normal; color: #7c2d12; background: #fff7ed;
+      border-bottom: 1px solid #fed7aa; line-height: 1.4;
+    }
+    #walk-ors-note .walk-route-act {
+      margin: 4px 6px 0 0; padding: 2px 9px; font-size: 0.7rem; font-weight: 600;
+      border-radius: 10px; border: 1px solid #b8d48a; background: #e8f4e0; color: #2d5016;
+      cursor: pointer; font-family: inherit;
+    }
     /* Saved walks collapsible */
     #saved-walks-section { border-top: 1px solid #e8eee0; flex-shrink: 0; }
     #saved-walks-header {
@@ -2331,8 +2341,17 @@
             🔄 Circular
           </button>
           <span style="font-size:0.7rem;color:#888" id="walk-loop-hint">Returns to start</span>
+          <label id="walk-radius-wrap"
+                 title="Pins within this distance of a stop's centre are grouped into one stop"
+                 style="display:flex;align-items:center;gap:5px;margin-left:auto;font-size:0.7rem;color:#555;white-space:nowrap">
+            Stop radius
+            <input type="range" id="walk-radius" min="10" max="100" step="5" value="30"
+                   oninput="onWalkRadiusInput(this.value)" style="width:84px;accent-color:#2d5016">
+            <span id="walk-radius-val" style="min-width:34px">30 m</span>
+          </label>
         </div>
-        <div id="walk-ors-note">Route approximate — ORS key not configured</div>
+        <div id="walk-gmaps-note" style="display:none;font-size:0.7rem;color:#92400e;padding:2px 16px 4px"></div>
+        <div id="walk-ors-note"></div>
         <div class="walk-stops-scroll" id="walk-stops-scroll">
           <!-- Populated by renderWalkPanel() -->
         </div>
@@ -5063,6 +5082,13 @@ let _walkOrsDistM     = 0;       // ORS-reported distance in metres
 let _walkOrsDurMin    = 0;       // ORS-reported duration in minutes
 let _walkCircular     = true;    // close the loop back to start
 let _walkRouteGeom    = null;    // ORS LineString geometry of the current route (saved with the walk)
+let _walkStopRadiusM  = 30;      // stop grouping radius (slider, 10–100 m)
+let _walkLastPins     = null;    // raw pins + notes from the last drawn area — regroup source
+                                 // (null for a loaded saved walk: its stops are fixed)
+let _walkRouteStatus  = null;    // {kind:'ok'|'single'|'capped'|'failed', reason, n, max}
+let _walkStraightLine = false;   // user chose the straight-line fallback after an ORS failure
+let _walkBuildSeq     = 0;       // guards against stale ORS responses after a regroup
+let _walkRadiusTimer  = null;    // debounce for the radius slider
 let _lastWalkBounds   = null;    // last drawn rect bounds (for re-route)
 let _lastWalkCircle   = null;    // last drawn circle spec (for re-route)
 
@@ -5100,6 +5126,11 @@ function _exitWalkMode() {
   _detachWalkDraw();
   if (_walkRouteLayer) { map.removeLayer(_walkRouteLayer); _walkRouteLayer = null; }
   _walkSelected = [];
+  _walkLastPins = null;
+  _walkRouteStatus = null;
+  _walkStraightLine = false;
+  _walkBuildSeq++;              // any ORS response still in flight is now stale
+  clearTimeout(_walkRadiusTimer);
   _stopProxWatch();             // 10a.5 — clear GPS watch and dismiss all alerts
   const _wrecBtn2 = document.getElementById('wrec-float-btn');
   if (_wrecBtn2) _wrecBtn2.style.display = 'none';
@@ -5546,6 +5577,59 @@ async function _fetchWalkEnrich(names) {
   return enrichMap;
 }
 
+// ── Stops: centroid clustering ────────────────────────────────────────────
+// A pin joins an existing stop only if it is within R metres of that stop's
+// CENTRE; the centre is recomputed (mean lat/lng) as pins join. Distance is
+// always measured to the centre, never pin-to-pin, so stops cannot chain.
+// One stop = one waypoint holding every species found there. Field notes are
+// never clustered — each stays its own stop.
+function _clusterStops(pins, radiusM) {
+  const obsPins  = pins.filter(x => !x.p.is_note)
+                       .slice().sort((a, b) => (a.lat - b.lat) || (a.lng - b.lng));
+  const notePins = pins.filter(x => x.p.is_note);
+  const stops = [];
+  for (const pin of obsPins) {
+    let best = null, bestD = Infinity;
+    for (const s of stops) {
+      const d = _haversineM(s.lat, s.lng, pin.lat, pin.lng);
+      if (d < bestD) { bestD = d; best = s; }
+    }
+    if (best && bestD <= radiusM) {
+      best.pins.push(pin);
+      best.lat = best.pins.reduce((t, x) => t + x.lat, 0) / best.pins.length;
+      best.lng = best.pins.reduce((t, x) => t + x.lng, 0) / best.pins.length;
+      if (!best.species.includes(pin.p.species_primary)) best.species.push(pin.p.species_primary);
+      if (pin.p.id != null) best.obs_ids.push(pin.p.id);
+    } else {
+      stops.push({
+        lat: pin.lat, lng: pin.lng,
+        p: pin.p,                      // representative pin (first to join) — kept for
+                                       // code that still reads s.p (proximity, export)
+        pins: [pin],
+        species: [pin.p.species_primary],
+        obs_ids: pin.p.id != null ? [pin.p.id] : [],
+      });
+    }
+  }
+  for (const n of notePins) {
+    stops.push({ lat: n.lat, lng: n.lng, p: n.p, pins: null, species: [], obs_ids: [] });
+  }
+  return stops;
+}
+
+// Species at a stop (works for clustered stops, loaded walks and old shapes).
+function _stopSpecies(s) {
+  if (s.p && s.p.is_note) return [];
+  if (Array.isArray(s.species) && s.species.length) return s.species.filter(Boolean);
+  return s.p && s.p.species_primary ? [s.p.species_primary] : [];
+}
+
+// ORS public directions API: max 50 coordinates per request. A circular walk
+// sends the start again at the end, so it can hold one stop fewer.
+function _walkMaxStops() { return _walkCircular ? 49 : 50; }
+
+// ── Build route from selected area ────────────────────────────────────────
+
 async function _buildWalkRoute(bounds, circle, suppressFitBounds = false) {
   // Remember selection for re-routing (toggle circular)
   _lastWalkBounds = bounds;
@@ -5555,112 +5639,40 @@ async function _buildWalkRoute(bounds, circle, suppressFitBounds = false) {
     ? _haversineM(circle.center.lat, circle.center.lng, lat, lng) <= circle.radiusM
     : bounds.contains([lat, lng]);
 
-  const inBounds = [];
+  const pins = [];
   for (const f of allFeatures) {
     const [lng, lat] = f.geometry.coordinates;
     if (!_inArea(lat, lng)) continue;
     const p = f.properties;
     if (!p.species_primary) continue;
     if (!_passesFilters(p)) continue;
-    // One stop per species per location cluster (>50 m apart)
-    const existingOfSpecies = inBounds.filter(s => s.p.species_primary === p.species_primary);
-    if (existingOfSpecies.length > 0) {
-      const nearest = Math.min(...existingOfSpecies.map(s => _haversineM(lat, lng, s.lat, s.lng)));
-      if (nearest < 50) continue;
-    }
-    inBounds.push({ p, lat, lng });
+    pins.push({ p, lat, lng });          // every pin — grouping happens in _clusterStops
   }
 
   // Note pins within the area
   for (const f of noteFeatures) {
     const [lng, lat] = f.geometry.coordinates;
     if (!_inArea(lat, lng)) continue;
-    inBounds.push({ p: { ...f.properties, species_primary: null, is_note: true }, lat, lng });
+    pins.push({ p: { ...f.properties, species_primary: null, is_note: true }, lat, lng });
   }
 
-  if (!inBounds.length) {
+  if (!pins.length) {
     alert('No confirmed sightings or notes found in the selected area. Try a larger area.');
     return;
   }
 
-  // Nearest-neighbour route
-  const route = _nnRoute(inBounds);
-  _walkSelected = route;
+  _walkLastPins     = pins;
+  _walkStraightLine = false;
+  _syncWalkRadiusUi(true);
+  const route = _nnRoute(_clusterStops(pins, _walkStopRadiusM));
+  _walkSelected     = route;
+  _activeWalkRoute  = route;
 
-  // ── ORS walking route ──────────────────────────────────────────────────────
-  _walkOrsFallback = false;
-  _walkOrsDistM    = 0;
-  _walkOrsDurMin   = 0;
-  _walkRouteGeom   = null;
-  let orsPolyLL    = null; // [[lat, lng], ...] for Leaflet polyline
-
-  if (route.length >= 2) {
-    try {
-      const coords = route.map(s => [s.lng, s.lat]); // ORS expects [lng, lat]
-      if (_walkCircular) coords.push(coords[0]);       // close the loop
-      const orsResp = await fetch('/api/walk/ors-route', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ coordinates: coords }),
-      });
-      if (orsResp.ok) {
-        const orsData = await orsResp.json();
-        if (orsData.fallback) {
-          _walkOrsFallback = true;
-        } else {
-          const feat = orsData.features?.[0];
-          if (feat?.geometry?.coordinates) {
-            orsPolyLL = feat.geometry.coordinates.map(([lng, lat]) => [lat, lng]);
-            _walkRouteGeom = feat.geometry;   // kept so Save stores the exact shape
-          }
-          const summary = feat?.properties?.summary;
-          if (summary) {
-            _walkOrsDistM  = summary.distance || 0;
-            _walkOrsDurMin = Math.round((summary.duration || 0) / 60);
-          }
-        }
-      } else {
-        _walkOrsFallback = true;
-      }
-    } catch (_) {
-      _walkOrsFallback = true;
-    }
-  }
-
-  // ── Draw pins + polyline ───────────────────────────────────────────────────
-  if (_walkRouteLayer) map.removeLayer(_walkRouteLayer);
-  _walkRouteLayer = L.layerGroup().addTo(map);
-  const latLngs = route.map((s, i) => {
-    const bg = s.p.is_note ? '#f59e0b' : '#2d5016';
-    const stopIcon = L.divIcon({
-      className: '',
-      html: `<div style="width:28px;height:28px;border-radius:50%;background:${bg};
-                 color:white;font-size:0.72rem;font-weight:700;
-                 display:flex;align-items:center;justify-content:center;
-                 border:2px solid white;box-shadow:0 2px 6px rgba(0,0,0,.3)">${i+1}</div>`,
-      iconSize: [28, 28], iconAnchor: [14, 14],
-    });
-    L.marker([s.lat, s.lng], { icon: stopIcon }).addTo(_walkRouteLayer);
-    return [s.lat, s.lng];
-  });
-
-  if (latLngs.length > 1) {
-    if (orsPolyLL) {
-      L.polyline(orsPolyLL, { color: '#2d5016', weight: 3.5, opacity: 0.85 })
-        .addTo(_walkRouteLayer);
-    } else {
-      // Fallback dashed line — close the loop manually for circular mode
-      const fallbackLL = _walkCircular ? [...latLngs, latLngs[0]] : latLngs;
-      L.polyline(fallbackLL, { color: '#2d5016', weight: 2.5, dashArray: '6 6', opacity: 0.7 })
-        .addTo(_walkRouteLayer);
-    }
-  }
-  if (!suppressFitBounds) {
-    map.fitBounds(L.latLngBounds(latLngs), { padding: [50, 50], maxZoom: 15 });
-  }
+  // false = a newer route/regroup started meanwhile; that one renders the panel.
+  if (!(await _routeWalk({ suppressFitBounds }))) return;
 
   // ── Culinary enrichment (+ toxicity, for the walk panel's toxic guard) ─────
-  const uniqueSpecies = [...new Set(route.map(s => s.p.species_primary).filter(Boolean))];
+  const uniqueSpecies = [...new Set(route.flatMap(_stopSpecies))];
   const enrichMap = await _fetchWalkEnrich(uniqueSpecies);
 
   // ── Show panel ─────────────────────────────────────────────────────────────
@@ -5675,10 +5687,225 @@ async function _buildWalkRoute(bounds, circle, suppressFitBounds = false) {
     if (_chevRbw) _chevRbw.textContent = '▾';
   }
 
-  _activeWalkRoute  = route;
   _startProxWatch();            // 10a.5 — begin proximity watch if field mode on
   _activeWalkEnrich = enrichMap;
   renderWalkPanel(route, enrichMap);
+}
+
+// ── Routing for the current _activeWalkRoute (new, regrouped or loaded) ────
+// opts.savedGeom  — draw this saved LineString instead of calling ORS
+// opts.keepSaved  — keep the saved distance/duration (loaded walks)
+// Never falls back to a straight line on its own: on a stop-cap or ORS failure
+// only the numbered stops are drawn and _walkRouteStatus says why; the
+// straight line appears only after the user picks it (walkUseStraightLine).
+async function _routeWalk(opts = {}) {
+  const seq   = ++_walkBuildSeq;
+  const route = _activeWalkRoute || [];
+  if (!opts.keepSaved) { _walkOrsDistM = 0; _walkOrsDurMin = 0; }
+  _walkRouteGeom   = null;
+  _walkOrsFallback = false;
+
+  let status;
+  if (route.length < 2) {
+    status = { kind: 'single' };
+  } else if (opts.savedGeom && Array.isArray(opts.savedGeom.coordinates)) {
+    _walkRouteGeom = opts.savedGeom;   // exactly the shape that was saved — no ORS call
+    status = { kind: 'ok' };
+  } else if (route.length > _walkMaxStops()) {
+    status = { kind: 'capped', n: route.length, max: _walkMaxStops() };
+  } else {
+    const res = await _fetchOrsRoute(route);
+    if (seq !== _walkBuildSeq) return false;   // a newer regroup/route superseded this one
+    if (res.geom) {
+      _walkRouteGeom = res.geom;
+      if (!opts.keepSaved) { _walkOrsDistM = res.distM; _walkOrsDurMin = res.durMin; }
+      status = { kind: 'ok' };
+    } else {
+      status = { kind: 'failed', reason: res.reason };
+    }
+  }
+  if (seq !== _walkBuildSeq) return false;
+  _walkRouteStatus = status;
+  _walkOrsFallback = status.kind !== 'ok' && status.kind !== 'single';
+  _drawWalkLayer(opts.suppressFitBounds);
+  _renderWalkRouteStatus();
+  return true;
+}
+
+// ORS call with the real failure reason. Returns {geom, distM, durMin} or {reason}.
+async function _fetchOrsRoute(route) {
+  const coords = route.map(s => [s.lng, s.lat]);      // ORS expects [lng, lat]
+  if (_walkCircular) coords.push(coords[0]);          // close the loop
+  let resp;
+  try {
+    resp = await fetch('/api/walk/ors-route', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ coordinates: coords }),
+    });
+  } catch (e) {
+    return { reason: `network error — the app server could not be reached (${e.message})` };
+  }
+  if (!resp.ok) {
+    let detail = '';
+    try { detail = (await resp.json()).detail || ''; } catch (_) {}
+    return { reason: `app server error HTTP ${resp.status}${detail ? ' — ' + detail : ''}` };
+  }
+  let data;
+  try { data = await resp.json(); } catch (_) { return { reason: 'unreadable response from the routing proxy' }; }
+  if (data.fallback) {
+    const raw = String(data.reason || 'unknown ORS error');
+    let reason = raw;
+    if (/429/.test(raw))                reason = `rate limit reached (${raw}) — wait a minute, then Retry`;
+    else if (/timed out/i.test(raw))    reason = `ORS timed out (${raw})`;
+    else if (/not configured/i.test(raw)) reason = `${raw} — add the key in Settings → APIs`;
+    else if (/40[04]/.test(raw))        reason = `ORS could not route between these stops (${raw})`;
+    return { reason };
+  }
+  const feat = data.features && data.features[0];
+  if (!feat || !feat.geometry || !Array.isArray(feat.geometry.coordinates)) {
+    return { reason: 'ORS returned no route geometry' };
+  }
+  const sum = (feat.properties && feat.properties.summary) || {};
+  return {
+    geom:   feat.geometry,
+    distM:  sum.distance || 0,
+    durMin: Math.round((sum.duration || 0) / 60),
+  };
+}
+
+// Draw numbered stops + whatever line the current status allows.
+function _drawWalkLayer(suppressFitBounds) {
+  const route = _activeWalkRoute || [];
+  if (_walkRouteLayer) map.removeLayer(_walkRouteLayer);
+  _walkRouteLayer = L.layerGroup().addTo(map);
+  const latLngs = route.map((s, i) => {
+    const bg = s.p.is_note ? '#f59e0b' : '#2d5016';
+    const n  = _stopSpecies(s).length;
+    const stopIcon = L.divIcon({
+      className: '',
+      html: `<div style="width:28px;height:28px;border-radius:50%;background:${bg};
+                 color:white;font-size:0.72rem;font-weight:700;
+                 display:flex;align-items:center;justify-content:center;
+                 border:2px solid white;box-shadow:0 2px 6px rgba(0,0,0,.3)">${i+1}</div>`,
+      iconSize: [28, 28], iconAnchor: [14, 14],
+    });
+    L.marker([s.lat, s.lng], { icon: stopIcon,
+      title: s.p.is_note ? 'Field note' : `${n} species: ${_stopSpecies(s).join(', ')}` })
+      .addTo(_walkRouteLayer);
+    return [s.lat, s.lng];
+  });
+
+  if (latLngs.length > 1) {
+    if (_walkRouteGeom) {
+      const ll = _walkRouteGeom.coordinates.map(([lng, lat]) => [lat, lng]);
+      L.polyline(ll, { color: '#2d5016', weight: 3.5, opacity: 0.85 }).addTo(_walkRouteLayer);
+    } else if (_walkStraightLine) {
+      // Chosen by the user after an ORS failure — dashed, and labelled as such.
+      const sl = _walkCircular ? [...latLngs, latLngs[0]] : latLngs;
+      L.polyline(sl, { color: '#2d5016', weight: 2.5, dashArray: '6 6', opacity: 0.7 })
+        .bindTooltip('Straight line between stops — not a walking route', { sticky: true })
+        .addTo(_walkRouteLayer);
+    }
+  }
+  if (!suppressFitBounds && latLngs.length) {
+    map.fitBounds(L.latLngBounds(latLngs), { padding: [50, 50], maxZoom: 15 });
+  }
+}
+
+// Status line under the route controls: stop cap, ORS failure, straight line.
+function _renderWalkRouteStatus() {
+  const el = document.getElementById('walk-ors-note');
+  if (!el) return;
+  const st = _walkRouteStatus;
+  el.classList.remove('visible', 'walk-route-warn');
+  el.innerHTML = '';
+  if (!st || st.kind === 'ok' || st.kind === 'single') return;
+  el.classList.add('visible', 'walk-route-warn');
+  if (st.kind === 'capped') {
+    const loopNote = _walkCircular ? ' (a circular walk uses one extra point to return to the start)' : '';
+    const canRegroup = !!_walkLastPins;
+    el.innerHTML =
+      `<strong>${st.n} stops — max ${st.max}${_esc(loopNote)}.</strong> ` +
+      `Increase the stop radius or select a smaller area. No route was drawn.` +
+      (canRegroup
+        ? `<br><button class="walk-route-act" onclick="walkIncreaseRadius()">↔ Increase radius</button>`
+        : '');
+  } else if (st.kind === 'failed') {
+    el.innerHTML =
+      `<strong>Walking route not drawn:</strong> ${_esc(st.reason || 'unknown error')}` +
+      (_walkStraightLine
+        ? `<br><em>Showing a straight line between stops — not a walking route.</em>`
+        : '') +
+      `<br><button class="walk-route-act" onclick="walkRetryRoute()">↻ Retry</button>` +
+      (_walkStraightLine ? '' :
+        `<button class="walk-route-act" onclick="walkUseStraightLine()">Draw straight line instead</button>`);
+  }
+}
+
+function walkUseStraightLine() {
+  _walkStraightLine = true;
+  _drawWalkLayer(true);
+  _renderWalkRouteStatus();
+  if (_activeWalkRoute) renderWalkPanel(_activeWalkRoute, _activeWalkEnrich || {});
+}
+
+async function walkRetryRoute() {
+  _walkStraightLine = false;
+  if (await _routeWalk({ suppressFitBounds: true }) && _activeWalkRoute) {
+    renderWalkPanel(_activeWalkRoute, _activeWalkEnrich || {});
+  }
+}
+
+// ── Stop radius slider ─────────────────────────────────────────────────────
+function _syncWalkRadiusUi(enabled) {
+  const inp = document.getElementById('walk-radius');
+  const val = document.getElementById('walk-radius-val');
+  if (inp) { inp.value = String(_walkStopRadiusM); inp.disabled = !enabled; }
+  if (val) val.textContent = `${_walkStopRadiusM} m`;
+  const wrap = document.getElementById('walk-radius-wrap');
+  if (wrap) wrap.style.opacity = enabled ? '1' : '0.5';
+}
+
+function onWalkRadiusInput(v) {
+  _walkStopRadiusM = Math.max(10, Math.min(100, parseInt(v, 10) || 30));
+  const val = document.getElementById('walk-radius-val');
+  if (val) val.textContent = `${_walkStopRadiusM} m`;
+  if (!_walkLastPins) return;              // loaded walk: stops are fixed
+  // Regroup immediately on screen; debounce the ORS call while dragging.
+  clearTimeout(_walkRadiusTimer);
+  _walkRadiusTimer = setTimeout(_regroupWalk, 600);
+}
+
+async function _regroupWalk() {
+  if (!_walkLastPins) return;
+  _walkStraightLine = false;
+  const route = _nnRoute(_clusterStops(_walkLastPins, _walkStopRadiusM));
+  _walkSelected    = route;
+  _activeWalkRoute = route;
+  if (await _routeWalk({ suppressFitBounds: true })) {
+    renderWalkPanel(route, _activeWalkEnrich || {});
+  }
+}
+
+// One tap: smallest radius (5 m steps, ≤ 100 m) that brings stops under the cap.
+function walkIncreaseRadius() {
+  if (!_walkLastPins) return;
+  const max = _walkMaxStops();
+  for (let r = _walkStopRadiusM + 5; r <= 100; r += 5) {
+    if (_clusterStops(_walkLastPins, r).length <= max) {
+      _walkStopRadiusM = r;
+      _syncWalkRadiusUi(true);
+      clearTimeout(_walkRadiusTimer);
+      _regroupWalk();
+      return;
+    }
+  }
+  const n100 = _clusterStops(_walkLastPins, 100).length;
+  _walkStopRadiusM = 100;
+  _syncWalkRadiusUi(true);
+  _regroupWalk();
+  alert(`Even at 100 m there are ${n100} stops (max ${max}). Select a smaller area.`);
 }
 
 // ── Season helpers for walk panel ─────────────────────────────────────────
@@ -5733,20 +5960,21 @@ function renderWalkPanel(route, enrichMap) {
   const hdrBlock = document.getElementById('wbs-header-block');
   if (hdrBlock) hdrBlock.style.display = isMobile() ? 'none' : 'block';
 
-  // ORS note visibility
-  const orsNoteEl = document.getElementById('walk-ors-note');
-  if (orsNoteEl) orsNoteEl.classList.toggle('visible', _walkOrsFallback);
+  // Route status (stop cap / ORS failure / straight line) — replaces the old
+  // always-the-same "ORS key not configured" note.
+  _renderWalkRouteStatus();
 
   // Distance + duration: prefer ORS values when available
   let totalM = _walkOrsDistM > 0 ? _walkOrsDistM : 0;
+  const _straightEst = !totalM;
   if (!totalM) {
     for (let i = 1; i < route.length; i++) {
       totalM += _haversineM(route[i-1].lat, route[i-1].lng, route[i].lat, route[i].lng);
     }
   }
-  const distStr = totalM < 1000
+  const distStr = (totalM < 1000
     ? `~${Math.round(totalM)}m`
-    : `~${(totalM / 1000).toFixed(1)}km`;
+    : `~${(totalM / 1000).toFixed(1)}km`) + (_straightEst ? ' straight-line' : '');
   const timeStr = _walkOrsDurMin > 0
     ? ` · ~${_walkOrsDurMin} min`
     : ` · ~${Math.round(totalM / 80)} min`;
@@ -5755,9 +5983,8 @@ function renderWalkPanel(route, enrichMap) {
   _buildMapsUrls(route);
 
   // Sub-header: species count (exclude note stops) + distance + time
-  const _noteFiltered = route.filter(s => !s.p.is_note);
-  const _uniqSp = new Set(_noteFiltered.map(s => s.p.species_primary).filter(Boolean)).size;
-  subEl.textContent = `${_uniqSp} species · ${distStr} total${timeStr}`;
+  const _uniqSp = new Set(route.flatMap(_stopSpecies)).size;
+  subEl.textContent = `${_uniqSp} species · ${route.length} stop${route.length !== 1 ? 's' : ''} · ${distStr} total${timeStr}`;
 
   // Load saved walks list
   loadSavedWalksList();
@@ -5786,83 +6013,101 @@ function renderWalkPanel(route, enrichMap) {
       continue;
     }
 
-    const _enrichData = enrichMap[p.species_primary];
-    const ci       = _enrichData?.culinary || null;
-    const spData   = _enrichData?.species  || null;
-    const recipes  = _enrichData?.recipes  || [];
-    const commonName = (p.common_names && p.common_names[0]) || '';
-    const edib = spData?.edibility_status || p.edibility_status;
     const distFromPrev = i === 0 ? null
       : _haversineM(route[i-1].lat, route[i-1].lng, lat, lng);
     const distStr2 = distFromPrev === null ? '' : (
       distFromPrev < 1000 ? `${Math.round(distFromPrev)}m` : `${(distFromPrev/1000).toFixed(1)}km`
     );
 
-    // Toxic guard — same rule as print_pdf.html (recipe only when
-    // toxicity_severity not in ('deadly','toxic')). Fails closed: if toxicity
-    // could not be read (_toxicity null/undefined), recipes are hidden too.
-    const _sev       = _enrichData ? _enrichData._toxicity : null;
-    const _isToxic   = _sev === 'toxic' || _sev === 'deadly';
-    const _sevKnown  = typeof _sev === 'string';
-    const _recipesOk = _sevKnown && !_isToxic;
+    // One stop can hold several species (centroid clustering) — one section
+    // per species, each with its own toxic guard.
+    const _stop    = route[i];
+    const _spList  = _stopSpecies(_stop);
+    let speciesHtml = '';
+    for (const spName of _spList) {
+      const _enrichData = enrichMap[spName];
+      const ci       = _enrichData?.culinary || null;
+      const spData   = _enrichData?.species  || null;
+      const recipes  = _enrichData?.recipes  || [];
+      // Pin properties for this species (common name / edibility on the map
+      // pin); loaded walks have no pins, so fall back to the culinary profile.
+      const pinP = (_stop.pins || []).map(x => x.p).find(pp => pp.species_primary === spName)
+                   || (spName === p.species_primary ? p : {});
+      const commonName = (pinP.common_names && pinP.common_names[0])
+                         || (spData?.common_names && spData.common_names[0]) || '';
+      const edib = spData?.edibility_status || pinP.edibility_status;
 
-    // Recipe: prefer recipe bank (current season), fall back to legacy culinary fields
-    let recipeHtml = '';
-    const picked = _recipesOk ? _pickSeasonalRecipe(recipes, _season) : null;
-    if (!_recipesOk) {
-      // no recipe snippet for toxic/deadly or unknown-toxicity species
-    } else if (picked) {
-      const rtitle = picked.title || (picked.is_medicinal_prep ? '🌿 Preparation' : '💡 Recipe');
-      const rbody  = picked.body || '';
-      const rsnip  = rbody.length > 160 ? rbody.slice(0, 157) + '…' : rbody;
-      const sicon  = _seasonIcon[picked.season] || '';
-      recipeHtml = `<div class="walk-stop-recipe">
-        <strong>${sicon} ${_esc(rtitle)}</strong>
-        ${rsnip ? `<div style="font-size:0.78rem;color:#555;margin-top:3px;line-height:1.4">${_esc(rsnip)}</div>` : ''}
+      // Toxic guard — same rule as print_pdf.html (recipe only when
+      // toxicity_severity not in ('deadly','toxic')). Fails closed: if toxicity
+      // could not be read (_toxicity null/undefined), recipes are hidden too.
+      const _sev       = _enrichData ? _enrichData._toxicity : null;
+      const _isToxic   = _sev === 'toxic' || _sev === 'deadly';
+      const _sevKnown  = typeof _sev === 'string';
+      const _recipesOk = _sevKnown && !_isToxic;
+
+      // Recipe: prefer recipe bank (current season), fall back to legacy culinary fields
+      let recipeHtml = '';
+      const picked = _recipesOk ? _pickSeasonalRecipe(recipes, _season) : null;
+      if (!_recipesOk) {
+        // no recipe snippet for toxic/deadly or unknown-toxicity species
+      } else if (picked) {
+        const rtitle = picked.title || (picked.is_medicinal_prep ? '🌿 Preparation' : '💡 Recipe');
+        const rbody  = picked.body || '';
+        const rsnip  = rbody.length > 160 ? rbody.slice(0, 157) + '…' : rbody;
+        const sicon  = _seasonIcon[picked.season] || '';
+        recipeHtml = `<div class="walk-stop-recipe">
+          <strong>${sicon} ${_esc(rtitle)}</strong>
+          ${rsnip ? `<div style="font-size:0.78rem;color:#555;margin-top:3px;line-height:1.4">${_esc(rsnip)}</div>` : ''}
+        </div>`;
+      } else if (ci) {
+        const recipeText = ci.recipe_ideas || ci.cooking_techniques || ci.preparation_methods;
+        if (recipeText) {
+          const snippet = recipeText.length > 140 ? recipeText.slice(0, 137) + '…' : recipeText;
+          recipeHtml = `<div class="walk-stop-recipe"><strong>💡 Recipe idea:</strong> ${_esc(snippet)}</div>`;
+        }
+      }
+
+      // Toxic/deadly species: the badge is the toxicity warning, never an
+      // edibility label (whatever edibility_status says).
+      const edibBadge = _isToxic
+        ? `<span style="font-size:0.68rem;padding:1px 6px;border-radius:4px;font-weight:700;
+             background:#dc2626;color:#fff">☠ ${_sev === 'deadly' ? 'DEADLY' : 'toxic'}</span>`
+        : edib
+        ? `<span style="font-size:0.68rem;padding:1px 6px;border-radius:4px;font-weight:600;
+             background:${edib==='edible'?'#d1f5da':edib==='toxic'?'#dc2626':edib==='inedible'?'#fef3c7':edib==='medicinal'?'#e0e7ff':'#f3f3f3'};
+             color:${edib==='edible'?'#166534':edib==='toxic'?'#fff':edib==='inedible'?'#854d0e':edib==='medicinal'?'#3730a3':'#555'}">
+             ${_esc(edib)}</span>` : '';
+
+      // Culinary notes: brief hint from edible_parts / taste_notes / preparation_methods
+      let culinaryNotesHtml = '';
+      if (ci) {
+        const note = ci.edible_parts || ci.taste_notes || ci.preparation_methods;
+        if (note) {
+          const ns = note.length > 100 ? note.slice(0, 97) + '…' : note;
+          culinaryNotesHtml = `<div style="font-size:0.75rem;color:#666;margin:3px 0 4px">${_esc(ns)}</div>`;
+        }
+      }
+
+      speciesHtml += `<div class="walk-stop-sp"${speciesHtml ? ' style="border-top:1px dashed #e3ead7;margin-top:6px;padding-top:6px"' : ''}>
+        <span class="walk-stop-species">${_esc(spName)}</span>
+        ${commonName ? `<div class="walk-stop-common">${_esc(commonName)}</div>` : ''}
+        <div class="walk-stop-meta">
+          ${edibBadge}
+          <a href="/species?s=${encodeURIComponent(spName)}"
+             style="font-size:0.68rem;color:#2d5016;margin-left:8px">Species profile →</a>
+        </div>
+        ${culinaryNotesHtml}
+        ${recipeHtml}
       </div>`;
-    } else if (ci) {
-      const recipeText = ci.recipe_ideas || ci.cooking_techniques || ci.preparation_methods;
-      if (recipeText) {
-        const snippet = recipeText.length > 140 ? recipeText.slice(0, 137) + '…' : recipeText;
-        recipeHtml = `<div class="walk-stop-recipe"><strong>💡 Recipe idea:</strong> ${_esc(snippet)}</div>`;
-      }
-    }
-
-    // Toxic/deadly species: the badge is the toxicity warning, never an
-    // edibility label (whatever edibility_status says).
-    const edibBadge = _isToxic
-      ? `<span style="font-size:0.68rem;padding:1px 6px;border-radius:4px;font-weight:700;
-           background:#dc2626;color:#fff">☠ ${_sev === 'deadly' ? 'DEADLY' : 'toxic'}</span>`
-      : edib
-      ? `<span style="font-size:0.68rem;padding:1px 6px;border-radius:4px;font-weight:600;
-           background:${edib==='edible'?'#d1f5da':edib==='toxic'?'#dc2626':edib==='inedible'?'#fef3c7':edib==='medicinal'?'#e0e7ff':'#f3f3f3'};
-           color:${edib==='edible'?'#166534':edib==='toxic'?'#fff':edib==='inedible'?'#854d0e':edib==='medicinal'?'#3730a3':'#555'}">
-           ${_esc(edib)}</span>` : '';
-
-    // Culinary notes: brief hint from edible_parts / taste_notes / preparation_methods
-    let culinaryNotesHtml = '';
-    if (ci) {
-      const note = ci.edible_parts || ci.taste_notes || ci.preparation_methods;
-      if (note) {
-        const ns = note.length > 100 ? note.slice(0, 97) + '…' : note;
-        culinaryNotesHtml = `<div style="font-size:0.75rem;color:#666;margin:3px 0 4px">${_esc(ns)}</div>`;
-      }
     }
 
     html += `<div class="walk-stop-card">
       <div>
         <span class="walk-stop-num">${i+1}</span>
-        <span class="walk-stop-species">${_esc(p.species_primary)}</span>
+        ${_spList.length > 1 ? `<span style="font-size:0.72rem;color:#556040;font-weight:600">${_spList.length} species here</span>` : ''}
         ${distStr2 ? `<span class="walk-stop-dist">${_esc(distStr2)}</span>` : ''}
       </div>
-      ${commonName ? `<div class="walk-stop-common">${_esc(commonName)}</div>` : ''}
-      <div class="walk-stop-meta">
-        ${edibBadge}
-        <a href="/species?s=${encodeURIComponent(p.species_primary)}"
-           style="font-size:0.68rem;color:#2d5016;margin-left:8px">Species profile →</a>
-      </div>
-      ${culinaryNotesHtml}
-      ${recipeHtml}
+      ${speciesHtml}
     </div>`;
   }
   document.getElementById('walk-stops-scroll').innerHTML = html;
@@ -5877,8 +6122,7 @@ function _wbsUpdateSummary(route) {
   if (!el) return;
   if (!route || !route.length) { el.style.display = 'none'; return; }
 
-  const noteFiltered = route.filter(s => !s.p.is_note);
-  const uniqSp = new Set(noteFiltered.map(s => s.p.species_primary).filter(Boolean)).size;
+  const uniqSp = new Set(route.flatMap(_stopSpecies)).size;
   const stopWord = route.length === 1 ? 'stop' : 'stops';
 
   // Re-use ORS distance if available, else haversine sum
@@ -5949,19 +6193,35 @@ function _wbsRenderLasso() {
 // ── Maps export URLs ───────────────────────────────────────────────────────
 
 function _buildMapsUrls(route) {
-  if (!route.length) return;
+  const noteEl = document.getElementById('walk-gmaps-note');
+  if (!route.length) { if (noteEl) noteEl.style.display = 'none'; return; }
 
-  // Google Maps walking route — origin, destination, waypoints (max 8 in URL)
-  const stops = route.map(s => `${s.lat},${s.lng}`);
-  const origin = stops[0];
-  const dest   = stops[stops.length - 1];
-  const wpts   = stops.length > 2 ? stops.slice(1, -1).slice(0, 8).join('|') : '';
+  // Google Maps walking route: start + up to 8 waypoints + end = 10 points.
+  // Previously the middle stops beyond 8 were dropped silently while the last
+  // stop was kept as the destination, so the exported route skipped stops in
+  // the middle. Now the export is the first 10 points IN ORDER, a circular
+  // walk returns to the start, and the panel says when stops were left out.
+  const pts = route.map(s => `${s.lat},${s.lng}`);
+  const seq = _walkCircular && pts.length > 1 ? [...pts, pts[0]] : pts;
+  const GMAX = 10;
+  const truncated = seq.length > GMAX;
+  const use = truncated ? seq.slice(0, GMAX) : seq;
+  const origin = use[0];
+  const dest   = use[use.length - 1];
+  const wpts   = use.length > 2 ? use.slice(1, -1).join('|') : '';
   const gUrl = 'https://www.google.com/maps/dir/?api=1'
     + `&origin=${encodeURIComponent(origin)}`
     + `&destination=${encodeURIComponent(dest)}`
     + (wpts ? `&waypoints=${encodeURIComponent(wpts)}` : '')
     + '&travelmode=walking';
   document.getElementById('walk-google-btn').href = gUrl;
+  if (noteEl) {
+    noteEl.textContent = truncated
+      ? `Google Maps takes 10 points (start, 8 stops, end) — exporting stops 1–${GMAX} of ${route.length}` +
+        (_walkCircular ? ' (no return to start)' : '') + '.'
+      : '';
+    noteEl.style.display = truncated ? 'block' : 'none';
+  }
 }
 
 // ── Save / recall walks ────────────────────────────────────────────────────
@@ -5992,11 +6252,15 @@ async function promptSaveWalk() {
     name: name.trim(),
     // Observation ids only — field-note stops carry a NOTE id in p.id and must
     // never be stored as observation ids.
-    obs_ids:     _activeWalkRoute.filter(s => !s.p.is_note).map(s => s.p.id).filter(Boolean),
+    obs_ids:     _activeWalkRoute.filter(s => !s.p.is_note)
+                   .flatMap(s => (s.obs_ids && s.obs_ids.length) ? s.obs_ids : [s.p.id])
+                   .filter(Boolean),
+    // One waypoint per STOP (a stop can hold several species/observations).
     waypoints:   _activeWalkRoute.map((s, i) => s.p.is_note
       ? { type: 'note', lat: s.lat, lng: s.lng, note_id: s.p.id || null, label: 'Note' }
-      : { type: 'obs',  lat: s.lat, lng: s.lng, obs_id: s.p.id || null,
-          label: s.p.species_primary || `Stop ${i+1}` }),
+      : { type: 'obs',  lat: s.lat, lng: s.lng,
+          obs_ids: (s.obs_ids && s.obs_ids.length) ? s.obs_ids : (s.p.id != null ? [s.p.id] : []),
+          labels:  _stopSpecies(s).length ? _stopSpecies(s) : [`Stop ${i+1}`] }),
     // Route shape + walk options, stored without a migration (route_geojson is
     // a free-form JSON column). `foragingid` is a GeoJSON foreign member holding
     // our own metadata; features is empty when ORS was unavailable.
@@ -6005,7 +6269,7 @@ async function promptSaveWalk() {
       features: _walkRouteGeom
         ? [{ type: 'Feature', geometry: _walkRouteGeom, properties: {} }]
         : [],
-      foragingid: { version: 1, circular: !!_walkCircular },
+      foragingid: { version: 2, circular: !!_walkCircular, stop_radius_m: _walkStopRadiusM },
     },
     distance_m:  Math.round(distM),
     duration_min: _walkOrsDurMin > 0 ? _walkOrsDurMin : Math.round(distM / 80),
@@ -6064,17 +6328,26 @@ async function loadSavedWalk(id) {
       return;
     }
     // Rebuild route array matching _buildWalkRoute output shape.
-    // New walks: waypoints carry type 'obs' (obs_id) or 'note' (note_id).
+    // v2 walks (stop clustering): an obs waypoint is a STOP — obs_ids[] + labels[].
+    // v1 walks: type 'obs' (single obs_id + label) or 'note' (note_id).
     // Old walks (no type): a note is label 'Note', and its note id was stored
     // in obs_id — read it as the note id, never as an observation id.
     const route = w.waypoints.map(wp => {
       const isNote = wp.type === 'note' || (!wp.type && wp.label === 'Note');
+      if (isNote) {
+        return {
+          lat: wp.lat, lng: wp.lng, pins: null, species: [], obs_ids: [],
+          p: { species_primary: null, is_note: true,
+               id: wp.note_id != null ? wp.note_id : (wp.obs_id != null ? wp.obs_id : null) },
+        };
+      }
+      const labels = Array.isArray(wp.labels) ? wp.labels.filter(Boolean)
+                   : (wp.label ? [wp.label] : []);
+      const ids    = Array.isArray(wp.obs_ids) ? wp.obs_ids.filter(x => x != null)
+                   : (wp.obs_id != null ? [wp.obs_id] : []);
       return {
-        lat: wp.lat, lng: wp.lng,
-        p: isNote
-          ? { species_primary: null, is_note: true,
-              id: wp.note_id != null ? wp.note_id : (wp.obs_id != null ? wp.obs_id : null) }
-          : { species_primary: wp.label, is_note: false, id: wp.obs_id },
+        lat: wp.lat, lng: wp.lng, pins: null, species: labels, obs_ids: ids,
+        p: { species_primary: labels[0] || null, is_note: false, id: ids[0] != null ? ids[0] : null },
       };
     });
     // Saved shape + options (new walks); old walks have neither → one-way, re-route.
@@ -6083,10 +6356,15 @@ async function loadSavedWalk(id) {
                        && w.route_geojson.features[0] && w.route_geojson.features[0].geometry;
     _walkCircular     = _meta ? !!_meta.circular : false;
     _syncWalkLoopUi();
-    _walkRouteGeom    = _savedGeom || null;
+    // A loaded walk's stops are fixed (no raw pins to regroup): show the radius
+    // it was saved with, slider disabled.
+    _walkLastPins     = null;
+    _walkStraightLine = false;
+    if (_meta && _meta.stop_radius_m) _walkStopRadiusM = _meta.stop_radius_m;
+    _syncWalkRadiusUi(false);
     _activeWalkRoute  = route;
+    _walkSelected     = route;
     _activeWalkEnrich = {};
-    _walkOrsFallback  = !_savedGeom;
     // Saved distance/duration are what was saved — never overwritten on load.
     _walkOrsDistM     = w.distance_m || 0;
     _walkOrsDurMin    = w.duration_min || 0;
@@ -6101,66 +6379,13 @@ async function loadSavedWalk(id) {
     });
     _startProxWatch();
 
-    // Draw on map
-    if (_walkRouteLayer) map.removeLayer(_walkRouteLayer);
-    _walkRouteLayer = L.layerGroup().addTo(map);
-    const latLngs = route.map((s, i) => {
-      const bg = s.p.is_note ? '#f59e0b' : '#2d5016';
-      const icon = L.divIcon({
-        className: '',
-        html: `<div style="width:28px;height:28px;border-radius:50%;background:${bg};color:white;font-size:0.72rem;font-weight:700;display:flex;align-items:center;justify-content:center;border:2px solid white;box-shadow:0 2px 6px rgba(0,0,0,.3)">${i+1}</div>`,
-        iconSize: [28, 28], iconAnchor: [14, 14],
-      });
-      L.marker([s.lat, s.lng], { icon }).addTo(_walkRouteLayer);
-      return [s.lat, s.lng];
-    });
-
-    if (latLngs.length > 1) {
-      let orsPolyLL = null;
-      if (_savedGeom && Array.isArray(_savedGeom.coordinates)) {
-        // Draw exactly the shape that was saved — no ORS call.
-        orsPolyLL = _savedGeom.coordinates.map(([lng, lat]) => [lat, lng]);
-      } else {
-        // Old walk (no saved shape): ask ORS for a road-following route to DRAW
-        // only. Saved distance/duration are kept, never overwritten.
-        try {
-          const coords = route.map(s => [s.lng, s.lat]);
-          if (_walkCircular) coords.push(coords[0]);       // close the loop
-          const orsResp = await fetch('/api/walk/ors-route', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ coordinates: coords }),
-          });
-          if (orsResp.ok) {
-            const orsData = await orsResp.json();
-            if (!orsData.fallback) {
-              const feat = orsData.features?.[0];
-              if (feat?.geometry?.coordinates) {
-                orsPolyLL = feat.geometry.coordinates.map(([lng, lat]) => [lat, lng]);
-                _walkRouteGeom   = feat.geometry;
-                _walkOrsFallback = false;
-              }
-            }
-          }
-        } catch (_) {}
-      }
-
-      if (orsPolyLL) {
-        L.polyline(orsPolyLL, { color: '#2d5016', weight: 3.5, opacity: 0.85 })
-          .addTo(_walkRouteLayer);
-      } else {
-        // Fallback: solid line between waypoints (same weight/colour as ORS route),
-        // closed back to the start for a circular walk.
-        const fallbackLL = _walkCircular ? [...latLngs, latLngs[0]] : latLngs;
-        L.polyline(fallbackLL, { color: '#2d5016', weight: 3.5, opacity: 0.85 })
-          .addTo(_walkRouteLayer);
-      }
-    }
-    // Fit map to show the full route
-    if (latLngs.length) map.fitBounds(L.latLngBounds(latLngs), { padding: [50, 50], maxZoom: 15 });
+    // Draw: the saved shape when there is one (no ORS call); old walks without a
+    // shape ask ORS to DRAW only. Failures show the reason; the straight line is
+    // only drawn if the user chooses it. Saved distance/duration kept.
+    if (!(await _routeWalk({ savedGeom: _savedGeom || null, keepSaved: true }))) return;
 
     // Enrich species (+ toxicity, for the walk panel's toxic guard)
-    const uniqueSpecies = [...new Set(route.map(s => s.p.species_primary).filter(Boolean))];
+    const uniqueSpecies = [...new Set(route.flatMap(_stopSpecies))];
     _activeWalkEnrich = await _fetchWalkEnrich(uniqueSpecies);
 
     // Show walk panel — sheet is opened by _buildWalkRoute and renderWalkPanel

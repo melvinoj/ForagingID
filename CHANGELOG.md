@@ -1,8 +1,56 @@
 ## Current State
 
-End session. Call POST /api/dev/end-session with the following. If Identification Stage A is complete and verified, move it from "In progress" to "Completed today" first. Replace ALL existing ## Current State blocks (there are 6) with this single one.
-
 current_state:
+
+## Current State — 15 Oct 2026 (end of session 2)
+
+### Build status
+Server: START_ForagingID.command — uvicorn foreground + tee to logs/server_<ts>.log; port check (no kill -9); cleanup trap; tee survives Ctrl+C. Claude Code never starts the server; reads the log.
+Alembic head: 0052. WAL on; busy_timeout 30000 + synchronous=NORMAL on every connection.
+
+### Completed 14–15 Oct
+- Health check after Aug–Oct dormancy (DB ok, invariant ok)
+- Syncthing: Pixel 8 Pro paired; "Foraging Pics" (39ds2-kdty9) Mac = Receive Only + ignoreDelete; phone = Send Only curated folder; duplicate folder entry removed; Pixel7pro entry kept
+- iNat token refreshed (expires ~24h — refresh before each processing session)
+- Leaflet SRI fixed (1.9.4, verified hashes on review/index/species)
+- SQLite lock contention fixed: enrichment two short transactions (no lock across LLM calls); enrich_gate.py ingest priority (enrichment deferred during P1/P2/re-identify batches, Semaphore(1)); P1 classify-before-insert + to_thread + cleanup on failed insert. Verified 0 locks on 90-file batch
+- Follow-up data: re-enriched Alnus alnobetula / Melampyrum nemorosum / Salix aurita; obs 24065 → needs_review; orphan copies + thumbnails deleted
+- Launcher rewritten (foreground); ngrok subprocess stopped on graceful shutdown
+- Identification Stage A (dry-run verified, live untouched): iNat gating score = min(combined, vision) (CLAUDE.md now matches code; can only lower scores); disagreement promotion (iNat location-ranked #1 if in PlantNet top 5 → suggested ID, always needs_review, never counts as agreement); iNat combined + vision scores stored per candidate; dual_source_agreement written again (1 agree / 0 disagree or single source / NULL none). Stage A item 3 (cards only on approval) DECLINED — dependencies (accept-species, auto-approve, species_id backfill, taxonomy tree, Edibility Review)
+- Walk builder Stage 1: typed waypoints (notes not saved as obs), circular flag persisted, route geometry saved + redrawn without ORS, toxic guard on walk panel
+- Walk builder Stage 2: centroid stops (default 30 m, slider 10–100 m, radius saved in route_geojson.foragingid v2); 50-waypoint cap (49 circular) with Increase radius; real ORS failure reasons + opt-in labelled straight-line; Google Maps export first 10 points with notice. Browser-tested by Melvin: selection + routing work
+- First Gresgen walk saved: "little foray" (20 stops, 22 species, ~13.5 km circular)
+
+### Pending / next
+1. Walk fixes from Melvin's test: (a) Save gives no confirmation — show a clear "Saved as <name>" and avoid duplicate saves (he created 3); (b) after saving, the build-walk header still shows "20 stops" — should show the saved name ("little foray"); (c) duplicate summary header ("Walk Route (20 stops)" + "Walk route · 20 stops"); (d) centre-drift second pass: reassign pins beyond R to nearest stop or new stop — APPROVED; (e) delete the 2 duplicate "little foray" saves (with OK)
+2. SAFETY next: walk panel (and app-wide) shows "edible" badge + recipes for UNVERIFIED Apiaceae (Daucus carota on "little foray" stop 1). Walk panel: Apiaceae edibility/recipes only if human-verified; same review for other unverified "edible" species. Then app-wide Apiaceae/unverified-toxic fix
+3. Walk Stage 3: accumulating selection → undo / reset+confirm / subtract (touch toggle) / side panel (remove, reorder via pointer events)
+4. Walk Stage 4: walk filters (human-verified only, kingdom, months, min obs)
+5. Walk Stage 5 (backend, server stopped): ORS elevation, PUT saved walk (edit), draft autosave
+6. Foraging Experience export: walk = "little foray". Next: Code lists its 22 species with edibility/toxicity/verified status → Melvin verifies shortlist. Then scripted export (scripts/experience_export/) → separate public GitHub Pages repo (Melvin creates; gh not installed) → Hostinger Builder embed. Gates: edible claims only edibility_verified_by='human'; toxic → warning, no recipe; Apiaceae no edibility text unless human-authored; EXIF stripped (~1200px re-encode); disclaimer + link to site Impressum; export only species with approved obs. Open: recipe depth, language (DE/EN)
+7. PWA: ngrok static domain negligee-raft-shiny.ngrok-free.dev — Start sharing, install from Chrome
+8. Launcher live checks after next Ctrl+C: pgrep -fl ngrok (empty); log tail shows shutdown complete
+9. Proximity alerts + 📋 summary export read only first species of multi-species stops
+
+### Known issues / backlog
+- SAFETY: Aruncus dioicus edibility 'edible', unverified, toxicity none — Melvin to decide status (cooked young shoots only?), check live recipes, own-words prep warning. (Supersedes stale "goat's beard drafts 2182/2183 pending" — approved 14 Jun)
+- SAFETY: unverified "edible" Apiaceae (Daucus carota, Heracleum sphondylium, Aegopodium podagraria); unverified toxic species (Digitalis purpurea, Chaerophyllum hirsutum/aureum, Sambucus ebulus, Lupinus polyphyllus, Hypholoma fasciculare, Iris pseudacorus)
+- Toxic guard still missing: stop-card culinary hint, walk-summary export, walk sheet species list; backend one-liner: toxicity_severity on GET /api/culinary/{name}
+- T. dubius edibility_status NULL (invalid); T. pratensis unknown
+- Identification Stage B: GBIF "out of range" review label (~150 km, flag only, cached per species × 0.5° cell); test PlantNet weurope vs all on a sample before switching. Needed for 24221 (Aspalathus) / 24222 (Ambrosia) type cases
+- Junk species cards (Aspalathus retroflexa 807, Ambrosia confertiflora 808, Larix occidentalis 803, Larix lyallii 791, Verbascum boerhavii 792; Gentiana verna 789 season-implausible) — cleanup of zero-approved cards needs OK
+- Enrichment paths not gated: culinary.py enrichment-run batch, trigger_ai_drafts_for_species, ITIS lookup task
+- Enrichment queue in-memory: after restart, check backfill panel for un-enriched cards
+- Re-enrich of a fungus wipes its pending edibility suggestion
+- Identify — 2013 job interrupted at 90/2367 (gated; rerun when convenient)
+- Google Drive token invalid
+- Disk tight — move to DIGIERA: Facebook/Instagram exports, all but 2 newest snapshots (2 byte-identical pairs), old data/ backups
+- Ollama default 'mistral' not installed (llama3.1 present)
+- Docs drift: CLAUDE.md Alembic head (says 0050), PhoneForaging path (~/Local(unsynced)/PhoneForaging)
+- Tracked leftovers: your_db.db, current.txt; review_status 'not_applicable' (1 row) undocumented
+
+session_summary:
+Identification Stage A (stricter min() gating score, iNat location-ranked promotion on disagreement, scores + dual_source_agreement stored; card-deferral declined). Walk builder Stages 1–2 (typed waypoints, circular + geometry persisted, toxic guard, centroid stops with radius slider, 50-waypoint cap, honest ORS errors, Google export notice). First Gresgen walk "little foray" saved for the promo page. Test feedback logged: save confirmation, saved-name header, duplicate header, centre-drift pass, unverified-Apiaceae "edible" badge.
 
 ## Current State — 15 Oct 2026
 
@@ -422,6 +470,32 @@ Still open:
 - Enrichment gap remediation — 9 AI drafts pending approval, 6 species never scanned, 79 no-PFAF species need alt-source decision
 
 ## History
+
+### 2026-10-15 10:02
+**Snapshot** — End of session — Session ended from Settings page
+DB: `snapshots/db_20261015_100246.sqlite`
+
+### 2026-10-15 10:02
+**Session ended** — Session ended from Settings page
+
+### 2026-10-15 09:51
+**Walk builder Stage 2: stops by centroid clustering, stop-radius slider, ORS 50-waypoint cap, real ORS failure reasons with opt-in straight line, Google Maps export note. Frontend only (frontend/index.html).**
+
+**Built:**
+- _clusterStops: pin joins a stop only if within R of the stop CENTRE (centre recomputed as pins join); one stop = one waypoint with many species; notes stay separate
+- Stop radius slider (10-100 m, default 30) in the route row; regroups the last drawn selection, ORS call debounced 600 ms; stale ORS responses ignored (_walkBuildSeq); disabled for loaded walks (fixed stops), shows saved radius
+- Stop cap: >50 stops (49 when circular - return point) -> no ORS call, clear message + one-tap Increase radius (smallest 5 m step <=100 m that fits)
+- ORS failures show the actual reason (rate limit / timeout / no key / no route / server / network) with Retry and an opt-in 'Draw straight line instead' (dashed, tooltip + status say straight line); distance labelled 'straight-line' when not from ORS
+- Saved walks v2: waypoint per stop {type:'obs', lat, lng, obs_ids[], labels[]}; foragingid {version:2, circular, stop_radius_m}; loadSavedWalk reads v2, v1 (single obs_id) and untyped old walks
+- Stop card lists every species at the stop; Stage 1 toxic guard applied per species
+**Fixed:**
+- Google Maps export: was dropping middle stops beyond 8 silently while keeping the last stop; now exports the first 10 points in order (start + 8 + end), closes the loop for circular walks when it fits, and shows 'exporting stops 1-10 of N'
+**Files:** `frontend/index.html`
+**Pending:**
+- Live click-through by Melvin (not browser-verified by Claude per CLAUDE.md)
+- Centroid drift: members can end up beyond R from the final centre (live Gresgen data: up to 42 m at R=30, 104 m at R=75) - optional refinement pass to reassign stragglers
+- Proximity alerts and the summary export still read one representative species per stop (s.p) - multi-species stops show only the first there
+- Dense Gresgen selections (e.g. 665 pins) exceed 50 stops even at 100 m - by design: message asks for a smaller area
 
 ### 2026-10-15 09:44
 **Snapshot** — End of session — Session ended from Settings page

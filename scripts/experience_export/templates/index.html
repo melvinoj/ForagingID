@@ -3,112 +3,103 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="color-scheme" content="light">
+<meta name="color-scheme" content="dark">
 <title>{{TITLE}}</title>
 {{CANONICAL}}
 {{LEAFLET_CSS}}
 <style>
-  :root {
-    --bg: #fbfaf6;
-    --card: #ffffff;
-    --ink: #1e2a22;
-    --ink-dim: #5d6a60;
-    --line: #e2e6dc;
-    --green: #2d5016;
-    --green-soft: #e8f1df;
-    --toxic: #c62828;
-    --toxic-soft: #fdecea;
-    --caution: #8a5a00;
-    --caution-soft: #fdf3dc;
-    --gutter: 16px;
-  }
+/* ════ App styles — copied from the app at build time (app_styles.py) ════ */
+{{APP_STYLES}}
+
+/* ════ Page layout — composes the app's tokens and classes ════ */
   * { box-sizing: border-box; }
-  html, body { margin: 0; background: var(--bg); color: var(--ink);
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; line-height: 1.5; }
-  body { overflow-x: hidden; }
-  img { max-width: 100%; display: block; }
-  a { color: var(--green); }
-  .wrap { max-width: 960px; margin: 0 auto; padding: 0 var(--gutter); }
+  html, body { margin: 0; }
+  body { background: var(--app-shell); color: var(--app-text); font-family: var(--font-ui);
+    line-height: 1.45; overflow-x: hidden; }
+  /* Page images only — never Leaflet's tiles/markers (Leaflet sizes those itself). */
+  img:not(.leaflet-container img) { max-width: 100%; display: block; }
+  a { color: var(--leaf-pale); }
+  .wrap { max-width: 960px; margin: 0 auto; padding: 0 16px; }
 
-  header.hero { padding: 28px 0 18px; }
-  .hero h1 { margin: 0 0 8px; font-size: clamp(1.5rem, 5vw, 2.2rem); line-height: 1.2; color: var(--green); }
-  .hero p { margin: 0 0 14px; max-width: 62ch; }
-  .meta { font-size: 0.85rem; color: var(--ink-dim); margin-bottom: 16px; }
-  .cta { display: inline-block; background: var(--green); color: #fff; text-decoration: none;
-    padding: 12px 20px; border-radius: 10px; font-weight: 600; }
-  .cta:hover { background: #1f3a0e; }
+  header.hero { background: var(--app-shell-deep); padding: 26px 0 20px; border-bottom: 2px solid var(--app-forest); }
+  .hero h1 { font-family: var(--font-display); font-weight: 400; color: var(--app-heading);
+    font-size: clamp(1.5rem, 5vw, 2.1rem); line-height: 1.2; margin: 0 0 8px; }
+  .hero p { margin: 0 0 12px; max-width: 62ch; }
+  .meta { font-size: 0.8rem; color: var(--moss-light); margin-bottom: 16px; }
+  .cta { display: inline-flex; align-items: center; min-height: var(--touch-min); padding: 0 20px;
+    background: var(--app-forest); color: var(--paper); border-radius: 7px; font-weight: 600;
+    text-decoration: none; border: 1.5px solid var(--leaf); }
+  .cta:hover { background: var(--moss); }
 
-  nav.tabs { position: sticky; top: 0; z-index: 1000; background: var(--bg);
-    border-bottom: 1px solid var(--line); }
-  .tabs .wrap { display: flex; gap: 4px; }
-  .tab { flex: 1; appearance: none; border: 0; background: none; font: inherit; font-weight: 600;
-    color: var(--ink-dim); padding: 12px 4px; border-bottom: 3px solid transparent; cursor: pointer; }
-  .tab[aria-selected="true"] { color: var(--green); border-bottom-color: var(--green); }
+  nav.tabs { position: sticky; top: 0; z-index: 1000; background: var(--app-shell-deep);
+    border-bottom: 1px solid rgba(255,255,255,.08); }
+  .tabs .wrap { display: flex; }
+  .tab { flex: 1; min-height: var(--touch-min); appearance: none; border: 0; background: none;
+    font: 600 0.9rem var(--font-ui); color: var(--moss-light); border-bottom: 3px solid transparent; cursor: pointer; }
+  .tab[aria-selected="true"] { color: var(--leaf-pale); border-bottom-color: var(--leaf); }
+
   section.panel { padding: 18px 0 28px; }
   section.panel[hidden] { display: none; }
-  h2 { font-size: 1.15rem; margin: 0 0 10px; }
-  .lead { color: var(--ink-dim); margin: 0 0 14px; font-size: 0.92rem; }
+  #list-view h2 { font-family: var(--font-display); font-weight: 400; }
 
-  #map { height: 58vh; min-height: 300px; border-radius: 12px; border: 1px solid var(--line); }
-  .stop-pin { width: 28px; height: 28px; border-radius: 50%; background: var(--green); color: #fff;
-    font: 700 13px/28px -apple-system, sans-serif; text-align: center; border: 2px solid #fff;
-    box-shadow: 0 1px 4px rgba(0,0,0,.35); }
-  .stop-pin.toxic { background: var(--toxic); width: 32px; height: 32px; line-height: 32px; font-size: 15px; }
+  #map { height: 58vh; min-height: 300px; border-radius: 8px; border: 1px solid rgba(255,255,255,.12); }
+  /* Leaflet's default container colour is #ddd; any hairline gap between tiles
+     (fractional-pixel tile positions) shows that through as a near-white grid line.
+     Dark here so a gap, if any, matches the page instead. */
+  .leaflet-container { background: var(--app-shell-deep); }
+  .leaflet-container img { box-sizing: content-box; }
+  .stop-pin { width: 26px; height: 26px; border-radius: 50%; background: var(--app-forest); color: #fff;
+    font: 700 12px/26px var(--font-ui); text-align: center; border: 2px solid var(--paper);
+    box-shadow: 0 1px 4px rgba(0,0,0,.4); }
 
-  .stops { display: grid; gap: 10px; margin-top: 16px; }
-  .stop { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; }
-  .stop.toxic { border-color: var(--toxic); }
-  .stop h3 { margin: 0 0 6px; font-size: 0.95rem; display: flex; align-items: center; gap: 8px; cursor: pointer; }
-  .stop-num { display: inline-block; min-width: 24px; height: 24px; border-radius: 12px; background: var(--green);
-    color: #fff; font-size: 0.8rem; line-height: 24px; text-align: center; }
-  .stop.toxic .stop-num { background: var(--toxic); }
-  .sp-row { display: flex; gap: 10px; align-items: center; padding: 6px 0; border-top: 1px solid var(--line); }
-  .sp-row:first-of-type { border-top: 0; }
-  .sp-row img, .sp-row .noimg { width: 52px; height: 52px; border-radius: 8px; object-fit: cover; flex: 0 0 auto;
-    background: var(--green-soft); }
-  .sp-names { min-width: 0; }
-  .sp-en { font-weight: 600; }
-  .sp-de, .sp-sci { font-size: 0.82rem; color: var(--ink-dim); }
-  .sp-sci { font-style: italic; }
+  .stops { margin-top: 16px; }
+  .stop-head { display: flex; align-items: center; gap: 2px; cursor: pointer; min-height: 28px;
+    color: var(--ink); font-size: 0.8rem; font-weight: 600; }
+  .stop-head .badge { margin-left: 6px; }
+  .walk-stop-sp { display: flex; gap: 10px; align-items: flex-start; margin-top: 8px; }
+  .walk-stop-sp + .walk-stop-sp { border-top: 1px dashed #e3ead7; padding-top: 8px; }
+  .walk-stop-sp img, .walk-stop-sp .noimg { width: 52px; height: 52px; border-radius: 6px; object-fit: cover;
+    flex: 0 0 auto; background: var(--leaf-pale); }
+  .walk-stop-species { font-family: var(--font-display); font-style: italic; }
 
-  .badge { display: inline-block; font-size: 0.75rem; font-weight: 700; padding: 2px 8px; border-radius: 10px;
-    background: #eef0ea; color: var(--ink-dim); margin-top: 3px; }
-  .badge.edible { background: var(--green-soft); color: var(--green); }
-  .badge.caution { background: var(--caution-soft); color: var(--caution); }
-  .badge.toxic, .badge.deadly { background: var(--toxic); color: #fff; }
-  .badge.apiaceae { background: var(--toxic-soft); color: var(--toxic); }
-
-  #tree-frame-wrap { height: 70vh; min-height: 360px; border-radius: 12px; overflow: hidden;
-    border: 1px solid var(--line); background: #14100c; }
+  #tree-frame-wrap { height: 70vh; min-height: 360px; border-radius: 8px; overflow: hidden;
+    border: 1px solid rgba(255,255,255,.12); background: var(--app-shell-deep); }
   #tree-frame-wrap iframe { width: 100%; height: 100%; border: 0; display: block; }
 
-  .grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(min(100%, 260px), 1fr));
-    margin-top: 18px; }
-  .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
-  .card.toxic { border: 2px solid var(--toxic); }
-  .card .photo { aspect-ratio: 4 / 3; width: 100%; object-fit: cover; background: var(--green-soft); cursor: zoom-in; }
-  .card .body { padding: 10px 12px 12px; }
-  .card .fam { font-size: 0.78rem; color: var(--ink-dim); }
-  .warn { margin-top: 8px; font-size: 0.85rem; border-radius: 8px; padding: 8px 10px; }
-  .warn.toxic { background: var(--toxic-soft); color: #7f1d1d; border-left: 4px solid var(--toxic); }
-  .warn.lookalike { background: var(--caution-soft); color: #5c3d00; border-left: 4px solid #c8963e; }
+  .grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(min(100%, 240px), 1fr)); margin-top: 16px; }
+  .grid .species-card { padding: 0; overflow: hidden; cursor: default; }
+  .grid .species-card.toxic { border: 2px solid var(--app-toxic); }
+  .species-card .photo { aspect-ratio: 4 / 3; width: 100%; object-fit: cover; background: var(--app-shell-deep); cursor: zoom-in; }
+  .species-card .body { padding: 12px 14px 14px; }
+  .species-card .common { font-family: var(--font-display); font-weight: 400; font-size: 1.05rem; }
+  .species-card .badge { margin-top: 6px; }
+  .warn { margin-top: 8px; font-size: 0.8rem; border-radius: 0 6px 6px 0; padding: 7px 9px; line-height: 1.4; }
+  .warn.toxic { background: rgba(220,38,38,.14); color: #fecaca; border-left: 3px solid var(--app-toxic); }
+  .warn.lookalike { background: rgba(200,155,60,.14); color: #f3e2bb; border-left: 3px solid var(--amber); }
   .warn strong { display: block; margin-bottom: 2px; }
+  .species-card .walk-stop-recipe { margin: 8px 0 0; }
+  .walk-stop-recipe .line { margin-top: 3px; font-style: italic; line-height: 1.4; }
+  .note-box { background: var(--app-shell-deep); border-left: 3px solid var(--amber); border-radius: 0 6px 6px 0;
+    padding: 9px 12px; color: var(--leaf-pale); font-weight: 600; margin: 0; }
 
-  .recipe .dish { font-weight: 700; margin: 0 0 4px; }
-  .recipe .line { margin: 0 0 6px; font-style: italic; color: #39463c; }
-  .note-box { background: var(--green-soft); border-radius: 10px; padding: 10px 12px; font-weight: 600; color: var(--green); }
-
-  footer { border-top: 1px solid var(--line); padding: 22px 0 36px; font-size: 0.85rem; color: #333; }
-  footer h2 { font-size: 0.95rem; color: var(--green); }
+  footer { background: var(--app-shell-deep); border-top: 2px solid var(--app-forest); padding: 22px 0 36px;
+    font-size: 0.8rem; color: var(--moss-light); }
+  footer h2 { font-family: var(--font-display); font-weight: 400; font-size: 1rem; color: var(--app-heading); margin: 0 0 8px; }
   footer p { margin: 0 0 10px; }
   .footer-links { display: flex; flex-wrap: wrap; gap: 6px 18px; margin-top: 14px; }
-  .placeholder { color: var(--toxic); font-weight: 700; }
+  .footer-links a { display: inline-flex; align-items: center; min-height: var(--touch-min); }
+  .placeholder { color: var(--alert); font-weight: 700; }
 
-  .lightbox { position: fixed; inset: 0; background: rgba(0,0,0,.88); z-index: 2000; display: none;
-    align-items: center; justify-content: center; padding: var(--gutter); }
+  .lightbox { position: fixed; inset: 0; background: rgba(0,0,0,.9); z-index: 2000; display: none;
+    align-items: center; justify-content: center; padding: 16px; }
   .lightbox.open { display: flex; }
   .lightbox img { max-height: 90vh; border-radius: 8px; }
-  .leaflet-popup-content { margin: 10px 12px; min-width: 200px; }
+  .leaflet-popup-content { margin: 10px 12px; min-width: 210px; font-family: var(--font-ui); }
+  .locate-btn { width: var(--touch-min); height: var(--touch-min); border-radius: 6px; border: 2px solid rgba(0,0,0,.2);
+    background: var(--paper); color: var(--ink); font-size: 22px; line-height: 1; cursor: pointer; }
+  .locate-btn:disabled { opacity: .5; }
+  .leaflet-control-layers { font-family: var(--font-ui); }
+  .leaflet-popup-content .walk-stop-sp:first-of-type { margin-top: 4px; }
 </style>
 </head>
 <body>
@@ -129,20 +120,20 @@
   </div>
 </nav>
 
-<main>
+<main id="list-view">
   <section class="panel" id="panel-walk" role="tabpanel" aria-labelledby="tab-walk">
     <div class="wrap">
       <h2>The route</h2>
-      <p class="lead">Numbered stops follow the walk. <strong style="color:var(--toxic)">☠ red stops</strong> have a poisonous plant — look, don't pick.</p>
+      <p class="subtitle">Numbered stops follow the walk.</p>
       <div id="map" role="region" aria-label="Walk map"></div>
-      <div class="stops" id="stops"></div>
+      <div class="stops walk-stops" id="stops"></div>
     </div>
   </section>
 
   <section class="panel" id="panel-plants" role="tabpanel" aria-labelledby="tab-plants" hidden>
     <div class="wrap">
       <h2>Plants on this walk</h2>
-      <p class="lead">A family tree of everything we meet on the way. Tap a branch to open it, tap a species for its photo.</p>
+      <p class="subtitle">A family tree of everything we meet on the way. Tap a branch to open it, tap a species for its photo.</p>
       <div id="tree-frame-wrap"></div>
       <div class="grid" id="species-grid"></div>
     </div>
@@ -184,15 +175,16 @@ window.DATA = {{DATA}};
     });
   }
   function badge(s) { return '<span class="badge ' + esc(s.badge.kind) + '">' + esc(s.badge.text) + "</span>"; }
-  function img(src, alt, cls) {
-    return src ? '<img src="' + esc(src) + '" alt="' + esc(alt) + '" loading="lazy"' + (cls ? ' class="' + cls + '"' : "") + ">"
-               : '<div class="noimg' + (cls ? " " + cls : "") + '"></div>';
+  function img(src, alt) {
+    return src ? '<img src="' + esc(src) + '" alt="' + esc(alt) + '" loading="lazy">' : '<div class="noimg"></div>';
   }
-  function spRow(s) {
-    return '<div class="sp-row">' + img(s.thumb, s.en || s.sci) +
-      '<div class="sp-names"><div class="sp-en">' + (s.toxic ? "☠ " : "") + esc(s.en || s.sci) + "</div>" +
-      (s.de ? '<div class="sp-de">' + esc(s.de) + "</div>" : "") +
-      '<div class="sp-sci">' + esc(s.sci) + "</div>" + badge(s) + "</div></div>";
+  // Same order as the app's walk panel: scientific name, common name, then the badge.
+  function stopSpecies(s) {
+    var common = [s.en, s.de].filter(Boolean).join(" · ");
+    return '<div class="walk-stop-sp">' + img(s.thumb, s.en || s.sci) + "<div>" +
+      '<span class="walk-stop-species">' + esc(s.sci) + "</span>" +
+      (common ? '<div class="walk-stop-common">' + esc(common) + "</div>" : "") +
+      '<div class="walk-stop-meta">' + badge(s) + "</div></div></div>";
   }
 
   // ── header ──
@@ -218,7 +210,7 @@ window.DATA = {{DATA}};
     if (name === "plants" && !treeLoaded) {
       // Created on first open so the tree lays out at its real size.
       var f = document.createElement("iframe");
-      f.src = "tree.html"; f.title = "Plant family tree"; f.loading = "eager";
+      f.src = "tree.html"; f.title = "Plant family tree";
       document.getElementById("tree-frame-wrap").appendChild(f);
       treeLoaded = true;
     }
@@ -229,43 +221,84 @@ window.DATA = {{DATA}};
     document.getElementById("tab-" + t).addEventListener("click", function () { show(t); });
   });
 
-  // ── walk ──
+  // ── walk: stop cards in the app's walk-panel layout ──
   var stopsEl = document.getElementById("stops");
   stopsEl.innerHTML = D.walk.stops.map(function (st) {
-    return '<div class="stop' + (st.toxic ? " toxic" : "") + '" id="stop-' + st.n + '">' +
-      '<h3 data-stop="' + st.n + '"><span class="stop-num">' + (st.toxic ? "☠" : st.n) + "</span>Stop " + st.n +
-      (st.toxic ? ' <span class="badge toxic">Poisonous plant here</span>' : "") + "</h3>" +
-      st.species.map(function (id) { return spRow(byId[id]); }).join("") + "</div>";
+    // Plain numbered stop; toxicity is shown only on the plant (its badge).
+    return '<div class="walk-stop-card" id="stop-' + st.n + '">' +
+      '<div class="stop-head" data-stop="' + st.n + '"><span class="walk-stop-num">' + st.n + "</span>" +
+      (st.species.length > 1 ? st.species.length + " species here" : "Stop " + st.n) + "</div>" +
+      st.species.map(function (id) { return stopSpecies(byId[id]); }).join("") + "</div>";
   }).join("");
 
   var markers = {};
   if (window.L) {
     map = L.map("map", { scrollWheelZoom: false });
-    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-      attribution: '© <a href="https://openstreetmap.org/copyright">OpenStreetMap</a> contributors', maxZoom: 19
-    }).addTo(map);
+    // Same keyless base layers as the app (frontend/index.html _baseLayers). No API keys.
+    var base = {
+      "Standard": L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+        attribution: '© <a href="https://openstreetmap.org/copyright" target="_top">OpenStreetMap</a> contributors', maxZoom: 19 }),
+      "Satellite": L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", {
+        attribution: "Tiles &copy; Esri &mdash; Source: Esri, USGS, AeroGRID, IGN, and the GIS User Community", maxZoom: 19 }),
+      "Topo": L.tileLayer("https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png", {
+        attribution: 'Map data: &copy; <a href="https://openstreetmap.org/copyright" target="_top">OpenStreetMap</a> contributors, SRTM | Display: &copy; <a href="https://opentopomap.org" target="_top">OpenTopoMap</a> (<a href="https://creativecommons.org/licenses/by-sa/3.0/" target="_top">CC-BY-SA</a>)',
+        maxZoom: 17, subdomains: ["a", "b", "c"] })
+    };
+    base["Standard"].addTo(map);
+    L.control.layers(base, null, { position: "topright", collapsed: true }).addTo(map);
+
+    // Locate me — browser geolocation, shown on the map only. Nothing is stored or sent.
+    var here = null;
+    var Locate = L.Control.extend({
+      options: { position: "topleft" },
+      onAdd: function () {
+        var b = L.DomUtil.create("button", "locate-btn");
+        b.type = "button"; b.title = "Show my location"; b.setAttribute("aria-label", "Show my location");
+        b.textContent = "◎";
+        L.DomEvent.disableClickPropagation(b);
+        L.DomEvent.on(b, "click", function () {
+          if (!navigator.geolocation) { alert("Location isn't available in this browser."); return; }
+          b.disabled = true;
+          navigator.geolocation.getCurrentPosition(function (pos) {
+            b.disabled = false;
+            var ll = [pos.coords.latitude, pos.coords.longitude];
+            if (here) here.remove();
+            here = L.layerGroup([
+              L.circle(ll, { radius: pos.coords.accuracy, color: "#6E8FA8", weight: 1, fillOpacity: 0.12 }),
+              L.circleMarker(ll, { radius: 7, color: "#fff", weight: 2, fillColor: "#6E8FA8", fillOpacity: 1 })
+            ]).addTo(map);
+            map.setView(ll, Math.max(map.getZoom(), 15));
+          }, function (err) {
+            b.disabled = false;
+            alert(err.code === 1 ? "Location permission was refused." : "Couldn't get your location.");
+          }, { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 });
+        });
+        return b;
+      }
+    });
+    map.addControl(new Locate());
     var bounds = [];
     if (D.walk.line) {
       var ll = D.walk.line.map(function (c) { return [c[1], c[0]]; });
-      L.polyline(ll, { color: "#2d5016", weight: 4, opacity: 0.85 }).addTo(map);
+      L.polyline(ll, { color: getComputedStyle(document.documentElement).getPropertyValue("--app-forest").trim() || "#2d5016",
+                       weight: 4, opacity: 0.9 }).addTo(map);
       bounds = bounds.concat(ll);
     }
     D.walk.stops.forEach(function (st) {
-      var icon = L.divIcon({ className: "", iconSize: st.toxic ? [32, 32] : [28, 28],
-        html: '<div class="stop-pin' + (st.toxic ? " toxic" : "") + '">' + (st.toxic ? "☠" : st.n) + "</div>" });
-      var m = L.marker([st.lat, st.lng], { icon: icon, title: "Stop " + st.n, zIndexOffset: st.toxic ? 1000 : 0 })
+      var icon = L.divIcon({ className: "", iconSize: [26, 26], html: '<div class="stop-pin">' + st.n + "</div>" });
+      var m = L.marker([st.lat, st.lng], { icon: icon, title: "Stop " + st.n })
         .addTo(map)
-        .bindPopup('<strong>Stop ' + st.n + "</strong>" + st.species.map(function (id) { return spRow(byId[id]); }).join(""),
-                   { maxWidth: 280 });
+        .bindPopup('<div class="stop-head"><span class="walk-stop-num">' + st.n + "</span>Stop " + st.n + "</div>" +
+                   st.species.map(function (id) { return stopSpecies(byId[id]); }).join(""), { maxWidth: 290 });
       markers[st.n] = m;
       bounds.push([st.lat, st.lng]);
     });
     if (bounds.length) map.fitBounds(bounds, { padding: [20, 20] });
   } else {
-    document.getElementById("map").innerHTML = '<p class="lead" style="padding:12px">Map could not load (offline?).</p>';
+    document.getElementById("map").innerHTML = '<p class="subtitle" style="padding:12px">Map could not load (offline?).</p>';
   }
   stopsEl.addEventListener("click", function (e) {
-    var h = e.target.closest("h3[data-stop]");
+    var h = e.target.closest(".stop-head[data-stop]");
     if (!h || !map) return;
     var m = markers[h.getAttribute("data-stop")];
     document.getElementById("map").scrollIntoView({ behavior: "smooth", block: "center" });
@@ -273,32 +306,33 @@ window.DATA = {{DATA}};
     m.openPopup();
   });
 
-  // ── plants ──
+  // ── plants: the app's species cards ──
   document.getElementById("species-grid").innerHTML = D.species.map(function (s) {
     var w = "";
     if (s.safety.toxic) w += '<div class="warn toxic"><strong>☠ Not safe to eat</strong>' + esc(s.safety.toxic) + "</div>";
     if (s.safety.look_alike) w += '<div class="warn lookalike"><strong>Look-alikes</strong>' + esc(s.safety.look_alike) + "</div>";
-    return '<article class="card' + (s.toxic ? " toxic" : "") + '">' +
+    return '<article class="species-card' + (s.toxic ? " toxic" : "") + '">' +
       (s.photo ? '<img class="photo" src="' + esc(s.thumb) + '" data-full="' + esc(s.photo) + '" alt="' + esc(s.en || s.sci) + '" loading="lazy">'
                : '<div class="photo"></div>') +
-      '<div class="body"><div class="sp-en">' + (s.toxic ? "☠ " : "") + esc(s.en || s.sci) + "</div>" +
-      (s.de ? '<div class="sp-de">' + esc(s.de) + "</div>" : "") +
-      '<div class="sp-sci">' + esc(s.sci) + "</div>" +
-      (s.family ? '<div class="fam">' + esc(s.family) + "</div>" : "") + badge(s) + w + "</div></article>";
+      '<div class="body"><div class="common">' + (s.toxic ? "☠ " : "") + esc(s.en || s.sci) + "</div>" +
+      '<div class="sci-name">' + esc(s.sci) + "</div>" +
+      (s.de ? '<div class="common-de">' + esc(s.de) + "</div>" : "") +
+      (s.family ? '<div class="family">' + esc(s.family) + "</div>" : "") + badge(s) + w + "</div></article>";
   }).join("");
 
-  // ── recipes (teasers only) ──
+  // ── recipes: teaser in the app's walk-panel recipe strip ──
   var rg = document.getElementById("recipe-grid");
   rg.innerHTML = D.recipes.length ? D.recipes.map(function (r) {
     var s = byId[r.species_id];
-    return '<article class="card recipe">' +
+    return '<article class="species-card">' +
       (s.photo ? '<img class="photo" src="' + esc(s.thumb) + '" data-full="' + esc(s.photo) + '" alt="' + esc(s.en || s.sci) + '" loading="lazy">' : "") +
-      '<div class="body"><p class="dish">' + esc(r.dish) + "</p>" +
-      '<p class="line">' + esc(r.line) + "</p>" +
-      '<div class="sp-de">' + esc(s.en || s.sci) + (s.de ? " · " + esc(s.de) : "") + "</div>" + badge(s) + "</div></article>";
-  }).join("") : '<p class="lead">Recipes to follow.</p>';
+      '<div class="body"><div class="common">' + esc(s.en || s.sci) + "</div>" +
+      (s.de ? '<div class="common-de">' + esc(s.de) + "</div>" : "") + badge(s) +
+      '<div class="walk-stop-recipe"><strong>' + esc(r.dish) + '</strong><div class="line">' + esc(r.line) + "</div></div>" +
+      "</div></article>";
+  }).join("") : '<p class="subtitle">Recipes to follow.</p>';
 
-  // ── footer: disclaimer text is print_pdf.html's, unchanged ──
+  // ── footer ──
   document.getElementById("disclaimer-h").textContent = D.disclaimer.heading;
   document.getElementById("disclaimer").innerHTML = D.disclaimer.paras.map(function (p) { return "<p>" + esc(p) + "</p>"; }).join("");
   document.getElementById("footer-links").innerHTML =

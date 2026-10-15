@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="{{LANG}}">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="color-scheme" content="dark">
+<meta name="robots" content="noindex">
+<title>{{TITLE}}</title>
+<style>
+/* ════ App styles — copied from the app at build time (app_styles.py) ════ */
+{{APP_STYLES}}
+
+/* ════ Embed card: fixed 500px, no scrolling, no JavaScript ════ */
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 500px; overflow: hidden; background: var(--app-shell-deep); }
+  body { font-family: var(--font-ui); color: var(--app-text); }
+  a.card { display: grid; grid-template-rows: 200px 1fr auto; height: 500px; overflow: hidden;
+    color: inherit; text-decoration: none; background: var(--app-shell); border: 1px solid rgba(255,255,255,.1);
+    border-radius: 10px; }
+  a.card:focus-visible { outline: 3px solid var(--leaf); outline-offset: -3px; }
+
+  .hero { position: relative; overflow: hidden; background: var(--app-shell-deep); }
+  .hero img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .hero::after { content: ""; position: absolute; inset: 0;
+    background: linear-gradient(to top, rgba(30,43,40,.95) 0%, rgba(30,43,40,.35) 55%, rgba(30,43,40,0) 100%); }
+  .hero-text { position: absolute; left: 16px; right: 16px; bottom: 12px; z-index: 1; }
+  .hero h1 { margin: 0; font: 400 1.45rem/1.15 var(--font-display); color: var(--paper);
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .hero .where { margin-top: 4px; font-size: .78rem; color: var(--leaf-pale); }
+
+  .body { display: grid; grid-template-columns: 112px 1fr; gap: 14px; padding: 14px 16px 10px; min-height: 0; overflow: hidden; }
+  .route { width: 112px; height: 112px; border-radius: 8px; background: var(--app-shell-deep);
+    border: 1px solid rgba(255,255,255,.08); }
+  .stats { display: flex; flex-wrap: wrap; gap: 4px 10px; margin-top: 8px; font-size: .74rem; color: var(--moss-light); }
+  .stats b { color: var(--app-heading); font-weight: 700; }
+  .side { min-width: 0; overflow: hidden; }
+  .side h2 { margin: 0 0 6px; font: 400 .95rem var(--font-display); color: var(--app-heading); }
+  .teasers { list-style: none; margin: 0; padding: 0; display: grid; gap: 7px; }
+  .teasers li { border-left: 3px solid var(--amber); padding: 1px 0 1px 8px; min-width: 0; }
+  .dish { font-size: .82rem; font-weight: 600; color: var(--paper);
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .plant { font-size: .72rem; color: var(--moss-light); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .more { margin-top: 6px; font-size: .72rem; color: var(--leaf-pale); }
+
+  .go { margin: 0 16px 16px; min-height: var(--touch-min); display: flex; align-items: center; justify-content: center;
+    background: var(--app-forest); color: var(--paper); border: 1.5px solid var(--leaf); border-radius: 7px;
+    font-weight: 600; font-size: .95rem; }
+  a.card:hover .go { background: var(--moss); }
+
+  /* Narrow embeds (phones): smaller route, two teasers */
+  @media (max-width: 400px) {
+    a.card { grid-template-rows: 180px 1fr auto; }
+    .body { grid-template-columns: 84px 1fr; gap: 12px; }
+    .route { width: 84px; height: 84px; }
+    .teasers li:nth-child(3) { display: none; }
+  }
+</style>
+</head>
+<body>
+<a class="card" href="index.html" target="_top" aria-label="Open the foraging experience">
+  <div class="hero">
+    {{HERO}}
+    <div class="hero-text">
+      <h1>{{TITLE}}</h1>
+      <div class="where">{{WHERE}}</div>
+    </div>
+  </div>
+  <div class="body">
+    <div>
+      {{ROUTE_SVG}}
+      <div class="stats">{{STATS}}</div>
+    </div>
+    <div class="side">
+      <h2>From the walk to the plate</h2>
+      <ul class="teasers">{{TEASERS}}</ul>
+      <div class="more">Full recipes on the day.</div>
+    </div>
+  </div>
+  <span class="go">Open the foraging experience →</span>
+</a>
+</body>
+</html>

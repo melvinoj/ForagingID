@@ -14,6 +14,8 @@ Rules (Melvin, 15 Oct 2026):
   4. Apiaceae: no recipe or edibility text unless human-authored
      (culinary_info_history changed_by='human'); otherwise name, photo and
      look-alike warning only.
+     Page-level override (config apiaceae_id_only, 15 Oct 2026): ALL Apiaceae
+     are look-alike / ID cards — no edible label, no recipe, whatever the data.
   5. Recipes: status='approved' only; never is_medicinal_prep.
   6. No medicinal content anywhere.
 
@@ -76,8 +78,10 @@ def human_authored(conn: sqlite3.Connection, culinary_info_id, field: str, curre
     return bool(row) and row[0] == "human" and (row[1] or "").strip() == (current or "").strip()
 
 
-def may_claim_edible(sp: dict, ci: dict, conn: sqlite3.Connection) -> bool:
+def may_claim_edible(sp: dict, ci: dict, conn: sqlite3.Connection, cfg: dict) -> bool:
     """May the page call this species edible (or edible-with-caution)?"""
+    if is_apiaceae(sp) and cfg.get("apiaceae_id_only"):
+        return False                                   # rule 4, page-level override
     if is_toxic(sp):
         return False                                   # rule 3
     if sp.get("edibility_status") not in ("edible", "caution"):
@@ -89,7 +93,7 @@ def may_claim_edible(sp: dict, ci: dict, conn: sqlite3.Connection) -> bool:
     return True
 
 
-def edibility_badge(sp: dict, ci: dict, conn: sqlite3.Connection) -> dict:
+def edibility_badge(sp: dict, ci: dict, conn: sqlite3.Connection, cfg: dict) -> dict:
     """{kind, text} for the species badge. Never an edible label for toxic."""
     if is_toxic(sp):
         if is_deadly(sp):
@@ -97,7 +101,7 @@ def edibility_badge(sp: dict, ci: dict, conn: sqlite3.Connection) -> dict:
         return {"kind": "toxic", "text": "☠ Toxic — do not eat"}
     if sp.get("edibility_status") == "inedible":
         return {"kind": "inedible", "text": "Not for eating"}
-    if may_claim_edible(sp, ci, conn):
+    if may_claim_edible(sp, ci, conn, cfg):
         if sp["edibility_status"] == "caution":
             return {"kind": "caution", "text": "Edible with caution"}
         return {"kind": "edible", "text": "Edible"}
@@ -135,7 +139,9 @@ def recipe_allowed(sp: dict, ci: dict, recipe: dict, conn: sqlite3.Connection, c
         return False, f"source not allowed ({recipe['source']})"
     if is_toxic(sp):
         return False, "toxic species"
-    if not may_claim_edible(sp, ci, conn):
+    if is_apiaceae(sp) and cfg.get("apiaceae_id_only"):
+        return False, "Apiaceae — ID card only on this page"
+    if not may_claim_edible(sp, ci, conn, cfg):
         return False, "no edible claim (not human-verified edible/caution, or Apiaceae without human text)"
     if is_apiaceae(sp) and recipe["source"] != "curator":
         return False, "Apiaceae — recipe not human-authored"

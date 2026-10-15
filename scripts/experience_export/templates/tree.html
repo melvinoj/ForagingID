@@ -8,6 +8,16 @@
 <style>
 /* ── frontend/taxonomy.html <style>, copied verbatim at build time ── */
 {{TAXONOMY_STYLE}}
+/* ── app palette (app_styles.py, build time) mapped onto the taxonomy variables ── */
+{{APP_ROOT}}
+:root {
+  --bg: var(--app-shell-deep); --bg2: var(--app-shell);
+  --ink: var(--app-text); --ink-dim: var(--moss-light);
+  --leaf-bright: var(--app-heading);   /* --leaf comes from tokens.css above */
+  --panel: rgba(30,43,40,0.94); --line: rgba(216,228,216,0.18);
+}
+.tip, .species-popup { background: var(--app-shell-deep); font-family: var(--font-ui); }
+.species-popup-name { font-family: var(--font-display); }
 /* ── export-only overrides (embedded in the Plants tab iframe) ── */
 .header { padding: 12px 16px; }
 .species-popup { max-width: min(260px, calc(100vw - 32px)); }
@@ -15,10 +25,10 @@
 .species-popup-en { font-weight: 600; color: var(--ink); margin-bottom: 2px; }
 .species-popup-badge { display: inline-block; margin-top: 4px; padding: 2px 8px; border-radius: 10px;
   font-size: 11px; font-weight: 600; background: rgba(255,255,255,0.08); color: var(--ink); }
-.species-popup-badge.toxic, .species-popup-badge.deadly { background: #d1342b; color: #fff; }
-.species-popup-badge.edible { background: #3f9e52; color: #fff; }
-.species-popup-badge.caution { background: #c8963e; color: #1c1610; }
-.species-popup-badge.apiaceae { background: #b5503f; color: #fff; }
+.species-popup-badge.toxic, .species-popup-badge.deadly { background: var(--app-toxic); color: #fff; }
+.species-popup-badge.edible { background: var(--app-forest); color: #fff; }
+.species-popup-badge.caution { background: var(--amber); color: var(--app-shell-deep); }
+.species-popup-badge.apiaceae { background: var(--alert); color: #fff; }
 </style>
 </head>
 <body>
@@ -38,7 +48,7 @@
     <button class="legend-close" onclick="closeLegend()" aria-label="Close legend">✕</button>
     <div class="row"><span class="dot" style="background:var(--plant)"></span> Plant</div>
     <div class="row"><span class="dot" style="background:var(--fungi)"></span> Fungus</div>
-    <div class="row"><span class="dot" style="background:#d1342b"></span> ☠ Toxic — do not eat</div>
+    <div class="row"><span class="dot" style="background:var(--app-toxic)"></span> ☠ Toxic — do not eat</div>
     <div class="hint">Tap a branch to open it, tap a species for its photo.<br>Drag to move · pinch or scroll to zoom.</div>
   </div>
   <div class="controls">

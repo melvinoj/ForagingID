@@ -8,25 +8,44 @@
 
   "intro": "A guided foraging walk above Gresgen in the southern Black Forest. Meet the plants of the meadows, hedges and forest edge — what to pick, what to leave, and how to tell them apart.",
   "cta_label": "Book or ask a question",
-  "contact_url": "https://melvinjarman.co.uk",
+  "contact_url": "https://melvinjarman.co.uk/contact",
 
-  "_host_note": "The page is embedded (iframe) on this Hostinger page; outbound links open in the top window.",
+  "_host_note": "preview.html (the card) is embedded on this Hostinger page; it links to the full page in the top window.",
   "host_page_url": "https://melvinjarman.co.uk/b",
+
+  "_canonical_note": "Self-canonical for index.html (its own public URL). Switch to the subdomain URL if one is added later.",
+  "canonical_url": "https://melvinoj.github.io/foraging-experience/",
 
   "_impressum_note": "Page to be created on melvinjarman.co.uk before go-live.",
   "impressum_url": "https://melvinjarman.co.uk/impressum",
 
   "show_brand": false,
 
+  "_disclaimer_note": "Web adaptation of app/templates/print_pdf.html final-disclaimer: 'booklet' -> 'page', brand name removed; meaning unchanged. Delete this key to fall back to the verbatim print text.",
+  "disclaimer_override": {
+    "heading": "A note on safety and sources",
+    "paras": ["Edibility and medicinal information on this page is for educational reference only. Always verify identification with multiple authoritative sources before consuming any wild plant or fungi. Never rely on any single source, including this page, as your sole basis for a consumption decision. Identification and content may be AI-assisted. Human-created and/or reviewed content is indicated where shown. This page is an educational resource, not a safety-certified identification system."]
+  },
+
   "hide_obs_ids": [],
   "photo_overrides": {},
 
-  "recipe_sources_allowed": ["ai_generated", "curator"],
+  "_recipe_sources_note": "Friture Sauvage menu = Melvin's own menu (confirmed 15 Oct 2026). Priority: human-authored first.",
+  "recipe_sources_allowed": ["curator", "Friture Sauvage menu, Hofgut LEO, 5 July 2026", "ai_generated"],
+  "recipe_source_priority": ["curator", "Friture Sauvage menu, Hofgut LEO, 5 July 2026", "ai_generated"],
+
+  "_apiaceae_note": "Page-level rule (15 Oct 2026): all Apiaceae shown as look-alike / ID cards — no edible label, no recipe. DB unchanged.",
+  "apiaceae_id_only": true,
   "_exclude_recipe_ids_note": "6 = 'Field Mint Broth…' stored against Prunus avium (wrong species).",
   "exclude_recipe_ids": [6],
   "exclude_recipe_species_ids": [],
   "_teaser_note": "Teaser = first self-contained sentence of the approved recipe text; sentences matching these regexes (case-insensitive) are skipped.",
   "teaser_skip_patterns": ["\\bSheffield\\b", "\\bmedic", "\\bremed", "\\bheal(s|ing|er)?\\b", "\\bcures?\\b", "\\btonic\\b", "\\btherap", "\\bdiuretic", "\\bailment", "\\bdigestion"],
+
+  "_preview_note": "dist/preview.html — embed card for melvinjarman.co.uk/b. Empty/null = automatic (hero = first teaser's plant; teasers = first 3 by recipe_source_priority).",
+  "preview_where": "Rümmelsbühl · Gresgen, southern Black Forest",
+  "preview_hero_species_id": null,
+  "preview_recipe_ids": [],
 
   "photo_long_edge": 1200,
   "thumb_long_edge": 400,

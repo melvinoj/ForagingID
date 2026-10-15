@@ -33,6 +33,7 @@ HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[1]
 sys.path.insert(0, str(HERE))
 import gates  # noqa: E402
+import app_styles  # noqa: E402
 
 DB_PATH   = REPO / "data" / "foragingid.db"
 DIST      = REPO / "dist"
@@ -213,7 +214,7 @@ TREE_PATCHES = [
      'const GENUS_SLOT_UNIT = window.__EXPORT_GENUS_SLOT_DEG__ * Math.PI / 180;', 2),
     ("toxic species drawn red",
      r'function colourFor\(d\)\{\n',
-     'function colourFor(d){\n  if (d.data.rank === "species" && (window.__EXPORT_SPECIES__[d.data.name] || {}).toxic) return "#d1342b";\n'),
+     'function colourFor(d){\n  if (d.data.rank === "species" && (window.__EXPORT_SPECIES__[d.data.name] || {}).toxic) return "var(--app-toxic)";\n'),
     ("toxic ☠ on persistent species labels",
      r'\.text\(d=>d\.data\.name\.split\(" "\)\.slice\(1\)\.join\(" "\)\)',
      '.text(d=>((window.__EXPORT_SPECIES__[d.data.name]||{}).toxic ? "☠ " : "") + d.data.name.split(" ").slice(1).join(" "))'),
@@ -223,6 +224,14 @@ TREE_PATCHES = [
     ("tooltip shows common name, not 'species card'",
      r'meta = st === "none" \? "placeholder" : st === "in_review" \? "card pending review" : "species card";',
      'meta = (window.__EXPORT_SPECIES__[d.data.name] || {}).en || "";'),
+    # taxonomy.html's class-tier redistribution is tuned to the app's full
+    # collection and throws unless Magnoliopsida, Bryopsida, Polypodiopsida,
+    # Liliopsida, Pinopsida and Florideophyceae are all present. A single walk
+    # rarely has all six, so the export skips that block (layout only — the
+    # general radial layout above it still positions every class node).
+    ("skip full-collection class-tier redistribution",
+     r'if \(gatherTrunk\) \{\n    const REDISTRIBUTE = ',
+     'if (gatherTrunk && !window.__EXPORT_SKIP_CLASS_REDISTRIBUTION__) {\n    const REDISTRIBUTE = '),
     ("no empty 'Unplaced' knot",
      r'\n    drawUnplaced\(\);\n',
      '\n    if (UNPLACED.length) drawUnplaced();\n'),
@@ -232,7 +241,7 @@ TREE_PATCHES = [
 ]
 
 
-def build_tree_html(species_meta: dict, taxonomy: dict, slot_deg: float) -> tuple[str, list]:
+def build_tree_html(species_meta: dict, taxonomy: dict, slot_deg: float, app_root_css: str) -> tuple[str, list]:
     src = TAXONOMY.read_text(encoding="utf-8")
     style = re.search(r"<style>(.*?)</style>", src, re.S)
     scripts = re.findall(r"<script>(.*?)</script>", src, re.S)
@@ -263,13 +272,82 @@ def build_tree_html(species_meta: dict, taxonomy: dict, slot_deg: float) -> tupl
                      for gens in fams.values() for sp in gens.values())
     tpl = (HERE / "templates" / "tree.html").read_text(encoding="utf-8")
     out = (tpl.replace("{{TAXONOMY_STYLE}}", style.group(1))
+              .replace("{{APP_ROOT}}", app_root_css)
               .replace("{{D3}}", sri_tag("d3_js"))
               .replace("{{DATA}}", "window.__EXPORT_TAXONOMY__ = " + json_inline(taxonomy) + ";\n"
                        "window.__EXPORT_SPECIES__ = " + json_inline(species_meta) + ";\n"
                        f"window.__EXPORT_GENUS_SLOT_DEG__ = {slot_deg:.4f};\n"
-                       f"window.__EXPORT_TREE_COUNT__ = {tree_count};\n")
+                       f"window.__EXPORT_TREE_COUNT__ = {tree_count};\n"
+                       "window.__EXPORT_SKIP_CLASS_REDISTRIBUTION__ = true;\n")
               .replace("{{TAXONOMY_SCRIPT}}", script))
     return out, applied
+
+
+# ── preview card (dist/preview.html — static, no JS) ─────────────────────────
+
+def route_svg(line, stops, size=100, pad=8) -> str:
+    """Small static route drawing from the saved route line (no map tiles)."""
+    pts = [(c[0], c[1]) for c in (line or [])] or [(st["lng"], st["lat"]) for st in stops]
+    if not pts:
+        return ""
+    import math
+    lat0 = sum(p[1] for p in pts) / len(pts)
+    kx = math.cos(math.radians(lat0))                       # equirectangular, true aspect at this latitude
+    xs = [p[0] * kx for p in pts]; ys = [p[1] for p in pts]
+    sx = [st["lng"] * kx for st in stops]; sy = [st["lat"] for st in stops]
+    minx, maxx = min(xs + sx), max(xs + sx); miny, maxy = min(ys + sy), max(ys + sy)
+    span = max(maxx - minx, maxy - miny) or 1e-9
+    sc = (size - 2 * pad) / span
+    ox = pad + ((size - 2 * pad) - (maxx - minx) * sc) / 2
+    oy = pad + ((size - 2 * pad) - (maxy - miny) * sc) / 2
+    X = lambda x: ox + (x - minx) * sc
+    Y = lambda y: oy + (maxy - y) * sc                      # north up
+    poly = " ".join(f"{X(x):.1f},{Y(y):.1f}" for x, y in zip(xs, ys))
+    dots = "".join(f'<circle cx="{X(x):.1f}" cy="{Y(y):.1f}" r="1.8" style="fill:var(--paper)"/>' for x, y in zip(sx, sy))
+    start = f'<circle cx="{X(xs[0]):.1f}" cy="{Y(ys[0]):.1f}" r="3.2" style="fill:var(--amber)"/>' if line else ""
+    return (f'<svg class="route" viewBox="0 0 {size} {size}" role="img" aria-label="Route of the walk">'
+            f'<polyline points="{poly}" style="fill:none;stroke:var(--leaf)" stroke-width="2.2" '
+            f'stroke-linejoin="round" stroke-linecap="round"/>{dots}{start}</svg>')
+
+
+def build_preview(cfg: dict, data: dict, pub: dict, app_css: str) -> tuple[str, dict]:
+    recipes = data["recipes"]
+    want = cfg.get("preview_recipe_ids") or []
+    if want:
+        chosen = [r for rid in want for r in recipes if r["recipe_id"] == rid]
+        missing = [rid for rid in want if rid not in {r["recipe_id"] for r in chosen}]
+        if missing:
+            die(f"preview_recipe_ids not among the page's gated recipes: {missing}")
+    else:
+        prio = {src: i for i, src in enumerate(cfg.get("recipe_source_priority", []))}
+        chosen = sorted(recipes, key=lambda r: prio.get(r["source"], len(prio)))
+    chosen = chosen[:3]
+
+    hero_sid = cfg.get("preview_hero_species_id") or (chosen[0]["species_id"] if chosen else None)
+    hero = pub.get(hero_sid) if hero_sid is not None else None
+    if hero is None or not hero["photo"]:
+        die(f"preview hero species {hero_sid} has no photo on this walk")
+    if hero["toxic"]:
+        die(f"preview hero must not be a toxic species ({hero['sci']})")
+
+    km = f"{data['walk']['distance_m'] / 1000:.1f}" if data["walk"]["distance_m"] else None
+    stats = [f"<span><b>{len(pub)}</b> species</span>", f"<span><b>{len(data['walk']['stops'])}</b> stops</span>"]
+    if km:
+        stats.append(f"<span><b>{km}</b> km</span>")
+    teasers = "".join(
+        f'<li><div class="dish">{html.escape(r["dish"])}</div>'
+        f'<div class="plant">{html.escape(pub[r["species_id"]]["en"] or pub[r["species_id"]]["sci"])}</div></li>'
+        for r in chosen)
+    tpl = (HERE / "templates" / "preview.html").read_text(encoding="utf-8")
+    out = (tpl.replace("{{APP_STYLES}}", app_css)
+              .replace("{{LANG}}", html.escape(cfg.get("language", "en")))
+              .replace("{{TITLE}}", html.escape(cfg["title"]))
+              .replace("{{WHERE}}", html.escape(cfg.get("preview_where", "")))
+              .replace("{{HERO}}", f'<img src="{hero["photo"]}" alt="{html.escape(hero["en"] or hero["sci"])}">')
+              .replace("{{ROUTE_SVG}}", route_svg(data["walk"]["line"], data["walk"]["stops"]))
+              .replace("{{STATS}}", "".join(stats))
+              .replace("{{TEASERS}}", teasers))
+    return out, {"hero": f"{hero['id']} {hero['sci']}", "recipes": [f"{r['recipe_id']} {r['dish']}" for r in chosen]}
 
 
 # ── main build ───────────────────────────────────────────────────────────────
@@ -355,7 +433,7 @@ def main():
     pub = {}
     for sid, sp in species.items():
         ci = ci_by_sp[sid]
-        badge = gates.edibility_badge(sp, ci, conn)
+        badge = gates.edibility_badge(sp, ci, conn, cfg)
         pub[sid] = {
             "id": sid,
             "sci": sp["scientific_name"],
@@ -373,12 +451,16 @@ def main():
             "n_obs": len(sp_obs[sid]),
         }
 
-    # Recipes — one teaser per species (curator first, then preferred, then oldest)
-    recipes_out, recipe_excluded = [], []
+    # Recipes — one teaser per species. Order: config recipe_source_priority
+    # (human-authored sources first), then preferred, then oldest. The same dish
+    # is never shown twice (one menu item can be stored against several species).
+    prio = {src: i for i, src in enumerate(cfg.get("recipe_source_priority", []))}
+    recipes_out, recipe_excluded, dishes_shown = [], [], set()
     for sid, sp in species.items():
         recs = [dict(r) for r in conn.execute(
             "SELECT id, title, body, status, is_preferred, is_medicinal_prep, source FROM species_recipes "
-            "WHERE species_id = ? ORDER BY (source = 'curator') DESC, is_preferred DESC, id", (sid,))]
+            "WHERE species_id = ?", (sid,))]
+        recs.sort(key=lambda r: (prio.get(r["source"], len(prio)), -int(bool(r["is_preferred"])), r["id"]))
         picked = None
         for r in recs:
             ok, why = gates.recipe_allowed(sp, ci_by_sp[sid], r, conn, cfg)
@@ -391,6 +473,10 @@ def main():
                 if not title or not teaser:
                     recipe_excluded.append((r["id"], sp["scientific_name"], "no usable title/teaser line"))
                     continue
+                if title.lower() in dishes_shown:
+                    recipe_excluded.append((r["id"], sp["scientific_name"], "same dish already shown for another species"))
+                    continue
+                dishes_shown.add(title.lower())
                 picked = {"recipe_id": r["id"], "species_id": sid, "dish": title, "line": teaser,
                           "source": r["source"]}
             else:
@@ -443,7 +529,8 @@ def main():
 
     species_meta = {p["sci"]: {"id": p["id"], "en": p["en"], "de": p["de"], "toxic": p["toxic"],
                                "badge": p["badge"], "thumb": p["thumb"]} for p in pub.values()}
-    tree_html, patches = build_tree_html(species_meta, taxonomy, slot_deg)
+    app_css, style_report = app_styles.load()
+    tree_html, patches = build_tree_html(species_meta, taxonomy, slot_deg, style_report["root_css"])
     (DIST / "tree.html").write_text(tree_html, encoding="utf-8")
 
     # Page
@@ -459,33 +546,43 @@ def main():
                  "line": line, "stops": stops},
         "species": [pub[s] for s in sorted(pub, key=lambda s: (not pub[s]["toxic"], pub[s]["en"] or pub[s]["sci"]))],
         "recipes": recipes_out,
-        "disclaimer": {"heading": texts["disclaimer_heading"], "paras": texts["disclaimer_paras"]},
+        "disclaimer": cfg.get("disclaimer_override") or {"heading": texts["disclaimer_heading"],
+                                                         "paras": texts["disclaimer_paras"]},
     }
     tpl = (HERE / "templates" / "index.html").read_text(encoding="utf-8")
     page = (tpl.replace("{{TITLE}}", html.escape(cfg["title"]))
                .replace("{{LANG}}", html.escape(cfg.get("language", "en")))
-               .replace("{{CANONICAL}}", f'<link rel="canonical" href="{html.escape(cfg["host_page_url"])}">'
-                        if cfg.get("host_page_url") else "")
+               .replace("{{CANONICAL}}", f'<link rel="canonical" href="{html.escape(cfg["canonical_url"])}">'
+                        if cfg.get("canonical_url") else "")
                .replace("{{LEAFLET_CSS}}", sri_tag("leaflet_css"))
                .replace("{{LEAFLET_JS}}", sri_tag("leaflet_js"))
+               .replace("{{APP_STYLES}}", app_css)
                .replace("{{DATA}}", json_inline(data)))
     (DIST / "index.html").write_text(page, encoding="utf-8")
+    preview_html, preview_info = build_preview(cfg, data, pub, app_css)
+    (DIST / "preview.html").write_text(preview_html, encoding="utf-8")
 
     # Post-build checks
     meta = verify_no_metadata(photo_paths)
-    out_text = page + tree_html
+    out_text = page + tree_html + preview_html
+    if "<script" in preview_html.lower():
+        die("preview.html must stay script-free")
     if not cfg.get("show_brand", False) and "landmemory" in out_text.lower():
         die("'LandMemory' found in output while show_brand is false")
     leftovers = [m for m in ("{{", "}}") if m in page or m in tree_html.replace("${", "")]
-    if "{{" in page or "{{" in tree_html:
+    if "{{" in page or "{{" in tree_html or "{{" in preview_html:
         die(f"unreplaced template placeholder in output: {leftovers}")
     if meta["exiftool_gps_tags"] or meta["pil_gps_tags"]:
         die(f"GPS metadata found in output images: {meta}")
     for p in pub.values():                                  # gate cross-checks on the final data
         if p["toxic"] and p["badge"]["kind"] in ("edible", "caution"):
             die(f"toxic species with edible badge: {p['sci']}")
+        if cfg.get("apiaceae_id_only") and p["apiaceae"] and p["badge"]["kind"] in ("edible", "caution"):
+            die(f"Apiaceae with edible badge while apiaceae_id_only: {p['sci']}")
     for r in recipes_out:
         sp = species[r["species_id"]]
+        if cfg.get("apiaceae_id_only") and gates.is_apiaceae(sp):
+            die(f"recipe {r['recipe_id']} for Apiaceae while apiaceae_id_only: {sp['scientific_name']}")
         if gates.is_toxic(sp) or not gates.human_verified(sp):
             die(f"recipe {r['recipe_id']} for non-eligible species {sp['scientific_name']}")
 
@@ -511,6 +608,13 @@ def main():
         print(f"         \"{r['line']}\"")
     for rid, name, why in recipe_excluded:
         print(f"  - {rid:>4} {name:<26} {why}")
+    print("Disclaimer: " + ("config disclaimer_override (web wording)" if cfg.get("disclaimer_override")
+                              else "print_pdf.html verbatim"))
+    print(f"App styles: {len(style_report['tokens'])} tokens, {len(style_report['rules'])} rules copied, "
+          f"shell {style_report['shell']['background']}/{style_report['deep']['background']}, "
+          f"badges toxic {style_report['badges']['toxic'][0]} edible {style_report['badges']['edible'][0]} "
+          f"inedible {style_report['badges']['inedible'][0]}")
+    print(f"Preview: hero {preview_info['hero']}; teasers {preview_info['recipes']}")
     print(f"Stops: {len(stops)} ({sum(s['toxic'] for s in stops)} with ☠)")
     print(f"Images: {meta['files']} written ({len(photo_report)} species × 2 sizes); "
           f"GPS tags exiftool={meta['exiftool_gps_tags']} PIL={meta['pil_gps_tags']}; "
@@ -524,6 +628,6 @@ def main():
 if __name__ == "__main__":
     try:
         main()
-    except BuildError as e:
+    except (BuildError, app_styles.StyleDrift) as e:
         print(f"BUILD FAILED: {e}", file=sys.stderr)
         sys.exit(1)

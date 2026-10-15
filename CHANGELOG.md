@@ -471,6 +471,80 @@ Still open:
 
 ## History
 
+### 2026-10-15 13:45
+**Snapshot** — Manual snapshot
+DB: `snapshots/db_20261015_134551.sqlite`
+
+### 2026-10-15 13:41
+**Experience export: self-canonical on index.html; removed ☠ subtitle sentence**
+
+**Built:**
+- config canonical_url https://melvinoj.github.io/foraging-experience/ used for index.html canonical (switch to subdomain later)
+**Fixed:**
+- index.html no longer canonicalises to /b
+- Walk subtitle now: Numbered stops follow the walk.
+- preview.html noindex confirmed (already present), no canonical
+**Files:** `scripts/experience_export/config.json`, `scripts/experience_export/export.py`, `scripts/experience_export/templates/index.html`
+**Pending:**
+- Push only after explicit OK
+
+### 2026-10-15 13:39
+**Experience export: dist/preview.html embed card for melvinjarman.co.uk/b**
+
+**Built:**
+- preview.html: static (no JS), fixed 500px, no scroll; hero photo, build-time SVG route drawing (no tiles), species/stops/km stats, 3 recipe teasers (2 under 400px wide), whole card + button link to index.html target=_top
+- Preview obeys gates: teasers from gated recipes only, hero must have photo and must not be toxic; build fails otherwise
+- config: preview_where, preview_hero_species_id, preview_recipe_ids
+**Files:** `scripts/experience_export/templates/preview.html`, `scripts/experience_export/export.py`, `scripts/experience_export/config.json`
+**Pending:**
+- index.html canonical points to /b, which will host the preview card, not the full page - Melvin to decide
+- Verify preview fit at 500px live; push only after explicit OK
+
+### 2026-10-15 13:37
+**Experience export fixes: tree failed-to-load diagnosed + fixed; plain stop markers; base-layer switcher + locate me; contact URL**
+
+**Built:**
+- Map: Standard (OSM) / Satellite (Esri World Imagery) / Topo (OpenTopoMap) layer switcher using the app _baseLayers definitions, keyless; Locate me control (navigator.geolocation, drawn on map only, nothing stored/sent)
+- Stop markers/cards plain numbered; toxic shown only on the plant badge; subtitle now: ☠ marks poisonous plants — look, don't pick.
+**Fixed:**
+- Plants tab Failed to load: taxonomy.html layout() class-tier redistribution throws unless all 6 full-collection classes (Magnoliopsida, Bryopsida, Polypodiopsida, Liliopsida, Pinopsida, Florideophyceae) exist; walk has 4 (no Bryopsida/Florideophyceae). Reproduced under jsc with DOM stubs; fixed with anchored export patch skipping that block (flag __EXPORT_SKIP_CLASS_REDISTRIBUTION__). jsc run now: 51 species badge, 97 nodes, 4 toxic labels, 0 NaN transforms
+- contact_url -> https://melvinjarman.co.uk/contact (CTA + footer, target=_top)
+**Files:** `scripts/experience_export/export.py`, `scripts/experience_export/templates/index.html`, `scripts/experience_export/config.json`
+**Pending:**
+- Melvin to verify tree + map live
+- Hostinger embed iframe needs allow=geolocation for Locate me
+- Push only after explicit OK
+
+### 2026-10-15 13:28
+**Experience export restyled to the app look (build-time extraction, fail-loud anchors); OSM tiles kept, no Thunderforest key**
+
+**Built:**
+- scripts/experience_export/app_styles.py: copies tokens.css :root verbatim, 18 top-level rules (walk-panel stop card/num/species/common/meta/recipe strip, walk-header; species.html species-card family, warn/toxic badges, list headings), shell colours from species.html (#2a3330) and lists.html (#1e2b28), walk-panel badge colours read from renderWalkPanel JS; each anchor must match exactly once (StyleDrift)
+- index template: dark app shell, Georgia display serif for names/headings, stop cards in walk-panel layout (sci name, common EN/DE, badge), species cards, recipe teasers in walk-panel recipe strip, 44px touch targets
+- tree.html: taxonomy variables mapped to app palette; toxic nodes var(--app-toxic)
+**Files:** `scripts/experience_export/app_styles.py`, `scripts/experience_export/export.py`, `scripts/experience_export/templates/index.html`, `scripts/experience_export/templates/tree.html`
+**Pending:**
+- Melvin to check the restyled preview in his browser (not verified live)
+- Push only after explicit OK
+
+### 2026-10-15 13:23
+**Experience export adjustments + DB: Galium album verified, GBIF lineage backfill for 7 species; snapshot db_20261015_132210**
+
+**Built:**
+- gates: page-level apiaceae_id_only (all Apiaceae = look-alike/ID cards, no edible label, no recipe; build fails if violated)
+- recipes: Friture Sauvage (Melvin own menu) allowed; source priority curator > own menu > ai_generated; same dish never shown twice
+- disclaimer_override (web wording) in config
+**Fixed:**
+- 183 Galium album verified human (status already edible)
+- Genus corrected 134 Stellaria->Polygonum, 233 Scorzoneroides->Hypochaeris (GBIF conflict gate)
+- GBIF lineage via app/integrations/gbif.enrich_species_taxonomy for 58,134,233,293,329,488,710 - all EXACT; tree now 51/51 placed
+- History rows for verification, genus and lineage fields
+**Files:** `data/foragingid.db`, `scripts/experience_export/gates.py`, `scripts/experience_export/export.py`, `scripts/experience_export/config.json`
+**Pending:**
+- Melvin: approve web disclaimer wording
+- Melvin: review preview; push only after explicit OK
+- Impressum page to be created before go-live
+
 ### 2026-10-15 13:22
 **Snapshot** — Manual snapshot
 DB: `snapshots/db_20261015_132210.sqlite`

@@ -470,7 +470,9 @@ window.DATA = {{DATA}};
   document.getElementById("footer-links").innerHTML =
     '<a href="' + esc(D.contact_url) + '" target="_top" rel="noopener">Contact</a>' +
     (D.impressum_url ? '<a href="' + esc(D.impressum_url) + '" target="_top" rel="noopener">Impressum</a>'
-                     : '<span class="placeholder">Impressum (link to follow)</span>');
+                     : '<span class="placeholder">Impressum (link to follow)</span>') +
+    (D.datenschutz_url ? '<a href="' + esc(D.datenschutz_url) + '" target="_top" rel="noopener">Datenschutz</a>'
+                       : '<span class="placeholder">Datenschutz (link to follow)</span>');
 
   // ── photo lightbox ──
   var lb = document.getElementById("lightbox");

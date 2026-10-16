@@ -5584,6 +5584,13 @@ async function _caffToggle() {
   }
 }
 
+// Show the REAL state on page load: _caffActive starts false, so after a page
+// reload the button read "off" while caffeinate was still running.
+fetch('/api/scan/caffeinate/status')
+  .then(r => r.ok ? r.json() : null)
+  .then(d => { if (d) { _caffActive = !!d.active; _caffRender(); } })
+  .catch(() => {});
+
 function _caffRender() {
   const btn = document.getElementById('btn-caffeinate');
   if (!btn) return;

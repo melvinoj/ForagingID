@@ -11,6 +11,7 @@ No-op on non-macOS platforms. Safe to call from async contexts —
 subprocess.Popen is non-blocking and the cleanup on exit is near-instant.
 """
 
+import os
 import subprocess
 import sys
 from contextlib import contextmanager
@@ -32,8 +33,11 @@ def keep_awake(reason: str = "ForagingID job running"):
 
     proc = None
     try:
+        # -w <server pid>: exits with the server even if the finally below
+        # never runs (crash / --reload restart mid-job) — same class of bug
+        # as the scan caffeinate endpoints.
         proc = subprocess.Popen(
-            ["caffeinate", "-i"],
+            ["caffeinate", "-i", "-w", str(os.getpid())],
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
         )

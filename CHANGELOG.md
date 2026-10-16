@@ -1,527 +1,108 @@
 ## Current State
 
-continued...
-## Known issues / backlog
+_Last updated: 16 Oct 2026_
+
+### Build status
+Server: START_ForagingID.command — uvicorn foreground + tee to logs/server_<ts>.log; port check; cleanup trap. Claude Code never starts the server.
+Launcher (from next launch): --reload-dir app plus absolute --reload-exclude for scripts/, migrations/, tests/ (uvicorn 0.32.1 ignores --reload-dir alone); --timeout-graceful-shutdown 5.
+Alembic head 0052. WAL; busy_timeout 30000; synchronous=NORMAL per connection.
+
+### Completed 15–16 Oct
+- melvinjarman.co.uk/b live: embedded preview.html card (opens full Foraging Experience); hero image removed — plain welcome, card, guestbook
+- Impressum + Datenschutz pages live (DE/EN) at /impressum and /datenschutz; sitewide footer links "Impressum · Datenschutz"; public contact melvin@melvinjarman.co.uk; address c/o Hofgut LEO, Gresgen 40
+- Experience export: Datenschutz link added; footer reads Contact · Impressum · Datenschutz (target=_top); pushed to melvinoj/foraging-experience main 59b9748
+- External-host audit of export: unpkg (Leaflet), OSM tiles, Esri + OpenTopoMap (on layer switch only), cdnjs d3 (Taxonomy tab only); no cookies/storage/trackers; preview.html loads no external hosts
+- Caffeinate fix applied (scan.py, caffeinate.py, scan.html): tied to server PID on start/stop/status; keep_awake matching fixed; scan.html shows real status on load. Verified with real processes (start, stop, orphan cleanup, -w exit). NOT yet verified through a real server reload or via the scan-page button
+- Root cause of orphaned caffeinate: reloader watched scripts/ edits → worker restarts; fixed via launcher flags above
+- CHANGELOG tidied: one Current State block; 8 stale dated blocks moved to Archive; nothing lost
+
+### Pending / next
+1. Next launch: confirm new launcher flags active; then verify caffeinate through a real reload + scan-page button
+2. Check live footer links on phone (melvinjarman.co.uk + experience page after Pages rebuild)
+3. "Publish as experience" button on a saved walk — on the simmer
+4. Walk Stage 3: accumulating selection → undo / reset+confirm / subtract / side panel
+5. Walk Stage 4 filters; Stage 5 backend (ORS elevation, PUT saved walk, draft autosave)
+6. Saved walks should resolve stop labels from observations at load
+7. PWA install on Pixel 8 via ngrok static domain
+8. Proximity alerts + summary export read only first species of multi-species stops
+
+### Known issues / backlog
 - SAFETY: Aruncus dioicus 'edible', unverified, toxicity none — Melvin to decide
-- SAFETY: remaining unverified "edible"/toxic species app-wide (Heracleum sphondylium, Chaerophyllum hirsutum, Sambucus ebulus, Hypholoma fasciculare, Iris pseudacorus …) — verify walk-by-walk or in a sweep
-- No UI path to human-verify an already-'edible' species (verification done via SQL with history rows today)
-- Toxic guard missing: stop-card culinary hint, walk-summary export, walk sheet species list; backend toxicity_severity on GET /api/culinary/{name}
-- Re-ID sweep: remaining obs of H. perfoliatum (5), Knautia arvernensis (4), Thymus serpyllum (4), T. praecox (11), T. polytrichus (2), Rubus gratus (1) outside the walks
-- Anthriscus caucalis (138): inedible + toxicity 'toxic' contradiction; 1 obs left
-- Junk/zero-obs cards (cleanup needs OK): 108, 810, 491, 744, 279, 754, 755, 792, 807, 808, 803, 791; keep 653 Oenanthe crocata (reference)
-- Identification Stage B: GBIF out-of-range flag (~150 km); test PlantNet weurope vs all
-- 7 species lacked class/order lineage (backfill status to confirm); Erigeron family fixed
-- Enrichment paths not gated: culinary.py batch, trigger_ai_drafts_for_species, ITIS task; enrichment queue in-memory
-- Re-enrich of fungus wipes pending edibility suggestion
+- SAFETY: remaining unverified "edible"/toxic species app-wide (Heracleum sphondylium, Chaerophyllum hirsutum, Sambucus ebulus, Hypholoma fasciculare, Iris pseudacorus …)
+- No UI path to human-verify an already-'edible' species
+- Toxic guard missing: stop-card culinary hint, walk-summary export, walk sheet species list; toxicity_severity on GET /api/culinary/{name}
+- Re-ID sweep: remaining obs of H. perfoliatum, Knautia arvernensis, Thymus serpyllum/praecox/polytrichus, Rubus gratus outside the walks
+- Anthriscus caucalis (138): inedible + toxic contradiction
+- Junk/zero-obs cards awaiting cleanup OK (keep 653 Oenanthe crocata)
+- Identification Stage B: GBIF out-of-range flag; PlantNet weurope vs all test
+- Enrichment paths not gated; enrichment queue in-memory; fungus re-enrich wipes pending edibility suggestion
 - Identify — 2013 job at 90/2367
 - Google Drive token invalid; Ollama 'mistral' not installed
 - Disk tight — move exports/old snapshots to DIGIERA
 - Docs drift: CLAUDE.md Alembic head, PhoneForaging path
 - Tracked leftovers: your_db.db, current.txt; review_status 'not_applicable' (1 row)
-
-session_summary:
-Walk builder fixes; human verification + re-ID review of two Gresgen walks (~62 species verified, audit trail started, deadly nightshade/male fern/tansy corrected); Foraging Experience export built and published to GitHub Pages (walk map with layers + locate, plants grid, recipe teasers, taxonomy tree, 500px embed card for /b).
-
-## Current State — 15 Oct 2026 (end of session 3)
-
-### Build status
-Server: START_ForagingID.command — uvicorn foreground + tee to logs/server_<ts>.log; port check; cleanup trap. Claude Code never starts the server.
-Alembic head 0052. WAL; busy_timeout 30000; synchronous=NORMAL per connection.
-
-### Completed 14–15 Oct
-- Revival health check; Syncthing re-paired to Pixel 8 Pro ("Foraging Pics" 39ds2-kdty9: Mac Receive Only + ignoreDelete; phone Send Only curated folder)
-- iNat token refreshed (expires ~24h); Leaflet SRI fixed
-- SQLite lock contention fixed (two-transaction enrichment; enrich_gate.py ingest priority; P1 classify-before-insert + cleanup). Verified 0 locks
-- Launcher rewritten (foreground, tee survives Ctrl+C); ngrok stopped on graceful shutdown
-- Identification Stage A: iNat gate = min(combined, vision); disagreement promotion (iNat location #1 if in PlantNet top 5 → suggested, needs_review, never agreement); scores + dual_source_agreement stored. Cards-on-approval DECLINED
-- Walk builder Stage 1 (typed waypoints, circular + geometry persisted, toxic guard) + Stage 2 (centroid stops 30 m default, slider 10–100, 50-cap, honest ORS errors, Google 10-point notice) + fixes (save confirmation / duplicate guard, saved name in header, single header, centre-drift second pass)
-- Saved walks: "little foray" (id 3), "Rümmelsbühl foray" (id 4, 26 stops, 51 species, 6.4 km)
-- Edibility audit trail started: species_edibility_history now written (was 0 rows for all species before today)
-- Human verification: all species on walks 3 and 4 verified (~62 species); status changes incl. Atropa → toxic/deadly, Senecio ovatus → toxic, Dryopteris filix-mas → toxic, Tanacetum/Artemisia vulgaris/absinthium → caution, all Hypericum → caution (photosensitivity), Carex caryophyllea/Briza media → inedible/none, Galium album → edible
-- Re-IDs (correct-species path): S. canadensis → S. nigra (4 obs); 24234 → H. perforatum; 17188 → Daucus carota; perfoliatum → perforatum; arvernensis → K. arvensis; A. oblongifolia → A. patula; L. heterophyllum → L. vulgare; 3 thyme obs → T. pulegioides; R. gratus → R. fruticosus; 17889 → Genista sagittalis
-- Family/name fixes: 9 families, 2 kingdoms, names (Silene nutans, Silene vulgaris "Bladder campion", Fagus DE, Malva DE)
-- Foraging Experience export LIVE: scripts/experience_export/ (export.py, config.json, gates.py, app_styles.py, templates) → dist/ → separate repo melvinoj/foraging-experience (clone at ~/foraging-experience) → GitHub Pages https://melvinoj.github.io/foraging-experience/. Tabs: Walk (OSM/Satellite/Topo, locate-me, plain numbered stops) · Plants (photo grid, walk order, filter chips, preview panel) · Recipes (teasers) · Taxonomy (tree, Bryopsida anchor patch). preview.html = 500px embed card for melvinjarman.co.uk/b. Gates: edible claims only human-verified; toxic → badge, never recipe (build fails otherwise); Apiaceae page-level look-alike cards; no AI descriptions; no medicinal; EXIF stripped (208 photos, 24.8 MB). Publish: re-run export → rsync dist/ → commit/push in clone
-
-### Pending / next
-1. Hostinger: embed preview.html iframe on /b (Builder embed element, height 500) — check live on phone
-2. Impressum + Datenschutz pages on melvinjarman.co.uk (footer links to /impressum) — before linking/QR; Claude to draft DE/EN if asked
-3. "Publish as experience" button on a saved walk (export + preview + push on confirm; small overrides panel: hero, teasers, hidden stops) — on the simmer
-4. Walk Stage 3: accumulating selection → undo / reset+confirm / subtract / side panel (remove, reorder)
-5. Walk Stage 4 filters; Stage 5 backend (ORS elevation, PUT saved walk, draft autosave)
-6. Saved walks should resolve stop labels from observations at load (stale labels after re-ID)
-7. PWA install on Pixel 8 via negligee-raft-shiny.ngrok-free.dev (Start sharing first)
-8. Launcher live checks after next Ctrl+C: pgrep -fl ngrok empty; log tail shows shutdown
-
-### Known
-
-## Current State — 15 Oct 2026 (end of session 2)
-
-### Build status
-Server: START_ForagingID.command — uvicorn foreground + tee to logs/server_<ts>.log; port check (no kill -9); cleanup trap; tee survives Ctrl+C. Claude Code never starts the server; reads the log.
-Alembic head: 0052. WAL on; busy_timeout 30000 + synchronous=NORMAL on every connection.
-
-### Completed 14–15 Oct
-- Health check after Aug–Oct dormancy (DB ok, invariant ok)
-- Syncthing: Pixel 8 Pro paired; "Foraging Pics" (39ds2-kdty9) Mac = Receive Only + ignoreDelete; phone = Send Only curated folder; duplicate folder entry removed; Pixel7pro entry kept
-- iNat token refreshed (expires ~24h — refresh before each processing session)
-- Leaflet SRI fixed (1.9.4, verified hashes on review/index/species)
-- SQLite lock contention fixed: enrichment two short transactions (no lock across LLM calls); enrich_gate.py ingest priority (enrichment deferred during P1/P2/re-identify batches, Semaphore(1)); P1 classify-before-insert + to_thread + cleanup on failed insert. Verified 0 locks on 90-file batch
-- Follow-up data: re-enriched Alnus alnobetula / Melampyrum nemorosum / Salix aurita; obs 24065 → needs_review; orphan copies + thumbnails deleted
-- Launcher rewritten (foreground); ngrok subprocess stopped on graceful shutdown
-- Identification Stage A (dry-run verified, live untouched): iNat gating score = min(combined, vision) (CLAUDE.md now matches code; can only lower scores); disagreement promotion (iNat location-ranked #1 if in PlantNet top 5 → suggested ID, always needs_review, never counts as agreement); iNat combined + vision scores stored per candidate; dual_source_agreement written again (1 agree / 0 disagree or single source / NULL none). Stage A item 3 (cards only on approval) DECLINED — dependencies (accept-species, auto-approve, species_id backfill, taxonomy tree, Edibility Review)
-- Walk builder Stage 1: typed waypoints (notes not saved as obs), circular flag persisted, route geometry saved + redrawn without ORS, toxic guard on walk panel
-- Walk builder Stage 2: centroid stops (default 30 m, slider 10–100 m, radius saved in route_geojson.foragingid v2); 50-waypoint cap (49 circular) with Increase radius; real ORS failure reasons + opt-in labelled straight-line; Google Maps export first 10 points with notice. Browser-tested by Melvin: selection + routing work
-- First Gresgen walk saved: "little foray" (20 stops, 22 species, ~13.5 km circular)
-
-### Pending / next
-1. Walk fixes from Melvin's test: (a) Save gives no confirmation — show a clear "Saved as <name>" and avoid duplicate saves (he created 3); (b) after saving, the build-walk header still shows "20 stops" — should show the saved name ("little foray"); (c) duplicate summary header ("Walk Route (20 stops)" + "Walk route · 20 stops"); (d) centre-drift second pass: reassign pins beyond R to nearest stop or new stop — APPROVED; (e) delete the 2 duplicate "little foray" saves (with OK)
-2. SAFETY next: walk panel (and app-wide) shows "edible" badge + recipes for UNVERIFIED Apiaceae (Daucus carota on "little foray" stop 1). Walk panel: Apiaceae edibility/recipes only if human-verified; same review for other unverified "edible" species. Then app-wide Apiaceae/unverified-toxic fix
-3. Walk Stage 3: accumulating selection → undo / reset+confirm / subtract (touch toggle) / side panel (remove, reorder via pointer events)
-4. Walk Stage 4: walk filters (human-verified only, kingdom, months, min obs)
-5. Walk Stage 5 (backend, server stopped): ORS elevation, PUT saved walk (edit), draft autosave
-6. Foraging Experience export: walk = "little foray". Next: Code lists its 22 species with edibility/toxicity/verified status → Melvin verifies shortlist. Then scripted export (scripts/experience_export/) → separate public GitHub Pages repo (Melvin creates; gh not installed) → Hostinger Builder embed. Gates: edible claims only edibility_verified_by='human'; toxic → warning, no recipe; Apiaceae no edibility text unless human-authored; EXIF stripped (~1200px re-encode); disclaimer + link to site Impressum; export only species with approved obs. Open: recipe depth, language (DE/EN)
-7. PWA: ngrok static domain negligee-raft-shiny.ngrok-free.dev — Start sharing, install from Chrome
-8. Launcher live checks after next Ctrl+C: pgrep -fl ngrok (empty); log tail shows shutdown complete
-9. Proximity alerts + 📋 summary export read only first species of multi-species stops
-
-### Known issues / backlog
-- SAFETY: Aruncus dioicus edibility 'edible', unverified, toxicity none — Melvin to decide status (cooked young shoots only?), check live recipes, own-words prep warning. (Supersedes stale "goat's beard drafts 2182/2183 pending" — approved 14 Jun)
-- SAFETY: unverified "edible" Apiaceae (Daucus carota, Heracleum sphondylium, Aegopodium podagraria); unverified toxic species (Digitalis purpurea, Chaerophyllum hirsutum/aureum, Sambucus ebulus, Lupinus polyphyllus, Hypholoma fasciculare, Iris pseudacorus)
-- Toxic guard still missing: stop-card culinary hint, walk-summary export, walk sheet species list; backend one-liner: toxicity_severity on GET /api/culinary/{name}
-- T. dubius edibility_status NULL (invalid); T. pratensis unknown
-- Identification Stage B: GBIF "out of range" review label (~150 km, flag only, cached per species × 0.5° cell); test PlantNet weurope vs all on a sample before switching. Needed for 24221 (Aspalathus) / 24222 (Ambrosia) type cases
-- Junk species cards (Aspalathus retroflexa 807, Ambrosia confertiflora 808, Larix occidentalis 803, Larix lyallii 791, Verbascum boerhavii 792; Gentiana verna 789 season-implausible) — cleanup of zero-approved cards needs OK
-- Enrichment paths not gated: culinary.py enrichment-run batch, trigger_ai_drafts_for_species, ITIS lookup task
-- Enrichment queue in-memory: after restart, check backfill panel for un-enriched cards
-- Re-enrich of a fungus wipes its pending edibility suggestion
-- Identify — 2013 job interrupted at 90/2367 (gated; rerun when convenient)
-- Google Drive token invalid
-- Disk tight — move to DIGIERA: Facebook/Instagram exports, all but 2 newest snapshots (2 byte-identical pairs), old data/ backups
-- Ollama default 'mistral' not installed (llama3.1 present)
-- Docs drift: CLAUDE.md Alembic head (says 0050), PhoneForaging path (~/Local(unsynced)/PhoneForaging)
-- Tracked leftovers: your_db.db, current.txt; review_status 'not_applicable' (1 row) undocumented
-
-session_summary:
-Identification Stage A (stricter min() gating score, iNat location-ranked promotion on disagreement, scores + dual_source_agreement stored; card-deferral declined). Walk builder Stages 1–2 (typed waypoints, circular + geometry persisted, toxic guard, centroid stops with radius slider, 50-waypoint cap, honest ORS errors, Google export notice). First Gresgen walk "little foray" saved for the promo page. Test feedback logged: save confirmation, saved-name header, duplicate header, centre-drift pass, unverified-Apiaceae "edible" badge.
-
-## Current State — 15 Oct 2026
-
-### Build status
-Server: START_ForagingID.command — uvicorn foreground + tee to logs/server_<ts>.log; port check (no kill -9); cleanup trap. Claude Code never starts the server; reads the log.
-Alembic head: 0052. WAL on; busy_timeout 30000 + synchronous=NORMAL on every connection.
-
-### Completed today (14–15 Oct)
-- Health check after Aug–Oct dormancy (DB ok, invariant ok, git clean)
-- Syncthing: Pixel 8 Pro paired; "Foraging Pics" (39ds2-kdty9) Mac = Receive Only + ignoreDelete; phone = Send Only on curated folder; duplicate "ForagingID" folder entry removed; Pixel7pro entry kept (old phone)
-- iNat token refreshed (expires ~24h — refresh before each processing session)
-- Leaflet SRI: 1.9.4 pinned, verified hashes on review/index/species (review.html JS hash was truncated)
-- SQLite lock contention fixed: enrichment no longer holds write lock across LLM/network calls (two short transactions); enrich_gate.py — ingest priority (enrichment deferred while any P1/P2/re-identify batch active, Semaphore(1)); P1 ingest classify-before-insert + to_thread + cleanup of copy/thumbnail on failed insert. Verified: 0 locks on 90-file batch (vs 30 before); enrichment deferred and serialised; no edibility written
-- Follow-up data: re-enriched Alnus alnobetula / Melampyrum nemorosum / Salix aurita; obs 24065 → needs_review; 2 orphan pipeline2 copies + thumbnails deleted
-- Launcher rewritten (foreground, tee survives Ctrl+C, port check); ngrok subprocess stopped on graceful shutdown (sharing.py stop_ngrok_subprocess + lifespan)
-- Walk builder Stage 1 (frontend/index.html): note IDs no longer saved as obs IDs (typed waypoints, old walks still load); circular flag persisted in route_geojson.foragingid; route geometry saved + redrawn without ORS; toxic guard on walk panel (no recipes for toxic/deadly, ☠ badge)
-- Snapshots: db_20261015_072953 (+ earlier today)
-
-### In progress
-- Identification Stage A: iNat gating score = min(combined, vision) per docs; disagreement promotion (iNat location #1 if in PlantNet top 5, stays needs_review, never counts as agreement); store iNat combined score; fill dual_source_agreement; no species cards for disputed IDs (pending dependency check)
-
-### Pending / next
-1. Verify walk Stage 1 in browser (toxic badge; save/reload circular walk with note — SQL check; no ORS call on load)
-2. Walk Stage 2: stops via centroid clustering (default 30 m, slider 10–100 m), 50-waypoint ORS cap with message (no silent straight-line fallback)
-3. Walk Stage 3: accumulating selection → undo / reset+confirm / subtract mode (touch toggle) / side panel (remove, reorder via pointer events)
-4. Walk Stage 4: walk filters (human-verified only, kingdom, months, min obs)
-5. Walk Stage 5 (backend, server stopped): ORS elevation, PUT saved walk (edit), draft autosave
-6. Foraging Experience export (Gresgen): scripted export (scripts/experience_export/) → separate public GitHub Pages repo (Melvin creates repo; gh not installed) → Hostinger Builder embed. Needs: Gresgen walk drawn; walk species shortlist human-verified; gates: edible claims only edibility_verified_by='human', toxic → warning/no recipe, Apiaceae no edibility text unless human-authored; EXIF stripped (re-encode ~1200px); existing disclaimer + link to site Impressum. Open: recipe depth (full/teaser), language (DE/EN)
-7. PWA install on Pixel 8 via ngrok static domain (negligee-raft-shiny.ngrok-free.dev) — Start sharing first, install from Chrome
-8. Launcher live checks after next Ctrl+C: pgrep -fl ngrok (empty); log tail shows shutdown complete
-
-### Known issues / backlog
-- SAFETY: Aruncus dioicus edibility_status='edible', unverified, toxicity none — Melvin to decide status (cooked young shoots only?), check live recipes, rewrite prep warning in own words. CHANGELOG "goat's beard drafts 2182/2183 pending" is stale (approved 14 Jun) — replaced by this
-- SAFETY: unverified "edible" Apiaceae (Daucus carota, Heracleum sphondylium, Aegopodium podagraria); unverified toxic species (Digitalis purpurea, Chaerophyllum hirsutum/aureum, Sambucus ebulus, Lupinus polyphyllus, Hypholoma fasciculare, Iris pseudacorus) — app-wide
-- Toxic guard still missing: stop-card culinary hint, walk-summary export, walk sheet species list; backend one-liner to add toxicity_severity to GET /api/culinary/{name}
-- T. dubius edibility_status NULL (invalid); T. pratensis unknown
-- Orphan/implausible species cards from disputed IDs (Aspalathus retroflexa 807, Ambrosia
-
-## Current State — 19 July 2026
-
-**Session focus:** Opus phase-boundary audit → full remediation of the 
-guard-coverage defect class, plus repair of the 6 invariant-drifted rows. 
-All audit findings closed. Invariant clean: card_counted 2158 = map_eligible 
-2158, zero drift.
-
-**Landed and verified this session (all harness- or live-verified per fix):**
-
-STRUCTURAL — _identify_scanned_inner guard-coverage fix (scan.py)
-- Root-cause fix for the guard-coverage defect class (4 prior instances in 
-  2 weeks: kingdom gate, blacklist gate, force_review-in-else, terminal 
-  guard). Compute `terminal = is_terminal_review_status(obs.review_status)` 
-  ONCE up front; every human-decision mutation gated on it; diagnostics/
-  append-only rows left unconditional. All hand-rolled terminal variants 
-  retired (grep for `!= "manually_verified"` returns nothing).
-- Closed A1 (min-confidence branch: species-wipe + review_status revert, 
-  zero guard, executed on live manually_verified rows), A2 (unguarded 
-  species overwrite), A3 (reviewer_notes overwrite — now append-never-
-  overwrite; also fixed an auto-approve `reviewer_notes = None` blanket 
-  wipe), A5 (missing-file path), A6 (kingdom gate now covers all 3 terminal 
-  states), A7 (6 review_label writes via single apply point). Two sites the 
-  audit missed (pause check, no-credential exit) also found and guarded.
-- A6 behaviour signed off: approved/rejected rows are now immune to 
-  automated re-ID pull-back. Human override stands — finalized is finalized.
-
-EDIBILITY — rename safety bypass (enrichment.py, A4)
-- Rename path was silently downgrading human-confirmed toxic → unknown and 
-  clearing the human-lock, bypassing _enforce_edibility_write_rules(). 
-  Found routing-through-the-gate would NOT fix it (gate permits toxic→
-  unknown by design, off-ladder). Removed the automated edibility mutation 
-  entirely — verdict/lock never written by this path for any row. Rename 
-  now flags for review (existing review_requested triple) on any established 
-  verdict, locked or not. Verified: locked toxic + locked edible both 
-  preserved + flagged; unlocked correctly not flagged. AST-walk confirms 
-  zero edibility writes remain in the rename function.
-
-PHONE-ORIGIN — reconciled to one definition (A8, all parts)
-- Root finding: `is_phone` never meant "phone origin" — it meant "must 
-  force review". Tuple produced correct routing; the NAME lied. 
-  Renamed → `requires_forced_review` (zero behaviour change, proven by 
-  reconstruction-diff). Added canonical `is_phone_origin(obs) → 
-  upload_source == 'syncthing'`; retired 12 scattered string literals.
-- identify.py bulk-act filter (`.isnot("phone")`, 0-row no-op) removed as 
-  obsolete — the case it guarded no longer exists; documented why. 
-- Fail-closed on unknown provenance: `requires_forced_review = not 
-  is_phone_origin(obs)` — auto-approve is now opt-in for syncthing ONLY; 
-  file_upload, legacy phone, NULL, and any future source fail closed to 
-  review. 26 NULL-provenance rows moved from auto-approve-eligible to 
-  review-bound. Added an "Unknown origin — needs review" label so those 
-  rows aren't mislabelled "File upload".
-
-APPROVED-NO-SPECIES — named the legitimate state (both approve paths)
-- "approved, identified, no species" is now a named valid state for 
-  landscape/scene rows. Factored `qualifies_as_identified(obs)` (species 
-  set OR obs_category=='landscape') into observation.py; both bulk_actions 
-  and the shared observation_service helper use it. Fixed a second 
-  instance the audit reported as clean — single-approve had the identical 
-  gap (fix-one-twin-miss-the-other). One predicate, 4 call sites, zero 
-  duplicated logic.
-
-DATA REPAIR — the 6 drifted rows (all fixed)
-- 3 landscape (8771/9645/9827): repaired to approved+identified+NULL.
-- 9827 stale candidates cleared (10 Canis lupus rows + json); row retained 
-  as hazard reference.
-- 8771 unlogged species-primary clear: backfilled the missing audit row 
-  (timestamp unrecoverable — git reset 6 July — stamped honestly, inference 
-  in a log, not fabricated).
-- 3 plant (21562/21770/21771): were P1 rows that failed ID only on PlantNet 
-  timeouts. Deliberately re-opened (logged repair:reopen_for_reid) and 
-  re-identified through the standard path with force_review=True. All three 
-  identified this time (Thymus praecox, Campanula rotundifolia, Lactuca 
-  muralis) — the (5,25)+retry fix worked where it previously timed out. 
-  Now in review queue awaiting confirmation; none auto-approved.
-
-DOCS — consistency pass (CLAUDE.md, architecture.md, scan.py comment)
-- uploads/ corrected to primary-image-store; scan.py identification.py 
-  stale ref replaced; architecture.md date + canonical start command; 
-  timestamp convention (UTC DB vs local filenames) documented; the three 
-  shared predicates and the scene-state exception recorded as canonical, 
-  with "do not "fix" this as drift" flagged.
-
-**In the review queue (awaiting your confirmation, not urgent):**
-21562 Thymus praecox (edible), 21770 Campanula rotundifolia (edible), 
-21771 Lactuca muralis (CAUTION) — all edibility_verified=0, provisional 
-species links, low_confidence. The caution one wants a conscious confirm.
-
-**Carried, unchanged:** 3 damaged map rows (17052/17737/18709); Retry-ID 
-buttons absent on below_threshold cards; snapshots gzip option (~700M win); 
-thumbnails_quarantine purge.
-
-**Pending / next:** none from this session's audit — all findings closed. 
-Next work is a separate fix (new thread).
-
-## Current State — 19 July 2026
-
-**Session focus:** Checkpoint list follow-through — P1 auto-scan hardening, 
-identification.py:324 fix verification (now scan.py:1343), terminal-status 
-guard bug, defence-in-depth species-card count filter, watch-dir silent-skip 
-logging, launch.json port documentation.
-
-**Completed and verified this session:**
-
-- Confirmed identification.py:324 no longer exists; live no-candidate gate 
-  is scan.py:1343-1379. Harness-verified: transport failure → needs_review, 
-  file intact, cause named in log. Branch fires ~4,574 times total (335 
-  syncthing, 4,239 file_upload) — corrects earlier "rare" framing, which 
-  described the now-deleted old path.
-
-- Fixed terminal-status guard bug at scan.py:1343-1379: only review_status 
-  was protected against a retry-identify re-run on a finalized row; 
-  identification_status, species_id, species_candidates_json, and 
-  processing_stage were unguarded and could silently wipe a human-locked 
-  species assignment on any approved/manually_verified/rejected row. All 
-  four now gated by is_terminal_review_status(). Verified across all three 
-  terminal statuses plus a non-terminal control (still routes normally). 
-  Log message corrected — no longer claims "sent to review queue" on a row 
-  that wasn't.
-
-- Recon on 6 rows matching the pre-fix corruption signature (8771, 9645, 
-  9827, 21562, 21770, 21771): audit trail confirms none were caused by 
-  this bug — all deliberately human-approved landscape/scenery photos with 
-  no species ever assigned, or (9827) a deliberately-removed bad ID (dog 
-  misID at 1866% score). Nothing to restore. Real drift cause identified 
-  instead: bulk_actions.py:107 (_bulk_review_task) sets review_status 
-  without syncing identification_status — deferred, see Pending.
-
-- Added defence-in-depth two-field filter to species-card count query 
-  (culinary.py:88-96), matching map.py's identification_status='identified' 
-  clause. Verified no-op on current data (2,114 before/after, ORM and live 
-  endpoint both confirmed) — guards a currently-unreached state.
-
-- PlantNet timeout confirmed correct, no drift: (5,25) tuple + bounded 
-  retry live at plantnet.py:60/253-276. Apparent conflict with a 16 July 
-  httpx form was a different module (inaturalist.py) — false alarm, closed.
-
-- uploads/ recon: nothing reclaimable, 0 orphaned bytes. Confirmed still 
-  the primary image store (12,239 of 13,836 observation file_paths), not 
-  "browser-uploaded pending photos" per CLAUDE.md — doc correction still 
-  outstanding (see Pending). 36G→3.7G explained: cumulative 
-  delete_observation_file() on rejected rows over time, not a migration.
-
-- ~11 "never-ingested" P1 photos: recon reversed the premise. All 11 were 
-  previously ingested, human-reviewed, and deliberately deleted — now 
-  correctly blacklisted. Not lost data; do not re-ingest without an 
-  explicit DELETE FROM deleted_hashes decision (not made this session).
-
-- Fixed bare except: pass at syncthing.py _auto_scan_loop tick: now logs 
-  via three channels (stderr w/ traceback, _state["errors"], 
-  processing_logs) through a must-not-raise helper. Verified via harness 
-  and live production.
-
-- Fixed unlogged blacklist skip in _find_new_files: blacklisted-hash skips 
-  now log via ingest_guard.blacklisted_skip(), source="p1_autoscan_filter", 
-  deduped once per hash per process lifetime. Ordinary duplicate skips 
-  remain silent, unchanged. Verified live: 12 rows / 12 distinct hashes, 
-  held steady across ~45 ticks.
-
-- Fixed watch-dir silent skip (photo_library_path missing/misconfigured): 
-  now logs via _record_watch_dir_missing, same three-channel bar, latched 
-  on path value not per-tick. Harness-verified 4 cases incl. no false 
-  positives.
-
-- launch.json port 8001 (vs documented 8000): confirmed deliberate — 
-  separates tool-launched preview servers from the manually-run dev server 
-  on 8000. Left as-is, added an inert in-file comment. No change needed.
-
-**Retracted this session (both self-caught before any write):**
-
-- The 2,161 vs 2,155 map/card-count "discrepancy" that drove the 
-  culinary.py fix did not exist in the app — it came from an ad-hoc query 
-  reported as app behaviour without being run through the live code path. 
-  Real numbers: card count 2,114, map pins 2,131 (map shows more, not 
-  fewer — inverse of what was assumed). Gap judged not worth pursuing.
-- A reported "raw control character in /api/species/ JSON" was a 
-  diagnostic-harness artifact (zsh's echo interpreting \n as a literal 
-  newline), not an app defect. Live endpoint parses cleanly.
-- Pattern to carry forward: any anomalous number from an ad-hoc diagnostic 
-  script needs to be reproduced through the real code path before being 
-  reported as a finding — both retractions shared this root cause.
-
-**Known issues / notes:**
-
-- Unplanned live write: editing syncthing.py under --reload --reload-dir 
-  app hot-reloaded the running production server mid-session, firing 12 
-  real blacklisted_hash_skip rows to the live DB before any deliberate 
-  test ran. Append-only audit rows only, nothing destructive, no snapshot 
-  taken beforehand. Going forward: any edit to a module backing an active 
-  background loop should be flagged as a live write before editing, not 
-  discovered after.
-- scan.py:1380 log message still says "no species assigned" on the 
-  terminal-guard path, where the species is now correctly retained — 
-  one-line wording fix, left alone deliberately, not urgent.
-
-**Working tree — uncommitted:**
-Modified: app/api/culinary.py, app/api/scan.py, app/api/syncthing.py
-Untracked/edited: .claude/launch.json (comment added, port unchanged)
-All changes harness- and/or live-verified individually. Nothing committed 
-yet — this End Session should commit all four together.
-
-**Pending / next (priority order):**
-1. bulk_actions.py:107 — sync identification_status on bulk-approve, or 
-   formalize "approved, no species" as a legitimate state. Deferred design 
-   call, currently inert in practice.
-2. CLAUDE.md's uploads/ description is wrong — it's the primary image 
-   store (88% of observations), not "browser-uploaded pending photos." 
-   Fold into next doc-accuracy pass.
-3. scan.py:1380 log wording — cosmetic, whenever convenient.
-
-**Carried, unchanged from prior sessions:** 3 damaged map rows 
-(17052/17737/18709); Retry ID buttons absent on below_threshold cards; 
-snapshots gzip option (~700M win); thumbnails_quarantine purge.
-
-## Current State — 10 July 2026
-
-Fixes session across three areas: species-card save integrity, safety/edibility 
-editing, and taxonomy tree species-link crossing.
-
-SPECIES CARD — save integrity + SW cache:
-- Tansy (Tanacetum vulgare, sp 194) investigated for a "saved but not showing" 
-  report. Write integrity was CLEAN — human edit landed correctly (history 2780, 
-  changed_by='human'), matched live, no race, prefix is stored not rendered. Root 
-  cause was the service worker: SPECIES_CACHE (foragingid-species) is deliberately 
-  version-independent, cache-first, 7-day TTL, with NO invalidation hook in the 
-  save flow — so every species-card edit showed stale until hard-reset.
-- FIX shipped: extended sw.js 'clear-species-cache' message handler to accept an 
-  optional targeted url (single-entry delete); wired species.html saveEditMode() to 
-  invalidate the current species' /profile cache entry after save, before 
-  loadProfile() re-fetches. offline.js's existing whole-cache-clear caller unchanged.
-  NOTE: needs Melvin's normal-reload verification (edit field, save, F5, confirm 
-  fresh) — not yet confirmed live.
-
-POLYGALA ALPESTRIS (sp 696, "Mountain milkwort") — content write:
-- edible_parts + preparation_warnings written (human-dictated, verbatim, 
-  old_value=NULL confirmed true-empty, changed_by='human', read-back verified). 
-  Snapshot db_20260709_210257.
-- edibility_status: unknown → edible, on explicit confirmation only (separate 
-  snapshot db_20260709_210551). edibility_verified left 0 deliberately.
-- OPEN CONTENT ITEM: edible_parts text names "Polygala amara" (not in DB) and 
-  "Polygala vulgaris" (a different species, sp 221) in a parenthetical now attached 
-  to alpestris's card. Left as-is pending Melvin's decision on whether to trim it.
-
-SAFETY/EDIBILITY EDITING — bug found, two fixes queued:
-- Root cause of "can't edit safety warnings": read-view SAFETY branching only emits 
-  an editable [data-field-key] element when species is hazardous OR a warning field 
-  has content. Non-hazardous + empty species (unknown status, severity none) expose 
-  no edit target at all — not a lock, a render gap.
-- PROMPT B (safety fields always editable in edit mode) — WRITTEN, RUNNING as of 
-  session end. Frontend-only; both fields already allowlisted in the existing 
-  culinary field endpoint. Needs Melvin's live verify.
-- PROMPT C (edibility_status editing with confirm dialog) — WRITTEN, NOT RUN. To 
-  check tomorrow. Adds migration 0046 species_edibility_history (field/old/new/
-  changed_by/note, forward-only), status-only mode on existing PATCH 
-  /api/edibility/status/{id} (verified: Optional[bool]=None, only writes verified 
-  when not None), retrofits history logging to both /status/{id} and /bulk-status, 
-  confirm dialog on the badge with current→new + relax-warning + optional note + 
-  cache invalidation. Toxic/caution route through the coupled (verified:true) path 
-  by design — status-only toxic would create a deadly verdict the review queue never 
-  flags (queue catches caution+unverified but not toxic+unverified). Recon confirmed 
-  decoupling status from verified is safe (all 9 read sites walked).
-
-TAXONOMY TREE (frontend/taxonomy.html) — species-link crossing RESOLVED:
-- Budget lifted this session (PLANT_ARC no longer fixed at 207°). Replaced last 
-  session's genus/species min-gap (PAVA) blocks — which hit a hard ceiling because 
-  genus spacing is uniform tree-wide with no slack — with proportional angular SLOTS: 
-  genus slot = GENUS_SLOT_UNIT(0.65°) × max(1, species_count), species fanned strictly 
-  within own slot. Removed dead _enforceMinAngularGap helper.
-- Final arcs: PLANT_ARC 297.700°, FUNGI_ARC 59.300° (+ 2×1.5° gap = 360.000° exact). 
-  FUNGI_ARC now computed, not the old fixed 150°. Fungi internal crowding at its new 
-  width NOT yet reviewed — flagged as separate future pass.
-- Crossing had a second cause one tier up: family nodes sat at stale pre-slot 
-  cluster angles (81/84 families off >1°, up to −27°) while genera moved to slots. 
-  Genus↔species was already exact by construction. FIX: family-only bottom-up 
-  recenter (family.ang = midpoint of genus children's span), recompute px/py. 
-  Order/class deliberately EXCLUDED — recentering them would clobber the 8-July 
-  hand-tuning (locked-anchor class redistribution, order PAVA min-gap); Code hit 
-  the guard, stopped, reported, did not override.
-- Radii unchanged throughout (RING=200, TRUNK_RING=230, FAMILY_RADIUS=600, 
-  species=1000). Verified live at rest + on family/order/class/species click — all 
-  read clean, no crossing. Melvin sitting with the shifted genus layout before 
-  deciding if the slot spread is right.
-
-Pending / next:
-- Verify SW cache fix + Prompt B live (normal-reload checks)
-- Run Prompt C tomorrow (edibility_status edit UI) — check output before verifying
-- Decide Polygala alpestris "Polygala amara/vulgaris" parenthetical
-- Structural gap (logged, not urgent): species.edibility_status has no history 
-  table today — Prompt C's migration 0046 addresses this going forward
-- Deferred, not urgent: GENUS_SLOT_UNIT tuning if genus spread feels off after 
-  living with it; genus/species label crowding in big families (needs radius-lock 
-  lift or zoom-gated genus labels); fungi-fan internal crowding at new 59.3° width
-- Pre-existing (predates this work, not introduced): "flag for review" button shows 
-  misleading state for 55/65 verified species (edibility_human_verified depends on a 
-  history row nothing currently writes)
-
-## Current State — 8 July 2026
-
-Taxonomy tree (frontend/taxonomy.html) — spacing, highlighting, and colour 
-passes complete for this session.
-
-Spacing (class + order tiers):
-- Class tier (6 nodes): evenly redistributed, Magnoliopsida + Bryopsida locked 
-  as anchors, Pinopsida included after diagnostic showed it was near-crowded 
-  too. Now always-visible (removed from zoom-gated visibility function) — no 
-  crowding left to gate against.
-- Order tier (~40 nodes): minimum-gap enforcement, not uniform redistribution — 
-  preserves d3.cluster's density-proportional spacing where it already works, 
-  only pushes apart nodes below the minimum readable gap. Stays zoom-gated 
-  (correct — not all ~40 need to show at rest).
-- d.rad/RING/TRUNK_RING/FAMILY_RADIUS untouched throughout — angle-only changes.
-
-Highlighting:
-- Click/focus now lights up full ancestor path (parent chain to root), not 
-  just the selected node + descendants.
-- Sibling tier (same immediate parent) gets intermediate opacity, midpoint of 
-  existing bright/dim values.
-- Intermediate tier propagates down through sibling's own subtree (e.g. 
-  sibling genus's species also go intermediate, not just the sibling genus 
-  node itself).
-
-Species-tier links:
-- Changed from enter/exit-toggled to persistently visible at low ambient 
-  opacity, always in the DOM. Deliberate design choice (Melvin likes the look) 
-  that also structurally closes a recurring residue bug (see below).
-- Known follow-up, not yet actioned: species links from different sibling 
-  genera can visually cross in the fixed species ring when highlighted 
-  together, since species aren't locally grouped by genus in that ring. 
-  Deferred — real fix would be sorting species order within the ring to match 
-  sibling-genus adjacency. Revisit only if it becomes a visible problem.
-
-Colour:
-- Class/order/family labels now get distinct, subtle white-based tints 
-  (blue/red/yellow) instead of flat white — first attempt used bark-derived 
-  amber tones and was a legibility regression, corrected on the spot.
-- Same tint-per-rank scheme extended to fungi-fan class/order/family labels — 
-  reused the exact same CSS rules (rank-keyed, kingdom-agnostic), not new 
-  values. Fungi node-dot colour and lichen species colour-carve-out untouched.
-- Legend updated to match.
-- Brown-appearing genus/species dots investigated: confirmed NOT a colour 
-  scheme bug — species and genus share identical fill (#3f9e52); "brown" is 
-  the collapsed-ring stroke artifact on collapsed genus nodes. No fix applied, 
-  none needed.
-
-Bug fixed: recurring unnamed-D3-transition collision (3rd occurrence in this 
-file) caused a full label blackout after the initial class-tier edit, and was 
-the suspected (not fully live-confirmed) cause of a deselect residue bug — 
-made moot once species links stopped exit/entering the DOM.
-
-Standing process change: CLAUDE.md updated with new "Frontend / D3 Rendering 
-Discipline" section — mandatory named transitions on shared elements, loud-fail 
-on anchor lookups, honest unverified-vs-confirmed declaration language, and 
-blast-radius tracing before declaring a shared-function change done. Applies 
-project-wide, not just taxonomy.html.
-
-Pending / minor:
-- Hex values for the new white-tint rank colours weren't printed in Code's 
-  report as instructed — worth holding Code to this next time rather than 
-  chasing it down now.
-- Species-link crossing (above) — watch, not yet a confirmed problem.
-
-## Current State — 03 July 2026
-
-Audit-completion + snag cleanup session. Closed this session:
-- _auto_merge_into edibility_rating AttributeError (stray non-existent field in merge copy-list, removed)
-- Snapshot path divergence — confirmed none; End Session and /api/dev/snapshot share one code path
-- End Session UI — removed redundant phase/next-steps boxes, single Current State textarea only
-- primary_source_url unprotected overwrite — guarded at both call sites (enrichment.py main path + trigger_ai_drafts_for_species gap)
-- CLAUDE.md stale snapshot path — both occurrences (line 85, 174) corrected to project-local path
-- Guest-token coverage gap (audit finding #1 addendum) — save_api_key + 2 about.py mutating endpoints migrated from host-only is_guest_request() to token-aware get_identity(), closing a real gap where a local-wifi workshop guest token could overwrite owner API keys
-- 625 (Betony) medicinal_notes — stale "Betonica officinalis" text corrected to "Stachys officinalis" (identity columns already flipped under finding #2; only the field text lagged)
-- obs 9409 species_primary/species_id desync — resynced (same pattern as earlier Lepista/Collybia case)
-
-Still open:
-- GDrive token — parked; re-paste attempt didn't persist (updated_at unchanged), needs Melvin to retry and confirm the save actually lands
-- Species 412 (Thelypteris limbosperma) — primary_source_url points to Oreopteris quelpartensis, a taxon documented as East Asian/Pacific Northwest, likely NOT the same plant as the European Mountain Fern this card describes. Elevated risk of wrong-species-source (finding #3 pattern), not a naming/synonym issue. Recommended for #3b's verification scope.
-- Hypericum genus — 11 approved observations correctly identified, no systemic confusion found; one desync fixed (above); 3 observations (17172, 17178, 21554) have no persisted candidate data (minor, unresolved). Validated stem cross-section distinguishing feature (2-ridged perforatum vs 4-ridged/hollow maculatum, also separates tetrapterum) ready to add via species_lookalikes/look_alike_warnings — pending decision on who drafts the verbatim text.
-- Audit finding #3b (silent text-substitution detection) — not started; scope decision pending, now concretely includes verifying 412
-- Audit finding #5 (card-level approval design) — unblocked, design conversation not yet started
-- Enrichment gap remediation — 9 AI drafts pending approval, 6 species never scanned, 79 no-PFAF species need alt-source decision
+- Field-recorder companion (Capacitor: background GPS + pocket proximity alerts) — on the simmer; GPX tracker + existing GPX import covers screen-off tracking meanwhile
 
 ## History
+
+### 2026-10-16 06:46
+**Snapshot** — End of session — Session ended from Settings page
+DB: `snapshots/db_20261016_064609.sqlite`
+
+### 2026-10-16 06:46
+**Session ended** — Session ended from Settings page
+
+### 2026-10-16 06:43
+**Pushed Datenschutz footer link to melvinoj/foraging-experience**
+
+**Files:** `(separate repo) foraging-experience: index.html`
+**Pending:**
+- Check live footer after Pages rebuild
+
+### 2026-10-16 06:39
+**CHANGELOG tidied (one Current State block); Datenschutz link added to Foraging Experience export (not pushed)**
+
+**Built:**
+- Experience export: config datenschutz_url https://melvinjarman.co.uk/datenschutz; footer Contact · Impressum · Datenschutz (target=_top, same style; placeholder guard like Impressum). Rendered footer checked by running the page code in jsc; only index.html changed
+**Fixed:**
+- CHANGELOG.md: exactly one ## Current State (session-3 content + its backlog); session_summary fragment moved into the 14:11 History entry; 8 older dated Current State blocks moved unchanged to ## Archive at the end (headings demoted). No-content-lost check passed
+**Files:** `CHANGELOG.md`, `scripts/experience_export/config.json`, `scripts/experience_export/export.py`, `scripts/experience_export/templates/index.html`
+**Pending:**
+- Push experience update to melvinoj/foraging-experience after Melvin OK
+- End-session paste format: no ## lines except optional plain ## Current State; date as plain text; ### sub-headings; one paste; no current_state:/session_summary: labels
+
+### 2026-10-16 06:27
+**Launcher reload scope fixed; CHANGELOG tidy prepared (awaiting OK)**
+
+**Fixed:**
+- START_ForagingID.command: uvicorn --reload-exclude $PWD/scripts, $PWD/migrations, $PWD/tests (absolute; uvicorn 0.32.1 ignores --reload-dir for in-project dirs and always watches the repo root - verified against its FileFilter) + --timeout-graceful-shutdown 5. Written via atomic rename so the running launcher is unaffected; takes effect on next launch (unverified live)
+**Files:** `START_ForagingID.command`
+**Pending:**
+- CHANGELOG tidy: one ## Current State block, older dated blocks to ## Archive at end, session_summary into History - prepared, awaiting Melvin OK
+- End-session paste must not contain ## headings (use ###); dated ## Current State — <date> headings pile up as stale sections
+- Verify new launcher flags on next launch: edit under scripts/ must NOT reload; open tab must not block Ctrl+C beyond ~5 s
+
+### 2026-10-16 06:20
+**Caffeinate fix: scan keep-awake can no longer outlive the server; Stop/status act on the real process**
+
+**Fixed:**
+- app/api/scan.py: /caffeinate/start runs `caffeinate -dimsu -w <server pid>` (exits with the server on shutdown/crash/--reload); /caffeinate/stop also kills stray `caffeinate -dimsu` from earlier server processes; /caffeinate/status reports the real process (handle or stray)
+- app/utils/caffeinate.py keep_awake: `caffeinate -i -w <pid>` (same orphan class)
+- frontend/scan.html: button reads /caffeinate/status on page load (was always shown off after a reload)
+- VERIFIED by behaviour (pgrep): start -> `caffeinate -dimsu -w 32141` (server worker pid); stop -> none; planted old-style orphan detected by status and killed by stop; -w exits when watched pid dies; keep_awake starts with -w and exits on hard parent exit. UNVERIFIED: end-to-end via a real --reload restart, and the scan page button UI
+**Files:** `app/api/scan.py`, `app/utils/caffeinate.py`, `frontend/scan.html`
+**Pending:**
+- Melvin: open Scan page with keep-awake on -> button should read Keeping awake
+- Backlog: --reload restarts the worker on edits outside app/ (scripts/experience_export/export.py) despite --reload-dir app
+- Backlog: a long-lived browser connection (SSE/service worker) blocks graceful --reload (Waiting for connections to close) - consider uvicorn --timeout-graceful-shutdown
+
+### 2026-10-15 20:45
+**Bug logged: caffeinate keeps Mac awake after Stop (orphaned process)**
+
+**Fixed:**
+- Killed orphaned caffeinate -dimsu (pid 13666, started 09:29, parent launchd) — Mac sleeps normally again
+**Pending:**
+- FIX (app/, needs OK): caffeinate does not turn off. app/api/scan.py /caffeinate/start spawns `caffeinate -dimsu` and keeps the handle only in memory (_caffeinate_proc). After a server restart/reload the handle is lost: the process is orphaned (parent launchd) and /caffeinate/stop returns stopped:false while it keeps running; launcher cleanup + lifespan shutdown do not kill it. Options: start it as `caffeinate -dimsu -w <server pid>` so it exits with the server; stop/status fall back to finding the real process; kill it in lifespan shutdown. Check `pgrep -fl caffeinate` at each session start until fixed
 
 ### 2026-10-15 14:12
 **Snapshot** — End of session — Session ended from Settings page
@@ -529,6 +110,7 @@ DB: `snapshots/db_20261015_141159.sqlite`
 
 ### 2026-10-15 14:11
 **Session ended** — Session ended from Settings page
+Session summary (End-session text; moved from the top of Current State 16 Oct 2026): Walk builder fixes; human verification + re-ID review of two Gresgen walks (~62 species verified, audit trail started, deadly nightshade/male fern/tansy corrected); Foraging Experience export built and published to GitHub Pages (walk map with layers + locate, plants grid, recipe teasers, taxonomy tree, 500px embed card for /b).
 
 ### 2026-10-15 14:10
 **Snapshot** — End of session — Session ended from Settings page
@@ -7400,3 +6982,474 @@ DB: `snapshots/db_20260528_234754.sqlite`
 - `scan.html`: slider + Re-check queue button
 
 **Files:** `app/services/settings_service.py`, `app/models/observation.py`, `app/api/scan.py`, `app/services/identification.py`, `frontend/scan.html`
+
+## Archive — earlier Current State blocks
+
+_Moved here 16 Oct 2026 from the top of the file: superseded Current State snapshots (3 Jul – 15 Oct 2026), kept unchanged for reference; headings demoted one level._
+
+### Current State — 15 Oct 2026 (end of session 2)
+
+#### Build status
+Server: START_ForagingID.command — uvicorn foreground + tee to logs/server_<ts>.log; port check (no kill -9); cleanup trap; tee survives Ctrl+C. Claude Code never starts the server; reads the log.
+Alembic head: 0052. WAL on; busy_timeout 30000 + synchronous=NORMAL on every connection.
+
+#### Completed 14–15 Oct
+- Health check after Aug–Oct dormancy (DB ok, invariant ok)
+- Syncthing: Pixel 8 Pro paired; "Foraging Pics" (39ds2-kdty9) Mac = Receive Only + ignoreDelete; phone = Send Only curated folder; duplicate folder entry removed; Pixel7pro entry kept
+- iNat token refreshed (expires ~24h — refresh before each processing session)
+- Leaflet SRI fixed (1.9.4, verified hashes on review/index/species)
+- SQLite lock contention fixed: enrichment two short transactions (no lock across LLM calls); enrich_gate.py ingest priority (enrichment deferred during P1/P2/re-identify batches, Semaphore(1)); P1 classify-before-insert + to_thread + cleanup on failed insert. Verified 0 locks on 90-file batch
+- Follow-up data: re-enriched Alnus alnobetula / Melampyrum nemorosum / Salix aurita; obs 24065 → needs_review; orphan copies + thumbnails deleted
+- Launcher rewritten (foreground); ngrok subprocess stopped on graceful shutdown
+- Identification Stage A (dry-run verified, live untouched): iNat gating score = min(combined, vision) (CLAUDE.md now matches code; can only lower scores); disagreement promotion (iNat location-ranked #1 if in PlantNet top 5 → suggested ID, always needs_review, never counts as agreement); iNat combined + vision scores stored per candidate; dual_source_agreement written again (1 agree / 0 disagree or single source / NULL none). Stage A item 3 (cards only on approval) DECLINED — dependencies (accept-species, auto-approve, species_id backfill, taxonomy tree, Edibility Review)
+- Walk builder Stage 1: typed waypoints (notes not saved as obs), circular flag persisted, route geometry saved + redrawn without ORS, toxic guard on walk panel
+- Walk builder Stage 2: centroid stops (default 30 m, slider 10–100 m, radius saved in route_geojson.foragingid v2); 50-waypoint cap (49 circular) with Increase radius; real ORS failure reasons + opt-in labelled straight-line; Google Maps export first 10 points with notice. Browser-tested by Melvin: selection + routing work
+- First Gresgen walk saved: "little foray" (20 stops, 22 species, ~13.5 km circular)
+
+#### Pending / next
+1. Walk fixes from Melvin's test: (a) Save gives no confirmation — show a clear "Saved as <name>" and avoid duplicate saves (he created 3); (b) after saving, the build-walk header still shows "20 stops" — should show the saved name ("little foray"); (c) duplicate summary header ("Walk Route (20 stops)" + "Walk route · 20 stops"); (d) centre-drift second pass: reassign pins beyond R to nearest stop or new stop — APPROVED; (e) delete the 2 duplicate "little foray" saves (with OK)
+2. SAFETY next: walk panel (and app-wide) shows "edible" badge + recipes for UNVERIFIED Apiaceae (Daucus carota on "little foray" stop 1). Walk panel: Apiaceae edibility/recipes only if human-verified; same review for other unverified "edible" species. Then app-wide Apiaceae/unverified-toxic fix
+3. Walk Stage 3: accumulating selection → undo / reset+confirm / subtract (touch toggle) / side panel (remove, reorder via pointer events)
+4. Walk Stage 4: walk filters (human-verified only, kingdom, months, min obs)
+5. Walk Stage 5 (backend, server stopped): ORS elevation, PUT saved walk (edit), draft autosave
+6. Foraging Experience export: walk = "little foray". Next: Code lists its 22 species with edibility/toxicity/verified status → Melvin verifies shortlist. Then scripted export (scripts/experience_export/) → separate public GitHub Pages repo (Melvin creates; gh not installed) → Hostinger Builder embed. Gates: edible claims only edibility_verified_by='human'; toxic → warning, no recipe; Apiaceae no edibility text unless human-authored; EXIF stripped (~1200px re-encode); disclaimer + link to site Impressum; export only species with approved obs. Open: recipe depth, language (DE/EN)
+7. PWA: ngrok static domain negligee-raft-shiny.ngrok-free.dev — Start sharing, install from Chrome
+8. Launcher live checks after next Ctrl+C: pgrep -fl ngrok (empty); log tail shows shutdown complete
+9. Proximity alerts + 📋 summary export read only first species of multi-species stops
+
+#### Known issues / backlog
+- SAFETY: Aruncus dioicus edibility 'edible', unverified, toxicity none — Melvin to decide status (cooked young shoots only?), check live recipes, own-words prep warning. (Supersedes stale "goat's beard drafts 2182/2183 pending" — approved 14 Jun)
+- SAFETY: unverified "edible" Apiaceae (Daucus carota, Heracleum sphondylium, Aegopodium podagraria); unverified toxic species (Digitalis purpurea, Chaerophyllum hirsutum/aureum, Sambucus ebulus, Lupinus polyphyllus, Hypholoma fasciculare, Iris pseudacorus)
+- Toxic guard still missing: stop-card culinary hint, walk-summary export, walk sheet species list; backend one-liner: toxicity_severity on GET /api/culinary/{name}
+- T. dubius edibility_status NULL (invalid); T. pratensis unknown
+- Identification Stage B: GBIF "out of range" review label (~150 km, flag only, cached per species × 0.5° cell); test PlantNet weurope vs all on a sample before switching. Needed for 24221 (Aspalathus) / 24222 (Ambrosia) type cases
+- Junk species cards (Aspalathus retroflexa 807, Ambrosia confertiflora 808, Larix occidentalis 803, Larix lyallii 791, Verbascum boerhavii 792; Gentiana verna 789 season-implausible) — cleanup of zero-approved cards needs OK
+- Enrichment paths not gated: culinary.py enrichment-run batch, trigger_ai_drafts_for_species, ITIS lookup task
+- Enrichment queue in-memory: after restart, check backfill panel for un-enriched cards
+- Re-enrich of a fungus wipes its pending edibility suggestion
+- Identify — 2013 job interrupted at 90/2367 (gated; rerun when convenient)
+- Google Drive token invalid
+- Disk tight — move to DIGIERA: Facebook/Instagram exports, all but 2 newest snapshots (2 byte-identical pairs), old data/ backups
+- Ollama default 'mistral' not installed (llama3.1 present)
+- Docs drift: CLAUDE.md Alembic head (says 0050), PhoneForaging path (~/Local(unsynced)/PhoneForaging)
+- Tracked leftovers: your_db.db, current.txt; review_status 'not_applicable' (1 row) undocumented
+
+session_summary:
+Identification Stage A (stricter min() gating score, iNat location-ranked promotion on disagreement, scores + dual_source_agreement stored; card-deferral declined). Walk builder Stages 1–2 (typed waypoints, circular + geometry persisted, toxic guard, centroid stops with radius slider, 50-waypoint cap, honest ORS errors, Google export notice). First Gresgen walk "little foray" saved for the promo page. Test feedback logged: save confirmation, saved-name header, duplicate header, centre-drift pass, unverified-Apiaceae "edible" badge.
+
+### Current State — 15 Oct 2026
+
+#### Build status
+Server: START_ForagingID.command — uvicorn foreground + tee to logs/server_<ts>.log; port check (no kill -9); cleanup trap. Claude Code never starts the server; reads the log.
+Alembic head: 0052. WAL on; busy_timeout 30000 + synchronous=NORMAL on every connection.
+
+#### Completed today (14–15 Oct)
+- Health check after Aug–Oct dormancy (DB ok, invariant ok, git clean)
+- Syncthing: Pixel 8 Pro paired; "Foraging Pics" (39ds2-kdty9) Mac = Receive Only + ignoreDelete; phone = Send Only on curated folder; duplicate "ForagingID" folder entry removed; Pixel7pro entry kept (old phone)
+- iNat token refreshed (expires ~24h — refresh before each processing session)
+- Leaflet SRI: 1.9.4 pinned, verified hashes on review/index/species (review.html JS hash was truncated)
+- SQLite lock contention fixed: enrichment no longer holds write lock across LLM/network calls (two short transactions); enrich_gate.py — ingest priority (enrichment deferred while any P1/P2/re-identify batch active, Semaphore(1)); P1 ingest classify-before-insert + to_thread + cleanup of copy/thumbnail on failed insert. Verified: 0 locks on 90-file batch (vs 30 before); enrichment deferred and serialised; no edibility written
+- Follow-up data: re-enriched Alnus alnobetula / Melampyrum nemorosum / Salix aurita; obs 24065 → needs_review; 2 orphan pipeline2 copies + thumbnails deleted
+- Launcher rewritten (foreground, tee survives Ctrl+C, port check); ngrok subprocess stopped on graceful shutdown (sharing.py stop_ngrok_subprocess + lifespan)
+- Walk builder Stage 1 (frontend/index.html): note IDs no longer saved as obs IDs (typed waypoints, old walks still load); circular flag persisted in route_geojson.foragingid; route geometry saved + redrawn without ORS; toxic guard on walk panel (no recipes for toxic/deadly, ☠ badge)
+- Snapshots: db_20261015_072953 (+ earlier today)
+
+#### In progress
+- Identification Stage A: iNat gating score = min(combined, vision) per docs; disagreement promotion (iNat location #1 if in PlantNet top 5, stays needs_review, never counts as agreement); store iNat combined score; fill dual_source_agreement; no species cards for disputed IDs (pending dependency check)
+
+#### Pending / next
+1. Verify walk Stage 1 in browser (toxic badge; save/reload circular walk with note — SQL check; no ORS call on load)
+2. Walk Stage 2: stops via centroid clustering (default 30 m, slider 10–100 m), 50-waypoint ORS cap with message (no silent straight-line fallback)
+3. Walk Stage 3: accumulating selection → undo / reset+confirm / subtract mode (touch toggle) / side panel (remove, reorder via pointer events)
+4. Walk Stage 4: walk filters (human-verified only, kingdom, months, min obs)
+5. Walk Stage 5 (backend, server stopped): ORS elevation, PUT saved walk (edit), draft autosave
+6. Foraging Experience export (Gresgen): scripted export (scripts/experience_export/) → separate public GitHub Pages repo (Melvin creates repo; gh not installed) → Hostinger Builder embed. Needs: Gresgen walk drawn; walk species shortlist human-verified; gates: edible claims only edibility_verified_by='human', toxic → warning/no recipe, Apiaceae no edibility text unless human-authored; EXIF stripped (re-encode ~1200px); existing disclaimer + link to site Impressum. Open: recipe depth (full/teaser), language (DE/EN)
+7. PWA install on Pixel 8 via ngrok static domain (negligee-raft-shiny.ngrok-free.dev) — Start sharing first, install from Chrome
+8. Launcher live checks after next Ctrl+C: pgrep -fl ngrok (empty); log tail shows shutdown complete
+
+#### Known issues / backlog
+- SAFETY: Aruncus dioicus edibility_status='edible', unverified, toxicity none — Melvin to decide status (cooked young shoots only?), check live recipes, rewrite prep warning in own words. CHANGELOG "goat's beard drafts 2182/2183 pending" is stale (approved 14 Jun) — replaced by this
+- SAFETY: unverified "edible" Apiaceae (Daucus carota, Heracleum sphondylium, Aegopodium podagraria); unverified toxic species (Digitalis purpurea, Chaerophyllum hirsutum/aureum, Sambucus ebulus, Lupinus polyphyllus, Hypholoma fasciculare, Iris pseudacorus) — app-wide
+- Toxic guard still missing: stop-card culinary hint, walk-summary export, walk sheet species list; backend one-liner to add toxicity_severity to GET /api/culinary/{name}
+- T. dubius edibility_status NULL (invalid); T. pratensis unknown
+- Orphan/implausible species cards from disputed IDs (Aspalathus retroflexa 807, Ambrosia
+
+### Current State — 19 July 2026
+
+**Session focus:** Opus phase-boundary audit → full remediation of the 
+guard-coverage defect class, plus repair of the 6 invariant-drifted rows. 
+All audit findings closed. Invariant clean: card_counted 2158 = map_eligible 
+2158, zero drift.
+
+**Landed and verified this session (all harness- or live-verified per fix):**
+
+STRUCTURAL — _identify_scanned_inner guard-coverage fix (scan.py)
+- Root-cause fix for the guard-coverage defect class (4 prior instances in 
+  2 weeks: kingdom gate, blacklist gate, force_review-in-else, terminal 
+  guard). Compute `terminal = is_terminal_review_status(obs.review_status)` 
+  ONCE up front; every human-decision mutation gated on it; diagnostics/
+  append-only rows left unconditional. All hand-rolled terminal variants 
+  retired (grep for `!= "manually_verified"` returns nothing).
+- Closed A1 (min-confidence branch: species-wipe + review_status revert, 
+  zero guard, executed on live manually_verified rows), A2 (unguarded 
+  species overwrite), A3 (reviewer_notes overwrite — now append-never-
+  overwrite; also fixed an auto-approve `reviewer_notes = None` blanket 
+  wipe), A5 (missing-file path), A6 (kingdom gate now covers all 3 terminal 
+  states), A7 (6 review_label writes via single apply point). Two sites the 
+  audit missed (pause check, no-credential exit) also found and guarded.
+- A6 behaviour signed off: approved/rejected rows are now immune to 
+  automated re-ID pull-back. Human override stands — finalized is finalized.
+
+EDIBILITY — rename safety bypass (enrichment.py, A4)
+- Rename path was silently downgrading human-confirmed toxic → unknown and 
+  clearing the human-lock, bypassing _enforce_edibility_write_rules(). 
+  Found routing-through-the-gate would NOT fix it (gate permits toxic→
+  unknown by design, off-ladder). Removed the automated edibility mutation 
+  entirely — verdict/lock never written by this path for any row. Rename 
+  now flags for review (existing review_requested triple) on any established 
+  verdict, locked or not. Verified: locked toxic + locked edible both 
+  preserved + flagged; unlocked correctly not flagged. AST-walk confirms 
+  zero edibility writes remain in the rename function.
+
+PHONE-ORIGIN — reconciled to one definition (A8, all parts)
+- Root finding: `is_phone` never meant "phone origin" — it meant "must 
+  force review". Tuple produced correct routing; the NAME lied. 
+  Renamed → `requires_forced_review` (zero behaviour change, proven by 
+  reconstruction-diff). Added canonical `is_phone_origin(obs) → 
+  upload_source == 'syncthing'`; retired 12 scattered string literals.
+- identify.py bulk-act filter (`.isnot("phone")`, 0-row no-op) removed as 
+  obsolete — the case it guarded no longer exists; documented why. 
+- Fail-closed on unknown provenance: `requires_forced_review = not 
+  is_phone_origin(obs)` — auto-approve is now opt-in for syncthing ONLY; 
+  file_upload, legacy phone, NULL, and any future source fail closed to 
+  review. 26 NULL-provenance rows moved from auto-approve-eligible to 
+  review-bound. Added an "Unknown origin — needs review" label so those 
+  rows aren't mislabelled "File upload".
+
+APPROVED-NO-SPECIES — named the legitimate state (both approve paths)
+- "approved, identified, no species" is now a named valid state for 
+  landscape/scene rows. Factored `qualifies_as_identified(obs)` (species 
+  set OR obs_category=='landscape') into observation.py; both bulk_actions 
+  and the shared observation_service helper use it. Fixed a second 
+  instance the audit reported as clean — single-approve had the identical 
+  gap (fix-one-twin-miss-the-other). One predicate, 4 call sites, zero 
+  duplicated logic.
+
+DATA REPAIR — the 6 drifted rows (all fixed)
+- 3 landscape (8771/9645/9827): repaired to approved+identified+NULL.
+- 9827 stale candidates cleared (10 Canis lupus rows + json); row retained 
+  as hazard reference.
+- 8771 unlogged species-primary clear: backfilled the missing audit row 
+  (timestamp unrecoverable — git reset 6 July — stamped honestly, inference 
+  in a log, not fabricated).
+- 3 plant (21562/21770/21771): were P1 rows that failed ID only on PlantNet 
+  timeouts. Deliberately re-opened (logged repair:reopen_for_reid) and 
+  re-identified through the standard path with force_review=True. All three 
+  identified this time (Thymus praecox, Campanula rotundifolia, Lactuca 
+  muralis) — the (5,25)+retry fix worked where it previously timed out. 
+  Now in review queue awaiting confirmation; none auto-approved.
+
+DOCS — consistency pass (CLAUDE.md, architecture.md, scan.py comment)
+- uploads/ corrected to primary-image-store; scan.py identification.py 
+  stale ref replaced; architecture.md date + canonical start command; 
+  timestamp convention (UTC DB vs local filenames) documented; the three 
+  shared predicates and the scene-state exception recorded as canonical, 
+  with "do not "fix" this as drift" flagged.
+
+**In the review queue (awaiting your confirmation, not urgent):**
+21562 Thymus praecox (edible), 21770 Campanula rotundifolia (edible), 
+21771 Lactuca muralis (CAUTION) — all edibility_verified=0, provisional 
+species links, low_confidence. The caution one wants a conscious confirm.
+
+**Carried, unchanged:** 3 damaged map rows (17052/17737/18709); Retry-ID 
+buttons absent on below_threshold cards; snapshots gzip option (~700M win); 
+thumbnails_quarantine purge.
+
+**Pending / next:** none from this session's audit — all findings closed. 
+Next work is a separate fix (new thread).
+
+### Current State — 19 July 2026
+
+**Session focus:** Checkpoint list follow-through — P1 auto-scan hardening, 
+identification.py:324 fix verification (now scan.py:1343), terminal-status 
+guard bug, defence-in-depth species-card count filter, watch-dir silent-skip 
+logging, launch.json port documentation.
+
+**Completed and verified this session:**
+
+- Confirmed identification.py:324 no longer exists; live no-candidate gate 
+  is scan.py:1343-1379. Harness-verified: transport failure → needs_review, 
+  file intact, cause named in log. Branch fires ~4,574 times total (335 
+  syncthing, 4,239 file_upload) — corrects earlier "rare" framing, which 
+  described the now-deleted old path.
+
+- Fixed terminal-status guard bug at scan.py:1343-1379: only review_status 
+  was protected against a retry-identify re-run on a finalized row; 
+  identification_status, species_id, species_candidates_json, and 
+  processing_stage were unguarded and could silently wipe a human-locked 
+  species assignment on any approved/manually_verified/rejected row. All 
+  four now gated by is_terminal_review_status(). Verified across all three 
+  terminal statuses plus a non-terminal control (still routes normally). 
+  Log message corrected — no longer claims "sent to review queue" on a row 
+  that wasn't.
+
+- Recon on 6 rows matching the pre-fix corruption signature (8771, 9645, 
+  9827, 21562, 21770, 21771): audit trail confirms none were caused by 
+  this bug — all deliberately human-approved landscape/scenery photos with 
+  no species ever assigned, or (9827) a deliberately-removed bad ID (dog 
+  misID at 1866% score). Nothing to restore. Real drift cause identified 
+  instead: bulk_actions.py:107 (_bulk_review_task) sets review_status 
+  without syncing identification_status — deferred, see Pending.
+
+- Added defence-in-depth two-field filter to species-card count query 
+  (culinary.py:88-96), matching map.py's identification_status='identified' 
+  clause. Verified no-op on current data (2,114 before/after, ORM and live 
+  endpoint both confirmed) — guards a currently-unreached state.
+
+- PlantNet timeout confirmed correct, no drift: (5,25) tuple + bounded 
+  retry live at plantnet.py:60/253-276. Apparent conflict with a 16 July 
+  httpx form was a different module (inaturalist.py) — false alarm, closed.
+
+- uploads/ recon: nothing reclaimable, 0 orphaned bytes. Confirmed still 
+  the primary image store (12,239 of 13,836 observation file_paths), not 
+  "browser-uploaded pending photos" per CLAUDE.md — doc correction still 
+  outstanding (see Pending). 36G→3.7G explained: cumulative 
+  delete_observation_file() on rejected rows over time, not a migration.
+
+- ~11 "never-ingested" P1 photos: recon reversed the premise. All 11 were 
+  previously ingested, human-reviewed, and deliberately deleted — now 
+  correctly blacklisted. Not lost data; do not re-ingest without an 
+  explicit DELETE FROM deleted_hashes decision (not made this session).
+
+- Fixed bare except: pass at syncthing.py _auto_scan_loop tick: now logs 
+  via three channels (stderr w/ traceback, _state["errors"], 
+  processing_logs) through a must-not-raise helper. Verified via harness 
+  and live production.
+
+- Fixed unlogged blacklist skip in _find_new_files: blacklisted-hash skips 
+  now log via ingest_guard.blacklisted_skip(), source="p1_autoscan_filter", 
+  deduped once per hash per process lifetime. Ordinary duplicate skips 
+  remain silent, unchanged. Verified live: 12 rows / 12 distinct hashes, 
+  held steady across ~45 ticks.
+
+- Fixed watch-dir silent skip (photo_library_path missing/misconfigured): 
+  now logs via _record_watch_dir_missing, same three-channel bar, latched 
+  on path value not per-tick. Harness-verified 4 cases incl. no false 
+  positives.
+
+- launch.json port 8001 (vs documented 8000): confirmed deliberate — 
+  separates tool-launched preview servers from the manually-run dev server 
+  on 8000. Left as-is, added an inert in-file comment. No change needed.
+
+**Retracted this session (both self-caught before any write):**
+
+- The 2,161 vs 2,155 map/card-count "discrepancy" that drove the 
+  culinary.py fix did not exist in the app — it came from an ad-hoc query 
+  reported as app behaviour without being run through the live code path. 
+  Real numbers: card count 2,114, map pins 2,131 (map shows more, not 
+  fewer — inverse of what was assumed). Gap judged not worth pursuing.
+- A reported "raw control character in /api/species/ JSON" was a 
+  diagnostic-harness artifact (zsh's echo interpreting \n as a literal 
+  newline), not an app defect. Live endpoint parses cleanly.
+- Pattern to carry forward: any anomalous number from an ad-hoc diagnostic 
+  script needs to be reproduced through the real code path before being 
+  reported as a finding — both retractions shared this root cause.
+
+**Known issues / notes:**
+
+- Unplanned live write: editing syncthing.py under --reload --reload-dir 
+  app hot-reloaded the running production server mid-session, firing 12 
+  real blacklisted_hash_skip rows to the live DB before any deliberate 
+  test ran. Append-only audit rows only, nothing destructive, no snapshot 
+  taken beforehand. Going forward: any edit to a module backing an active 
+  background loop should be flagged as a live write before editing, not 
+  discovered after.
+- scan.py:1380 log message still says "no species assigned" on the 
+  terminal-guard path, where the species is now correctly retained — 
+  one-line wording fix, left alone deliberately, not urgent.
+
+**Working tree — uncommitted:**
+Modified: app/api/culinary.py, app/api/scan.py, app/api/syncthing.py
+Untracked/edited: .claude/launch.json (comment added, port unchanged)
+All changes harness- and/or live-verified individually. Nothing committed 
+yet — this End Session should commit all four together.
+
+**Pending / next (priority order):**
+1. bulk_actions.py:107 — sync identification_status on bulk-approve, or 
+   formalize "approved, no species" as a legitimate state. Deferred design 
+   call, currently inert in practice.
+2. CLAUDE.md's uploads/ description is wrong — it's the primary image 
+   store (88% of observations), not "browser-uploaded pending photos." 
+   Fold into next doc-accuracy pass.
+3. scan.py:1380 log wording — cosmetic, whenever convenient.
+
+**Carried, unchanged from prior sessions:** 3 damaged map rows 
+(17052/17737/18709); Retry ID buttons absent on below_threshold cards; 
+snapshots gzip option (~700M win); thumbnails_quarantine purge.
+
+### Current State — 10 July 2026
+
+Fixes session across three areas: species-card save integrity, safety/edibility 
+editing, and taxonomy tree species-link crossing.
+
+SPECIES CARD — save integrity + SW cache:
+- Tansy (Tanacetum vulgare, sp 194) investigated for a "saved but not showing" 
+  report. Write integrity was CLEAN — human edit landed correctly (history 2780, 
+  changed_by='human'), matched live, no race, prefix is stored not rendered. Root 
+  cause was the service worker: SPECIES_CACHE (foragingid-species) is deliberately 
+  version-independent, cache-first, 7-day TTL, with NO invalidation hook in the 
+  save flow — so every species-card edit showed stale until hard-reset.
+- FIX shipped: extended sw.js 'clear-species-cache' message handler to accept an 
+  optional targeted url (single-entry delete); wired species.html saveEditMode() to 
+  invalidate the current species' /profile cache entry after save, before 
+  loadProfile() re-fetches. offline.js's existing whole-cache-clear caller unchanged.
+  NOTE: needs Melvin's normal-reload verification (edit field, save, F5, confirm 
+  fresh) — not yet confirmed live.
+
+POLYGALA ALPESTRIS (sp 696, "Mountain milkwort") — content write:
+- edible_parts + preparation_warnings written (human-dictated, verbatim, 
+  old_value=NULL confirmed true-empty, changed_by='human', read-back verified). 
+  Snapshot db_20260709_210257.
+- edibility_status: unknown → edible, on explicit confirmation only (separate 
+  snapshot db_20260709_210551). edibility_verified left 0 deliberately.
+- OPEN CONTENT ITEM: edible_parts text names "Polygala amara" (not in DB) and 
+  "Polygala vulgaris" (a different species, sp 221) in a parenthetical now attached 
+  to alpestris's card. Left as-is pending Melvin's decision on whether to trim it.
+
+SAFETY/EDIBILITY EDITING — bug found, two fixes queued:
+- Root cause of "can't edit safety warnings": read-view SAFETY branching only emits 
+  an editable [data-field-key] element when species is hazardous OR a warning field 
+  has content. Non-hazardous + empty species (unknown status, severity none) expose 
+  no edit target at all — not a lock, a render gap.
+- PROMPT B (safety fields always editable in edit mode) — WRITTEN, RUNNING as of 
+  session end. Frontend-only; both fields already allowlisted in the existing 
+  culinary field endpoint. Needs Melvin's live verify.
+- PROMPT C (edibility_status editing with confirm dialog) — WRITTEN, NOT RUN. To 
+  check tomorrow. Adds migration 0046 species_edibility_history (field/old/new/
+  changed_by/note, forward-only), status-only mode on existing PATCH 
+  /api/edibility/status/{id} (verified: Optional[bool]=None, only writes verified 
+  when not None), retrofits history logging to both /status/{id} and /bulk-status, 
+  confirm dialog on the badge with current→new + relax-warning + optional note + 
+  cache invalidation. Toxic/caution route through the coupled (verified:true) path 
+  by design — status-only toxic would create a deadly verdict the review queue never 
+  flags (queue catches caution+unverified but not toxic+unverified). Recon confirmed 
+  decoupling status from verified is safe (all 9 read sites walked).
+
+TAXONOMY TREE (frontend/taxonomy.html) — species-link crossing RESOLVED:
+- Budget lifted this session (PLANT_ARC no longer fixed at 207°). Replaced last 
+  session's genus/species min-gap (PAVA) blocks — which hit a hard ceiling because 
+  genus spacing is uniform tree-wide with no slack — with proportional angular SLOTS: 
+  genus slot = GENUS_SLOT_UNIT(0.65°) × max(1, species_count), species fanned strictly 
+  within own slot. Removed dead _enforceMinAngularGap helper.
+- Final arcs: PLANT_ARC 297.700°, FUNGI_ARC 59.300° (+ 2×1.5° gap = 360.000° exact). 
+  FUNGI_ARC now computed, not the old fixed 150°. Fungi internal crowding at its new 
+  width NOT yet reviewed — flagged as separate future pass.
+- Crossing had a second cause one tier up: family nodes sat at stale pre-slot 
+  cluster angles (81/84 families off >1°, up to −27°) while genera moved to slots. 
+  Genus↔species was already exact by construction. FIX: family-only bottom-up 
+  recenter (family.ang = midpoint of genus children's span), recompute px/py. 
+  Order/class deliberately EXCLUDED — recentering them would clobber the 8-July 
+  hand-tuning (locked-anchor class redistribution, order PAVA min-gap); Code hit 
+  the guard, stopped, reported, did not override.
+- Radii unchanged throughout (RING=200, TRUNK_RING=230, FAMILY_RADIUS=600, 
+  species=1000). Verified live at rest + on family/order/class/species click — all 
+  read clean, no crossing. Melvin sitting with the shifted genus layout before 
+  deciding if the slot spread is right.
+
+Pending / next:
+- Verify SW cache fix + Prompt B live (normal-reload checks)
+- Run Prompt C tomorrow (edibility_status edit UI) — check output before verifying
+- Decide Polygala alpestris "Polygala amara/vulgaris" parenthetical
+- Structural gap (logged, not urgent): species.edibility_status has no history 
+  table today — Prompt C's migration 0046 addresses this going forward
+- Deferred, not urgent: GENUS_SLOT_UNIT tuning if genus spread feels off after 
+  living with it; genus/species label crowding in big families (needs radius-lock 
+  lift or zoom-gated genus labels); fungi-fan internal crowding at new 59.3° width
+- Pre-existing (predates this work, not introduced): "flag for review" button shows 
+  misleading state for 55/65 verified species (edibility_human_verified depends on a 
+  history row nothing currently writes)
+
+### Current State — 8 July 2026
+
+Taxonomy tree (frontend/taxonomy.html) — spacing, highlighting, and colour 
+passes complete for this session.
+
+Spacing (class + order tiers):
+- Class tier (6 nodes): evenly redistributed, Magnoliopsida + Bryopsida locked 
+  as anchors, Pinopsida included after diagnostic showed it was near-crowded 
+  too. Now always-visible (removed from zoom-gated visibility function) — no 
+  crowding left to gate against.
+- Order tier (~40 nodes): minimum-gap enforcement, not uniform redistribution — 
+  preserves d3.cluster's density-proportional spacing where it already works, 
+  only pushes apart nodes below the minimum readable gap. Stays zoom-gated 
+  (correct — not all ~40 need to show at rest).
+- d.rad/RING/TRUNK_RING/FAMILY_RADIUS untouched throughout — angle-only changes.
+
+Highlighting:
+- Click/focus now lights up full ancestor path (parent chain to root), not 
+  just the selected node + descendants.
+- Sibling tier (same immediate parent) gets intermediate opacity, midpoint of 
+  existing bright/dim values.
+- Intermediate tier propagates down through sibling's own subtree (e.g. 
+  sibling genus's species also go intermediate, not just the sibling genus 
+  node itself).
+
+Species-tier links:
+- Changed from enter/exit-toggled to persistently visible at low ambient 
+  opacity, always in the DOM. Deliberate design choice (Melvin likes the look) 
+  that also structurally closes a recurring residue bug (see below).
+- Known follow-up, not yet actioned: species links from different sibling 
+  genera can visually cross in the fixed species ring when highlighted 
+  together, since species aren't locally grouped by genus in that ring. 
+  Deferred — real fix would be sorting species order within the ring to match 
+  sibling-genus adjacency. Revisit only if it becomes a visible problem.
+
+Colour:
+- Class/order/family labels now get distinct, subtle white-based tints 
+  (blue/red/yellow) instead of flat white — first attempt used bark-derived 
+  amber tones and was a legibility regression, corrected on the spot.
+- Same tint-per-rank scheme extended to fungi-fan class/order/family labels — 
+  reused the exact same CSS rules (rank-keyed, kingdom-agnostic), not new 
+  values. Fungi node-dot colour and lichen species colour-carve-out untouched.
+- Legend updated to match.
+- Brown-appearing genus/species dots investigated: confirmed NOT a colour 
+  scheme bug — species and genus share identical fill (#3f9e52); "brown" is 
+  the collapsed-ring stroke artifact on collapsed genus nodes. No fix applied, 
+  none needed.
+
+Bug fixed: recurring unnamed-D3-transition collision (3rd occurrence in this 
+file) caused a full label blackout after the initial class-tier edit, and was 
+the suspected (not fully live-confirmed) cause of a deselect residue bug — 
+made moot once species links stopped exit/entering the DOM.
+
+Standing process change: CLAUDE.md updated with new "Frontend / D3 Rendering 
+Discipline" section — mandatory named transitions on shared elements, loud-fail 
+on anchor lookups, honest unverified-vs-confirmed declaration language, and 
+blast-radius tracing before declaring a shared-function change done. Applies 
+project-wide, not just taxonomy.html.
+
+Pending / minor:
+- Hex values for the new white-tint rank colours weren't printed in Code's 
+  report as instructed — worth holding Code to this next time rather than 
+  chasing it down now.
+- Species-link crossing (above) — watch, not yet a confirmed problem.
+
+### Current State — 03 July 2026
+
+Audit-completion + snag cleanup session. Closed this session:
+- _auto_merge_into edibility_rating AttributeError (stray non-existent field in merge copy-list, removed)
+- Snapshot path divergence — confirmed none; End Session and /api/dev/snapshot share one code path
+- End Session UI — removed redundant phase/next-steps boxes, single Current State textarea only
+- primary_source_url unprotected overwrite — guarded at both call sites (enrichment.py main path + trigger_ai_drafts_for_species gap)
+- CLAUDE.md stale snapshot path — both occurrences (line 85, 174) corrected to project-local path
+- Guest-token coverage gap (audit finding #1 addendum) — save_api_key + 2 about.py mutating endpoints migrated from host-only is_guest_request() to token-aware get_identity(), closing a real gap where a local-wifi workshop guest token could overwrite owner API keys
+- 625 (Betony) medicinal_notes — stale "Betonica officinalis" text corrected to "Stachys officinalis" (identity columns already flipped under finding #2; only the field text lagged)
+- obs 9409 species_primary/species_id desync — resynced (same pattern as earlier Lepista/Collybia case)
+
+Still open:
+- GDrive token — parked; re-paste attempt didn't persist (updated_at unchanged), needs Melvin to retry and confirm the save actually lands
+- Species 412 (Thelypteris limbosperma) — primary_source_url points to Oreopteris quelpartensis, a taxon documented as East Asian/Pacific Northwest, likely NOT the same plant as the European Mountain Fern this card describes. Elevated risk of wrong-species-source (finding #3 pattern), not a naming/synonym issue. Recommended for #3b's verification scope.
+- Hypericum genus — 11 approved observations correctly identified, no systemic confusion found; one desync fixed (above); 3 observations (17172, 17178, 21554) have no persisted candidate data (minor, unresolved). Validated stem cross-section distinguishing feature (2-ridged perforatum vs 4-ridged/hollow maculatum, also separates tetrapterum) ready to add via species_lookalikes/look_alike_warnings — pending decision on who drafts the verbatim text.
+- Audit finding #3b (silent text-substitution detection) — not started; scope decision pending, now concretely includes verifying 412
+- Audit finding #5 (card-level approval design) — unblocked, design conversation not yet started
+- Enrichment gap remediation — 9 AI drafts pending approval, 6 species never scanned, 79 no-PFAF species need alt-source decision

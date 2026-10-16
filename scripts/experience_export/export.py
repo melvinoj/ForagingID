@@ -567,10 +567,15 @@ def main():
     impressum_placeholder = (not impressum) or impressum.startswith("TODO")
     if impressum_placeholder:
         warnings.append("impressum_url is a PLACEHOLDER — footer shows 'Impressum (link to follow)'. Do not publish until set.")
+    datenschutz = cfg.get("datenschutz_url") or ""
+    datenschutz_placeholder = (not datenschutz) or datenschutz.startswith("TODO")
+    if datenschutz_placeholder:
+        warnings.append("datenschutz_url is a PLACEHOLDER — footer shows 'Datenschutz (link to follow)'. Do not publish until set.")
     data = {
         "title": cfg["title"], "intro": cfg.get("intro", ""), "cta_label": cfg.get("cta_label", "Get in touch"),
         "contact_url": cfg["contact_url"],
         "impressum_url": None if impressum_placeholder else impressum,
+        "datenschutz_url": None if datenschutz_placeholder else datenschutz,
         "walk": {"name": walk["name"], "distance_m": walk["distance_m"], "duration_min": walk["duration_min"],
                  "line": line, "stops": stops},
         # Walk order: the order plants are first met along the route (Melvin, 15 Oct 2026).

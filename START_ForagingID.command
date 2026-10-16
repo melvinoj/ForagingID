@@ -63,5 +63,14 @@ OPENER_PID=$!
 # tee ignores Ctrl+C (SIGINT): otherwise it exits on the same keypress and
 # uvicorn's shutdown output never reaches the log. It still ends when uvicorn
 # closes the pipe, and closing the window (SIGHUP) still stops it.
-uvicorn app.main:app --host 0.0.0.0 --port "$PORT" --reload --reload-dir app 2>&1 \
+#
+# Reload scope (16 Oct 2026): uvicorn 0.32.1 IGNORES --reload-dir for any folder
+# inside the project and always watches the whole repo, so edits under scripts/
+# reloaded the server (and orphaned caffeinate). The excludes must be ABSOLUTE
+# paths — relative ones are silently ignored (checked against uvicorn's
+# FileFilter). --timeout-graceful-shutdown 5: an open browser tab (event stream)
+# can no longer hold a reload or Ctrl+C on "Waiting for connections to close".
+uvicorn app.main:app --host 0.0.0.0 --port "$PORT" --reload --reload-dir app \
+  --reload-exclude "$PWD/scripts" --reload-exclude "$PWD/migrations" --reload-exclude "$PWD/tests" \
+  --timeout-graceful-shutdown 5 2>&1 \
   | (trap '' INT; exec tee -a "$LOG")

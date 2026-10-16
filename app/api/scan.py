@@ -35,7 +35,10 @@ import hashlib
 import httpx
 import json as _json
 import logging
+import os
 import shutil
+import signal
+import subprocess
 import tempfile
 import uuid
 from datetime import datetime
@@ -110,6 +113,19 @@ _ARCHIVE_ROOT_DEFAULT = "/Volumes/DIGIERA/Pictures"
 _caffeinate_proc: Optional[asyncio.subprocess.Process] = None
 
 
+def _stray_caffeinate_pids() -> list[int]:
+    """PIDs of every caffeinate this endpoint family starts (`caffeinate -dimsu`,
+    with or without `-w <pid>`) — including ones orphaned by an earlier server
+    process, which the in-memory handle above knows nothing about. Never
+    matches other caffeinate invocations (e.g. keep_awake's `caffeinate -i`)."""
+    try:
+        out = subprocess.run(["pgrep", "-f", "^caffeinate -dimsu( |$)"],
+                             capture_output=True, text=True, timeout=5).stdout
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        return []
+    return [int(p) for p in out.split() if p.isdigit()]
+
+
 @router.post("/caffeinate/start")
 async def caffeinate_start():
     """Start caffeinate -dimsu to keep the Mac awake during a scan session."""
@@ -117,8 +133,12 @@ async def caffeinate_start():
     if _caffeinate_proc is not None and _caffeinate_proc.returncode is None:
         return {"active": True, "pid": _caffeinate_proc.pid, "started": False}
     try:
+        # -w <this server's pid>: caffeinate exits on its own when this server
+        # process exits — shutdown, crash, or a --reload worker restart. The
+        # handle below lives only in memory; before this, a restart lost it and
+        # left caffeinate running forever (orphaned to launchd, 15 Oct 2026).
         _caffeinate_proc = await asyncio.create_subprocess_exec(
-            "caffeinate", "-dimsu",
+            "caffeinate", "-dimsu", "-w", str(os.getpid()),
             stdout=asyncio.subprocess.DEVNULL,
             stderr=asyncio.subprocess.DEVNULL,
         )
@@ -130,31 +150,42 @@ async def caffeinate_start():
 
 @router.post("/caffeinate/stop")
 async def caffeinate_stop():
-    """Kill the caffeinate process — allow Mac to sleep normally again."""
+    """Kill the caffeinate process — allow Mac to sleep normally again.
+
+    Stops the tracked process AND any stray `caffeinate -dimsu` left by an
+    earlier server process, so Stop always means stopped."""
     global _caffeinate_proc
-    if _caffeinate_proc is None or _caffeinate_proc.returncode is not None:
-        _caffeinate_proc = None
-        return {"active": False, "stopped": False}
-    try:
-        _caffeinate_proc.terminate()
-        await asyncio.wait_for(_caffeinate_proc.wait(), timeout=2.0)
-    except Exception:
+    stopped = False
+    if _caffeinate_proc is not None and _caffeinate_proc.returncode is None:
         try:
-            _caffeinate_proc.kill()
+            _caffeinate_proc.terminate()
+            await asyncio.wait_for(_caffeinate_proc.wait(), timeout=2.0)
         except Exception:
-            pass
+            try:
+                _caffeinate_proc.kill()
+            except Exception:
+                pass
+        stopped = True
     _caffeinate_proc = None
-    return {"active": False, "stopped": True}
+    for pid in _stray_caffeinate_pids():
+        try:
+            os.kill(pid, signal.SIGTERM)
+            stopped = True
+        except ProcessLookupError:
+            pass
+    return {"active": bool(_stray_caffeinate_pids()), "stopped": stopped}
 
 
 @router.get("/caffeinate/status")
 async def caffeinate_status():
-    """Return whether caffeinate is currently active."""
+    """Return whether caffeinate is currently active — the real process state,
+    not just this server's in-memory handle."""
     global _caffeinate_proc
-    active = _caffeinate_proc is not None and _caffeinate_proc.returncode is None
-    if not active:
-        _caffeinate_proc = None
-    return {"active": active, "pid": _caffeinate_proc.pid if active else None}
+    if _caffeinate_proc is not None and _caffeinate_proc.returncode is None:
+        return {"active": True, "pid": _caffeinate_proc.pid}
+    _caffeinate_proc = None
+    strays = _stray_caffeinate_pids()
+    return {"active": bool(strays), "pid": strays[0] if strays else None}
 
 
 # ---------------------------------------------------------------------------

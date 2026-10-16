@@ -16,8 +16,9 @@
   "_canonical_note": "Self-canonical for index.html (its own public URL). Switch to the subdomain URL if one is added later.",
   "canonical_url": "https://melvinoj.github.io/foraging-experience/",
 
-  "_impressum_note": "Page to be created on melvinjarman.co.uk before go-live.",
+  "_legal_note": "Impressum and Datenschutz pages live on melvinjarman.co.uk (16 Oct 2026). Footer links open in the top window.",
   "impressum_url": "https://melvinjarman.co.uk/impressum",
+  "datenschutz_url": "https://melvinjarman.co.uk/datenschutz",
 
   "show_brand": false,
 

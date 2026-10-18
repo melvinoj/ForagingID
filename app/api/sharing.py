@@ -19,6 +19,7 @@ import asyncio
 import html
 import ipaddress
 import logging
+import re
 import socket
 from datetime import datetime, date
 from typing import Optional, List
@@ -341,9 +342,20 @@ class WalkSpecies(BaseModel):
 
 class WalkStop(BaseModel):
     num: int
+    label: Optional[str] = None               # saved-walk stop label ("7", "7a"); shown instead of num
     dist_from_prev: Optional[float] = None   # metres
     note_text: Optional[str] = None           # field-note stop (no species)
-    species: List[WalkSpecies] = []           # EVERY species at the stop
+    species: List[WalkSpecies] = []           # species FIRST listed at this stop (full block)
+    also_here: List["WalkRepeat"] = []        # species already listed at an earlier stop (compact line)
+
+
+class WalkRepeat(BaseModel):
+    species_scientific: str
+    first_label: str                           # label of the stop where its full block is
+    toxicity_warning: Optional[str] = None     # toxic guard label, kept on the compact line
+
+
+WalkStop.model_rebuild()
 
 
 class WalkExportRequest(BaseModel):
@@ -387,6 +399,59 @@ def _fmt_dist(m: Optional[float]) -> str:
     return f"{round(m)}m" if m < 1000 else f"{m / 1000:.1f}km"
 
 
+_MD_LIST = re.compile(r"^\s*(?:[-*+]|\d+[.)])\s+")
+
+
+def _md_inline(text: str) -> str:
+    """Escape, then **bold** / *italic* / _italic_ / `code`. Escaping first means
+    recipe text can never inject HTML."""
+    t = html.escape(text)
+    t = re.sub(r"\*\*(.+?)\*\*", r"<strong>\1</strong>", t)
+    t = re.sub(r"__(.+?)__", r"<strong>\1</strong>", t)
+    t = re.sub(r"(?<![\w*])\*(?!\s)(.+?)(?<!\s)\*(?![\w*])", r"<em>\1</em>", t)
+    t = re.sub(r"(?<!\w)_(?!\s)(.+?)(?<!\s)_(?!\w)", r"<em>\1</em>", t)
+    t = re.sub(r"`([^`]+)`", r"<code>\1</code>", t)
+    return t
+
+
+def _md_snippet(body: str, title: str, limit: int = 700) -> str:
+    """Recipe Markdown → small safe HTML: headings, paragraphs, bullet/numbered
+    lists, bold/italic. A leading heading that repeats the recipe title is
+    dropped (the title is already shown). Whole blocks are kept up to ~limit
+    characters, then '…'."""
+    blocks = [b.strip() for b in re.split(r"\n\s*\n", (body or "").replace("\r", "")) if b.strip()]
+    title_norm = re.sub(r"[#*_\s]+", " ", title or "").strip().lower()
+    out, used = [], 0
+    for i, b in enumerate(blocks):
+        if re.fullmatch(r"[-*_]{3,}", b):
+            continue                                            # horizontal rule
+        m = re.match(r"^(#{1,6})\s+(.*)$", b.split("\n", 1)[0])
+        if i <= 1 and not out and re.sub(r"[#*_\s]+", " ", b).strip().lower() == title_norm:
+            continue                                            # "**Title**" / "# Title" alone
+        if m and i == 0 and re.sub(r"[#*_\s]+", " ", m.group(2)).strip().lower() == title_norm:
+            rest = b.split("\n", 1)[1].strip() if "\n" in b else ""
+            if not rest:
+                continue
+            b, m = rest, re.match(r"^(#{1,6})\s+(.*)$", rest.split("\n", 1)[0])
+        if used and used + len(b) > limit:
+            out.append("<p style='margin:4px 0 0'>…</p>")
+            break
+        used += len(b)
+        lines = b.split("\n")
+        if m and len(lines) == 1:
+            out.append(f"<div style='font-weight:600;color:#2d5016;margin:6px 0 2px'>{_md_inline(m.group(2))}</div>")
+        elif all(_MD_LIST.match(l) for l in lines):
+            tag = "ol" if re.match(r"^\s*\d", lines[0]) else "ul"
+            items = "".join(f"<li>{_md_inline(_MD_LIST.sub('', l))}</li>" for l in lines)
+            out.append(f"<{tag} style='margin:4px 0 4px 18px;padding:0'>{items}</{tag}>")
+        else:
+            if m:                                               # heading line + text below it
+                out.append(f"<div style='font-weight:600;color:#2d5016;margin:6px 0 2px'>{_md_inline(m.group(2))}</div>")
+                lines = lines[1:]
+            out.append(f"<p style='margin:4px 0'>{_md_inline(' '.join(l.strip() for l in lines))}</p>")
+    return "".join(out)
+
+
 def _walk_species_html(s: WalkSpecies, first: bool) -> str:
     """One species section inside a stop card. Content arrives already gated by
     the frontend toxic guard; a toxicity_warning replaces the edibility badge."""
@@ -419,15 +484,13 @@ def _walk_species_html(s: WalkSpecies, first: bool) -> str:
     if s.recipe_title or s.recipe_body:
         r_icon = _SEASON_ICON.get(s.recipe_season or "", "💡")
         r_label = ("Preparation" if s.is_medicinal_prep else None) or s.recipe_title or "Recipe"
-        body_text = s.recipe_body or ""
-        snippet = body_text[:500] + ("…" if len(body_text) > 500 else "")
         recipe_html = (
             f'<div style="background:#f8faf4;border-left:3px solid #7a9e50;'
             f'padding:8px 12px;margin-top:8px;border-radius:0 6px 6px 0">'
             f'<div style="font-size:0.78rem;font-weight:600;color:#2d5016;margin-bottom:4px">'
             f'{r_icon} {_h(r_label)}</div>'
-            f'<div style="font-size:0.75rem;color:#555;line-height:1.55;white-space:pre-wrap">'
-            f'{_h(snippet)}</div></div>'
+            f'<div class="recipe-md" style="font-size:0.75rem;color:#555;line-height:1.55">'
+            f'{_md_snippet(s.recipe_body or "", s.recipe_title or "")}</div></div>'
         )
 
     sep = "" if first else "border-top:1px dashed #e3ead7;margin-top:10px;padding-top:10px;"
@@ -447,9 +510,11 @@ def _walk_species_html(s: WalkSpecies, first: bool) -> str:
 
 
 def _build_walk_html(body: WalkExportRequest) -> str:
-    title = body.title or f"ForagingID Walk — {date.today().strftime('%d %b %Y')}"
+    # Saved walks send their name; an unsaved route gets a dated default.
+    title = body.title or f"Walk — {date.today().strftime('%d %b %Y')}"
     n_stops = len(body.stops)
-    n_species = len({sp.species_scientific for s in body.stops for sp in s.species})
+    n_species = len({sp.species_scientific for s in body.stops for sp in s.species}
+                    | {r.species_scientific for s in body.stops for r in s.also_here})
     season_icon = _SEASON_ICON.get(body.season or "", "")
     total_str = _fmt_dist(body.total_distance_m)
 
@@ -470,15 +535,27 @@ def _build_walk_html(body: WalkExportRequest) -> str:
                 f'{_h(s.note_text[:400])}</div>'
             )
 
-        n_here = len(s.species)
+        if s.also_here:
+            parts = []
+            for r in s.also_here:
+                warn = (f' <span style="font-size:0.66rem;font-weight:700;padding:0 5px;border-radius:4px;'
+                        f'background:#dc2626;color:#fff">{_h(r.toxicity_warning)}</span>'
+                        if r.toxicity_warning else "")
+                parts.append(f'<em>{_h(r.species_scientific)}</em>{warn} (see stop {_h(r.first_label)})')
+            species_html += (
+                f'<div style="font-size:0.75rem;color:#666;margin-top:{8 if s.species else 2}px">'
+                f'Also here: {", ".join(parts)}</div>'
+            )
+
+        n_here = len(s.species) + len(s.also_here)
         stops_html += (
             f'<div style="background:white;border:1px solid #e0e8d0;border-radius:8px;'
             f'padding:14px 16px;margin-bottom:12px;page-break-inside:avoid">'
             f'<div style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;margin-bottom:6px">'
-            f'<span style="min-width:22px;height:22px;border-radius:50%;background:#2d5016;'
-            f'color:white;font-size:0.68rem;font-weight:700;'
+            f'<span style="min-width:22px;height:22px;border-radius:11px;padding:0 4px;box-sizing:border-box;'
+            f'background:#2d5016;color:white;font-size:0.68rem;font-weight:700;'
             f'display:inline-flex;align-items:center;justify-content:center;flex-shrink:0">'
-            f'{s.num}</span>'
+            f'{_h(s.label) if s.label else s.num}</span>'
             + (f'<span style="font-size:0.75rem;color:#556040;font-weight:600">{n_here} species here</span>'
                if n_here > 1 else "")
             + f'{dist_html}</div>'
@@ -521,7 +598,7 @@ def _build_walk_html(body: WalkExportRequest) -> str:
         f"{dist_stat}</div>\n"
         f"  <button class='print-btn no-print' onclick='window.print()'>🖨 Print / Save as PDF</button>\n"
         f"  {stops_html}\n"
-        f"  <div class='footer'>Generated by ForagingID · "
+        f"  <div class='footer'>Generated by LandMemory · "
         f"{date.today().strftime('%d %b %Y')}</div>\n"
         f"</body>\n</html>"
     )

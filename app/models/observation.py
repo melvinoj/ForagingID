@@ -81,6 +81,44 @@ def is_phone_origin(obs) -> bool:
     return getattr(obs, "upload_source", None) == PHONE_ORIGIN_SOURCE
 
 
+# ── Confirmed for a walk (membership + "human-confirmed only") ───────────────
+# Same two-field rule as the map (/api/map/geojson) and the experience export
+# gate: approved/manually_verified AND identified — plus a species, because a
+# walk lists species. Accepts an ORM row or a plain dict (the export reads
+# sqlite3 rows), so walk_membership.py and export.py share ONE definition.
+# map.py / nearby.py / taxonomy.py still carry their own _CONFIRMED_STATUSES
+# tuple; the values are identical — fold them in here if any of them changes.
+CONFIRMED_REVIEW_STATUSES = frozenset({"approved", "manually_verified"})
+
+
+def _field(obs, name):
+    return obs.get(name) if isinstance(obs, dict) else getattr(obs, name, None)
+
+
+def is_confirmed_observation(obs) -> bool:
+    """True when a walk may list this observation's species."""
+    return (
+        _field(obs, "review_status") in CONFIRMED_REVIEW_STATUSES
+        and _field(obs, "identification_status") == "identified"
+        and bool(_field(obs, "species_primary"))
+    )
+
+
+def is_human_confirmed(obs) -> bool:
+    """
+    Confirmed AND a human made the decision — the "human-confirmed only" walk
+    filter. 'AI-agreed' is the complement within confirmed: P1's dual-API
+    auto-approve sets review_status='approved' but never reviewed_at
+    (scan.py dual-agree branch); every human approve path stamps reviewed_at
+    (observation_service.update_observation_status, bulk_actions, reidentify,
+    observations.py, audit.py). manually_verified is always human.
+    """
+    if not is_confirmed_observation(obs):
+        return False
+    return (_field(obs, "review_status") == "manually_verified"
+            or _field(obs, "reviewed_at") is not None)
+
+
 class Observation(Base):
     __tablename__ = "observations"
 

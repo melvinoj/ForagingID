@@ -82,8 +82,10 @@ def _body_colours(src: Path) -> dict:
 def _walk_badges() -> dict:
     """renderWalkPanel()'s inline badge colours (toxic + per-status)."""
     js = INDEX_HTML.read_text(encoding="utf-8")
-    tox = _one(r"background:(#[0-9a-fA-F]{6});color:(#[0-9a-fA-F]{3,6})\">☠ \$\{_sev === 'deadly'", js,
-               "index.html walk toxic badge")
+    # Toxic badge colours live in _culinaryGateBadge() since the 16 Oct 2026
+    # toxic guard (was an inline ☠ span in renderWalkPanel).
+    tox = _one(r"const bg = gate\.isToxic \? '(#[0-9a-fA-F]{6})'.*?const fg = gate\.isToxic \? '(#[0-9a-fA-F]{3,6})'",
+               js, "index.html walk toxic badge (_culinaryGateBadge)", re.S)
     statuses = r"\$\{edib==='edible'\?'(#\w+)':edib==='toxic'\?'(#\w+)':edib==='inedible'\?'(#\w+)':edib==='medicinal'\?'(#\w+)':'(#\w+)'\}"
     bg = _one(r"background:" + statuses, js, "index.html walk badge backgrounds")
     fg = _one(r"color:" + statuses, js, "index.html walk badge colours")

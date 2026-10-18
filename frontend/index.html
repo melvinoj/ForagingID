@@ -579,8 +579,8 @@
       border-radius: 8px; padding: 10px 12px; margin-bottom: 8px;
     }
     .walk-stop-num {
-      display: inline-block; width: 22px; height: 22px;
-      background: #2d5016; color: white; border-radius: 50%;
+      display: inline-block; min-width: 22px; height: 22px; padding: 0 4px; box-sizing: border-box;
+      background: #2d5016; color: white; border-radius: 11px;   /* pill: fits "12a" */
       font-size: 0.7rem; font-weight: 700;
       text-align: center; line-height: 22px;
       margin-right: 7px; flex-shrink: 0; vertical-align: middle;
@@ -2355,6 +2355,9 @@
       <div id="walk-tab-stops">
         <div class="walk-export-row">
           <a id="walk-google-btn" class="walk-map-btn google" href="#" target="_blank" rel="noopener">🗺 Google Maps</a>
+          <button id="walk-gpx-btn" class="walk-map-btn" onclick="walkDownloadGpx()"
+            style="background:#fff;color:#2d5016;border:1px solid #b8d48a;cursor:pointer"
+            title="Download the full route line as a GPX track (with stops as waypoints)">⬇ Download GPX</button>
           <button id="walk-save-btn" class="walk-save-btn" onclick="promptSaveWalk()">💾 Save walk</button>
           <button id="walk-export-btn" class="walk-map-btn"
             onclick="exportWalkSummary()"
@@ -2385,6 +2388,8 @@
         </div>
         <div id="walk-gmaps-note" style="display:none;font-size:0.7rem;color:#92400e;padding:2px 16px 4px"></div>
         <div id="walk-ors-note"></div>
+        <!-- Loaded saved walk only: route-proximity membership (_renderWalkMembership) -->
+        <div id="walk-membership" style="display:none;padding:4px 12px 6px;border-bottom:1px solid #eef0ea;font-size:0.72rem;color:#555"></div>
         <div class="walk-stops-scroll" id="walk-stops-scroll">
           <!-- Populated by renderWalkPanel() -->
         </div>
@@ -3124,6 +3129,9 @@ function setLayer(mode, _fromZoom) {
 // var (not let): _applyLayer runs from many places, some before this file's
 // walk-state block is reached.
 var _savedWalkView = null;
+// Loaded saved walk as the server computed it: {id, name, stops, membership}
+// (GET /api/walk/saves/{id}). _savedWalkRoute() turns it into the route array.
+var _savedWalkData = null;
 
 function _applyLayer() {
   const _hideAll     = !!(_savedWalkView && _savedWalkView.hidePins);
@@ -5196,6 +5204,8 @@ function _exitWalkMode() {
   // to the layer + map view from before it was opened.
   const _sv = _savedWalkView;
   _savedWalkView = null;
+  _savedWalkData = null;
+  _renderWalkMembership();
   const _wbsSide = document.getElementById('walk-bottom-sheet');
   if (_wbsSide) _wbsSide.classList.remove('wbs-side', 'wbs-peek');
   const _wbsLbl = document.getElementById('wbs-label');
@@ -5738,6 +5748,13 @@ function _clusterStops(pins, radiusM) {
 }
 
 // Species at a stop (works for clustered stops, loaded walks and old shapes).
+// Stop number shown on the map, card and export. Loaded saved walks carry the
+// server's label ("7", "7a" for a stop that joined by route proximity —
+// walk_membership.py); every other route is numbered by position.
+function _stopLabel(s, i) {
+  return (s && s.label) ? String(s.label) : String(i + 1);
+}
+
 function _stopSpecies(s) {
   if (s.p && s.p.is_note) return [];
   if (Array.isArray(s.species) && s.species.length) return s.species.filter(Boolean);
@@ -5900,14 +5917,15 @@ function _drawWalkLayer(suppressFitBounds) {
   if (_walkRouteLayer) map.removeLayer(_walkRouteLayer);
   _walkRouteLayer = L.layerGroup().addTo(map);
   const latLngs = route.map((s, i) => {
-    const bg = s.p.is_note ? '#f59e0b' : '#2d5016';
+    // Stops that joined a saved walk by route proximity ("7a") are a lighter green.
+    const bg = s.p.is_note ? '#f59e0b' : (s.origin === 'joined' ? '#5f8f35' : '#2d5016');
     const n  = _stopSpecies(s).length;
     const stopIcon = L.divIcon({
       className: '',
       html: `<div style="width:28px;height:28px;border-radius:50%;background:${bg};
                  color:white;font-size:0.72rem;font-weight:700;
                  display:flex;align-items:center;justify-content:center;
-                 border:2px solid white;box-shadow:0 2px 6px rgba(0,0,0,.3)">${i+1}</div>`,
+                 border:2px solid white;box-shadow:0 2px 6px rgba(0,0,0,.3)">${_esc(_stopLabel(s, i))}</div>`,
       iconSize: [28, 28], iconAnchor: [14, 14],
     });
     L.marker([s.lat, s.lng], { icon: stopIcon,
@@ -6038,6 +6056,39 @@ function _currentSeason() {
   return 'winter';
 }
 
+// Export summary recipe choice — the experience export's rule
+// (scripts/experience_export/export.py, recipe_source_priority): human-authored
+// first (curator), then Melvin's own menu (any other named source), then
+// ai_generated; within a source preferred first, then oldest. Never a
+// medicinal preparation; a dish already shown elsewhere in the summary is
+// skipped. `shown` is the summary-wide set of dish titles (lower case).
+// Recipes arrive already filtered by the toxic guard (empty when blocked).
+// Recipe title, else the body's first non-empty line without Markdown marks
+// (same fallback as the experience export's recipe_title()).
+function _recipeTitle(r) {
+  if ((r.title || '').trim()) return r.title.trim();
+  for (const line of String(r.body || '').split('\n')) {
+    const t = line.trim().replace(/^#+/, '').trim().replace(/^\*+|\*+$/g, '').trim();
+    if (t) return t;
+  }
+  return '';
+}
+
+function _summaryRecipe(recipes, shown) {
+  const rank = r => r.source === 'curator' ? 0 : (r.source === 'ai_generated' ? 2 : 1);
+  const sorted = (recipes || [])
+    .filter(r => !r.is_medicinal_prep)
+    .slice()
+    .sort((a, b) => (rank(a) - rank(b)) || ((b.is_preferred ? 1 : 0) - (a.is_preferred ? 1 : 0)) || (a.id - b.id));
+  for (const r of sorted) {
+    const dish = _recipeTitle(r).toLowerCase();
+    if (dish && shown.has(dish)) continue;
+    if (dish) shown.add(dish);
+    return r;
+  }
+  return null;
+}
+
 function _pickSeasonalRecipe(recipes, season) {
   if (!recipes || !recipes.length) return null;
   const pref = r => r.is_preferred;
@@ -6123,7 +6174,7 @@ function renderWalkPanel(route, enrichMap) {
         ? `${Math.round(distFromPrevN)}m` : `${(distFromPrevN/1000).toFixed(1)}km`;
       html += `<div class="walk-stop-card" style="border-left:3px solid #f59e0b">
         <div class="walk-stop-header">
-          <span class="walk-stop-num" style="background:#f59e0b">${i+1}</span>
+          <span class="walk-stop-num" style="background:#f59e0b">${_esc(_stopLabel(route[i], i))}</span>
           <span style="font-size:0.8rem;font-weight:600;color:#92400e">📝 Field Note</span>
           ${dstrN ? `<span class="walk-stop-dist">${dstrN}</span>` : ''}
         </div>
@@ -6209,6 +6260,7 @@ function renderWalkPanel(route, enrichMap) {
         ${commonName ? `<div class="walk-stop-common">${_esc(commonName)}</div>` : ''}
         <div class="walk-stop-meta">
           ${edibBadge}
+          ${_walkMemberChips(_stop, spName)}
           <a href="/species?s=${encodeURIComponent(spName)}"
              style="font-size:0.68rem;color:#2d5016;margin-left:8px">Species profile →</a>
         </div>
@@ -6217,19 +6269,49 @@ function renderWalkPanel(route, enrichMap) {
       </div>`;
     }
 
-    html += `<div class="walk-stop-card">
+    const _joinedStop = _stop.origin === 'joined';
+    html += `<div class="walk-stop-card"${_joinedStop ? ' style="border-style:dashed"' : ''}>
       <div>
-        <span class="walk-stop-num">${i+1}</span>
+        <span class="walk-stop-num"${_joinedStop ? ' style="background:#5f8f35"' : ''}>${_esc(_stopLabel(_stop, i))}</span>
+        ${_joinedStop ? `<span style="font-size:0.72rem;color:#556040;font-weight:600">new stop · </span>` : ''}
         ${_spList.length > 1 ? `<span style="font-size:0.72rem;color:#556040;font-weight:600">${_spList.length} species here</span>` : ''}
         ${distStr2 ? `<span class="walk-stop-dist">${_esc(distStr2)}</span>` : ''}
       </div>
-      ${speciesHtml}
+      ${speciesHtml || `<div style="font-size:0.75rem;color:#999;margin-top:4px">No confirmed species here now</div>`}
     </div>`;
   }
   document.getElementById('walk-stops-scroll').innerHTML = html;
 
   // Bottom sheet summary (phone only — mirrors walk-title / walk-sub for the sheet)
   _wbsUpdateSummary(route);
+}
+
+// Loaded saved walk: per-species membership chips (walk_membership.py).
+//   AI-agreed — confirmed only by P1's dual-API auto-approve, no human review
+//   new       — joined after the walk was saved (route proximity / accepted older)
+// The ✕ removes proximity-joined photos of that species at this stop (curator).
+function _walkMemberChips(stop, spName) {
+  const info = (stop.spInfo || []).find(x => x.name === spName);
+  if (!info) return '';
+  let h = '';
+  if (!info.human) {
+    h += `<span title="Confirmed by two identification services agreeing — not reviewed by a person"
+             style="font-size:0.64rem;padding:1px 5px;border-radius:4px;margin-left:5px;
+                    background:#eef2ff;color:#3730a3;font-weight:600">AI-agreed</span>`;
+  }
+  if (info.joined) {
+    const ids = (info.obs_ids || []).filter(id => (stop.joined_obs_ids || []).includes(id));
+    h += `<span title="Joined after the walk was saved"
+             style="font-size:0.64rem;padding:1px 5px;border-radius:4px;margin-left:5px;
+                    background:#ecfccb;color:#3f6212;font-weight:600">new</span>`;
+    if (ids.length) {
+      h += `<button data-guest-hide onclick="walkExcludeJoined([${ids.join(',')}])"
+               title="Remove from this walk"
+               style="margin-left:4px;font-size:0.64rem;padding:0 5px;border:1px solid #d6d3d1;
+                      border-radius:4px;background:#fff;color:#78716c;cursor:pointer">✕</button>`;
+    }
+  }
+  return h;
 }
 
 // ── Walk bottom sheet: summary section ─────────────────────────────────────
@@ -6351,16 +6433,13 @@ function _buildMapsUrls(route) {
   const noteEl = document.getElementById('walk-gmaps-note');
   if (!route.length) { if (noteEl) noteEl.style.display = 'none'; return; }
 
-  // Google Maps walking route: start + up to 8 waypoints + end = 10 points.
-  // Previously the middle stops beyond 8 were dropped silently while the last
-  // stop was kept as the destination, so the exported route skipped stops in
-  // the middle. Now the export is the first 10 points IN ORDER, a circular
-  // walk returns to the start, and the panel says when stops were left out.
-  const pts = route.map(s => `${s.lat},${s.lng}`);
-  const seq = _walkCircular && pts.length > 1 ? [...pts, pts[0]] : pts;
-  const GMAX = 10;
-  const truncated = seq.length > GMAX;
-  const use = truncated ? seq.slice(0, GMAX) : seq;
+  // Google Maps walking route takes 10 points: origin + 8 waypoints +
+  // destination. They are spread EVENLY BY DISTANCE along the whole walk line
+  // (the drawn route; else the stops joined in order, back to the start for a
+  // circular walk), so the link covers the full loop rather than the first 10
+  // stops. A circular line ends where it starts, so the destination is the start.
+  const line = _walkLinePoints(route);
+  const use  = _samplePolyline(line, 10).map(([la, ln]) => `${la.toFixed(6)},${ln.toFixed(6)}`);
   const origin = use[0];
   const dest   = use[use.length - 1];
   const wpts   = use.length > 2 ? use.slice(1, -1).join('|') : '';
@@ -6371,12 +6450,72 @@ function _buildMapsUrls(route) {
     + '&travelmode=walking';
   document.getElementById('walk-google-btn').href = gUrl;
   if (noteEl) {
-    noteEl.textContent = truncated
-      ? `Google Maps takes 10 points (start, 8 stops, end) — exporting stops 1–${GMAX} of ${route.length}` +
-        (_walkCircular ? ' (no return to start)' : '') + '.'
+    const many = line.length > 10;
+    noteEl.textContent = many
+      ? 'Google Maps takes 10 points — they are spread evenly along the whole route; use Download GPX for the exact track.'
       : '';
-    noteEl.style.display = truncated ? 'block' : 'none';
+    noteEl.style.display = many ? 'block' : 'none';
   }
+}
+
+// The walk as a line of [lat, lng]: the drawn route geometry when there is one
+// (ORS / saved shape), else the stops in order (+ back to start if circular).
+function _walkLinePoints(route) {
+  if (_walkRouteGeom && Array.isArray(_walkRouteGeom.coordinates) && _walkRouteGeom.coordinates.length > 1) {
+    return _walkRouteGeom.coordinates.map(([lng, lat]) => [lat, lng]);
+  }
+  const pts = (route || []).map(s => [s.lat, s.lng]);
+  return (_walkCircular && pts.length > 1) ? [...pts, pts[0]] : pts;
+}
+
+// n points evenly spaced by distance along a polyline (first and last included).
+function _samplePolyline(pts, n) {
+  if (pts.length <= n) return pts.slice();
+  const cum = [0];
+  for (let i = 1; i < pts.length; i++) {
+    cum.push(cum[i - 1] + _haversineM(pts[i - 1][0], pts[i - 1][1], pts[i][0], pts[i][1]));
+  }
+  const total = cum[cum.length - 1];
+  if (!total) return [pts[0]];
+  const out = [];
+  let j = 1;
+  for (let k = 0; k < n; k++) {
+    const target = total * k / (n - 1);
+    while (j < pts.length - 1 && cum[j] < target) j++;
+    const seg = cum[j] - cum[j - 1];
+    const t = seg ? Math.min(1, Math.max(0, (target - cum[j - 1]) / seg)) : 0;
+    out.push([pts[j - 1][0] + t * (pts[j][0] - pts[j - 1][0]),
+              pts[j - 1][1] + t * (pts[j][1] - pts[j - 1][1])]);
+  }
+  return out;
+}
+
+// GPX 1.1 of the whole walk: the full line as a track + every stop as a
+// waypoint named by its label ("7", "7a") with its species.
+function walkDownloadGpx() {
+  const route = _activeWalkRoute || [];
+  const line  = _walkLinePoints(route);
+  if (!line.length) { alert('No walk route to export.'); return; }
+  const x = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  const name = (_walkSavedNameFor(route) || _walkTitleText(route).replace('🥾 ', '')).trim() || 'Walk';
+  const wpts = route.map((s, i) => {
+    const sp = s.p && s.p.is_note ? 'Field note' : _stopSpecies(s).join(', ');
+    return `  <wpt lat="${s.lat.toFixed(7)}" lon="${s.lng.toFixed(7)}"><name>${x('Stop ' + _stopLabel(s, i))}</name>` +
+           (sp ? `<desc>${x(sp)}</desc>` : '') + `</wpt>`;
+  }).join('\n');
+  const trkpts = line.map(([la, ln]) => `      <trkpt lat="${la.toFixed(7)}" lon="${ln.toFixed(7)}"/>`).join('\n');
+  const gpx = `<?xml version="1.0" encoding="UTF-8"?>\n` +
+    `<gpx version="1.1" creator="LandMemory" xmlns="http://www.topografix.com/GPX/1/1">\n` +
+    `  <metadata><name>${x(name)}</name></metadata>\n` +
+    `${wpts}\n` +
+    `  <trk><name>${x(name)}</name><trkseg>\n${trkpts}\n    </trkseg></trk>\n</gpx>\n`;
+  const blob = new Blob([gpx], { type: 'application/gpx+xml' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = name.replace(/[^\wÀ-ɏ -]+/g, '').replace(/\s+/g, '_') + '.gpx';
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
 }
 
 // ── Save / recall walks ────────────────────────────────────────────────────
@@ -6538,12 +6677,19 @@ async function loadSavedWalk(id) {
       alert('This saved walk has no waypoints.');
       return;
     }
-    // Rebuild route array matching _buildWalkRoute output shape.
+    // Stops come from the server (walk_membership.py): species resolved from the
+    // CURRENT observations, plus photos that joined by route proximity ("7a").
+    // The stored waypoint labels below are only a fallback for a response
+    // without `stops` (older server).
+    _savedWalkData = Array.isArray(w.stops)
+      ? { id: w.id, name: w.name, stops: w.stops, membership: w.membership || null }
+      : null;
+    // Legacy rebuild, matching _buildWalkRoute output shape.
     // v2 walks (stop clustering): an obs waypoint is a STOP — obs_ids[] + labels[].
     // v1 walks: type 'obs' (single obs_id + label) or 'note' (note_id).
     // Old walks (no type): a note is label 'Note', and its note id was stored
     // in obs_id — read it as the note id, never as an observation id.
-    const route = w.waypoints.map(wp => {
+    const route = _savedWalkData ? _savedWalkRoute() : w.waypoints.map(wp => {
       const isNote = wp.type === 'note' || (!wp.type && wp.label === 'Note');
       if (isNote) {
         return {
@@ -6632,6 +6778,7 @@ async function loadSavedWalk(id) {
     document.getElementById('walk-mode-toggle').classList.remove('visible');
 
     renderWalkPanel(route, _activeWalkEnrich);
+    _renderWalkMembership();
     const _wbsBodyEl = document.getElementById('wbs-body');
     if (_wbsBodyEl) _wbsBodyEl.scrollTop = 0;   // header + Export summary, not the saved-walks list the click came from
   } catch (e) {
@@ -6696,6 +6843,181 @@ function _syncWalkPinsBtn() {
   if (_savedWalkView) b.textContent = _savedWalkView.hidePins ? '👁 Show all pins' : '🙈 Hide other pins';
 }
 
+// ── Loaded saved walk: route-proximity membership (walk_membership.py) ─────
+// The server decides membership; this only draws it and sends the curator's
+// actions (buffer, accept older, remove joined, renumber). "Human-confirmed
+// only" is a per-walk display filter remembered in this browser — it changes
+// what the panel, map, proximity alerts and Export summary show, never the walk.
+
+const _walkHumanOnlyMem = {};   // fallback when localStorage is unavailable
+let _walkOlderOpen = false;
+
+function _walkHumanOnly(id, set) {
+  const key = `foragingid_walk_human_only_${id}`;
+  if (set !== undefined) {
+    _walkHumanOnlyMem[id] = !!set;
+    try { if (set) localStorage.setItem(key, '1'); else localStorage.removeItem(key); } catch (_) {}
+  }
+  try { return localStorage.getItem(key) === '1'; } catch (_) { return !!_walkHumanOnlyMem[id]; }
+}
+
+// Server stops → route entries (shape of _buildWalkRoute output + label/origin/spInfo).
+function _savedWalkRoute() {
+  const d = _savedWalkData;
+  if (!d) return [];
+  const humanOnly = _walkHumanOnly(d.id);
+  const route = [];
+  for (const st of d.stops) {
+    if (st.is_note) {
+      route.push({ lat: st.lat, lng: st.lng, pins: null, species: [], obs_ids: [],
+                   label: st.label, origin: st.origin,
+                   p: { species_primary: null, is_note: true, id: st.note_id != null ? st.note_id : null } });
+      continue;
+    }
+    const sp = humanOnly ? st.species.filter(x => x.human) : st.species;
+    // A stop left with no species under the filter (or a joined stop with
+    // none) is dropped; labels keep every other stop's number unchanged.
+    if (!sp.length && (humanOnly || st.origin === 'joined')) continue;
+    const firstObs = (sp.length && sp[0].obs_ids.length) ? sp[0].obs_ids[0]
+                   : (st.obs_ids.length ? st.obs_ids[0] : null);
+    route.push({ lat: st.lat, lng: st.lng, pins: null,
+                 species: sp.map(x => x.name), spInfo: sp,
+                 obs_ids: st.obs_ids, joined_obs_ids: st.joined_obs_ids || [],
+                 label: st.label, origin: st.origin,
+                 p: { species_primary: sp.length ? sp[0].name : null, is_note: false, id: firstObs } });
+  }
+  return route;
+}
+
+function _renderWalkMembership() {
+  const el = document.getElementById('walk-membership');
+  if (!el) return;
+  const d = _savedWalkData;
+  if (!d || !d.membership) { el.style.display = 'none'; el.innerHTML = ''; return; }
+  const m = d.membership, rule = m.rule || {};
+  const humanOnly = _walkHumanOnly(d.id);
+  const nNew  = d.stops.reduce((a, st) => a + (st.joined_obs_ids || []).length, 0);
+  const nAi   = new Set(d.stops.flatMap(st => st.species.filter(x => !x.human).map(x => x.name))).size;
+  const since = rule.since ? String(rule.since).slice(0, 16) : '—';
+  const cands = m.older_candidates || [];
+  const btn   = 'font-size:0.7rem;padding:2px 8px;border-radius:5px;border:1px solid #b8d48a;background:#f0f4e8;color:#2d5016;cursor:pointer;font-family:inherit';
+  el.style.display = 'block';
+  el.innerHTML = `
+    <div style="display:flex;flex-wrap:wrap;align-items:center;gap:6px 12px">
+      <label data-guest-hide title="Confirmed photos within this distance of the walk's line join it"
+             style="display:flex;align-items:center;gap:5px;white-space:nowrap">
+        Route buffer
+        <input type="range" min="10" max="60" step="5" value="${Number(rule.buffer_m) || 25}"
+               oninput="this.nextElementSibling.textContent = this.value + ' m'"
+               onchange="walkSetBuffer(this.value)" style="width:80px;accent-color:#2d5016">
+        <span style="min-width:34px">${Number(rule.buffer_m) || 25} m</span>
+      </label>
+      <label title="Hide species confirmed only by two identification services agreeing (AI-agreed)"
+             style="display:flex;align-items:center;gap:4px;white-space:nowrap;cursor:pointer">
+        <input type="checkbox" ${humanOnly ? 'checked' : ''} onchange="walkToggleHumanOnly(this.checked)">
+        Human-confirmed only
+      </label>
+      <button data-guest-hide onclick="walkRenumber()" style="${btn}"
+              title="Make the current stops (including 7a-style new ones) the saved walk, numbered 1–N">Renumber stops</button>
+    </div>
+    <div style="margin-top:3px;color:#777">
+      ${nNew} photo${nNew !== 1 ? 's' : ''} joined since ${_esc(since)}${nAi ? ` · ${nAi} AI-agreed species` : ''}
+    </div>
+    ${cands.length ? `
+    <div data-guest-hide style="margin-top:5px">
+      <button onclick="walkToggleOlderList()" style="${btn}">
+        Older photos near this route: ${cands.length} species ${_walkOlderOpen ? '▾' : '▸'}</button>
+      <div id="walk-older-list" style="display:${_walkOlderOpen ? 'block' : 'none'};margin-top:4px;max-height:220px;overflow-y:auto">
+        ${cands.map(c => `
+          <label style="display:flex;align-items:baseline;gap:5px;padding:2px 0;cursor:pointer">
+            <input type="checkbox" class="walk-older-cb" value="${c.obs_ids.map(Number).join(',')}">
+            <em style="color:#2d5016">${_esc(c.species)}</em>
+            <span style="color:#999">${c.n} photo${c.n !== 1 ? 's' : ''} · ${Number(c.nearest_m)} m${c.human ? '' : ' · AI-agreed'}</span>
+          </label>`).join('')}
+        <div style="display:flex;gap:6px;margin-top:4px">
+          <button onclick="walkAcceptOlder(false)" style="${btn}">Accept selected</button>
+          <button onclick="walkAcceptOlder(true)"  style="${btn}">Accept all</button>
+        </div>
+      </div>
+    </div>` : ''}`;
+}
+
+// Redraw from a server walk response (GET shape) without re-fitting the map.
+async function _refreshSavedWalk(w) {
+  if (!_savedWalkView || !w || !Array.isArray(w.stops)) return;   // walk was cleared meanwhile
+  _savedWalkData = { id: w.id, name: w.name, stops: w.stops, membership: w.membership || null };
+  const route = _savedWalkRoute();
+  _activeWalkRoute = route;
+  _walkSelected    = route;
+  _walkSaved       = { id: w.id, name: w.name, sig: _walkRouteSig(route) };
+  _drawWalkLayer(true);
+  const need = [...new Set(route.flatMap(_stopSpecies))].filter(n => !(_activeWalkEnrich && _activeWalkEnrich[n]));
+  if (need.length) {
+    const more = await _fetchWalkEnrich(need);
+    if (!_savedWalkView) return;
+    _activeWalkEnrich = Object.assign(_activeWalkEnrich || {}, more);
+  }
+  renderWalkPanel(route, _activeWalkEnrich || {});
+  _renderWalkMembership();
+}
+
+async function _walkMembershipCall(path, method, body) {
+  const d = _savedWalkData;
+  if (!d) return null;
+  try {
+    const r = await fetch(`/api/walk/saves/${d.id}/${path}`, {
+      method,
+      headers: { 'Content-Type': 'application/json' },
+      body: body ? JSON.stringify(body) : undefined,
+    });
+    const out = await r.json().catch(() => ({}));
+    if (!r.ok) {
+      const det = out.detail;
+      throw new Error(det ? (typeof det === 'string' ? det : JSON.stringify(det)) : `HTTP ${r.status}`);
+    }
+    await _refreshSavedWalk(out);
+    return out;
+  } catch (e) {
+    alert('Walk update failed: ' + e.message);
+    return null;
+  }
+}
+
+function walkToggleHumanOnly(on) {
+  if (!_savedWalkData) return;
+  _walkHumanOnly(_savedWalkData.id, !!on);
+  _refreshSavedWalk(Object.assign({}, _savedWalkData));
+}
+
+function walkSetBuffer(v) {
+  _walkMembershipCall('membership', 'PATCH', { buffer_m: Number(v) });
+}
+
+function walkToggleOlderList() {
+  _walkOlderOpen = !_walkOlderOpen;
+  _renderWalkMembership();
+}
+
+function walkAcceptOlder(all) {
+  const boxes = [...document.querySelectorAll('#walk-older-list .walk-older-cb')]
+    .filter(cb => all || cb.checked);
+  const ids = boxes.flatMap(cb => cb.value.split(',').map(Number).filter(Boolean));
+  if (!ids.length) { alert('Tick at least one species first.'); return; }
+  if (!confirm(`Add ${boxes.length} species (${ids.length} older photo${ids.length !== 1 ? 's' : ''}) to this walk?`)) return;
+  _walkMembershipCall('accept', 'POST', { obs_ids: ids });
+}
+
+function walkExcludeJoined(ids) {
+  if (!ids || !ids.length) return;
+  if (!confirm(`Remove ${ids.length} new photo${ids.length !== 1 ? 's' : ''} of this species from the walk?`)) return;
+  _walkMembershipCall('exclude', 'POST', { obs_ids: ids });
+}
+
+function walkRenumber() {
+  if (!confirm('Renumber stops?\n\nNew stops (7a, 7b…) become part of the saved walk and every stop is numbered 1–N in route order. Printed sheets and published pages will no longer match until reprinted / republished.')) return;
+  _walkMembershipCall('renumber', 'POST', null);
+}
+
 async function deleteSavedWalk(id) {
   if (!confirm('Delete this saved walk?')) return;
   try {
@@ -6737,6 +7059,10 @@ async function exportWalkSummary() {
   // through the toxic guard. Blocked species are still listed, with no
   // culinary/recipe/edibility content, only the warning (rendered as the badge
   // by /api/sharing/export-walk).
+  // A species already listed at an earlier stop becomes a compact "also here"
+  // line (with its ☠ warning if blocked) instead of a second full block.
+  const _firstStopOf = {};          // species → label of the first stop listing it
+  const _dishesShown = new Set();   // summary-wide: the same dish is never shown twice
   const stops = _activeWalkRoute.map((stop, i) => {
     const { p, lat, lng } = stop;
     const distFromPrev = i === 0 ? null
@@ -6744,13 +7070,23 @@ async function exportWalkSummary() {
           _activeWalkRoute[i-1].lat, _activeWalkRoute[i-1].lng,
           lat, lng
         );
-    const species = _stopSpecies(stop).map(spName => {
+    const label = _stopLabel(stop, i);
+    const also_here = [];
+    const names = _stopSpecies(stop).filter(spName => {
+      if (_firstStopOf[spName] === undefined) { _firstStopOf[spName] = label; return true; }
+      const ed = _activeWalkEnrich?.[spName];
+      const gate = _culinaryGate(ed ? ed._toxicity : null);
+      also_here.push({ species_scientific: spName, first_label: _firstStopOf[spName],
+                       toxicity_warning: gate.ok ? null : gate.label });
+      return false;
+    });
+    const species = names.map(spName => {
       const ed = _activeWalkEnrich?.[spName];
       const gate = _culinaryGate(ed ? ed._toxicity : null);
       const ci = gate.ok ? (ed?.culinary || null) : null;
       const spData = ed?.species || null;
       const recipes = gate.ok ? (ed?.recipes || []) : [];
-      const picked = _pickSeasonalRecipe(recipes, _season);
+      const picked = _summaryRecipe(recipes, _dishesShown);
       // Pin props for this species (new walks); loaded walks have no pins.
       const pinP = (stop.pins || []).map(x => x.p).find(pp => pp.species_primary === spName)
                    || (spName === p.species_primary ? p : {});
@@ -6763,7 +7099,7 @@ async function exportWalkSummary() {
         edibility: gate.ok ? (spData?.edibility_status || pinP.edibility_status || null) : null,
         toxicity_warning: gate.ok ? null : gate.label,
         culinary_notes: ci ? (ci.edible_parts || ci.taste_notes || ci.preparation_methods || null) : null,
-        recipe_title: picked ? (picked.title || null) : null,
+        recipe_title: picked ? (_recipeTitle(picked) || null) : null,
         recipe_body:  picked ? (picked.body  || null) : null,
         recipe_season: picked ? picked.season : null,
         is_medicinal_prep: picked ? !!picked.is_medicinal_prep : null,
@@ -6771,9 +7107,11 @@ async function exportWalkSummary() {
     });
     return {
       num: i + 1,
+      label,                        // "7a" for joined stops; rendered by export-walk when present
       dist_from_prev: distFromPrev,
       note_text: p.is_note ? (p.text || '') : null,
       species,
+      also_here,
     };
   });
 
@@ -6783,9 +7121,12 @@ async function exportWalkSummary() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         stops,
-        total_distance_m: totalM,
+        // Same distance the panel shows: the routed/saved distance when there
+        // is one, else the straight-line sum between stops.
+        total_distance_m: _walkOrsDistM > 0 ? _walkOrsDistM : totalM,
         season: _season,
-        title: null,
+        // Saved walk name while the route still matches it; else the server default.
+        title: _walkSavedNameFor(_activeWalkRoute) || null,
       }),
     });
     if (!r.ok) {

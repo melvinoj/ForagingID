@@ -17,3 +17,9 @@ class SavedWalk(Base):
     duration_min   = Column(Integer, default=0)
     # Ownership (multi-tenancy groundwork) — nullable, no FK yet; backfilled to curator (user_id=1)
     user_id        = Column(Integer, nullable=True)
+    # Membership by route proximity (migration 0053; rule in app/services/walk_membership.py).
+    # All NULL = defaults: 25 m buffer, photos taken on/after created_at join.
+    buffer_m          = Column(Float, nullable=True)
+    members_since     = Column(DateTime, nullable=True)   # PHOTO clock (EXIF local), not UTC
+    excluded_obs_json = Column(Text, nullable=True)       # JSON ids removed from the walk by hand
+    accepted_obs_json = Column(Text, nullable=True)       # JSON ids of older photos accepted from review

@@ -1621,7 +1621,9 @@ async def get_culinary_profile(
     recipes_out = [
         {"id": r.id, "title": r.title, "body": r.body,
          "season": r.season, "is_preferred": r.is_preferred,
-         "is_medicinal_prep": r.is_medicinal_prep}
+         "is_medicinal_prep": r.is_medicinal_prep,
+         # walk Export summary ranks curator > own menu > ai_generated (_summaryRecipe)
+         "source": r.source}
         for r in _recipe_rows
     ]
 

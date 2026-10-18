@@ -32,8 +32,12 @@ from PIL import Image, ImageOps
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[1]
 sys.path.insert(0, str(HERE))
+sys.path.insert(1, str(REPO))
 import gates  # noqa: E402
 import app_styles  # noqa: E402
+# Walk membership (saved stops + photos that joined by route proximity) — the
+# app's own rule, imported, not re-implemented (pure Python, no DB access).
+from app.services import walk_membership as wm  # noqa: E402
 
 DB_PATH   = REPO / "data" / "foragingid.db"
 DIST      = REPO / "dist"
@@ -366,15 +370,31 @@ def main():
         die(f"saved_walks id {cfg['walk_id']} not found")
     if walk["name"] != cfg["walk_name"]:
         die(f"saved_walks id {cfg['walk_id']} is '{walk['name']}', config says '{cfg['walk_name']}'")
-    obs_ids = json.loads(walk["obs_ids_json"] or "[]")
-    waypoints = json.loads(walk["waypoints_json"] or "[]")
     route = json.loads(walk["route_geojson"]) if walk["route_geojson"] else {}
 
-    # Observations, in walk order
-    q = ",".join("?" * len(obs_ids))
-    rows = {r["id"]: dict(r) for r in conn.execute(
-        f"SELECT id, species_id, species_primary, review_status, identification_status, file_path, photo_taken_at "
-        f"FROM observations WHERE id IN ({q})", obs_ids)}
+    # Membership, exactly as the app computes it (walk_membership.compute):
+    # saved stops + confirmed photos within the walk's buffer taken since save /
+    # accepted from review, minus removed ones. Stop labels ("7", "7a") as in the app.
+    obs_cols = ("id, species_id, species_primary, review_status, identification_status, file_path, "
+                "photo_taken_at, latitude, longitude, gps_accuracy_m, reviewed_at")
+    saved_ids = sorted(wm.saved_obs_ids(dict(walk)))
+    q = ",".join("?" * len(saved_ids))
+    saved_rows = {r["id"]: dict(r) for r in conn.execute(
+        f"SELECT {obs_cols} FROM observations WHERE id IN ({q})", saved_ids)} if saved_ids else {}
+    bb = wm.search_bbox(dict(walk))
+    nearby_rows = [dict(r) for r in conn.execute(
+        f"SELECT {obs_cols} FROM observations WHERE latitude BETWEEN ? AND ? AND longitude BETWEEN ? AND ?",
+        bb)] if bb else []
+    membership = wm.compute(dict(walk), saved_rows, nearby_rows)
+    mem_stops = membership["stops"]
+    joined_ids = [oid for st in mem_stops for oid in st["joined_obs_ids"]]
+    nearby_by_id = {r["id"]: r for r in nearby_rows}
+
+    # Observations, in walk order (saved stops' photos + joined photos)
+    obs_ids = list(dict.fromkeys([oid for st in mem_stops for oid in st["obs_ids"]] +
+                                 [i for i in saved_ids]))
+    rows = dict(saved_rows)
+    rows.update({oid: nearby_by_id[oid] for oid in joined_ids if oid in nearby_by_id})
     obs_order = [rows[i] for i in obs_ids if i in rows]
     missing_obs = [i for i in obs_ids if i not in rows]
     if missing_obs:
@@ -505,26 +525,28 @@ def main():
         if picked:
             recipes_out.append(picked)
 
-    # Stops — species from CURRENT observation IDs (stored labels can be stale)
+    # Stops — from the computed membership (species from CURRENT observation IDs;
+    # stored labels can be stale). "n" is the app's stop label ("7", "7a") so the
+    # page matches the walk panel and printed sheet; a stop with no publishable
+    # species is skipped (its label is simply absent).
     stops = []
-    for i, wp in enumerate(waypoints):
-        if wp.get("type") == "note":
+    for st_m in mem_stops:
+        if st_m["is_note"]:
             continue
-        ids = wp.get("obs_ids") or ([wp["obs_id"]] if wp.get("obs_id") is not None else [])
         sids = []
-        for oid in ids:
+        for oid in st_m["obs_ids"]:
             o = rows.get(oid)
             if o and gates.obs_passes(o, hide) and o["species_id"] in pub and o["species_id"] not in sids:
                 sids.append(o["species_id"])
         if not sids:
             continue
-        stops.append({"n": len(stops) + 1, "lat": wp["lat"], "lng": wp["lng"], "species": sids,
+        stops.append({"n": st_m["label"], "lat": st_m["lat"], "lng": st_m["lng"], "species": sids,
                       "toxic": any(pub[s]["toxic"] for s in sids)})
 
-    first_stop = {}
-    for st in stops:
+    first_stop = {}                      # species id → position of the first stop it appears at
+    for pos, st in enumerate(stops):
         for sid in st["species"]:
-            first_stop.setdefault(sid, st["n"])
+            first_stop.setdefault(sid, pos)
     missing_from_stops = [pub[s]["sci"] for s in pub if s not in first_stop]
     if missing_from_stops:
         warnings.append(f"species not on any stop (listed last): {missing_from_stops}")

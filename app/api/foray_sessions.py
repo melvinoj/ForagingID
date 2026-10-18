@@ -240,9 +240,12 @@ async def auto_populate(session_id: int, db: AsyncSession = Depends(get_db)):
     if not walk:
         raise HTTPException(status_code=404, detail=f"Walk {s.walk_id} not found")
 
-    obs_ids = json.loads(walk.obs_ids_json or "[]")
+    # The walk's members as the walk panel shows them: saved stops + confirmed
+    # photos that joined by route proximity (walk_membership.py), minus removed ones.
+    from app.api.walk import walk_membership_for
+    obs_ids = (await walk_membership_for(db, walk))["member_obs_ids"]
     if not obs_ids:
-        return {"inserted": 0, "message": "Walk has no pinned observations"}
+        return {"inserted": 0, "message": "Walk has no confirmed observations"}
 
     # Fetch confirmed species from the pinned observations
     obs_rows = (await db.execute(

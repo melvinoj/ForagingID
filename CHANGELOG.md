@@ -1,49 +1,80 @@
 ## Current State
 
-_Last updated: 16 Oct 2026_
+_Last updated: 18 Oct 2026_
 
 ### Build status
 Server: START_ForagingID.command — uvicorn foreground + tee to logs/server_<ts>.log; port check; cleanup trap. Claude Code never starts the server.
-Launcher (from next launch): --reload-dir app plus absolute --reload-exclude for scripts/, migrations/, tests/ (uvicorn 0.32.1 ignores --reload-dir alone); --timeout-graceful-shutdown 5.
-Alembic head 0052. WAL; busy_timeout 30000; synchronous=NORMAL per connection.
+Launcher flags active: --reload-dir app + absolute --reload-exclude scripts/, migrations/, tests/; --timeout-graceful-shutdown 5 (reload now cancels running background tasks after 5 s — always check background_processes before app/ edits).
+Walk membership migration applied (Alembic head per CHANGELOG). WAL; busy_timeout 30000; synchronous=NORMAL.
+Snapshot before today's data fixes: db_20261018_081958 (commit 66095a85).
 
-### Completed 15–16 Oct
-- melvinjarman.co.uk/b live: embedded preview.html card (opens full Foraging Experience); hero image removed — plain welcome, card, guestbook
-- Impressum + Datenschutz pages live (DE/EN) at /impressum and /datenschutz; sitewide footer links "Impressum · Datenschutz"; public contact melvin@melvinjarman.co.uk; address c/o Hofgut LEO, Gresgen 40
-- Experience export: Datenschutz link added; footer reads Contact · Impressum · Datenschutz (target=_top); pushed to melvinoj/foraging-experience main 59b9748
-- External-host audit of export: unpkg (Leaflet), OSM tiles, Esri + OpenTopoMap (on layer switch only), cdnjs d3 (Taxonomy tab only); no cookies/storage/trackers; preview.html loads no external hosts
-- Caffeinate fix applied (scan.py, caffeinate.py, scan.html): tied to server PID on start/stop/status; keep_awake matching fixed; scan.html shows real status on load. Verified with real processes (start, stop, orphan cleanup, -w exit). NOT yet verified through a real server reload or via the scan-page button
-- Root cause of orphaned caffeinate: reloader watched scripts/ edits → worker restarts; fixed via launcher flags above
-- CHANGELOG tidied: one Current State block; 8 stale dated blocks moved to Archive; nothing lost
+### Completed 16–18 Oct
+- Toxic guard: shared _culinaryGate (frontend) + culinary_allowed() (backend) — culinary content only when toxicity_severity='none', fail closed ("⚠ toxicity unknown"); covers stop cards, walk sheet, export summary, proximity alerts and all 7 recipe read endpoints. Proven against a DB copy.
+- Multi-species stops: export summary + proximity alerts list every species per stop; note stops export correctly.
+- Walk membership by route proximity: computed on load from saved obs + confirmed obs within buffer (default 25 m, slider 10–60) since save date, minus manual removals; "AI-agreed" chips; "Human-confirmed only" filter; "7a"-style new stops + "Renumber stops"; older-photo candidates as a review list; stops resolved from current observations (stale labels fixed). Shared membership module used by walk API, experience export and foray auto-populate.
+- Saved-walk loading: sheet collapses, route drawn, map fits walk, other pins hidden ("Show all pins" toggle), walk panel opens; "Open a saved walk" in Tools; stop counts fixed.
+- Walk 4 line fixed: 4.3 km routing detour through Gresgen replaced by straight dashed legs 22→1 ("no mapped footpath"); all stops 0–37 m from line; 2.9 km / ~35 min (was 6.4 km). Older-photo candidates 37 → 0 (artefact of the bad line).
+- Wrong-species AI recipes archived (5 Stellaria, 6 Prunus avium "Field Mint Broth", 7 Prunus domestica, 8 Cardamine flexuosa) — 26 May batch; none were on the published page.
+- Export summary: walk name as title, correct distance, LandMemory footer, rendered recipe Markdown, recipe priority curator > own menu > ai_generated (no repeats), repeat species as "Also here … (see stop N)".
+- Google Maps export: 10 points spread along the whole route; GPX download (full track + stop waypoints).
+- Experience export build fixed (broken since 16 Oct by toxic-guard style move); rebuilds cleanly, not published.
+- Bulk approval of 17 Oct Rümmelsbühl photos completed (after an earlier reload interrupted it).
+- Legal: Impressum + Datenschutz live; experience footer Contact · Impressum · Datenschutz.
 
 ### Pending / next
-1. Next launch: confirm new launcher flags active; then verify caffeinate through a real reload + scan-page button
-2. Check live footer links on phone (melvinjarman.co.uk + experience page after Pages rebuild)
-3. "Publish as experience" button on a saved walk — on the simmer
-4. Walk Stage 3: accumulating selection → undo / reset+confirm / subtract / side panel
-5. Walk Stage 4 filters; Stage 5 backend (ORS elevation, PUT saved walk, draft autosave)
-6. Saved walks should resolve stop labels from observations at load
-7. PWA install on Pixel 8 via ngrok static domain
-8. Proximity alerts + summary export read only first species of multi-species stops
+1. Browser check walk 4: dashed legs + line under every stop; export summary (title, 2.9 km, no recipe at stops 1–2, "Also here" lines); Google link covers the loop; GPX opens with full track; toxic stops 4/6/10/24 ☠ only.
+2. Published experience page is stale (old line, 6.4 km, pre-membership species) — republish via the Publish flow once built. Export draws straight legs solid, not dashed — handle in B1.
+3. Publish as experience — Stage B1 (export refactor: --walk-id/--overrides/--out/--plan-only, hide_species_ids, "More walks" line inside 500 px card; must use membership module). Decisions: repo app-owned; root = default walk + /w/<slug>/ (canonical → root); per-walk title/intro/where overrides; verify action edible+caution only; confirm step warns exact route public + unpublish ≠ erasure; review list shows AI-agreed species.
+4. Then B2 (experience_publications table, curator-only router incl. GETs, verify endpoint, saved-walk delete guard) and C (panel UI).
+5. Invalidate approved wrong-species drafts 94–105 from the 26 May batch (taste/medicinal) — not showing now, but stale.
+6. Caffeinate: confirm off after scan-page toggle (Activity Monitor search) and through a real reload.
+7. Walk Stage 4 filters; Stage 5 backend (ORS elevation, PUT saved walk, draft autosave).
+8. PWA install on Pixel 8 via ngrok static domain.
 
 ### Known issues / backlog
 - SAFETY: Aruncus dioicus 'edible', unverified, toxicity none — Melvin to decide
 - SAFETY: remaining unverified "edible"/toxic species app-wide (Heracleum sphondylium, Chaerophyllum hirsutum, Sambucus ebulus, Hypholoma fasciculare, Iris pseudacorus …)
-- No UI path to human-verify an already-'edible' species
-- Toxic guard missing: stop-card culinary hint, walk-summary export, walk sheet species list; toxicity_severity on GET /api/culinary/{name}
+- No UI path to human-verify an already-'edible' species (planned as Publish B2 verify endpoint)
+- Recipe regenerate (AI) and curator recipe writes not gated on toxicity; audit recipe check uses edibility only
+- Recipes have no audit/history table
+- Participant guest token on localhost/LAN sees admin buttons (/api/me host-only) — endpoints must check identity
+- DELETE /api/walk/saves/{id} has no identity check
+- GPS accuracy not recorded (Pixel EXIF) — membership accuracy filter inert
 - Re-ID sweep: remaining obs of H. perfoliatum, Knautia arvernensis, Thymus serpyllum/praecox/polytrichus, Rubus gratus outside the walks
 - Anthriscus caucalis (138): inedible + toxic contradiction
 - Junk/zero-obs cards awaiting cleanup OK (keep 653 Oenanthe crocata)
 - Identification Stage B: GBIF out-of-range flag; PlantNet weurope vs all test
 - Enrichment paths not gated; enrichment queue in-memory; fungus re-enrich wipes pending edibility suggestion
 - Identify — 2013 job at 90/2367
+- iNaturalist token expired — refresh before next processing
 - Google Drive token invalid; Ollama 'mistral' not installed
 - Disk tight — move exports/old snapshots to DIGIERA
 - Docs drift: CLAUDE.md Alembic head, PhoneForaging path
 - Tracked leftovers: your_db.db, current.txt; review_status 'not_applicable' (1 row)
-- Field-recorder companion (Capacitor: background GPS + pocket proximity alerts) — on the simmer; GPX tracker + existing GPX import covers screen-off tracking meanwhile
+- Field-recorder companion (Capacitor: background GPS + pocket proximity alerts) — on the simmer; GPX tracker + GPX import covers screen-off tracking meanwhile
 
 ## History
+
+### 2026-10-18 09:35
+**Snapshot** — End of session — Session ended from Settings page
+DB: `snapshots/db_20261018_093543.sqlite`
+
+### 2026-10-18 09:35
+**Session ended** — Session ended from Settings page
+
+### 2026-10-18 08:22
+**DB fixes (Melvin OK, snapshot db_20261018_081958): archived mismatched recipes 5-8; walk 4 detour legs replaced with straight dashed segments**
+
+**Built:**
+- Saved walks: route_geojson.foragingid.straight_from — vertices from that index drawn dashed (no mapped footpath), kept on re-save
+**Fixed:**
+- Archived species_recipes 5 (Stellaria media, cherry text), 6 (Prunus avium, field mint), 7 (Prunus domestica, wild carrot), 8 (Cardamine flexuosa, plums) via the app archive endpoint — 26 May AI batch used another species context
+- Walk 4 line: ORS part kept for stops 1-22 (2.0 km), legs 22-23-24-25-26-1 straight (894 m); distance 6410 -> 2895 m, duration 77 -> 35 min; members unchanged (136); 37 older-photo candidate species dropped (all were along the removed Gresgen detour)
+**Files:** `frontend/index.html`, `data/foragingid.db (saved_walks 4, species_recipes 5-8)`
+**Pending:**
+- Melvin browser check: walk 4 line under all stops with dashed legs 22-26-1, summary, Google link, GPX
+- Published experience page draws the line solid (no dashed legs) — dist/ rebuilt, not published
+- Remaining 26 May batch drafts 94-105 (taste/medicinal) approved but not live — culinary_info for those species is empty
 
 ### 2026-10-18 08:19
 **Snapshot** — Before archiving mismatched recipes 5-8 and replacing walk 4 detour legs with straight segments

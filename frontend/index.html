@@ -5131,6 +5131,8 @@ let _walkOrsDistM     = 0;       // ORS-reported distance in metres
 let _walkOrsDurMin    = 0;       // ORS-reported duration in minutes
 let _walkCircular     = true;    // close the loop back to start
 let _walkRouteGeom    = null;    // ORS LineString geometry of the current route (saved with the walk)
+let _walkStraightFrom = null;    // saved walks: vertex index from which _walkRouteGeom is straight
+                                 // legs between stops (no mapped path) — drawn dashed; meta.straight_from
 let _walkStopRadiusM  = 30;      // stop grouping radius (slider, 10–100 m)
 let _walkLastPins     = null;    // raw pins + notes from the last drawn area — regroup source
                                  // (null for a loaded saved walk: its stops are fixed)
@@ -5840,6 +5842,7 @@ async function _routeWalk(opts = {}) {
   const route = _activeWalkRoute || [];
   if (!opts.keepSaved) { _walkOrsDistM = 0; _walkOrsDurMin = 0; }
   _walkRouteGeom   = null;
+  _walkStraightFrom = null;
   _walkOrsFallback = false;
 
   let status;
@@ -5847,6 +5850,8 @@ async function _routeWalk(opts = {}) {
     status = { kind: 'single' };
   } else if (opts.savedGeom && Array.isArray(opts.savedGeom.coordinates)) {
     _walkRouteGeom = opts.savedGeom;   // exactly the shape that was saved — no ORS call
+    const sf = opts.straightFrom;
+    _walkStraightFrom = (Number.isInteger(sf) && sf >= 0 && sf < opts.savedGeom.coordinates.length - 1) ? sf : null;
     status = { kind: 'ok' };
   } else if (route.length > _walkMaxStops()) {
     status = { kind: 'capped', n: route.length, max: _walkMaxStops() };
@@ -5937,7 +5942,16 @@ function _drawWalkLayer(suppressFitBounds) {
   if (latLngs.length > 1) {
     if (_walkRouteGeom) {
       const ll = _walkRouteGeom.coordinates.map(([lng, lat]) => [lat, lng]);
-      L.polyline(ll, { color: '#2d5016', weight: 3.5, opacity: 0.85 }).addTo(_walkRouteLayer);
+      if (_walkStraightFrom !== null) {
+        // Routed part solid; the straight legs (no mapped footpath) dashed and labelled.
+        L.polyline(ll.slice(0, _walkStraightFrom + 1), { color: '#2d5016', weight: 3.5, opacity: 0.85 })
+          .addTo(_walkRouteLayer);
+        L.polyline(ll.slice(_walkStraightFrom), { color: '#2d5016', weight: 3, dashArray: '7 6', opacity: 0.85 })
+          .bindTooltip('Straight line between stops — no mapped footpath here', { sticky: true })
+          .addTo(_walkRouteLayer);
+      } else {
+        L.polyline(ll, { color: '#2d5016', weight: 3.5, opacity: 0.85 }).addTo(_walkRouteLayer);
+      }
     } else if (_walkStraightLine) {
       // Chosen by the user after an ORS failure — dashed, and labelled as such.
       const sl = _walkCircular ? [...latLngs, latLngs[0]] : latLngs;
@@ -6611,7 +6625,10 @@ async function _saveWalk(btn, onSaved) {
       features: _walkRouteGeom
         ? [{ type: 'Feature', geometry: _walkRouteGeom, properties: {} }]
         : [],
-      foragingid: { version: 2, circular: !!_walkCircular, stop_radius_m: _walkStopRadiusM },
+      foragingid: Object.assign(
+        { version: 2, circular: !!_walkCircular, stop_radius_m: _walkStopRadiusM },
+        // Re-saving a loaded walk keeps its dashed straight legs.
+        (_walkRouteGeom && _walkStraightFrom !== null) ? { straight_from: _walkStraightFrom } : {}),
     },
     distance_m:  Math.round(distM),
     duration_min: _walkOrsDurMin > 0 ? _walkOrsDurMin : Math.round(distM / 80),
@@ -6758,7 +6775,8 @@ async function loadSavedWalk(id) {
     // shape ask ORS to DRAW only. Failures show the reason; the straight line is
     // only drawn if the user chooses it. Saved distance/duration kept.
     // fitBounds is done below by _fitSavedWalk, once the panel layout is known.
-    if (!(await _routeWalk({ savedGeom: _savedGeom || null, keepSaved: true, suppressFitBounds: true }))) return;
+    if (!(await _routeWalk({ savedGeom: _savedGeom || null, keepSaved: true, suppressFitBounds: true,
+                             straightFrom: _meta ? _meta.straight_from : null }))) return;
 
     // Panel layout first (laptop: right-hand panel; phone: peek bar), then fit
     // the whole walk into the map area the panel leaves free.

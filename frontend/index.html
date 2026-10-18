@@ -403,6 +403,27 @@
       #walk-bottom-sheet.wbs-active:not(.wbs-route-active):not(.wbs-open) { transform: translateY(calc(100% - 195px)); }
       /* Quickbar visible only: active + no route + sheet not fully open */
       #walk-bottom-sheet.wbs-active:not(.wbs-route-active):not(.wbs-open) #wbs-quickbar { display: flex; }
+      /* Loaded saved walk (laptop): the sheet becomes a full-height right-hand
+         panel so the map stays draggable and the route is not covered.
+         !important beats the bottom-sheet transform classes and any inline
+         transform left by a handle drag. */
+      #walk-bottom-sheet.wbs-side {
+        top: 0; bottom: 0; left: auto; right: 0; width: 360px;
+        max-height: none; border-radius: 0;
+        box-shadow: -4px 0 20px rgba(0,0,0,.22);
+        transform: none !important; transition: none;
+      }
+      #walk-bottom-sheet.wbs-side #wbs-handle { display: none; }
+      #walk-bottom-sheet.wbs-side .walk-stops-scroll { max-height: none; } /* the panel body scrolls */
+      body:has(#walk-bottom-sheet.wbs-side) .leaflet-top.leaflet-right,
+      body:has(#walk-bottom-sheet.wbs-side) .leaflet-bottom.leaflet-right {
+        right: 370px !important; /* 10px base gutter + 360px panel */
+      }
+      body:has(#walk-bottom-sheet.wbs-side) #walk-clear-btn,
+      body:has(#walk-bottom-sheet.wbs-side) #search-chip-wrap,
+      body:has(#walk-bottom-sheet.wbs-side) #config-sheet-chip {
+        right: 372px; /* 12px base gutter + 360px panel */
+      }
     }
     #wbs-handle {
       display: flex; flex-direction: column; align-items: center;
@@ -509,6 +530,11 @@
     /* phone: open high enough to show all three entry cards (~handle 44px + cards ~215px) */
     @media (max-width: 700px) {
       #walk-bottom-sheet.wbs-active:not(.wbs-route-active):not(.wbs-open) { transform: translateY(calc(100% - 275px)); }
+      /* Loaded saved walk (phone): peek bar tall enough for handle + walk-name label.
+         62px is also the fit padding in _fitSavedWalk — change both together. */
+      /* .wbs-active required: _closeWalkSheet (e.g. opening a recorded walk) drops
+         it to hide the sheet fully, and the peek must not keep it on screen. */
+      #walk-bottom-sheet.wbs-peek.wbs-active:not(.wbs-open) { transform: translateY(calc(100% - 62px)); }
     }
     .wbs-entry-card {
       display: flex; align-items: flex-start; gap: 10px;
@@ -1989,6 +2015,7 @@
       <div class="cs-section-title">Tools</div>
       <button class="cs-tool-row" id="btn-layer-note" onclick="toggleNotePanel()">📝 Drop a note</button>
       <button class="cs-tool-row" id="btn-layer-walk" onclick="setLayer('walk')">🥾 Build a walk</button>
+      <button class="cs-tool-row" id="btn-open-saved-walk" onclick="openSavedWalksList()">📂 Open a saved walk</button>
     </section>
     <section class="cs-section" id="cs-filters">
       <div class="fp-active-row">
@@ -2333,6 +2360,10 @@
             onclick="exportWalkSummary()"
             style="background:#f0f4e8;color:#2d5016;border:1px solid #b8d48a;cursor:pointer"
             title="Generate a printable / shareable summary page">📋 Export summary</button>
+          <!-- Loaded saved walk only (_syncWalkPinsBtn): other pins are hidden by default -->
+          <button id="walk-pins-btn" class="walk-map-btn" onclick="walkToggleAllPins()"
+            style="display:none;background:#fff;color:#2d5016;border:1px solid #b8d48a;cursor:pointer"
+            title="Show or hide every other observation pin">👁 Show all pins</button>
         </div>
         <div id="walk-save-status" role="status"
              style="display:none;padding:2px 10px 4px;font-size:0.78rem;font-weight:600"></div>
@@ -3087,10 +3118,18 @@ function setLayer(mode, _fromZoom) {
   _applyLayer();
 }
 
+// Loaded saved walk: {hidePins, prevLayer, prevCenter, prevZoom} — null otherwise.
+// hidePins (default true) takes every observation layer off the map so only the
+// walk shows; "Show all pins" flips it. prev* restore the view on clear.
+// var (not let): _applyLayer runs from many places, some before this file's
+// walk-state block is reached.
+var _savedWalkView = null;
+
 function _applyLayer() {
-  const showPins     = currentLayer === 'pins';
-  const showClusters = currentLayer === 'clusters';
-  const showHeat     = currentLayer === 'heatmap';
+  const _hideAll     = !!(_savedWalkView && _savedWalkView.hidePins);
+  const showPins     = currentLayer === 'pins'     && !_hideAll;
+  const showClusters = currentLayer === 'clusters' && !_hideAll;
+  const showHeat     = currentLayer === 'heatmap'  && !_hideAll;
 
   if (showPins     && !map.hasLayer(pinsGroup))    map.addLayer(pinsGroup);
   if (!showPins    &&  map.hasLayer(pinsGroup))    map.removeLayer(pinsGroup);
@@ -5153,6 +5192,24 @@ function _exitWalkMode() {
   if (_esEl) _esEl.style.display = 'none';
   _wbsRestoreRouteContent();
   _closeWalkSheet();
+  // Loaded saved walk: drop the side-panel layout and hidden pins, and go back
+  // to the layer + map view from before it was opened.
+  const _sv = _savedWalkView;
+  _savedWalkView = null;
+  const _wbsSide = document.getElementById('walk-bottom-sheet');
+  if (_wbsSide) _wbsSide.classList.remove('wbs-side', 'wbs-peek');
+  const _wbsLbl = document.getElementById('wbs-label');
+  if (_wbsLbl) _wbsLbl.textContent = 'Select walk';
+  _syncWalkPinsBtn();
+  if (_sv) {
+    currentLayer = _sv.prevLayer;
+    ['pins', 'clusters', 'heatmap'].forEach(m => {
+      const b = document.getElementById(`btn-layer-${m}`);
+      if (b) b.classList.toggle('active', m === currentLayer);
+    });
+    map.setView(_sv.prevCenter, _sv.prevZoom);
+  }
+  _applyLayer();
 }
 
 // ── Walk bottom sheet empty state helpers (laptop only) ───────────────────
@@ -5237,6 +5294,15 @@ window._wbsLoadSaved = function() {
   var rwList = document.getElementById('wbs-recorded-walks-list');
   if (rwList && rwList.style.display === 'none') _wbsToggleRecordedWalks();
 };
+
+// TOOLS → "Open a saved walk": straight to the saved-walks list. Enters walk
+// mode first when it is off (setLayer('walk') also closes the config sheet);
+// when it is already on, setLayer('walk') would EXIT it, so only close the sheet.
+function openSavedWalksList() {
+  if (!_walkActive) setLayer('walk');
+  else closeConfigSheet();
+  _wbsLoadSaved();
+}
 
 // ── Walk bottom sheet (phone only) ───────────────────────────────────────
 // State: sheet fully hidden (translateY 100%) until Walk tapped.
@@ -5554,29 +5620,43 @@ function toggleWalkLoop() {
   if (_lastWalkBounds || _lastWalkCircle) _buildWalkRoute(_lastWalkBounds, _lastWalkCircle, true);
 }
 
-// Culinary profile + toxicity for each species on a walk.
-// toxicity_severity is not in /api/culinary/{name} (nor on map pins), so it is
-// read from /api/species/{name}/profile and stored on the entry as _toxicity:
-// 'none' | 'toxic' | 'deadly', or null when it could not be read. The walk panel
-// treats null as unknown and fails closed (recipes hidden).
+// Toxic guard — the ONLY definition of "may culinary content be shown for this
+// species?" in the walk flow (stop cards, walk sheet list, proximity alerts,
+// summary export). Same rule as print_pdf.html: culinary content (recipes,
+// edible parts, taste notes, edible badge) only when toxicity_severity is
+// 'none'. 'toxic' / 'deadly' → the ☠ warning instead. Anything else (null,
+// undefined, unrecognised — toxicity could not be read) fails closed: culinary
+// content hidden, "toxicity unknown" warning shown.
+// Returns { ok, isToxic, label } — label is the warning text ('' when ok).
+function _culinaryGate(sev) {
+  if (sev === 'none')   return { ok: true,  isToxic: false, label: '' };
+  if (sev === 'deadly') return { ok: false, isToxic: true,  label: '☠ DEADLY' };
+  if (sev === 'toxic')  return { ok: false, isToxic: true,  label: '☠ toxic' };
+  return { ok: false, isToxic: false, label: '⚠ toxicity unknown' };
+}
+
+// Warning badge for a blocked species (inline style, shared by all walk sites).
+function _culinaryGateBadge(gate) {
+  if (gate.ok) return '';
+  const bg = gate.isToxic ? '#dc2626' : '#fef3c7';
+  const fg = gate.isToxic ? '#fff'    : '#92400e';
+  return `<span style="font-size:0.68rem;padding:1px 6px;border-radius:4px;font-weight:700;
+    background:${bg};color:${fg}">${_esc(gate.label)}</span>`;
+}
+
+// Culinary profile + toxicity for each species on a walk, from one request:
+// /api/culinary/{name} returns species.toxicity_severity, stored on the entry
+// as _toxicity ('none' | 'toxic' | 'deadly', or null when it could not be read
+// — _culinaryGate fails closed on null).
 async function _fetchWalkEnrich(names) {
   const enrichMap = {};
   await Promise.allSettled(names.map(async name => {
-    const enc = encodeURIComponent(name);
-    const [cr, pr] = await Promise.allSettled([
-      fetch(`/api/culinary/${enc}`),
-      fetch(`/api/species/${enc}/profile`),
-    ]);
     let entry = {};
-    try { if (cr.status === 'fulfilled' && cr.value.ok) entry = await cr.value.json(); } catch (_) {}
-    let sev = null;
     try {
-      if (pr.status === 'fulfilled' && pr.value.ok) {
-        const prof = await pr.value.json();
-        sev = (prof && prof.species && prof.species.toxicity_severity) || null;
-      }
+      const r = await fetch(`/api/culinary/${encodeURIComponent(name)}`);
+      if (r.ok) entry = await r.json();
     } catch (_) {}
-    entry._toxicity = sev;
+    entry._toxicity = (entry && entry.species && entry.species.toxicity_severity) || null;
     enrichMap[name] = entry;
   }));
   return enrichMap;
@@ -6077,13 +6157,10 @@ function renderWalkPanel(route, enrichMap) {
                          || (spData?.common_names && spData.common_names[0]) || '';
       const edib = spData?.edibility_status || pinP.edibility_status;
 
-      // Toxic guard — same rule as print_pdf.html (recipe only when
-      // toxicity_severity not in ('deadly','toxic')). Fails closed: if toxicity
-      // could not be read (_toxicity null/undefined), recipes are hidden too.
-      const _sev       = _enrichData ? _enrichData._toxicity : null;
-      const _isToxic   = _sev === 'toxic' || _sev === 'deadly';
-      const _sevKnown  = typeof _sev === 'string';
-      const _recipesOk = _sevKnown && !_isToxic;
+      // Toxic guard (_culinaryGate): recipe, culinary hint and edibility badge
+      // only when toxicity is 'none'; fails closed when it could not be read.
+      const _gate      = _culinaryGate(_enrichData ? _enrichData._toxicity : null);
+      const _recipesOk = _gate.ok;
 
       // Recipe: prefer recipe bank (current season), fall back to legacy culinary fields
       let recipeHtml = '';
@@ -6107,11 +6184,10 @@ function renderWalkPanel(route, enrichMap) {
         }
       }
 
-      // Toxic/deadly species: the badge is the toxicity warning, never an
-      // edibility label (whatever edibility_status says).
-      const edibBadge = _isToxic
-        ? `<span style="font-size:0.68rem;padding:1px 6px;border-radius:4px;font-weight:700;
-             background:#dc2626;color:#fff">☠ ${_sev === 'deadly' ? 'DEADLY' : 'toxic'}</span>`
+      // Blocked species (toxic/deadly/unknown): the badge is the toxicity
+      // warning, never an edibility label (whatever edibility_status says).
+      const edibBadge = !_gate.ok
+        ? _culinaryGateBadge(_gate)
         : edib
         ? `<span style="font-size:0.68rem;padding:1px 6px;border-radius:4px;font-weight:600;
              background:${edib==='edible'?'#d1f5da':edib==='toxic'?'#dc2626':edib==='inedible'?'#fef3c7':edib==='medicinal'?'#e0e7ff':'#f3f3f3'};
@@ -6120,7 +6196,7 @@ function renderWalkPanel(route, enrichMap) {
 
       // Culinary notes: brief hint from edible_parts / taste_notes / preparation_methods
       let culinaryNotesHtml = '';
-      if (ci) {
+      if (ci && _gate.ok) {
         const note = ci.edible_parts || ci.taste_notes || ci.preparation_methods;
         if (note) {
           const ns = note.length > 100 ? note.slice(0, 97) + '…' : note;
@@ -6247,7 +6323,12 @@ function _wbsRenderLasso() {
                  : (p.common_name || '');
     const edib = p.edibility_status || '';
     const ec = edibColour[edib] || { bg: '#f3f3f3', fg: '#666', label: edib };
-    const edibTag = edib
+    // Toxic guard: toxicity comes from the walk enrichment (map pins carry
+    // none); a species not enriched yet fails closed to "toxicity unknown".
+    const gate = _culinaryGate(_activeWalkEnrich?.[name]?._toxicity ?? null);
+    const edibTag = !gate.ok
+      ? _culinaryGateBadge(gate)
+      : edib
       ? `<span class="wbs-lasso-edib" style="background:${ec.bg};color:${ec.fg}">${ec.label}</span>`
       : '';
     return `<div class="wbs-lasso-item">
@@ -6500,6 +6581,22 @@ async function loadSavedWalk(id) {
     // Saved distance/duration are what was saved — never overwritten on load.
     _walkOrsDistM     = w.distance_m || 0;
     _walkOrsDurMin    = w.duration_min || 0;
+    // Remember the layer + view to return to on clear (first load only — a
+    // second saved walk opened on top keeps the original), and hide every
+    // other pin by default.
+    if (!_savedWalkView) {
+      _savedWalkView = {
+        prevLayer:  ['pins', 'clusters', 'heatmap'].includes(currentLayer) ? currentLayer : 'pins',
+        prevCenter: map.getCenter(),
+        prevZoom:   map.getZoom(),
+      };
+    }
+    _savedWalkView.hidePins = true;
+    // Coming from "Build a walk" the rectangle/circle draw is attached, which
+    // disables map dragging — a loaded walk has fixed stops, so drop it.
+    _detachWalkDraw();
+    _hideWalkRect();
+    _hideWalkCircle();
     // Enter walk mode so clear-btn and proximity watch work correctly
     _walkActive = true;
     currentLayer = 'pins';
@@ -6514,7 +6611,14 @@ async function loadSavedWalk(id) {
     // Draw: the saved shape when there is one (no ORS call); old walks without a
     // shape ask ORS to DRAW only. Failures show the reason; the straight line is
     // only drawn if the user chooses it. Saved distance/duration kept.
-    if (!(await _routeWalk({ savedGeom: _savedGeom || null, keepSaved: true }))) return;
+    // fitBounds is done below by _fitSavedWalk, once the panel layout is known.
+    if (!(await _routeWalk({ savedGeom: _savedGeom || null, keepSaved: true, suppressFitBounds: true }))) return;
+
+    // Panel layout first (laptop: right-hand panel; phone: peek bar), then fit
+    // the whole walk into the map area the panel leaves free.
+    _savedWalkLayout(w.name);
+    _syncWalkPinsBtn();
+    _fitSavedWalk();
 
     // Enrich species (+ toxicity, for the walk panel's toxic guard)
     const uniqueSpecies = [...new Set(route.flatMap(_stopSpecies))];
@@ -6528,9 +6632,68 @@ async function loadSavedWalk(id) {
     document.getElementById('walk-mode-toggle').classList.remove('visible');
 
     renderWalkPanel(route, _activeWalkEnrich);
+    const _wbsBodyEl = document.getElementById('wbs-body');
+    if (_wbsBodyEl) _wbsBodyEl.scrollTop = 0;   // header + Export summary, not the saved-walks list the click came from
   } catch (e) {
     alert('Failed to load walk: ' + e.message);
   }
+}
+
+// Loaded saved walk layout. Laptop: the sheet becomes a full-height right-hand
+// panel (.wbs-side). Phone: collapsed to a peek bar (.wbs-peek) the user drags
+// up by the handle (the handle has no tap action). Both clear any inline
+// transform left by a handle drag.
+function _savedWalkLayout(name) {
+  const sheet = document.getElementById('walk-bottom-sheet');
+  if (!sheet) return;
+  sheet.style.transform  = '';
+  sheet.style.transition = '';
+  sheet.classList.add('wbs-active', 'wbs-route-active');
+  const chev = document.getElementById('wbs-chevron');
+  if (isMobile()) {
+    sheet.classList.remove('wbs-side', 'wbs-open');
+    sheet.classList.add('wbs-peek');
+    if (chev) chev.textContent = '▴';
+  } else {
+    sheet.classList.remove('wbs-peek');
+    sheet.classList.add('wbs-side', 'wbs-open');
+    if (chev) chev.textContent = '▾';
+  }
+  const lbl = document.getElementById('wbs-label');
+  if (lbl) lbl.textContent = `${name} — pull up for stops`;
+}
+
+// Fit the whole loaded walk (stops + saved line) into the map area left free
+// by the panel: right-hand panel width on laptop, peek bar height on phone.
+function _fitSavedWalk() {
+  const pts = (_activeWalkRoute || []).map(s => [s.lat, s.lng]);
+  if (_walkRouteGeom && Array.isArray(_walkRouteGeom.coordinates)) {
+    _walkRouteGeom.coordinates.forEach(([lng, lat]) => pts.push([lat, lng]));
+  }
+  if (!pts.length) return;
+  const sheet = document.getElementById('walk-bottom-sheet');
+  const side  = sheet && sheet.classList.contains('wbs-side') ? sheet.offsetWidth : 0;
+  const peek  = sheet && sheet.classList.contains('wbs-peek') ? 62 : 0;   // = .wbs-peek translateY offset
+  map.fitBounds(L.latLngBounds(pts), {
+    paddingTopLeft:     [40, 80],               // clear of the top chips / ✕ Clear button
+    paddingBottomRight: [40 + side, 40 + peek],
+    maxZoom: 18,
+  });
+}
+
+// "Show all pins" on a loaded saved walk — flips the hide flag _applyLayer reads.
+function walkToggleAllPins() {
+  if (!_savedWalkView) return;
+  _savedWalkView.hidePins = !_savedWalkView.hidePins;
+  _applyLayer();
+  _syncWalkPinsBtn();
+}
+
+function _syncWalkPinsBtn() {
+  const b = document.getElementById('walk-pins-btn');
+  if (!b) return;
+  b.style.display = _savedWalkView ? '' : 'none';
+  if (_savedWalkView) b.textContent = _savedWalkView.hidePins ? '👁 Show all pins' : '🙈 Hide other pins';
 }
 
 async function deleteSavedWalk(id) {
@@ -6570,31 +6733,47 @@ async function exportWalkSummary() {
     );
   }
 
-  // Build stops payload
-  const stops = _activeWalkRoute.map(({ p, lat, lng }, i) => {
-    const ed = _activeWalkEnrich?.[p.species_primary];
-    const ci = ed?.culinary || null;
-    const spData = ed?.species || null;
-    const recipes = ed?.recipes || [];
-    const picked = _pickSeasonalRecipe(recipes, _season);
+  // Build stops payload — EVERY species at each stop (_stopSpecies), each
+  // through the toxic guard. Blocked species are still listed, with no
+  // culinary/recipe/edibility content, only the warning (rendered as the badge
+  // by /api/sharing/export-walk).
+  const stops = _activeWalkRoute.map((stop, i) => {
+    const { p, lat, lng } = stop;
     const distFromPrev = i === 0 ? null
       : _haversineM(
           _activeWalkRoute[i-1].lat, _activeWalkRoute[i-1].lng,
           lat, lng
         );
-    const allCommon = p.common_names && p.common_names.length ? p.common_names : [];
+    const species = _stopSpecies(stop).map(spName => {
+      const ed = _activeWalkEnrich?.[spName];
+      const gate = _culinaryGate(ed ? ed._toxicity : null);
+      const ci = gate.ok ? (ed?.culinary || null) : null;
+      const spData = ed?.species || null;
+      const recipes = gate.ok ? (ed?.recipes || []) : [];
+      const picked = _pickSeasonalRecipe(recipes, _season);
+      // Pin props for this species (new walks); loaded walks have no pins.
+      const pinP = (stop.pins || []).map(x => x.p).find(pp => pp.species_primary === spName)
+                   || (spName === p.species_primary ? p : {});
+      const allCommon = (pinP.common_names && pinP.common_names.length) ? pinP.common_names
+                      : (spData?.common_names || []);
+      return {
+        species_scientific: spName,
+        species_common: allCommon[0] || null,
+        all_common: allCommon,
+        edibility: gate.ok ? (spData?.edibility_status || pinP.edibility_status || null) : null,
+        toxicity_warning: gate.ok ? null : gate.label,
+        culinary_notes: ci ? (ci.edible_parts || ci.taste_notes || ci.preparation_methods || null) : null,
+        recipe_title: picked ? (picked.title || null) : null,
+        recipe_body:  picked ? (picked.body  || null) : null,
+        recipe_season: picked ? picked.season : null,
+        is_medicinal_prep: picked ? !!picked.is_medicinal_prep : null,
+      };
+    });
     return {
       num: i + 1,
-      species_scientific: p.species_primary,
-      species_common: allCommon[0] || null,
-      all_common: allCommon,
-      edibility: spData?.edibility_status || p.edibility_status || null,
       dist_from_prev: distFromPrev,
-      culinary_notes: ci ? (ci.edible_parts || ci.taste_notes || ci.preparation_methods || null) : null,
-      recipe_title: picked ? (picked.title || null) : null,
-      recipe_body:  picked ? (picked.body  || null) : null,
-      recipe_season: picked ? picked.season : null,
-      is_medicinal_prep: picked ? !!picked.is_medicinal_prep : null,
+      note_text: p.is_note ? (p.text || '') : null,
+      species,
     };
   });
 
@@ -6712,22 +6891,29 @@ function _onProxPosition(pos) {
 }
 
 // Builds a notification object and prepends it to the stack.
+// Lists EVERY species at the stop (_stopSpecies); each gets its own toxic guard
+// at render time.
 function _fireProxAlert(stop, distM) {
   const p       = stop.p || {};
-  const species = p.species_primary || null;
-  const common  = p.common_name ||
-    (species && _activeWalkEnrich && _activeWalkEnrich[species]
-      ? ((_activeWalkEnrich[species].common_names || [])[0] || null)
-      : null);
+  const species = _stopSpecies(stop).map(name => {
+    const ed   = _activeWalkEnrich?.[name] || null;
+    const pinP = (stop.pins || []).map(x => x.p).find(pp => pp.species_primary === name)
+                 || (name === p.species_primary ? p : {});
+    return {
+      name:             name,
+      common_name:      (pinP.common_names && pinP.common_names[0]) || pinP.common_name ||
+                        (ed?.species?.common_names || [])[0] || null,
+      edibility_status: ed?.species?.edibility_status || pinP.edibility_status || null,
+      toxicity:         (ed && ed._toxicity) || null,
+    };
+  });
 
   _proxNotifs.unshift({
     id:               ++_proxIdSeq,
     species:          species,
-    common_name:      common,
     distance_m:       distM,
     thumbnail:        p.thumbnail        || null,
     is_note:          p.is_note          || false,
-    edibility_status: p.edibility_status || null,
   });
   // Auto-dismiss oldest when overflow
   if (_proxNotifs.length > _PROX_MAX_NOTIFS) {
@@ -6751,27 +6937,37 @@ function _renderProxPanel() {
   }
   panel.style.display = 'flex';
   panel.innerHTML = _proxNotifs.map(function (n) {
-    const href   = n.species ? '/species?s=' + encodeURIComponent(n.species) : null;
     const thumb  = n.thumbnail
       ? '<img class="walk-prox-thumb" src="' + _esc(n.thumbnail) + '" alt="" loading="lazy">'
       : '<div class="walk-prox-thumb walk-prox-thumb-empty"></div>';
-    const nameEl = n.is_note
-      ? '<span class="walk-prox-name" style="font-style:normal">📝 Walk note</span>'
-      : '<a class="walk-prox-name" href="' + _esc(href || '#') + '">' + _esc(n.species || '?') + '</a>';
-    const common = n.common_name
-      ? '<div class="walk-prox-common">' + _esc(n.common_name) + '</div>'
-      : '';
-    const edib   = n.edibility_status
-      ? '<span class="nearme-edib" style="' +
-          _esc(_NEARME_EDIB_STYLE[n.edibility_status] || _NEARME_EDIB_STYLE.unknown) +
-          '">' + _esc(n.edibility_status) + '</span>'
-      : '';
+    // One row per species at the stop. Toxic guard per species: blocked
+    // species show the warning, never an edibility label.
+    const spRows = n.is_note
+      ? '<div><span class="walk-prox-name" style="font-style:normal">📝 Walk note</span></div>'
+      : (n.species.length ? n.species : [{ name: null }]).map(function (sp, k) {
+          const href   = sp.name ? '/species?s=' + encodeURIComponent(sp.name) : '#';
+          const common = sp.common_name
+            ? '<div class="walk-prox-common">' + _esc(sp.common_name) + '</div>'
+            : '';
+          const gate   = _culinaryGate(sp.toxicity);
+          const edib   = !gate.ok ? _culinaryGateBadge(gate)
+            : sp.edibility_status
+            ? '<span class="nearme-edib" style="' +
+                _esc(_NEARME_EDIB_STYLE[sp.edibility_status] || _NEARME_EDIB_STYLE.unknown) +
+                '">' + _esc(sp.edibility_status) + '</span>'
+            : '';
+          return '<div' + (k ? ' style="margin-top:4px"' : '') + '>' +
+            '<a class="walk-prox-name" href="' + _esc(href) + '">' + _esc(sp.name || '?') + '</a>' +
+            common +
+            (edib ? '<div class="walk-prox-meta">' + edib + '</div>' : '') +
+          '</div>';
+        }).join('');
     return '<div class="walk-prox-card" data-id="' + n.id + '">' +
       '<button class="walk-prox-dismiss" onclick="_dismissProxAlert(' + n.id + ')" title="Dismiss">✕</button>' +
       '<div class="walk-prox-body">' + thumb +
         '<div class="walk-prox-info">' +
-          '<div>' + nameEl + common + '</div>' +
-          '<div class="walk-prox-meta">' + edib +
+          spRows +
+          '<div class="walk-prox-meta">' +
             '<span class="walk-prox-dist">📍 ' + n.distance_m + 'm away</span>' +
           '</div>' +
           '<!-- goethean_prompt_placeholder -->' +

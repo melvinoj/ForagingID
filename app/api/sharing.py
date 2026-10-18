@@ -324,18 +324,26 @@ async def lan_url():
 # ---------------------------------------------------------------------------
 # Walk export models
 # ---------------------------------------------------------------------------
-class WalkStop(BaseModel):
-    num: int
+class WalkSpecies(BaseModel):
     species_scientific: str
     species_common: Optional[str] = None
     all_common: Optional[List[str]] = None
     edibility: Optional[str] = None
-    dist_from_prev: Optional[float] = None   # metres
+    # Set by the frontend toxic guard (_culinaryGate in index.html) when culinary
+    # content is blocked; culinary/recipe/edibility fields then arrive as null.
+    toxicity_warning: Optional[str] = None
     culinary_notes: Optional[str] = None
     recipe_title: Optional[str] = None
     recipe_body: Optional[str] = None
     recipe_season: Optional[str] = None
     is_medicinal_prep: Optional[bool] = None
+
+
+class WalkStop(BaseModel):
+    num: int
+    dist_from_prev: Optional[float] = None   # metres
+    note_text: Optional[str] = None           # field-note stop (no species)
+    species: List[WalkSpecies] = []           # EVERY species at the stop
 
 
 class WalkExportRequest(BaseModel):
@@ -379,53 +387,90 @@ def _fmt_dist(m: Optional[float]) -> str:
     return f"{round(m)}m" if m < 1000 else f"{m / 1000:.1f}km"
 
 
+def _walk_species_html(s: WalkSpecies, first: bool) -> str:
+    """One species section inside a stop card. Content arrives already gated by
+    the frontend toxic guard; a toxicity_warning replaces the edibility badge."""
+    bg, fg = _EDIB_COLORS.get((s.edibility or "").lower(), ("#f3f3f3", "#555"))
+    edib_badge = (
+        f'<span style="display:inline-block;padding:2px 8px;border-radius:4px;'
+        f'font-size:0.7rem;font-weight:600;background:{bg};color:{fg}">{_h(s.edibility)}</span>'
+    ) if s.edibility else ""
+    if s.toxicity_warning:
+        t_bg, t_fg = ("#dc2626", "#fff") if "☠" in s.toxicity_warning else ("#fef3c7", "#92400e")
+        edib_badge = (
+            f'<span style="display:inline-block;padding:2px 8px;border-radius:4px;'
+            f'font-size:0.7rem;font-weight:700;background:{t_bg};color:{t_fg}">'
+            f'{_h(s.toxicity_warning)}</span>'
+        )
+
+    common_main = s.species_common or (s.all_common[0] if s.all_common else None)
+    extra_common = s.all_common[1:] if (s.all_common and len(s.all_common) > 1) else []
+
+    culinary_html = ""
+    if s.culinary_notes:
+        note = s.culinary_notes[:130]
+        if len(s.culinary_notes) > 130:
+            note += "…"
+        culinary_html = (
+            f'<div style="font-size:0.77rem;color:#666;margin-top:4px">{_h(note)}</div>'
+        )
+
+    recipe_html = ""
+    if s.recipe_title or s.recipe_body:
+        r_icon = _SEASON_ICON.get(s.recipe_season or "", "💡")
+        r_label = ("Preparation" if s.is_medicinal_prep else None) or s.recipe_title or "Recipe"
+        body_text = s.recipe_body or ""
+        snippet = body_text[:500] + ("…" if len(body_text) > 500 else "")
+        recipe_html = (
+            f'<div style="background:#f8faf4;border-left:3px solid #7a9e50;'
+            f'padding:8px 12px;margin-top:8px;border-radius:0 6px 6px 0">'
+            f'<div style="font-size:0.78rem;font-weight:600;color:#2d5016;margin-bottom:4px">'
+            f'{r_icon} {_h(r_label)}</div>'
+            f'<div style="font-size:0.75rem;color:#555;line-height:1.55;white-space:pre-wrap">'
+            f'{_h(snippet)}</div></div>'
+        )
+
+    sep = "" if first else "border-top:1px dashed #e3ead7;margin-top:10px;padding-top:10px;"
+    return (
+        f'<div class="walk-sp" style="{sep}">'
+        f'<div style="font-style:italic;font-size:0.92rem;font-weight:600;color:#1a2e0a">'
+        f'{_h(s.species_scientific)}</div>'
+        + (f'<div style="font-size:0.97rem;font-weight:600;color:#2d5016;margin-bottom:3px">'
+           f'{_h(common_main)}</div>' if common_main else "")
+        + (f'<div style="font-size:0.75rem;color:#999;margin-bottom:3px">'
+           f'{_h(" · ".join(extra_common))}</div>' if extra_common else "")
+        + f'<div style="margin:5px 0">{edib_badge}</div>'
+        + culinary_html
+        + recipe_html
+        + "</div>"
+    )
+
+
 def _build_walk_html(body: WalkExportRequest) -> str:
     title = body.title or f"ForagingID Walk — {date.today().strftime('%d %b %Y')}"
     n_stops = len(body.stops)
-    n_species = len({s.species_scientific for s in body.stops})
+    n_species = len({sp.species_scientific for s in body.stops for sp in s.species})
     season_icon = _SEASON_ICON.get(body.season or "", "")
     total_str = _fmt_dist(body.total_distance_m)
 
     stops_html = ""
     for s in body.stops:
-        bg, fg = _EDIB_COLORS.get((s.edibility or "").lower(), ("#f3f3f3", "#555"))
-        edib_badge = (
-            f'<span style="display:inline-block;padding:2px 8px;border-radius:4px;'
-            f'font-size:0.7rem;font-weight:600;background:{bg};color:{fg}">{_h(s.edibility)}</span>'
-        ) if s.edibility else ""
-
         dist_html = (
             f'<span style="font-size:0.7rem;color:#bbb;margin-left:auto">'
             f'{_fmt_dist(s.dist_from_prev)}</span>'
         ) if s.dist_from_prev else ""
 
-        common_main = s.species_common or (s.all_common[0] if s.all_common else None)
-        extra_common = s.all_common[1:] if (s.all_common and len(s.all_common) > 1) else []
-
-        culinary_html = ""
-        if s.culinary_notes:
-            note = s.culinary_notes[:130]
-            if len(s.culinary_notes) > 130:
-                note += "…"
-            culinary_html = (
-                f'<div style="font-size:0.77rem;color:#666;margin-top:4px">{_h(note)}</div>'
+        species_html = ""
+        for k, sp in enumerate(s.species):
+            species_html += _walk_species_html(sp, first=(k == 0))
+        if s.note_text is not None:
+            species_html += (
+                f'<div style="font-size:0.8rem;color:#92400e;font-weight:600">📝 Field note</div>'
+                f'<div style="font-size:0.77rem;color:#555;margin-top:3px;white-space:pre-wrap">'
+                f'{_h(s.note_text[:400])}</div>'
             )
 
-        recipe_html = ""
-        if s.recipe_title or s.recipe_body:
-            r_icon = _SEASON_ICON.get(s.recipe_season or "", "💡")
-            r_label = ("Preparation" if s.is_medicinal_prep else None) or s.recipe_title or "Recipe"
-            body_text = s.recipe_body or ""
-            snippet = body_text[:500] + ("…" if len(body_text) > 500 else "")
-            recipe_html = (
-                f'<div style="background:#f8faf4;border-left:3px solid #7a9e50;'
-                f'padding:8px 12px;margin-top:8px;border-radius:0 6px 6px 0">'
-                f'<div style="font-size:0.78rem;font-weight:600;color:#2d5016;margin-bottom:4px">'
-                f'{r_icon} {_h(r_label)}</div>'
-                f'<div style="font-size:0.75rem;color:#555;line-height:1.55;white-space:pre-wrap">'
-                f'{_h(snippet)}</div></div>'
-            )
-
+        n_here = len(s.species)
         stops_html += (
             f'<div style="background:white;border:1px solid #e0e8d0;border-radius:8px;'
             f'padding:14px 16px;margin-bottom:12px;page-break-inside:avoid">'
@@ -434,16 +479,10 @@ def _build_walk_html(body: WalkExportRequest) -> str:
             f'color:white;font-size:0.68rem;font-weight:700;'
             f'display:inline-flex;align-items:center;justify-content:center;flex-shrink:0">'
             f'{s.num}</span>'
-            f'<span style="font-style:italic;font-size:0.92rem;font-weight:600;color:#1a2e0a">'
-            f'{_h(s.species_scientific)}</span>'
-            f'{dist_html}</div>'
-            + (f'<div style="font-size:0.97rem;font-weight:600;color:#2d5016;margin-bottom:3px">'
-               f'{_h(common_main)}</div>' if common_main else "")
-            + (f'<div style="font-size:0.75rem;color:#999;margin-bottom:3px">'
-               f'{_h(" · ".join(extra_common))}</div>' if extra_common else "")
-            + f'<div style="margin:5px 0">{edib_badge}</div>'
-            + culinary_html
-            + recipe_html
+            + (f'<span style="font-size:0.75rem;color:#556040;font-weight:600">{n_here} species here</span>'
+               if n_here > 1 else "")
+            + f'{dist_html}</div>'
+            + species_html
             + "</div>"
         )
 

@@ -45,6 +45,76 @@ Alembic head 0052. WAL; busy_timeout 30000; synchronous=NORMAL per connection.
 
 ## History
 
+### 2026-10-18 05:43
+**Snapshot** — Before walk-membership migration (saved_walks: buffer_m, members_since, excluded/accepted obs)
+DB: `snapshots/db_20261018_054349.sqlite`
+
+### 2026-10-18 05:33
+**Saved-walk loading UX: side panel (laptop) / peek bar (phone), fit whole walk, other pins hidden + Show all pins, restore on clear; TOOLS Open a saved walk; stop_count fix**
+
+**Built:**
+- Loaded saved walk opens as 360px right-hand panel on laptop (.wbs-side), 62px peek bar on phone (.wbs-peek)
+- _fitSavedWalk: fitBounds over stops + saved line with padding for panel/peek, maxZoom 18
+- Other pins hidden by default on a loaded saved walk (_savedWalkView.hidePins read in _applyLayer); Show all pins toggle in walk export row
+- Clear walk restores previous layer + map view
+- TOOLS: Open a saved walk (openSavedWalksList)
+**Fixed:**
+- loadSavedWalk left rectangle-draw attached (map.dragging disabled) when entered via Build a walk — now detached
+- fitBounds ran while the 68vh full-width sheet covered the map — now runs after panel layout with matching padding
+- wbs-body kept the saved-walks list scroll position so Export summary was off-screen — scrolled to top on load
+- GET /api/walk/saves stop_count counted obs_ids (120) not waypoints (26)
+**Files:** `frontend/index.html`, `app/api/walk.py`
+**Pending:**
+- Melvin live check: walk 4 on laptop and at 390px phone width
+- Phone handle has no tap-to-open (drag only) — pre-existing
+- _wbsLoadSaved hides walk-ors-note and nothing restores it — pre-existing
+- Saved walk stop labels still from save time (pending item 6)
+
+### 2026-10-18 05:16
+**Publish-as-experience Stage A: read-only recon + plan (no code, no DB writes)**
+
+**Pending:**
+- Melvin to answer Stage A open questions before Stage B
+- Uncommitted 16 Oct toxic-guard work still awaiting live check + commit
+
+### 2026-10-16 07:05
+**Safety follow-up: multi-species stops in export + proximity alerts; backend recipe toxic guard (code-only, no DB writes)**
+
+**Built:**
+- culinary_allowed() / CULINARY_ALLOWED_SQL in app/models/species.py — single backend toxic guard (recipes only when toxicity_severity='none', fail closed)
+- Walk export schema: WalkStop.species[] (WalkSpecies) — every species per stop, one card with a section each; field-note stops render note text
+- Proximity alerts list every species at the stop, each through _culinaryGate
+**Fixed:**
+- exportWalkSummary dropped all but the first species per stop (toxic Digitalis stop 6, Rhinanthus stop 24 were omitted)
+- Proximity alert common-name fallback read entry.common_names (never existed) — now entry.species.common_names
+- Recipes now gated on toxicity in GET /api/culinary/{name}, /api/species/{name}/recipes, /api/species/{name}/profile (also feeds lists_pdf), /api/find/recipes, /api/find/medicinal, /api/find/in-season recipe_count, /api/personal-lists/card/{id}
+- Export with a field-note stop previously 422'd (missing species_scientific) — note stops now carry note_text
+**Files:** `frontend/index.html`, `app/api/sharing.py`, `app/api/culinary.py`, `app/api/recipes.py`, `app/api/find.py`, `app/api/personal_lists.py`, `app/models/species.py`
+**Pending:**
+- Live browser check: walk 4 export (stops 6/19/24) + proximity alert layout with several species
+- WalkRecorder.logProximityEncounter logs only stop.p.id (first obs) per multi-species stop
+- Curator recipe write endpoints (POST/PATCH/regenerate) not toxicity-gated; audit recipe check uses edibility only
+- iNaturalist token expired (server log)
+
+### 2026-10-16 06:55
+**Safety pass: toxic guard gaps in walk flow (code-only, no DB writes)**
+
+**Built:**
+- _culinaryGate / _culinaryGateBadge: single shared toxic guard in index.html (allow-list: culinary only when toxicity_severity='none'; toxic/deadly -> ☠ warning; unreadable -> fail closed, '⚠ toxicity unknown')
+- GET /api/culinary/{name} returns species.toxicity_severity; _fetchWalkEnrich drops the extra /profile request
+- Walk export: toxicity_warning field rendered as badge
+**Fixed:**
+- Stop-card culinary hint (edible_parts/taste_notes) now gated
+- exportWalkSummary sends no culinary/recipe/edibility for blocked species
+- Walk sheet list (_wbsRenderLasso) shows ☠ warning instead of edible badge
+- Proximity alerts showed pin edibility badge for toxic species — now gated
+- Unknown-toxicity species no longer show an edibility badge on stop cards
+**Files:** `frontend/index.html`, `app/api/culinary.py`, `app/api/sharing.py`
+**Pending:**
+- Live browser check of walk 4 (stop cards, sheet list, export, prox alert)
+- Export still reads only first species of multi-species stops (Digitalis stop 6, Rhinanthus stop 24 omitted)
+- Lasso species outside the walk enrichment show 'toxicity unknown' until enriched
+
 ### 2026-10-16 06:46
 **Snapshot** — End of session — Session ended from Settings page
 DB: `snapshots/db_20261016_064609.sqlite`

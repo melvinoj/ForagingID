@@ -29,7 +29,7 @@ from app.services.write_lock import db_write_lock
 from app.models.culinary import CulinaryInfo
 from app.models.notes import MapNote
 from app.models.observation import Observation
-from app.models.species import CulinaryInfoHistory, EnrichmentSource, Species, SpeciesAIDraft, SpeciesCandidate, SpeciesRecipe, SpeciesEdibilityCondition, SpeciesLookalike
+from app.models.species import CulinaryInfoHistory, EnrichmentSource, Species, SpeciesAIDraft, SpeciesCandidate, SpeciesRecipe, SpeciesEdibilityCondition, SpeciesLookalike, culinary_allowed
 from app.models.encounter import Encounter
 from app.models.foray_session import SessionSpecies
 from app.models.notification import NotificationDismissal
@@ -1606,7 +1606,8 @@ async def get_culinary_profile(
 
     # Include recipe bank (current-season + all approved) — for walk panel collation
     _edib = (sp.edibility_status or "").lower()
-    _edib_blocked = _edib in ("toxic", "inedible", "not_edible") or sp.edibility_status is None
+    _edib_blocked = (_edib in ("toxic", "inedible", "not_edible") or sp.edibility_status is None
+                     or not culinary_allowed(sp.toxicity_severity))
     _recipe_rows: list = []
     if not _edib_blocked:
         _recipe_stmt = (
@@ -1634,6 +1635,7 @@ async def get_culinary_profile(
             "genus": sp.genus,
             "edibility_status": sp.edibility_status,
             "edibility_verified": sp.edibility_verified,
+            "toxicity_severity": sp.toxicity_severity,  # none | toxic | deadly — walk panel toxic guard
         },
         "culinary": _culinary_to_dict(ci, sp.scientific_name) if ci else None,
         "ai_generated_fields": ai_fields,
@@ -1941,7 +1943,8 @@ async def species_profile(
 
     # Recipe bank — enforce edibility rules
     edib = (sp.edibility_status or "").lower()
-    _edibility_blocked = edib in ("toxic", "inedible", "not_edible") or sp.edibility_status is None
+    _edibility_blocked = (edib in ("toxic", "inedible", "not_edible") or sp.edibility_status is None
+                          or not culinary_allowed(sp.toxicity_severity))
     recipes_stmt = (
         select(SpeciesRecipe)
         .where(SpeciesRecipe.species_id == sp.id)

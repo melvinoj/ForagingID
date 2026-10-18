@@ -449,3 +449,18 @@ class SpeciesSynonym(Base):
         Integer, ForeignKey("species.id"), nullable=False, index=True
     )
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+# ---------------------------------------------------------------------------
+# Culinary toxic guard — the ONLY backend definition of "may recipes / culinary
+# content be returned for this species?". Same rule as the frontend
+# _culinaryGate (index.html) and print_pdf.html: only when toxicity_severity is
+# 'none'. 'toxic', 'deadly' and anything unrecognised/missing fail closed.
+# Extend these; never copy the comparison into a call site.
+# ---------------------------------------------------------------------------
+def culinary_allowed(toxicity_severity: Optional[str]) -> bool:
+    return toxicity_severity == "none"
+
+
+# SQL form of culinary_allowed() for queries that join Species.
+CULINARY_ALLOWED_SQL = Species.toxicity_severity == "none"

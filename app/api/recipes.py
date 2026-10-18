@@ -21,7 +21,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.models.species import Species, SpeciesRecipe, SpeciesAIDraft
+from app.models.species import Species, SpeciesRecipe, SpeciesAIDraft, culinary_allowed
 from app.models.culinary import CulinaryInfo
 
 log = logging.getLogger(__name__)
@@ -109,6 +109,10 @@ async def list_recipes(
         SpeciesRecipe.created_at.desc(),
     )
     rows = (await db.execute(stmt)).scalars().all()
+
+    # Toxic guard (culinary_allowed): no recipes unless toxicity_severity is 'none'
+    if not culinary_allowed(sp.toxicity_severity):
+        return {"species": sp.scientific_name, "edibility_blocked": True, "recipes": []}
 
     # Enforce edibility rules: blank for toxic/unknown species
     edib = (sp.edibility_status or "").lower()

@@ -128,7 +128,10 @@ async def list_walks(db: AsyncSession = Depends(get_db)):
                 "created_at":  w.created_at.isoformat() if w.created_at else None,
                 "distance_m":  w.distance_m,
                 "duration_min": w.duration_min,
-                "stop_count":  len(json.loads(w.obs_ids_json or "[]")),
+                # Stops = waypoints (one per stop, field notes included — same
+                # count the walk panel shows). obs_ids holds every observation,
+                # several per stop since stop clustering.
+                "stop_count":  len(json.loads(w.waypoints_json or "[]")),
             }
             for w in walks
         ]

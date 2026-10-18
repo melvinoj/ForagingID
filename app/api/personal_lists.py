@@ -32,7 +32,7 @@ from app.models.culinary import CulinaryInfo
 from app.models.encounter import Encounter
 from app.models.observation import Observation
 from app.models.personal_list import PersonalList, PersonalListSpecies
-from app.models.species import Species, SpeciesRecipe
+from app.models.species import Species, SpeciesRecipe, culinary_allowed
 
 log = logging.getLogger(__name__)
 
@@ -217,13 +217,14 @@ async def get_personal_card(species_id: int, db: AsyncSession = Depends(get_db))
     ci = await db.scalar(select(CulinaryInfo).where(CulinaryInfo.species_id == sp.id))
 
     # Preferred (or most recent) approved recipe — read-only scaffold content.
+    # Toxic guard (culinary_allowed): none unless toxicity_severity is 'none'.
     recipe = await db.scalar(
         select(SpeciesRecipe)
         .where(SpeciesRecipe.species_id == sp.id)
         .where(SpeciesRecipe.status == "approved")
         .order_by(SpeciesRecipe.is_preferred.desc(), SpeciesRecipe.created_at.desc())
         .limit(1)
-    )
+    ) if culinary_allowed(sp.toxicity_severity) else None
 
     thumb = await _species_thumbnail(db, sp)
 

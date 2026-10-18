@@ -18,7 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.models.observation import Observation
-from app.models.species import Species, SpeciesRecipe
+from app.models.species import Species, SpeciesRecipe, CULINARY_ALLOWED_SQL
 from app.services.phenology import species_in_season
 
 router = APIRouter(prefix="/api/find", tags=["find"])
@@ -73,8 +73,10 @@ async def find_in_season(
             SpeciesRecipe.species_id,
             func.count(SpeciesRecipe.id).label("n"),
         )
+        .join(Species, Species.id == SpeciesRecipe.species_id)
         .where(SpeciesRecipe.status == "approved")
         .where(SpeciesRecipe.is_medicinal_prep.is_(False))
+        .where(CULINARY_ALLOWED_SQL)  # toxic guard — no recipe count for toxic/deadly
         .group_by(SpeciesRecipe.species_id)
     )
     recipe_counts = {r.species_id: r.n for r in (await db.execute(rec_stmt)).all()}
@@ -183,6 +185,7 @@ async def find_recipes(
         .join(Species, Species.id == SpeciesRecipe.species_id)
         .where(SpeciesRecipe.status == "approved")
         .where(SpeciesRecipe.is_medicinal_prep.is_(False))
+        .where(CULINARY_ALLOWED_SQL)  # toxic guard
         .where(
             or_(
                 SpeciesRecipe.title.ilike(pattern),
@@ -259,6 +262,7 @@ async def find_medicinal(
         .join(Species, Species.id == SpeciesRecipe.species_id)
         .where(SpeciesRecipe.status == "approved")
         .where(SpeciesRecipe.is_medicinal_prep.is_(True))
+        .where(CULINARY_ALLOWED_SQL)  # toxic guard
         .where(
             or_(
                 SpeciesRecipe.title.ilike(pattern),

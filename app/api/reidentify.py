@@ -22,6 +22,7 @@ Endpoints:
 
 import asyncio
 import json
+import logging
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional, Set
@@ -41,12 +42,14 @@ from app.integrations.inaturalist import (
 from app.integrations import mushroom_observer as mo
 from app.integrations.plantnet import PlantNetError, identify_image as plantnet_identify
 from app.models.observation import Observation, ObservationEdit
+from app.services.regional_demotion import display_slots
 from app.services.species_link import set_observation_species
 from app.services.taxonomy import collapse_autonym
 from app.services.write_lock import db_write_lock
 from app.models.processing import ProcessingLog
 
 router = APIRouter(tags=["reidentify"])
+log = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # Provider outcome reporting
@@ -289,10 +292,16 @@ async def reidentify_observation(
     merged: Dict[str, dict] = {}
 
     def _add(sci: str, common: Optional[str], common_names: List[str],
-             score: float, source: str) -> None:
+             score: float, source: str, pn_cand: object = None) -> None:
         key = sci.lower().strip()
         if not key:
             return
+        if pn_cand is not None:
+            # Regional demotion flag comes from PlantNet only (plant lists).
+            flags = {"non_european": bool(getattr(pn_cand, "non_european", False)),
+                     "pn_raw_rank": getattr(pn_cand, "raw_rank", None)}
+        else:
+            flags = {}
         if key not in merged:
             merged[key] = {
                 "scientific_name": sci,
@@ -300,8 +309,12 @@ async def reidentify_observation(
                 "common_names": list(common_names),
                 "confidence": score,
                 "sources": {source},
+                "non_european": False,
+                "pn_raw_rank": None,
+                **flags,
             }
         else:
+            merged[key].update(flags)
             if score > merged[key]["confidence"]:
                 merged[key]["confidence"] = score
             merged[key]["sources"].add(source)
@@ -313,12 +326,18 @@ async def reidentify_observation(
     if pn_result is not None:
         for c in (pn_result.candidates or []):
             _add(c.scientific_name, c.common_names[0] if c.common_names else None,
-                 c.common_names, c.score, "plantnet")
+                 c.common_names, c.score, "plantnet", pn_cand=c)
 
     for c in (inat_candidates or []):
         _add(c.scientific_name, c.common_name, c.common_names, c.score, "inaturalist")
 
-    top5 = sorted(merged.values(), key=lambda x: x["confidence"], reverse=True)[:5]
+    # Regional demotion: a PlantNet-flagged non-European name sorts after the
+    # rest unless iNaturalist (location-aware) also named it; confidence order
+    # within each group. Any entry that the plain confidence top 5 would have
+    # shown stays shown, so demotion never hides a candidate.
+    by_conf = sorted(merged.values(), key=lambda x: x["confidence"], reverse=True)
+    demoted = sorted(by_conf, key=lambda x: x["non_european"] and "inaturalist" not in x["sources"])
+    top5 = demoted[:5] + [e for e in by_conf[:5] if e not in demoted[:5]]
 
     results = []
     for i, item in enumerate(top5):
@@ -331,6 +350,8 @@ async def reidentify_observation(
             "common_names": item["common_names"],
             "confidence": round(item["confidence"], 4),
             "source": source_label,
+            "non_european": item["non_european"],
+            "pn_raw_rank": item["pn_raw_rank"],
         })
 
     # Recorded outcomes only — see _plantnet_warning / _inat_warning.
@@ -355,26 +376,51 @@ async def reidentify_observation(
 # POST /api/observations/{id}/second-opinion
 # ---------------------------------------------------------------------------
 
+# Image sources a caller may request explicitly. GBIF is a name search on the
+# current species_primary, not image ID, so it always runs and is not selectable.
+_SOP_IMAGE_SOURCES = ("plantnet", "inaturalist")
+# Guaranteed display slots per queried source. Each source keeps its own top N
+# (in that source's own ranking order) before the lists are merged, so one
+# source's score scale can never crowd another source out of the panel.
+_SOP_PER_SOURCE = 5
+
+
+class SecondOpinionRequest(BaseModel):
+    # Same shape and semantics as ReidentifyRequest.sources: None/empty means
+    # "category default"; an explicit list is honoured as given — including
+    # PlantNet on a fungi obs (deliberate human override, e.g. Monotropa).
+    sources: Optional[List[str]] = None   # e.g. ["plantnet", "inaturalist"]
+    # Category the review card showed at click time — logged only. Routing
+    # defaults always come from the saved obs.obs_category.
+    category: Optional[str] = None
+
+
 @router.post("/api/observations/{observation_id}/second-opinion")
 async def second_opinion(
     observation_id: int,
     organ: str = Query(default="auto"),
     include_related_images: bool = Query(default=False),
+    body: Optional[SecondOpinionRequest] = None,
     db: AsyncSession = Depends(get_db),
 ) -> dict:
     """
-    Query PlantNet (image), iNaturalist (image), and GBIF (name search) in
-    parallel and return a merged, ranked list of species candidates.
+    Query the image sources appropriate to the observation's obs_category, plus
+    GBIF (name search), in parallel and return candidates with guaranteed
+    per-source slots.  Read-only: never writes species, status or edibility.
 
-    PlantNet and iNat do image-based scoring.  GBIF searches by the
-    observation's current species_primary to confirm / offer alternatives.
-    All three run concurrently — any single failure degrades gracefully.
+    Source matrix (default, no body.sources):
+      plant / landscape -> PlantNet (image) + iNaturalist (image) + GBIF
+      fungi             -> iNaturalist (image) + GBIF — PlantNet is plant-only
+    Same use_pn rule as retry-identify.  An explicit body.sources overrides the
+    default, exactly as in /reidentify.
 
     Query params:
       organ:                  PlantNet organ hint — auto | leaf | flower | fruit | bark | habit
       include_related_images: When true, each PlantNet candidate includes up to 2 reference
                               image URLs from PlantNet's herbarium for visual comparison.
                               Uses one extra API call against the daily quota.
+    Body (optional JSON):
+      sources: ["plantnet", "inaturalist"]  — subset to run; omit for category default
     """
     obs = await db.get(Observation, observation_id)
     if not obs:
@@ -387,6 +433,27 @@ async def second_opinion(
     api_key    = settings.plantnet_api_key
     inat_token = settings.inaturalist_api_token
     gbif_query = (obs.species_primary or "").strip()
+    obs_cat    = (obs.obs_category or "plant").lower()
+
+    # Determine which image sources to query — mirrors reidentify_observation.
+    requested = (set(s.lower() for s in body.sources) & set(_SOP_IMAGE_SOURCES)
+                 if body and body.sources else None)
+    if requested is None:
+        # Category default: fungi always skips PlantNet (retry-identify's rule).
+        requested = {"inaturalist"} if obs_cat == "fungi" else set(_SOP_IMAGE_SOURCES)
+        sources_mode = "category_default"
+    else:
+        sources_mode = "explicit"
+    query_pn   = "plantnet" in requested
+    query_inat = "inaturalist" in requested
+
+    log.warning(
+        "[second-opinion] obs#%s category=%s card=%s sources=%s (%s) plantnet=%s inaturalist=%s",
+        observation_id, obs_cat, (body.category if body else None),
+        sorted(requested), sources_mode,
+        "called" if query_pn and api_key else "not called",
+        "called" if query_inat and inat_token else "not called",
+    )
 
     # Sanitise organ param — unknown values fall back to "auto"
     _organ = organ.lower() if organ else "auto"
@@ -397,7 +464,7 @@ async def second_opinion(
 
     async def _plantnet() -> object:
         nonlocal pn_error
-        if not api_key:
+        if not (query_pn and api_key):
             return None
         try:
             return await plantnet_identify(
@@ -414,6 +481,10 @@ async def second_opinion(
             return None
 
     async def _inat() -> list:
+        if not query_inat:
+            return []
+        # lat/lng/date rank only — the gating score is min(vision, combined),
+        # so location can only demote (same rule as scan and retry-identify).
         return await inat_score(
             path, api_token=inat_token,
             lat=obs.latitude, lng=obs.longitude,
@@ -441,16 +512,17 @@ async def second_opinion(
                 pass
 
     # Merge image-based candidates keyed by lowercased scientific name.
-    # Scores are stored per-source on a normalised 0–1 scale so they can be
-    # combined meaningfully: PlantNet already returns 0–1; iNaturalist's
-    # combined_score is a 0–100 percentage and is divided by 100 at the call
-    # site below.  The final per-species confidence is computed after merging
-    # (average when two sources agree, single source's score otherwise).
+    # Scores are stored per-source on a normalised 0–1 scale: PlantNet returns
+    # 0–1, and inaturalist.score_image() already divides iNat's 0–100 scores by
+    # 100 (its .score is min(vision, combined) on 0–1). It must NOT be divided
+    # again here — before 19 Oct 2026 it was, which made every iNat candidate
+    # ~100x too small so PlantNet always took the pooled top-10.
     merged: Dict[str, dict] = {}
 
     def _add_img(sci: str, common: Optional[str], common_names: List[str],
                  score: float, source: str,
-                 ref_images: Optional[List[dict]] = None) -> None:
+                 ref_images: Optional[List[dict]] = None,
+                 pn_cand: object = None) -> None:
         key = sci.lower().strip()
         if not key:
             return
@@ -462,8 +534,17 @@ async def second_opinion(
                 "scores": {},          # source -> normalised 0–1 score
                 "sources": set(),
                 "reference_images": list(ref_images or []),
+                "non_european": False,
+                "pn_rank": None,
+                "pn_raw_rank": None,
             }
         entry = merged[key]
+        if pn_cand is not None:
+            # Regional demotion flag/ranks come from PlantNet only (the lists
+            # are plant lists — never applied to iNat or GBIF names).
+            entry["non_european"] = bool(getattr(pn_cand, "non_european", False))
+            entry["pn_rank"]      = getattr(pn_cand, "rank", None)
+            entry["pn_raw_rank"]  = getattr(pn_cand, "raw_rank", None)
         entry["sources"].add(source)
         entry["scores"][source] = score
         if common and not entry["common_name"]:
@@ -474,19 +555,24 @@ async def second_opinion(
         if ref_images and not entry["reference_images"]:
             entry["reference_images"] = list(ref_images)
 
-    if pn_result is not None:
-        for c in (pn_result.candidates or []):
-            cn = c.common_names[0] if c.common_names else None
-            _add_img(c.scientific_name, cn, c.common_names, c.score, "plantnet",
-                     ref_images=c.images)
+    # Per-source guaranteed slots: each source contributes its own top
+    # _SOP_PER_SOURCE in its own ranking order (PlantNet in its regionally
+    # demoted order, iNat by geo-weighted combined score). Dedupe by name merges
+    # the source tags. PlantNet's slots also keep any candidate that was in its
+    # RAW top _SOP_PER_SOURCE but was pushed down by demotion, so demotion never
+    # hides what PlantNet itself ranked highest (e.g. a planted exotic).
+    pn_cands = list((pn_result.candidates or []) if pn_result is not None else [])
+    for c in display_slots(pn_cands, _SOP_PER_SOURCE):
+        cn = c.common_names[0] if c.common_names else None
+        _add_img(c.scientific_name, cn, c.common_names, c.score, "plantnet",
+                 ref_images=c.images, pn_cand=c)
 
-    for c in (inat_candidates or []):
-        # iNaturalist combined_score is 0–100 — normalise to 0–1 to match PlantNet
-        inat_norm = min(c.score / 100.0, 1.0)
-        _add_img(c.scientific_name, c.common_name, c.common_names, inat_norm, "inaturalist")
+    for c in (inat_candidates or [])[:_SOP_PER_SOURCE]:
+        _add_img(c.scientific_name, c.common_name, c.common_names,
+                 min(c.score, 1.0), "inaturalist")
 
-    # Add GBIF-only names not already in image results (fixed score 0.50 display)
-    for g in (gbif_results or []):
+    # GBIF name matches (fixed score 0.50 display), same per-source cap
+    for g in (gbif_results or [])[:_SOP_PER_SOURCE]:
         key = g["scientific_name"].lower().strip()
         if key not in merged:
             merged[key] = {
@@ -501,7 +587,7 @@ async def second_opinion(
             merged[key]["sources"].add("gbif")
             merged[key]["scores"].setdefault("gbif", 0.50)
 
-    # Resolve a single 0–1 confidence per species:
+    # Resolve a single 0–1 confidence per species (display sort only):
     #   both image sources present -> average of the two
     #   one image source present   -> that source's score
     #   GBIF-only                  -> fixed 0.50 name-match score
@@ -517,10 +603,18 @@ async def second_opinion(
         else:
             entry["confidence"] = entry["scores"].get("gbif", 0.50)
 
-    top10 = sorted(merged.values(), key=lambda x: x["confidence"], reverse=True)[:10]
+    # Every slotted entry is kept; sorting is for display order only.
+    # Regional demotion: a PlantNet-flagged non-European name sorts after the
+    # rest unless iNaturalist (which is location-aware) also named it. Within
+    # each group, confidence order. Nothing is dropped; the flag is shown.
+    ranked = sorted(
+        merged.values(),
+        key=lambda x: (x["non_european"] and "inaturalist" not in x["sources"],
+                       -x["confidence"]),
+    )
 
     results = []
-    for i, item in enumerate(top10):
+    for i, item in enumerate(ranked):
         srcs: Set[str] = item["sources"]
         results.append({
             "rank": i + 1,
@@ -530,16 +624,25 @@ async def second_opinion(
             "confidence": round(item["confidence"], 4),
             "sources": sorted(srcs),          # list so JSON-serialisable
             "reference_images": item.get("reference_images", []),
+            "non_european": item["non_european"],
+            "pn_rank": item["pn_rank"],
+            "pn_raw_rank": item["pn_raw_rank"],
         })
 
-    # Recorded outcomes only — see _plantnet_warning / _inat_warning.
+    # Recorded outcomes only — see _plantnet_warning / _inat_warning. A queried
+    # source that produced zero candidates always gets an explicit line saying
+    # whether it responded empty or failed; a source not queried gets none.
     warnings = []
-    w = _plantnet_warning(pn_result, pn_error, api_key)
-    if w:
-        warnings.append(w)
-    w = _inat_warning(inat_candidates or [], inat_token)
-    if w:
-        warnings.append(w)
+    if query_pn:
+        w = _plantnet_warning(pn_result, pn_error, api_key)
+        if w:
+            warnings.append(w)
+        elif not pn_cands:
+            warnings.append("PlantNet: responded, no candidates for this photo")
+    if query_inat:
+        w = _inat_warning(inat_candidates or [], inat_token)
+        if w:
+            warnings.append(w)
     if not gbif_query:
         warnings.append("GBIF: skipped — no current species name to search")
     elif not gbif_results:
@@ -547,6 +650,9 @@ async def second_opinion(
 
     return {
         "observation_id": observation_id,
+        "obs_category": obs_cat,
+        "sources_queried": [s for s in _SOP_IMAGE_SOURCES if s in requested],
+        "sources_mode": sources_mode,
         "results": results,
         "plantnet_ok": pn_result is not None,
         "inaturalist_ok": bool(inat_candidates),
@@ -638,19 +744,23 @@ async def retry_identify(
 
     groups: List[dict] = []
 
-    # PlantNet group (plants only) — scores already 0–1.
+    # PlantNet group (plants only) — scores already 0–1. Regionally demoted
+    # order; the group also keeps anything from PlantNet's RAW top
+    # _RETRY_GROUP_CAP that demotion pushed past the cap (never hidden).
     if use_pn:
         pn_cands = []
         if pn_result is not None:
-            for c in (pn_result.candidates or []):
+            for c in display_slots(pn_result.candidates or [], _RETRY_GROUP_CAP):
                 pn_cands.append({
                     "scientific_name": c.scientific_name,
                     "common_name": c.common_names[0] if c.common_names else None,
                     "confidence": round(c.score, 4),
+                    "non_european": bool(getattr(c, "non_european", False)),
+                    "pn_raw_rank": getattr(c, "raw_rank", None),
                 })
         groups.append({
             "source": "plantnet", "label": "PlantNet", "scored": True,
-            "candidates": pn_cands[:_RETRY_GROUP_CAP],
+            "candidates": pn_cands,
         })
 
     # iNaturalist group (plants + fungi) — score_image already normalises to 0–1.

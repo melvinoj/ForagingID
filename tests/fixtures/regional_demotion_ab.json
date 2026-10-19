@@ -1,0 +1,685 @@
+{
+ "_about": "PlantNet project=all candidates from the 19 Oct 2026 A/B (scores as returned). nb30 = nb-results=30 responses.",
+ "cases": {
+  "21705": {
+   "species": "Aconitum napellus",
+   "source": "all (default 10)",
+   "cands": [
+    [
+     "Aconitum × cammarum",
+     0.05668
+    ],
+    [
+     "Syneilesis aconitifolia",
+     0.03512
+    ],
+    [
+     "Elaphoglossum peltatum",
+     0.03207
+    ],
+    [
+     "Lilium pardalinum",
+     0.02765
+    ],
+    [
+     "Geranium palmatum",
+     0.02427
+    ],
+    [
+     "Aconitum plicatum",
+     0.01655
+    ],
+    [
+     "Aconitum fischeri",
+     0.01596
+    ],
+    [
+     "Ranunculus polyanthemos",
+     0.01375
+    ],
+    [
+     "Iris fulva",
+     0.0116
+    ],
+    [
+     "Asplenium rutifolium",
+     0.01096
+    ]
+   ]
+  },
+  "19210": {
+   "species": "Fagus sylvatica",
+   "source": "all (default 10)",
+   "cands": [
+    [
+     "Fagus sylvatica",
+     0.65155
+    ],
+    [
+     "Fagus × taurica",
+     0.10372
+    ],
+    [
+     "Fagus crenata",
+     0.03007
+    ],
+    [
+     "Acer skutchii",
+     0.02192
+    ],
+    [
+     "Nothofagus fusca",
+     0.02162
+    ],
+    [
+     "Fagus hayatae",
+     0.01767
+    ],
+    [
+     "Quercus afares",
+     0.0172
+    ],
+    [
+     "Beilschmiedia tawa",
+     0.0101
+    ],
+    [
+     "Abies alba",
+     0.00395
+    ],
+    [
+     "Acer circinatum",
+     0.00343
+    ]
+   ]
+  },
+  "21252": {
+   "species": "Helianthus silphioides",
+   "source": "all (default 10)",
+   "cands": [
+    [
+     "Helianthus silphioides",
+     0.05289
+    ],
+    [
+     "Arctium nemorosum",
+     0.02853
+    ],
+    [
+     "Arctium tomentosum",
+     0.0255
+    ],
+    [
+     "Populus tremula",
+     0.0236
+    ],
+    [
+     "Melampodium perfoliatum",
+     0.01767
+    ],
+    [
+     "Arctium minus",
+     0.01659
+    ],
+    [
+     "Sigesbeckia pubescens",
+     0.01363
+    ],
+    [
+     "Arctium lappa",
+     0.0134
+    ],
+    [
+     "Xanthium strumarium",
+     0.01217
+    ],
+    [
+     "Venegasia carpesioides",
+     0.0089
+    ]
+   ]
+  },
+  "8316": {
+   "species": "Crataegus monogyna",
+   "source": "all (default 10)",
+   "cands": [
+    [
+     "Pyrus communis",
+     0.08906
+    ],
+    [
+     "Pyrus korshinskyi",
+     0.08152
+    ],
+    [
+     "Cordia trichotoma",
+     0.02
+    ],
+    [
+     "Pyrus spinosa",
+     0.01892
+    ],
+    [
+     "Cornus chinensis",
+     0.01699
+    ],
+    [
+     "Crataegus monogyna",
+     0.01683
+    ],
+    [
+     "Cecropia telenitida",
+     0.01602
+    ],
+    [
+     "Copaifera langsdorffii",
+     0.0139
+    ],
+    [
+     "Cryptosepalum exfoliatum",
+     0.01266
+    ],
+    [
+     "Pyrus elaeagrifolia",
+     0.01092
+    ]
+   ]
+  },
+  "8310": {
+   "species": "Larix decidua",
+   "source": "all (default 10)",
+   "cands": [
+    [
+     "Larix kaempferi",
+     0.2576
+    ],
+    [
+     "Larix × marschlinsii",
+     0.07737
+    ],
+    [
+     "Cedrus atlantica",
+     0.05155
+    ],
+    [
+     "Larix laricina",
+     0.04538
+    ],
+    [
+     "Pseudotsuga menziesii",
+     0.0337
+    ],
+    [
+     "Abies religiosa",
+     0.03021
+    ],
+    [
+     "Tsuga dumosa",
+     0.02353
+    ],
+    [
+     "Picea morrisonicola",
+     0.02311
+    ],
+    [
+     "Picea asperata",
+     0.02258
+    ],
+    [
+     "Larix decidua",
+     0.02074
+    ]
+   ]
+  },
+  "20563": {
+   "species": "Fuchsia magellanica",
+   "source": "all (default 10)",
+   "cands": [
+    [
+     "Fuchsia magellanica",
+     0.56342
+    ],
+    [
+     "Fuchsia × standishii",
+     0.24664
+    ],
+    [
+     "Fuchsia regia",
+     0.04072
+    ],
+    [
+     "Fuchsia × exoniensis",
+     0.03243
+    ],
+    [
+     "Fuchsia coccinea",
+     0.02538
+    ],
+    [
+     "Fuchsia microphylla",
+     0.00485
+    ],
+    [
+     "Fuchsia denticulata",
+     0.00303
+    ],
+    [
+     "Fuchsia lycioides",
+     0.00171
+    ],
+    [
+     "Fuchsia alpestris",
+     0.00148
+    ],
+    [
+     "Fuchsia vulcanica",
+     0.00101
+    ]
+   ]
+  },
+  "20570": {
+   "species": "Platanus × hispanica",
+   "source": "all (default 10)",
+   "cands": [
+    [
+     "Platanus × hispanica",
+     0.58075
+    ],
+    [
+     "Platanus occidentalis",
+     0.29506
+    ],
+    [
+     "Platanus orientalis",
+     0.04981
+    ],
+    [
+     "Platanus racemosa",
+     0.00368
+    ],
+    [
+     "Platanus mexicana",
+     0.00239
+    ]
+   ]
+  },
+  "21705_nb30": {
+   "species": "Aconitum napellus",
+   "source": "all nb-results=30",
+   "cands": [
+    [
+     "Aconitum × cammarum",
+     0.05668
+    ],
+    [
+     "Syneilesis aconitifolia",
+     0.03512
+    ],
+    [
+     "Elaphoglossum peltatum",
+     0.03207
+    ],
+    [
+     "Lilium pardalinum",
+     0.02765
+    ],
+    [
+     "Geranium palmatum",
+     0.02427
+    ],
+    [
+     "Aconitum plicatum",
+     0.01655
+    ],
+    [
+     "Aconitum fischeri",
+     0.01596
+    ],
+    [
+     "Ranunculus polyanthemos",
+     0.01375
+    ],
+    [
+     "Iris fulva",
+     0.0116
+    ],
+    [
+     "Asplenium rutifolium",
+     0.01096
+    ],
+    [
+     "Pulsatilla dahurica",
+     0.00934
+    ],
+    [
+     "Kadenia dubia",
+     0.00809
+    ],
+    [
+     "Cenolophium fischeri",
+     0.00807
+    ],
+    [
+     "Lycoris aurea",
+     0.00801
+    ],
+    [
+     "Arisaema tortuosum",
+     0.00732
+    ],
+    [
+     "Arisaema consanguineum",
+     0.00661
+    ],
+    [
+     "Aconitum leucostomum",
+     0.00654
+    ],
+    [
+     "Pteris umbrosa",
+     0.00645
+    ],
+    [
+     "Aconitum degenii",
+     0.00608
+    ],
+    [
+     "Lilium medeoloides",
+     0.00608
+    ],
+    [
+     "Lilium kelloggii",
+     0.00592
+    ],
+    [
+     "Pleurospermum uralense",
+     0.00574
+    ],
+    [
+     "Aconitum napellus",
+     0.00564
+    ],
+    [
+     "Dicentra canadensis",
+     0.00534
+    ],
+    [
+     "Hemerocallis middendorffii",
+     0.00469
+    ],
+    [
+     "Galium intermedium",
+     0.00449
+    ],
+    [
+     "Asplenium theciferum",
+     0.00441
+    ],
+    [
+     "Limnophila sessiliflora",
+     0.00434
+    ],
+    [
+     "Pitcairnia punicea",
+     0.00434
+    ],
+    [
+     "Delphinium glaucum",
+     0.00429
+    ]
+   ]
+  },
+  "8310_nb30": {
+   "species": "Larix decidua",
+   "source": "all nb-results=30",
+   "cands": [
+    [
+     "Larix kaempferi",
+     0.2576
+    ],
+    [
+     "Larix × marschlinsii",
+     0.07737
+    ],
+    [
+     "Cedrus atlantica",
+     0.05155
+    ],
+    [
+     "Larix laricina",
+     0.04538
+    ],
+    [
+     "Pseudotsuga menziesii",
+     0.0337
+    ],
+    [
+     "Abies religiosa",
+     0.03021
+    ],
+    [
+     "Tsuga dumosa",
+     0.02353
+    ],
+    [
+     "Picea morrisonicola",
+     0.02311
+    ],
+    [
+     "Picea asperata",
+     0.02258
+    ],
+    [
+     "Larix decidua",
+     0.02074
+    ],
+    [
+     "Picea sitchensis",
+     0.01658
+    ],
+    [
+     "Cedrus deodara",
+     0.01441
+    ],
+    [
+     "Abies concolor",
+     0.01385
+    ],
+    [
+     "Larix sibirica",
+     0.0133
+    ],
+    [
+     "Pseudotsuga sinensis",
+     0.01211
+    ],
+    [
+     "Tsuga heterophylla",
+     0.01173
+    ],
+    [
+     "Hesperocyparis lusitanica",
+     0.01123
+    ],
+    [
+     "Abies holophylla",
+     0.01114
+    ],
+    [
+     "Abies sibirica",
+     0.0097
+    ],
+    [
+     "Tsuga caroliniana",
+     0.00937
+    ],
+    [
+     "Picea laxa",
+     0.00804
+    ],
+    [
+     "Picea likiangensis",
+     0.00799
+    ],
+    [
+     "Cedrus libani",
+     0.00708
+    ],
+    [
+     "Arceuthobium douglasii",
+     0.0069
+    ],
+    [
+     "Picea abies",
+     0.00658
+    ],
+    [
+     "Picea jezoensis",
+     0.00654
+    ],
+    [
+     "Tsuga chinensis",
+     0.00605
+    ],
+    [
+     "Taxus baccata",
+     0.00549
+    ],
+    [
+     "Pseudolarix amabilis",
+     0.0053
+    ],
+    [
+     "Picea chihuahuana",
+     0.00515
+    ]
+   ]
+  },
+  "8316_nb30": {
+   "species": "Crataegus monogyna",
+   "source": "all nb-results=30",
+   "cands": [
+    [
+     "Pyrus communis",
+     0.08906
+    ],
+    [
+     "Pyrus korshinskyi",
+     0.08152
+    ],
+    [
+     "Cordia trichotoma",
+     0.02
+    ],
+    [
+     "Pyrus spinosa",
+     0.01892
+    ],
+    [
+     "Cornus chinensis",
+     0.01699
+    ],
+    [
+     "Crataegus monogyna",
+     0.01683
+    ],
+    [
+     "Cecropia telenitida",
+     0.01602
+    ],
+    [
+     "Copaifera langsdorffii",
+     0.0139
+    ],
+    [
+     "Cryptosepalum exfoliatum",
+     0.01266
+    ],
+    [
+     "Pyrus elaeagrifolia",
+     0.01092
+    ],
+    [
+     "Kunzea robusta",
+     0.00946
+    ],
+    [
+     "Crataegus azarolus",
+     0.00881
+    ],
+    [
+     "Protea roupelliae",
+     0.00858
+    ],
+    [
+     "Terminalia cherrieri",
+     0.00856
+    ],
+    [
+     "Calycophyllum candidissimum",
+     0.00823
+    ],
+    [
+     "Quercus rotundifolia",
+     0.00693
+    ],
+    [
+     "Callitris columellaris",
+     0.00672
+    ],
+    [
+     "Faurea saligna",
+     0.00587
+    ],
+    [
+     "Crataegus laevigata",
+     0.00563
+    ],
+    [
+     "Hymenaea stigonocarpa",
+     0.00531
+    ],
+    [
+     "Cordia megalantha",
+     0.00516
+    ],
+    [
+     "Viburnum treleasei",
+     0.00508
+    ],
+    [
+     "Pyrus nivalis",
+     0.00502
+    ],
+    [
+     "Eriotheca candolleana",
+     0.00485
+    ],
+    [
+     "Quercus sideroxyla",
+     0.00463
+    ],
+    [
+     "Quercus pubescens",
+     0.00462
+    ],
+    [
+     "Aspidosperma polyneuron",
+     0.00395
+    ],
+    [
+     "Vachellia drepanolobium",
+     0.0037
+    ],
+    [
+     "Escallonia resinosa",
+     0.00342
+    ],
+    [
+     "Quercus ilex",
+     0.00296
+    ]
+   ]
+  }
+ }
+}

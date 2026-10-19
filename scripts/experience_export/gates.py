@@ -4,18 +4,21 @@ rules live. export.py asks these functions every question about what may be
 shown; it never re-implements a rule inline (same single-source-of-truth
 discipline as app/models/observation.py's predicates).
 
-Rules (Melvin, 15 Oct 2026):
+Rules (Melvin, 15 Oct 2026; tightened for Publish B1, 18 Oct 2026):
   1. Species shown = species of this walk's observations that are
-     approved/manually_verified AND identified (and not in hide_obs_ids).
+     HUMAN-confirmed (is_human_confirmed — approved/manually_verified,
+     identified, and a human made the decision; AI-agreed-only is excluded),
+     not in hide_obs_ids and not in the walk's hide_species_ids.
   2. Edible claims and recipes ONLY if edibility_verified=1 AND
-     edibility_verified_by='human'.
+     edibility_verified_by='human'. A species whose verdict is edible/caution
+     but NOT human-verified, and that would otherwise get an edible label,
+     FAILS the build (GateError naming it) — never silently downgraded.
   3. toxic/deadly -> warning only, never a recipe or an edible label.
      Warnings are shown whether or not the verdict is verified (fails safe).
-  4. Apiaceae: no recipe or edibility text unless human-authored
-     (culinary_info_history changed_by='human'); otherwise name, photo and
-     look-alike warning only.
-     Page-level override (config apiaceae_id_only, 15 Oct 2026): ALL Apiaceae
-     are look-alike / ID cards — no edible label, no recipe, whatever the data.
+     Toxicity that is not exactly 'none' (NULL / unrecognised) fails closed:
+     no edible label, no recipe, "toxicity unknown" badge (app's culinary_allowed).
+  4. Apiaceae: ALWAYS look-alike / ID cards — no edible label, no recipe,
+     whatever the data (was config apiaceae_id_only; now unconditional).
   5. Recipes: status='approved' only; never is_medicinal_prep.
   6. No medicinal content anywhere.
 
@@ -28,20 +31,29 @@ from __future__ import annotations
 
 import sqlite3
 
+from app.models.observation import is_human_confirmed
+from app.models.species import culinary_allowed
+
 APPROVED_REVIEW = ("approved", "manually_verified")
 TOXIC_SEVERITIES = ("toxic", "deadly")
 APIACEAE = "Apiaceae"
 
 
+class GateError(RuntimeError):
+    """A publish rule the data cannot satisfy — the build must stop."""
+
+
 # ── observations ─────────────────────────────────────────────────────────────
 
-def obs_passes(obs: dict, hide_obs_ids: set) -> bool:
+def obs_passes(obs: dict, hide_obs_ids: set, hide_species_ids=frozenset()) -> bool:
     """Rule 1 for a single observation."""
     return (
         obs["id"] not in hide_obs_ids
+        and obs["species_id"] is not None
+        and obs["species_id"] not in hide_species_ids
         and obs["review_status"] in APPROVED_REVIEW
         and obs["identification_status"] == "identified"
-        and obs["species_id"] is not None
+        and is_human_confirmed(obs)
     )
 
 
@@ -58,6 +70,11 @@ def is_deadly(sp: dict) -> bool:
 
 def is_apiaceae(sp: dict) -> bool:
     return (sp.get("family") or "") == APIACEAE
+
+
+def toxicity_known_safe(sp: dict) -> bool:
+    """Rule 3's fail-closed half: culinary content only when toxicity is exactly 'none'."""
+    return culinary_allowed(sp.get("toxicity_severity"))
 
 
 def human_verified(sp: dict) -> bool:
@@ -80,33 +97,40 @@ def human_authored(conn: sqlite3.Connection, culinary_info_id, field: str, curre
 
 def may_claim_edible(sp: dict, ci: dict, conn: sqlite3.Connection, cfg: dict) -> bool:
     """May the page call this species edible (or edible-with-caution)?"""
-    if is_apiaceae(sp) and cfg.get("apiaceae_id_only"):
-        return False                                   # rule 4, page-level override
-    if is_toxic(sp):
+    if is_apiaceae(sp):
+        return False                                   # rule 4
+    if is_toxic(sp) or not toxicity_known_safe(sp):
         return False                                   # rule 3
     if sp.get("edibility_status") not in ("edible", "caution"):
         return False
     if not human_verified(sp):
         return False                                   # rule 2
-    if is_apiaceae(sp):                                # rule 4 — needs human-authored edibility text
-        return human_authored(conn, ci.get("id"), "edible_parts", ci.get("edible_parts"))
     return True
 
 
 def edibility_badge(sp: dict, ci: dict, conn: sqlite3.Connection, cfg: dict) -> dict:
-    """{kind, text} for the species badge. Never an edible label for toxic."""
+    """{kind, text} for the species badge. Never an edible label for toxic.
+    Raises GateError for an edible/caution verdict that is not human-verified
+    (rule 2) — the curator verifies it or hides the species; no downgrade."""
     if is_toxic(sp):
         if is_deadly(sp):
             return {"kind": "deadly", "text": "☠ Deadly — do not touch or eat"}
         return {"kind": "toxic", "text": "☠ Toxic — do not eat"}
+    if not toxicity_known_safe(sp):
+        return {"kind": "unknown", "text": "⚠ Toxicity unknown — do not eat"}
+    if is_apiaceae(sp):
+        return {"kind": "apiaceae", "text": "Carrot family — deadly look-alikes"}
     if sp.get("edibility_status") == "inedible":
         return {"kind": "inedible", "text": "Not for eating"}
+    if sp.get("edibility_status") in ("edible", "caution") and not human_verified(sp):
+        raise GateError(
+            f"species {sp['id']} {sp['scientific_name']} is '{sp['edibility_status']}' but not human-verified "
+            f"(edibility_verified={sp.get('edibility_verified')!r}, edibility_verified_by={sp.get('edibility_verified_by')!r}) "
+            f"— it would show an edible label. Verify it in the app, or add {sp['id']} to this walk's hide_species_ids.")
     if may_claim_edible(sp, ci, conn, cfg):
         if sp["edibility_status"] == "caution":
             return {"kind": "caution", "text": "Edible with caution"}
         return {"kind": "edible", "text": "Edible"}
-    if is_apiaceae(sp):
-        return {"kind": "apiaceae", "text": "Carrot family — deadly look-alikes"}
     return {"kind": "none", "text": "For identification"}
 
 
@@ -139,10 +163,10 @@ def recipe_allowed(sp: dict, ci: dict, recipe: dict, conn: sqlite3.Connection, c
         return False, f"source not allowed ({recipe['source']})"
     if is_toxic(sp):
         return False, "toxic species"
-    if is_apiaceae(sp) and cfg.get("apiaceae_id_only"):
-        return False, "Apiaceae — ID card only on this page"
+    if not toxicity_known_safe(sp):
+        return False, f"toxicity unknown ({sp.get('toxicity_severity')!r}) — fails closed"
+    if is_apiaceae(sp):
+        return False, "Apiaceae — ID card only"
     if not may_claim_edible(sp, ci, conn, cfg):
-        return False, "no edible claim (not human-verified edible/caution, or Apiaceae without human text)"
-    if is_apiaceae(sp) and recipe["source"] != "curator":
-        return False, "Apiaceae — recipe not human-authored"
+        return False, "no edible claim (not human-verified edible/caution)"
     return True, ""

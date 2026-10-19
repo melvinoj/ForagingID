@@ -61,6 +61,7 @@ from app.services.background_processes import bp_start, bp_progress, bp_finish
 from app.services.file_cleanup import delete_observation_file
 from app.services.ingest_guard import blacklisted_skip
 from app.services.prefilter import classify_plant_likelihood
+from app.services.agreement import decide_agreement
 from app.services.species_link import set_observation_species
 from app.services.taxonomy import collapse_autonym, normalize_taxon_key
 from app.utils.exif import extract_exif
@@ -1456,10 +1457,15 @@ async def _identify_scanned_inner(
             # ── Merge candidates ──────────────────────────────────────────
             candidates = []
 
+            # PlantNet candidates arrive regionally demoted (European-listed
+            # first; see app/services/regional_demotion.py). "rank" is the
+            # demoted rank, "pn_raw_rank" PlantNet's own — both kept for audit.
             if pn_result and pn_result.candidates:
                 for c in pn_result.candidates:
                     candidates.append({
                         "rank": c.rank,
+                        "pn_raw_rank": getattr(c, "raw_rank", None),
+                        "non_european": bool(getattr(c, "non_european", False)),
                         "scientific_name": c.scientific_name,
                         "common_names": c.common_names,
                         "score": round(c.score, 4),
@@ -1568,12 +1574,30 @@ async def _identify_scanned_inner(
             # only — the auto-approve thresholds are checked separately below.
             _pn_any   = bool(pn_result and pn_result.candidates)
             _inat_any = bool(inat_hits)
+
+            # ── Decision view of PlantNet's ranking ──────────────────────────
+            # Display order is always regionally demoted. Agreement — this
+            # evidence field AND the auto-approve check below — reads the
+            # DECISION view: PlantNet's raw order unless the curator has turned
+            # regional_demotion_affects_auto_approve on. With the setting OFF
+            # every agreement/auto-approve input is exactly what it was before
+            # demotion existed.
+            _demote_for_approve = bool(_gs("regional_demotion_affects_auto_approve"))
+            UPLOAD_AUTO_APPROVE_THRESHOLD = _gs("upload_auto_approve_threshold")
+            # The whole agreement rule lives in app/services/agreement.py (pure,
+            # unit-tested, and the same function the read-only dry run uses).
+            _agreement = decide_agreement(
+                list(pn_result.candidates) if _pn_any else [],
+                [(h.scientific_name, h.score) for h in inat_hits],
+                demote_for_approve=_demote_for_approve,
+                force_review=force_review,
+                use_pn=use_pn,
+                use_inat=use_inat,
+                threshold=UPLOAD_AUTO_APPROVE_THRESHOLD,
+            )
             if not terminal:
                 if _pn_any and _inat_any:
-                    obs.dual_source_agreement = int(
-                        pn_result.candidates[0].scientific_name
-                        == inat_hits[0].scientific_name
-                    )
+                    obs.dual_source_agreement = int(bool(_agreement.names_agree))
                 elif _pn_any or _inat_any:
                     obs.dual_source_agreement = 0
                 else:
@@ -1654,15 +1678,20 @@ async def _identify_scanned_inner(
             #
             # HARD GUARDS — a promoted ID is a suggestion for a human, nothing more:
             #   * it only happens on disagreement, so _dual_agree is already
-            #     False; _dual_agree below also checks `_promoted_from is None`
-            #     explicitly, so a promoted ID can never count toward dual-source
-            #     agreement or auto-approve;
+            #     False; _dual_agree below also checks the same promotion
+            #     condition explicitly (_promoted_in_decision, evaluated on the
+            #     agreement decision view), so a promoted ID can never count
+            #     toward dual-source agreement or auto-approve;
             #   * the observation always routes to needs_review (else-branch);
             #   * it keeps its OWN PlantNet score — PlantNet's #1 confidence is
             #     never transferred to it — so the min-confidence threshold
             #     judges it on its own evidence;
             #   * candidate order only: no score, threshold or agreement value
-            #     changes. Original PlantNet ranks stay in each entry's "rank".
+            #     changes. Each entry keeps "rank" (regionally demoted PlantNet
+            #     rank) and "pn_raw_rank" (PlantNet's own rank).
+            # This display promotion runs on the demoted order. If the row turns
+            # out to be an agreed auto-approve (decision view), the promotion is
+            # undone below — an agreed row is not a suggestion.
             _promoted_from: Optional[str] = None
             _promo_note = ""
             _pn_ranked = [c.scientific_name for c in pn_result.candidates] if _pn_any else []
@@ -1683,6 +1712,49 @@ async def _identify_scanned_inner(
                     f"#{_pn_ranked.index(_geo_top) + 1}; PlantNet #1 was "
                     f"{_promoted_from!r} — suggestion only, never auto-approved]"
                 )
+
+            # ── Auto-approve agreement (computed before the min-confidence ───
+            # check so the agreed species is the one judged and stored) ────────
+            # Single-source auto-approve removed — see 9.6 fix.
+            # Dual-API agreement required or observation goes to review queue.
+            #
+            # Both pipelines use the same rule:
+            #   BOTH PlantNet AND iNaturalist must name the same species as
+            #   their top result, EACH at or above upload_auto_approve_threshold.
+            #   APIs disagree, single source, or below threshold → review queue.
+            #   Fungi are never auto-approved (iNaturalist only, no second source).
+            #
+            # PlantNet's "top result" is taken from the decision view: raw order
+            # unless regional_demotion_affects_auto_approve is ON. Either way the
+            # agreed species must reach the threshold on its OWN PlantNet score
+            # and its OWN iNat score, and the 15 Oct promotion guard holds (a
+            # promoted iNat #1 never counts) — see decide_agreement().
+            #
+            # NOTE: force_review is re-checked here because fungi auto-detection,
+            # which runs after the decide_agreement() call above, can set it to
+            # True (it is never reset to False, so `and not force_review` is
+            # sufficient).
+            _dual_agree     = _agreement.dual_agree and not force_review
+            _pn_top_name    = _agreement.pn_top_name
+            _pn_top_score   = _agreement.pn_top_score
+            _inat_top_name  = _agreement.inat_top_name
+            _inat_top_score = _agreement.inat_top_score
+            _pn_raw_top_name = _agreement.pn_raw_top_name
+            _agree_after_demotion = _agreement.agree_after_demotion and _dual_agree
+
+            if _dual_agree and candidates[0]["scientific_name"] != _pn_top_name:
+                # The agreed species is the verdict: it must be the top (stored,
+                # threshold-checked) candidate. With the setting OFF this restores
+                # PlantNet's raw #1 when demotion had moved it down; any display
+                # promotion is undone because this row is agreed, not promoted.
+                _idx = next(i for i, c in enumerate(candidates)
+                            if c["scientific_name"] == _pn_top_name)
+                candidates.insert(0, candidates.pop(_idx))
+            if _dual_agree and _promoted_from is not None:
+                for c in candidates:
+                    c.pop("promoted_over", None)
+                _promoted_from = None
+                _promo_note = ""
 
             # ── Store top result ──────────────────────────────────────────
             top = candidates[0]
@@ -1757,41 +1829,8 @@ async def _identify_scanned_inner(
                 await set_observation_species(session, obs, top["scientific_name"])
 
             # ── Auto-approve logic ────────────────────────────────────────
-            # Single-source auto-approve removed — see 9.6 fix.
-            # Dual-API agreement required or observation goes to review queue.
-            #
-            # Both pipelines use the same rule:
-            #   BOTH PlantNet AND iNaturalist must name the same species as
-            #   their top result, EACH at or above upload_auto_approve_threshold.
-            #   APIs disagree, single source, or below threshold → review queue.
-            #   Fungi are never auto-approved (iNaturalist only, no second source).
-            UPLOAD_AUTO_APPROVE_THRESHOLD = _gs("upload_auto_approve_threshold")
-
-            # Extract raw top results (before merge) for agreement check
-            _pn_top_name  = (pn_result.candidates[0].scientific_name
-                             if pn_result and pn_result.candidates else None)
-            _pn_top_score = (pn_result.candidates[0].score
-                             if pn_result and pn_result.candidates else 0.0)
-            _inat_top_name  = inat_hits[0].scientific_name if inat_hits else None
-            _inat_top_score = inat_hits[0].score if inat_hits else 0.0
-
-            # `not force_review` is the veto and must stay part of this condition:
-            # force_review already subsumes requires_forced_review and is_fungi (set at the top of
-            # the session block, and again on fungi auto-detection above), so a
-            # manual upload, a fungus, or an explicit override-prefilter caller can
-            # never reach auto-approve no matter how confidently the APIs agree.
-            # P1 (syncthing) passes force_review=False and is unaffected.
-            _dual_agree = (
-                not force_review
-                and _promoted_from is None   # a promoted ID never auto-approves
-                and use_pn
-                and use_inat
-                and _pn_top_name is not None
-                and _inat_top_name is not None
-                and _pn_top_name == _inat_top_name
-                and _pn_top_score >= UPLOAD_AUTO_APPROVE_THRESHOLD
-                and _inat_top_score >= UPLOAD_AUTO_APPROVE_THRESHOLD
-            )
+            # _dual_agree and the top-name/score locals are computed above, before
+            # the min-confidence check (see "Auto-approve agreement").
 
             # review_label / reviewer_notes are collected into locals through the
             # branches below and applied ONCE, under the terminal guard, after the
@@ -1817,6 +1856,12 @@ async def _identify_scanned_inner(
                     f"Auto-approved — both APIs agree: {top['scientific_name']} "
                     f"PN={_pn_top_score:.0%} iNat={_inat_top_score:.0%}"
                 )
+                if _agree_after_demotion:
+                    # Appended (never overwrites) so the curator can see the
+                    # agreement only exists because of regional demotion.
+                    _add_note = (f"agreement after regional demotion "
+                                 f"(raw PN #1: {_pn_raw_top_name})")
+                    flag += f" [{_add_note}]"
 
             else:
                 # No dual-agree (includes single-source, API disagreement, below threshold,

@@ -86,6 +86,21 @@ def _build_registry() -> List[Dict]:
             "min": 0.0,
             "max": 1.0,
         },
+        {
+            "key": "regional_demotion_affects_auto_approve",
+            "default": False,
+            "type": "bool",
+            "label": "Regional demotion counts for auto-approve (Syncthing only)",
+            "description": (
+                "PlantNet candidates not native to Europe are always ranked below "
+                "European ones (scores unchanged, nothing hidden). OFF (default): the "
+                "auto-approve agreement check still uses PlantNet's raw #1, exactly as "
+                "before. ON: agreement may use the demoted #1 — the agreed species must "
+                "still reach the threshold on its own PlantNet AND iNat score, and a note "
+                "records the raw PlantNet #1. File uploads never auto-approve either way."
+            ),
+            "group": "Identification",
+        },
         # ── Pipelines ─────────────────────────────────────────────────────
         {
             "key": "api_source_syncthing",

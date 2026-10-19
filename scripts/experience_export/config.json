@@ -13,8 +13,8 @@
   "_host_note": "preview.html (the card) is embedded on this Hostinger page; it links to the full page in the top window.",
   "host_page_url": "https://melvinjarman.co.uk/b",
 
-  "_canonical_note": "Self-canonical for index.html (its own public URL). Switch to the subdomain URL if one is added later.",
-  "canonical_url": "https://melvinoj.github.io/foraging-experience/",
+  "_site_note": "Public root of the experience site. Root walk canonical = site_url; other walks = site_url + w/<slug>/.",
+  "site_url": "https://melvinoj.github.io/foraging-experience/",
 
   "_legal_note": "Impressum and Datenschutz pages live on melvinjarman.co.uk (16 Oct 2026). Footer links open in the top window.",
   "impressum_url": "https://melvinjarman.co.uk/impressum",

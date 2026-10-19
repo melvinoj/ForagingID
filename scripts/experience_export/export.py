@@ -2,12 +2,18 @@
 """
 Foraging Experience — static export of one saved walk.
 
-    ~/foragingid-venv/bin/python scripts/experience_export/export.py
+    ~/foragingid-venv/bin/python scripts/experience_export/export.py \
+        --walk-id 4 --overrides scripts/experience_export/overrides/walk4.json --default [--plan-only]
 
 Reads data/foragingid.db READ-ONLY (?mode=ro), never the app server. Writes
-dist/ (gitignored): index.html + tree.html with all data inlined as JSON (no
-fetch), and photos/ re-encoded with EXIF stripped. Every publish decision goes
-through gates.py.
+index.html + preview.html + tree.html (all data inlined as JSON, no fetch) and
+photos/ re-encoded with EXIF stripped, to <out>/ for the root (--default) walk
+— plus an identical copy at <out>/w/<slug>/ — or to <out>/w/<slug>/ otherwise.
+Only those files are replaced; other walks under <out>/w/ are left alone.
+--plan-only runs every gate and prints the plan without writing anything.
+Members come only from app/services/walk_membership.compute; every publish
+decision goes through gates.py. Page-wide settings: config.json; per-walk
+text, slug, hidden species and "More walks": the --overrides JSON.
 
 Reused (not forked) at build time, so the export follows the app:
   - frontend/taxonomy.html  <style> + main <script>, with anchored patches
@@ -17,6 +23,7 @@ Reused (not forked) at build time, so the export follows the app:
 """
 from __future__ import annotations
 
+import argparse
 import html
 import json
 import re
@@ -287,10 +294,11 @@ def build_tree_html(species_meta: dict, taxonomy: dict, slot_deg: float, app_roo
     return out, applied
 
 
-# ── preview card (dist/preview.html — static, no JS) ─────────────────────────
+# ── preview card (preview.html — static, no JS) ──────────────────────────────
 
-def route_svg(line, stops, size=100, pad=8) -> str:
-    """Small static route drawing from the saved route line (no map tiles)."""
+def route_svg(line, stops, straight_from=None, size=100, pad=8) -> str:
+    """Small static route drawing from the saved route line (no map tiles).
+    Vertices from straight_from on (no mapped footpath) are drawn dashed, as in the app."""
     pts = [(c[0], c[1]) for c in (line or [])] or [(st["lng"], st["lat"]) for st in stops]
     if not pts:
         return ""
@@ -306,15 +314,20 @@ def route_svg(line, stops, size=100, pad=8) -> str:
     oy = pad + ((size - 2 * pad) - (maxy - miny) * sc) / 2
     X = lambda x: ox + (x - minx) * sc
     Y = lambda y: oy + (maxy - y) * sc                      # north up
-    poly = " ".join(f"{X(x):.1f},{Y(y):.1f}" for x, y in zip(xs, ys))
+    xy = [f"{X(x):.1f},{Y(y):.1f}" for x, y in zip(xs, ys)]
+    style = 'style="fill:none;stroke:var(--leaf)" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"'
+    if line and straight_from is not None:
+        polys = (f'<polyline points="{" ".join(xy[:straight_from + 1])}" {style}/>'
+                 f'<polyline points="{" ".join(xy[straight_from:])}" {style} stroke-dasharray="3 3"/>')
+    else:
+        polys = f'<polyline points="{" ".join(xy)}" {style}/>'
     dots = "".join(f'<circle cx="{X(x):.1f}" cy="{Y(y):.1f}" r="1.8" style="fill:var(--paper)"/>' for x, y in zip(sx, sy))
     start = f'<circle cx="{X(xs[0]):.1f}" cy="{Y(ys[0]):.1f}" r="3.2" style="fill:var(--amber)"/>' if line else ""
     return (f'<svg class="route" viewBox="0 0 {size} {size}" role="img" aria-label="Route of the walk">'
-            f'<polyline points="{poly}" style="fill:none;stroke:var(--leaf)" stroke-width="2.2" '
-            f'stroke-linejoin="round" stroke-linecap="round"/>{dots}{start}</svg>')
+            f'{polys}{dots}{start}</svg>')
 
 
-def build_preview(cfg: dict, data: dict, pub: dict, app_css: str) -> tuple[str, dict]:
+def build_preview(cfg: dict, ov: dict, data: dict, pub: dict, app_css: str) -> tuple[str, dict]:
     recipes = data["recipes"]
     want = cfg.get("preview_recipe_ids") or []
     if want:
@@ -330,7 +343,7 @@ def build_preview(cfg: dict, data: dict, pub: dict, app_css: str) -> tuple[str, 
     hero_sid = cfg.get("preview_hero_species_id") or (chosen[0]["species_id"] if chosen else None)
     hero = pub.get(hero_sid) if hero_sid is not None else None
     if hero is None or not hero["photo"]:
-        die(f"preview hero species {hero_sid} has no photo on this walk")
+        die(f"preview hero species {hero_sid} has no photo on this walk (hidden, or not human-confirmed?)")
     if hero["toxic"]:
         die(f"preview hero must not be a toxic species ({hero['sci']})")
 
@@ -342,21 +355,108 @@ def build_preview(cfg: dict, data: dict, pub: dict, app_css: str) -> tuple[str, 
         f'<li><div class="dish">{html.escape(r["dish"])}</div>'
         f'<div class="plant">{html.escape(pub[r["species_id"]]["en"] or pub[r["species_id"]]["sci"])}</div></li>'
         for r in chosen)
+    more = ov["more_walks"]
+    more_html = ""
+    if more:
+        more_html = ('<div class="more-walks">More walks: ' + " · ".join(
+            f'<a href="{html.escape(m["url"])}" target="_top">{html.escape(m["title"])}</a>' for m in more) + "</div>")
     tpl = (HERE / "templates" / "preview.html").read_text(encoding="utf-8")
     out = (tpl.replace("{{APP_STYLES}}", app_css)
               .replace("{{LANG}}", html.escape(cfg.get("language", "en")))
-              .replace("{{TITLE}}", html.escape(cfg["title"]))
-              .replace("{{WHERE}}", html.escape(cfg.get("preview_where", "")))
+              .replace("{{TITLE}}", html.escape(ov["title_en"]))
+              .replace("{{WHERE}}", html.escape(ov["where_en"]))
+              .replace("{{CARD_CLASS}}", "card has-more" if more else "card")
               .replace("{{HERO}}", f'<img src="{hero["photo"]}" alt="{html.escape(hero["en"] or hero["sci"])}">')
-              .replace("{{ROUTE_SVG}}", route_svg(data["walk"]["line"], data["walk"]["stops"]))
+              .replace("{{ROUTE_SVG}}", route_svg(data["walk"]["line"], data["walk"]["stops"], data["walk"]["straight_from"]))
               .replace("{{STATS}}", "".join(stats))
-              .replace("{{TEASERS}}", teasers))
-    return out, {"hero": f"{hero['id']} {hero['sci']}", "recipes": [f"{r['recipe_id']} {r['dish']}" for r in chosen]}
+              .replace("{{TEASERS}}", teasers)
+              .replace("{{MORE_WALKS}}", more_html))
+    return out, {"hero": f"{hero['id']} {hero['sci']}", "recipes": [f"{r['recipe_id']} {r['dish']}" for r in chosen],
+                 "more_walks": [m["title"] for m in more]}
+
+
+# ── CLI + per-walk overrides ─────────────────────────────────────────────────
+
+OVERRIDE_TEXT_KEYS = ("title_en", "title_de", "intro_en", "intro_de", "where_en", "where_de")
+SLUG_RE = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
+# Files a build owns in its page directory — the only things it ever deletes there.
+OWNED_FILES = ("index.html", "preview.html", "tree.html")
+
+
+def parse_args(argv=None):
+    ap = argparse.ArgumentParser(description="Foraging Experience — static export of one saved walk.")
+    ap.add_argument("--walk-id", type=int, required=True, help="saved_walks.id to export")
+    ap.add_argument("--overrides", type=Path, help="per-walk JSON: slug, titles/intros/where (en/de), "
+                    "hide_species_ids, more_walks")
+    ap.add_argument("--out", type=Path, default=REPO / "dist", help="output root (default dist/)")
+    ap.add_argument("--plan-only", action="store_true", help="print the plan; write no files")
+    ap.add_argument("--default", action="store_true", dest="is_default",
+                    help="this walk is the root walk: <out>/index.html (+ a copy at <out>/w/<slug>/)")
+    return ap.parse_args(argv)
+
+
+def load_overrides(path, walk) -> dict:
+    """Per-walk overrides. All optional except slug (when a file is given).
+    Missing German text stays empty — never machine-translated."""
+    raw = {}
+    if path is not None:
+        try:
+            raw = json.loads(Path(path).read_text(encoding="utf-8"))
+        except (OSError, ValueError) as e:
+            die(f"overrides {path}: {e}")
+        if not isinstance(raw, dict):
+            die(f"overrides {path}: top level must be an object")
+        allowed = {"slug", "hide_species_ids", "more_walks", *OVERRIDE_TEXT_KEYS}
+        unknown = sorted(k for k in raw if k not in allowed and not k.startswith("_"))
+        if unknown:
+            die(f"overrides {path}: unknown keys {unknown} (allowed: {sorted(allowed)})")
+        if "slug" not in raw:
+            die(f"overrides {path}: 'slug' is required")
+    slug = raw.get("slug", f"walk-{walk['id']}")
+    if not isinstance(slug, str) or not SLUG_RE.match(slug):
+        die(f"overrides: slug {slug!r} must be lowercase letters/digits separated by single hyphens")
+    ov = {"slug": slug}
+    for k in OVERRIDE_TEXT_KEYS:
+        v = raw.get(k, "")
+        if not isinstance(v, str):
+            die(f"overrides: {k} must be a string")
+        ov[k] = v.strip()
+    if not ov["title_en"]:
+        ov["title_en"] = walk["name"]
+    hide = raw.get("hide_species_ids", [])
+    if not isinstance(hide, list) or not all(isinstance(x, int) and not isinstance(x, bool) for x in hide):
+        die("overrides: hide_species_ids must be a list of species ids (integers)")
+    ov["hide_species_ids"] = set(hide)
+    more = raw.get("more_walks", [])
+    if not isinstance(more, list):
+        die("overrides: more_walks must be a list of {title, url}")
+    ov["more_walks"] = []
+    for m in more:
+        if not (isinstance(m, dict) and isinstance(m.get("title"), str) and isinstance(m.get("url"), str)
+                and m["title"].strip() and m["url"].strip()):
+            die(f"overrides: more_walks entry {m!r} needs a non-empty title and url")
+        url = m["url"].strip()
+        if ":" in url.split("/")[0] and not url.lower().startswith(("https://", "http://")):
+            die(f"overrides: more_walks url {url!r} — only http(s) or relative links")
+        ov["more_walks"].append({"title": m["title"].strip(), "url": url})
+    return ov
+
+
+def saved_straight_from(route: dict, line) -> tuple:
+    """route_geojson.foragingid.straight_from, validated exactly as the app does
+    (frontend/index.html: integer, 0 <= sf < len(coords) - 1, else ignored)."""
+    sf = (route.get("foragingid") or {}).get("straight_from")
+    if sf is None:
+        return None, None
+    if line and isinstance(sf, int) and not isinstance(sf, bool) and 0 <= sf < len(line) - 1:
+        return sf, None
+    return None, f"route straight_from={sf!r} is out of range for a {len(line or [])}-vertex line — drawn solid, as the app does"
 
 
 # ── main build ───────────────────────────────────────────────────────────────
 
-def main():
+def main(argv=None):
+    args = parse_args(argv)
     cfg = json.loads((HERE / "config.json").read_text(encoding="utf-8"))
     hide = set(cfg.get("hide_obs_ids", []))
     overrides = {int(k): int(v) for k, v in (cfg.get("photo_overrides") or {}).items()}
@@ -365,16 +465,24 @@ def main():
     conn = sqlite3.connect(f"file:{DB_PATH}?mode=ro", uri=True)
     conn.row_factory = sqlite3.Row
 
-    walk = conn.execute("SELECT * FROM saved_walks WHERE id = ?", (cfg["walk_id"],)).fetchone()
+    walk = conn.execute("SELECT * FROM saved_walks WHERE id = ?", (args.walk_id,)).fetchone()
     if not walk:
-        die(f"saved_walks id {cfg['walk_id']} not found")
-    if walk["name"] != cfg["walk_name"]:
-        die(f"saved_walks id {cfg['walk_id']} is '{walk['name']}', config says '{cfg['walk_name']}'")
+        die(f"saved_walks id {args.walk_id} not found")
+    ov = load_overrides(args.overrides, walk)
+    hide_sp = ov["hide_species_ids"]
     route = json.loads(walk["route_geojson"]) if walk["route_geojson"] else {}
 
-    # Membership, exactly as the app computes it (walk_membership.compute):
-    # saved stops + confirmed photos within the walk's buffer taken since save /
-    # accepted from review, minus removed ones. Stop labels ("7", "7a") as in the app.
+    out_root = args.out.resolve()
+    page_dir = out_root if args.is_default else out_root / "w" / ov["slug"]
+    mirror_dir = out_root / "w" / ov["slug"] if args.is_default else None
+    site = cfg["site_url"].rstrip("/") + "/"
+    canonical = site if args.is_default else f"{site}w/{ov['slug']}/"
+
+    # Membership, exactly as the app computes it (walk_membership.compute) and
+    # ONLY from it: saved stops + confirmed photos within the walk's buffer taken
+    # since save / accepted from review, minus removed ones; species resolved from
+    # the CURRENT observation rows (stale saved labels never used). Stop labels
+    # ("7", "7a") as in the app.
     obs_cols = ("id, species_id, species_primary, review_status, identification_status, file_path, "
                 "photo_taken_at, latitude, longitude, gps_accuracy_m, reviewed_at")
     saved_ids = sorted(wm.saved_obs_ids(dict(walk)))
@@ -387,32 +495,42 @@ def main():
         bb)] if bb else []
     membership = wm.compute(dict(walk), saved_rows, nearby_rows)
     mem_stops = membership["stops"]
-    joined_ids = [oid for st in mem_stops for oid in st["joined_obs_ids"]]
-    nearby_by_id = {r["id"]: r for r in nearby_rows}
-
-    # Observations, in walk order (saved stops' photos + joined photos)
-    obs_ids = list(dict.fromkeys([oid for st in mem_stops for oid in st["obs_ids"]] +
-                                 [i for i in saved_ids]))
     rows = dict(saved_rows)
-    rows.update({oid: nearby_by_id[oid] for oid in joined_ids if oid in nearby_by_id})
+    rows.update({r["id"]: r for r in nearby_rows if r["id"] not in rows})
+
+    # Member observations, in walk order (the confirmed ones compute() put on a stop)
+    obs_ids = list(dict.fromkeys(oid for st in mem_stops for sp in st["species"] for oid in sp["obs_ids"]))
     obs_order = [rows[i] for i in obs_ids if i in rows]
     missing_obs = [i for i in obs_ids if i not in rows]
     if missing_obs:
-        warnings.append(f"walk references {len(missing_obs)} missing observations: {missing_obs}")
-    passing = [o for o in obs_order if gates.obs_passes(o, hide)]
-    failing = [o for o in obs_order if not gates.obs_passes(o, hide)]
+        warnings.append(f"membership references {len(missing_obs)} observations not loaded: {missing_obs}")
+    passing = [o for o in obs_order if gates.obs_passes(o, hide, hide_sp)]
+    failing = [o for o in obs_order if not gates.obs_passes(o, hide, hide_sp)]
 
-    # Species (rule 1)
+    # Species (rule 1: human-confirmed members only)
     sp_obs = defaultdict(list)
     for o in passing:
         sp_obs[o["species_id"]].append(o)
-    all_walk_species = {o["species_id"] for o in obs_order if o["species_id"] is not None}
+    mem_species = {}                    # species_id -> {name, human, stops}
+    for st in mem_stops:
+        for sp in st["species"]:
+            e = mem_species.setdefault(sp["species_id"], {"name": sp["name"], "human": False, "stops": []})
+            e["human"] = e["human"] or sp["human"]
+            if st["label"] not in e["stops"]:
+                e["stops"].append(st["label"])
+    ai_agreed = {sid: e for sid, e in mem_species.items() if not e["human"]}
     hidden_species = {}
-    for sid in all_walk_species - set(sp_obs):
-        why = sorted({f"obs {o['id']}: " + ("hidden in config" if o["id"] in hide
+    for sid in set(mem_species) - set(sp_obs):
+        if sid in ai_agreed:
+            continue                    # reported in its own section
+        why = sorted({f"obs {o['id']}: " + ("hide_species_ids" if sid in hide_sp
+                      else "hidden in config" if o["id"] in hide
                       else f"{o['review_status']}/{o['identification_status']}")
                       for o in obs_order if o["species_id"] == sid})
         hidden_species[sid] = why
+    unknown_hide = sorted(hide_sp - set(mem_species))
+    if unknown_hide:
+        warnings.append(f"hide_species_ids not on this walk (no effect): {unknown_hide}")
 
     species, ci_by_sp = {}, {}
     for sid in sorted(sp_obs):
@@ -423,33 +541,20 @@ def main():
 
     texts = load_print_pdf_texts()
 
-    # Fresh dist/
-    if DIST.exists():
-        shutil.rmtree(DIST)
-    (DIST / "photos").mkdir(parents=True)
-
-    # Photos: one per species — override, else first passing obs on this walk whose file exists
-    photo_report, photo_paths = [], []
+    # Photos (planned): one per species — override, else first passing obs on this
+    # walk whose file exists; plus up to N more distinct files for the preview panel.
+    photo_plan = {}                     # sid -> {"main": obs, "extras": [obs, ...]}
     for sid, olist in sp_obs.items():
         candidates = olist
         if sid in overrides:
-            ov = [o for o in olist if o["id"] == overrides[sid]]
-            if not ov:
+            ovr = [o for o in olist if o["id"] == overrides[sid]]
+            if not ovr:
                 warnings.append(f"photo override species {sid} -> obs {overrides[sid]} is not a passing obs of this walk; ignored")
-            candidates = ov + [o for o in olist if o["id"] != overrides[sid]]
+            candidates = ovr + [o for o in olist if o["id"] != overrides[sid]]
         chosen = next((o for o in candidates if o["file_path"] and Path(o["file_path"]).is_file()), None)
         if not chosen:
             warnings.append(f"species {sid} {species[sid]['scientific_name']}: no readable photo file")
-            species[sid]["_photo"] = None
             continue
-        big, thumb = DIST / "photos" / f"{sid}.jpg", DIST / "photos" / f"{sid}_t.jpg"
-        encode_photo(Path(chosen["file_path"]), big, cfg["photo_long_edge"], cfg["jpeg_quality"])
-        encode_photo(Path(chosen["file_path"]), thumb, cfg["thumb_long_edge"], cfg["jpeg_quality"])
-        photo_paths += [big, thumb]
-        species[sid]["_photo"] = {"obs_id": chosen["id"]}
-        photo_report.append((sid, chosen["id"]))
-        # Up to N more photos of this species from THIS walk's passing observations
-        # (same gate as everything else), for the Plants preview panel. Distinct files only.
         seen, extras = {chosen["file_path"]}, []
         for o in candidates:
             if len(extras) >= cfg.get("extra_photos_per_species", 3):
@@ -458,19 +563,16 @@ def main():
             if o is chosen or not fp or fp in seen or not Path(fp).is_file():
                 continue
             seen.add(fp)
-            n = len(extras) + 1
-            ex_big, ex_thumb = DIST / "photos" / f"{sid}_{n}.jpg", DIST / "photos" / f"{sid}_{n}_t.jpg"
-            encode_photo(Path(fp), ex_big, cfg.get("extra_photo_long_edge", 800), cfg["jpeg_quality"])
-            encode_photo(Path(fp), ex_thumb, cfg["thumb_long_edge"], cfg["jpeg_quality"])
-            photo_paths += [ex_big, ex_thumb]
-            extras.append({"photo": f"photos/{sid}_{n}.jpg", "thumb": f"photos/{sid}_{n}_t.jpg"})
-        species[sid]["_extras"] = extras
+            extras.append(o)
+        photo_plan[sid] = {"main": chosen, "extras": extras}
 
-    # Per-species public record (everything through gates)
+    # Per-species public record (everything through gates). GateError (e.g. an
+    # unverified 'edible' that would get an edible label) stops the build here.
     pub = {}
     for sid, sp in species.items():
         ci = ci_by_sp[sid]
         badge = gates.edibility_badge(sp, ci, conn, cfg)
+        pp = photo_plan.get(sid)
         pub[sid] = {
             "id": sid,
             "sci": sp["scientific_name"],
@@ -483,10 +585,11 @@ def main():
             "apiaceae": gates.is_apiaceae(sp),
             "badge": badge,
             "safety": gates.safety_texts(sp, ci, conn, texts["toxic_fallback"]),
-            "photo": f"photos/{sid}.jpg" if sp.get("_photo") else None,
-            "thumb": f"photos/{sid}_t.jpg" if sp.get("_photo") else None,
+            "photo": f"photos/{sid}.jpg" if pp else None,
+            "thumb": f"photos/{sid}_t.jpg" if pp else None,
             "n_obs": len(sp_obs[sid]),
-            "extra": sp.get("_extras") or [],
+            "extra": [{"photo": f"photos/{sid}_{n}.jpg", "thumb": f"photos/{sid}_{n}_t.jpg"}
+                      for n in range(1, len(pp["extras"]) + 1)] if pp else [],
             # Months this species was photographed on THIS walk (from passing obs).
             "months": sorted({int(str(o["photo_taken_at"])[5:7]) for o in sp_obs[sid]
                               if o.get("photo_taken_at") and str(o["photo_taken_at"])[5:7].isdigit()}),
@@ -525,21 +628,22 @@ def main():
         if picked:
             recipes_out.append(picked)
 
-    # Stops — from the computed membership (species from CURRENT observation IDs;
-    # stored labels can be stale). "n" is the app's stop label ("7", "7a") so the
-    # page matches the walk panel and printed sheet; a stop with no publishable
-    # species is skipped (its label is simply absent).
-    stops = []
+    # Stops — from the computed membership. "n" is the app's stop label ("7",
+    # "7a") so the page matches the walk panel and printed sheet. A stop whose
+    # confirmed species are all hidden or AI-agreed-only stays as a numbered
+    # point with no species; a stop with no confirmed species at all is skipped.
+    stops, emptied_stops = [], []
     for st_m in mem_stops:
-        if st_m["is_note"]:
+        if st_m["is_note"] or not st_m["species"]:
             continue
         sids = []
-        for oid in st_m["obs_ids"]:
-            o = rows.get(oid)
-            if o and gates.obs_passes(o, hide) and o["species_id"] in pub and o["species_id"] not in sids:
-                sids.append(o["species_id"])
+        for sp_m in st_m["species"]:
+            for oid in sp_m["obs_ids"]:
+                o = rows.get(oid)
+                if o and gates.obs_passes(o, hide, hide_sp) and o["species_id"] in pub and o["species_id"] not in sids:
+                    sids.append(o["species_id"])
         if not sids:
-            continue
+            emptied_stops.append(st_m["label"])
         stops.append({"n": st_m["label"], "lat": st_m["lat"], "lng": st_m["lng"], "species": sids,
                       "toxic": any(pub[s]["toxic"] for s in sids)})
 
@@ -558,6 +662,9 @@ def main():
             break
     if not line:
         warnings.append("walk has no saved route geometry — only stops are drawn")
+    straight_from, sf_warn = saved_straight_from(route, line)
+    if sf_warn:
+        warnings.append(sf_warn)
 
     # Taxonomy (mirrors app/api/taxonomy.py placement rule)
     raw = defaultdict(lambda: defaultdict(lambda: defaultdict(lambda: defaultdict(list))))
@@ -582,7 +689,6 @@ def main():
                                "badge": p["badge"], "thumb": p["thumb"]} for p in pub.values()}
     app_css, style_report = app_styles.load()
     tree_html, patches = build_tree_html(species_meta, taxonomy, slot_deg, style_report["root_css"])
-    (DIST / "tree.html").write_text(tree_html, encoding="utf-8")
 
     # Page
     impressum = cfg.get("impressum_url") or ""
@@ -594,12 +700,16 @@ def main():
     if datenschutz_placeholder:
         warnings.append("datenschutz_url is a PLACEHOLDER — footer shows 'Datenschutz (link to follow)'. Do not publish until set.")
     data = {
-        "title": cfg["title"], "intro": cfg.get("intro", ""), "cta_label": cfg.get("cta_label", "Get in touch"),
+        "title": ov["title_en"], "title_de": ov["title_de"],
+        "intro": ov["intro_en"], "intro_de": ov["intro_de"],
+        "where": ov["where_en"], "where_de": ov["where_de"],
+        "cta_label": cfg.get("cta_label", "Get in touch"),
         "contact_url": cfg["contact_url"],
         "impressum_url": None if impressum_placeholder else impressum,
         "datenschutz_url": None if datenschutz_placeholder else datenschutz,
+        # distance/duration: the saved walk's own figures (the walk panel's), never a stop sum.
         "walk": {"name": walk["name"], "distance_m": walk["distance_m"], "duration_min": walk["duration_min"],
-                 "line": line, "stops": stops},
+                 "line": line, "straight_from": straight_from, "stops": stops},
         # Walk order: the order plants are first met along the route (Melvin, 15 Oct 2026).
         # Toxicity is shown on each plant (badge/☠), never by list position.
         "species": [pub[s] for s in sorted(pub, key=lambda s: (first_stop.get(s, len(stops) + 1), pub[s]["en"] or pub[s]["sci"]))],
@@ -608,51 +718,93 @@ def main():
                                                          "paras": texts["disclaimer_paras"]},
     }
     tpl = (HERE / "templates" / "index.html").read_text(encoding="utf-8")
-    page = (tpl.replace("{{TITLE}}", html.escape(cfg["title"]))
+    page = (tpl.replace("{{TITLE}}", html.escape(ov["title_en"]))
                .replace("{{LANG}}", html.escape(cfg.get("language", "en")))
-               .replace("{{CANONICAL}}", f'<link rel="canonical" href="{html.escape(cfg["canonical_url"])}">'
-                        if cfg.get("canonical_url") else "")
+               .replace("{{CANONICAL}}", f'<link rel="canonical" href="{html.escape(canonical)}">')
                .replace("{{LEAFLET_CSS}}", sri_tag("leaflet_css"))
                .replace("{{LEAFLET_JS}}", sri_tag("leaflet_js"))
                .replace("{{APP_STYLES}}", app_css)
                .replace("{{DATA}}", json_inline(data)))
-    (DIST / "index.html").write_text(page, encoding="utf-8")
-    preview_html, preview_info = build_preview(cfg, data, pub, app_css)
-    (DIST / "preview.html").write_text(preview_html, encoding="utf-8")
+    preview_html, preview_info = build_preview(cfg, ov, data, pub, app_css)
 
-    # Post-build checks
-    meta = verify_no_metadata(photo_paths)
+    # Pre-write checks (run in --plan-only too)
     out_text = page + tree_html + preview_html
     if "<script" in preview_html.lower():
         die("preview.html must stay script-free")
     if not cfg.get("show_brand", False) and "landmemory" in out_text.lower():
         die("'LandMemory' found in output while show_brand is false")
-    leftovers = [m for m in ("{{", "}}") if m in page or m in tree_html.replace("${", "")]
     if "{{" in page or "{{" in tree_html or "{{" in preview_html:
-        die(f"unreplaced template placeholder in output: {leftovers}")
-    if meta["exiftool_gps_tags"] or meta["pil_gps_tags"]:
-        die(f"GPS metadata found in output images: {meta}")
+        die("unreplaced template placeholder in output")
     for p in pub.values():                                  # gate cross-checks on the final data
-        if p["toxic"] and p["badge"]["kind"] in ("edible", "caution"):
-            die(f"toxic species with edible badge: {p['sci']}")
-        if cfg.get("apiaceae_id_only") and p["apiaceae"] and p["badge"]["kind"] in ("edible", "caution"):
-            die(f"Apiaceae with edible badge while apiaceae_id_only: {p['sci']}")
+        if (p["toxic"] or p["apiaceae"]) and p["badge"]["kind"] in ("edible", "caution"):
+            die(f"toxic/Apiaceae species with edible badge: {p['sci']}")
+        if p["badge"]["kind"] in ("edible", "caution") and not gates.human_verified(species[p["id"]]):
+            die(f"edible badge on a species not human-verified: {p['sci']}")
     for r in recipes_out:
         sp = species[r["species_id"]]
-        if cfg.get("apiaceae_id_only") and gates.is_apiaceae(sp):
-            die(f"recipe {r['recipe_id']} for Apiaceae while apiaceae_id_only: {sp['scientific_name']}")
-        if gates.is_toxic(sp) or not gates.human_verified(sp):
+        if gates.is_apiaceae(sp):
+            die(f"recipe {r['recipe_id']} for Apiaceae: {sp['scientific_name']}")
+        if gates.is_toxic(sp) or not gates.toxicity_known_safe(sp) or not gates.human_verified(sp):
             die(f"recipe {r['recipe_id']} for non-eligible species {sp['scientific_name']}")
+    for sid in hide_sp:
+        if sid in pub or any(sid in st["species"] for st in stops) or any(r["species_id"] == sid for r in recipes_out):
+            die(f"hidden species {sid} still present in the output")
 
-    size = sum(f.stat().st_size for f in DIST.rglob("*") if f.is_file())
+    # ── write (skipped by --plan-only) ──
+    meta, size = None, 0
+    if not args.plan_only:
+        page_dir.mkdir(parents=True, exist_ok=True)
+        for name in OWNED_FILES:
+            (page_dir / name).unlink(missing_ok=True)
+        if (page_dir / "photos").exists():
+            shutil.rmtree(page_dir / "photos")
+        (page_dir / "photos").mkdir()
+        photo_paths = []
+        for sid, pp in photo_plan.items():
+            src = Path(pp["main"]["file_path"])
+            big, thumb = page_dir / "photos" / f"{sid}.jpg", page_dir / "photos" / f"{sid}_t.jpg"
+            encode_photo(src, big, cfg["photo_long_edge"], cfg["jpeg_quality"])
+            encode_photo(src, thumb, cfg["thumb_long_edge"], cfg["jpeg_quality"])
+            photo_paths += [big, thumb]
+            for n, o in enumerate(pp["extras"], 1):
+                ex_big, ex_thumb = page_dir / "photos" / f"{sid}_{n}.jpg", page_dir / "photos" / f"{sid}_{n}_t.jpg"
+                encode_photo(Path(o["file_path"]), ex_big, cfg.get("extra_photo_long_edge", 800), cfg["jpeg_quality"])
+                encode_photo(Path(o["file_path"]), ex_thumb, cfg["thumb_long_edge"], cfg["jpeg_quality"])
+                photo_paths += [ex_big, ex_thumb]
+        (page_dir / "tree.html").write_text(tree_html, encoding="utf-8")
+        (page_dir / "index.html").write_text(page, encoding="utf-8")
+        (page_dir / "preview.html").write_text(preview_html, encoding="utf-8")
+        meta = verify_no_metadata(photo_paths)
+        if meta["exiftool_gps_tags"] or meta["pil_gps_tags"]:
+            die(f"GPS metadata found in output images: {meta}")
+        if mirror_dir is not None:
+            # Root walk also served at /w/<slug>/; its canonical points to the root
+            # (the same canonical the root page carries), so the copy is identical.
+            if mirror_dir.exists():
+                shutil.rmtree(mirror_dir)
+            mirror_dir.mkdir(parents=True)
+            for name in OWNED_FILES:
+                shutil.copy2(page_dir / name, mirror_dir / name)
+            shutil.copytree(page_dir / "photos", mirror_dir / "photos")
+        size = sum(f.stat().st_size for d in filter(None, (page_dir, mirror_dir))
+                   for f in [*(d / n for n in OWNED_FILES), *(d / "photos").rglob("*")] if f.is_file())
 
     # Report
     print("=" * 72)
-    print(f"Foraging Experience export — walk {walk['id']} '{walk['name']}'")
-    print(f"Observations: {len(obs_order)} on walk, {len(passing)} pass gate, {len(failing)} fail")
-    print(f"Species: {len(pub)} shown, {len(hidden_species)} hidden")
+    print(f"Foraging Experience export — walk {walk['id']} '{walk['name']}'"
+          + ("  [PLAN ONLY — no files written]" if args.plan_only else ""))
+    print(f"Title: {ov['title_en']}" + (f"  |  DE: {ov['title_de']}" if ov["title_de"] else "  |  DE: (none)"))
+    print(f"Slug: {ov['slug']}  default(root): {args.is_default}")
+    print(f"Writes: {page_dir}/" + (f"  + copy {mirror_dir}/" if mirror_dir else "") + f"  canonical → {canonical}")
+    print(f"Route: {len(line or [])} vertices; distance {walk['distance_m']} m / {walk['duration_min']} min (saved walk); "
+          + (f"dashed from vertex {straight_from} (no mapped footpath)" if straight_from is not None else "all solid"))
+    print(f"Observations: {len(obs_order)} member, {len(passing)} pass gate, {len(failing)} fail")
+    print(f"Species: {len(pub)} shown, {len(hidden_species)} hidden, {len(ai_agreed)} AI-agreed only")
     for sid, why in hidden_species.items():
         print(f"  hidden {sid}: {why}")
+    print("AI-agreed — needs your review before they can appear:" + ("" if ai_agreed else " none"))
+    for sid, e in sorted(ai_agreed.items(), key=lambda kv: kv[1]["name"] or ""):
+        print(f"  {sid:>4} {e['name']:<28} stops {', '.join(e['stops'])}")
     badges = Counter(p["badge"]["kind"] for p in pub.values())
     print(f"Badges: {dict(badges)}")
     for p in sorted(pub.values(), key=lambda p: p["badge"]["kind"]):
@@ -672,13 +824,20 @@ def main():
           f"shell {style_report['shell']['background']}/{style_report['deep']['background']}, "
           f"badges toxic {style_report['badges']['toxic'][0]} edible {style_report['badges']['edible'][0]} "
           f"inedible {style_report['badges']['inedible'][0]}")
-    print(f"Preview: hero {preview_info['hero']}; teasers {preview_info['recipes']}")
-    print(f"Stops: {len(stops)} ({sum(s['toxic'] for s in stops)} with ☠)")
-    n_extra = sum(len(p["extra"]) for p in pub.values())
-    print(f"Images: {meta['files']} written ({len(photo_report)} species × 2 sizes + {n_extra} extra photos × 2 sizes); "
-          f"GPS tags exiftool={meta['exiftool_gps_tags']} PIL={meta['pil_gps_tags']}; "
-          f"files with any EXIF: {len(meta['files_with_any_exif'])} {meta['files_with_any_exif'][:5]}")
-    print(f"dist size: {size/1024/1024:.2f} MB  ({DIST})")
+    print(f"Preview: hero {preview_info['hero']}; teasers {preview_info['recipes']}; "
+          f"more walks {preview_info['more_walks'] or '(none — line hidden)'}")
+    print(f"Stops: {len(stops)} ({sum(s['toxic'] for s in stops)} with ☠): "
+          + ", ".join(s["n"] + ("☠" if s["toxic"] else "") for s in stops))
+    if emptied_stops:
+        print(f"  numbered points with no species shown (hidden / AI-agreed only): {emptied_stops}")
+    n_main = len(photo_plan); n_extra = sum(len(pp["extras"]) for pp in photo_plan.values())
+    if meta:
+        print(f"Images: {meta['files']} written ({n_main} species × 2 sizes + {n_extra} extra photos × 2 sizes); "
+              f"GPS tags exiftool={meta['exiftool_gps_tags']} PIL={meta['pil_gps_tags']}; "
+              f"files with any EXIF: {len(meta['files_with_any_exif'])} {meta['files_with_any_exif'][:5]}")
+        print(f"output size: {size/1024/1024:.2f} MB")
+    else:
+        print(f"Images (planned): {n_main} species × 2 sizes + {n_extra} extra photos × 2 sizes = {2 * (n_main + n_extra)} files")
     for w in warnings:
         print(f"WARNING: {w}")
     print("=" * 72)
@@ -687,6 +846,6 @@ def main():
 if __name__ == "__main__":
     try:
         main()
-    except (BuildError, app_styles.StyleDrift) as e:
+    except (BuildError, gates.GateError, app_styles.StyleDrift) as e:
         print(f"BUILD FAILED: {e}", file=sys.stderr)
         sys.exit(1)

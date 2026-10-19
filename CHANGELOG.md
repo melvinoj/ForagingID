@@ -55,6 +55,49 @@ Snapshot before today's data fixes: db_20261018_081958 (commit 66095a85).
 
 ## History
 
+### 2026-10-19 20:04
+**Snapshot** — before sending 5 suspected misIDs to review (19805,19820,20572,21472,22131)
+DB: `snapshots/db_20261019_200454.sqlite`
+
+### 2026-10-19 19:46
+**PlantNet regional demotion (project stays 'all'): European lists reference file + refresh script, nb-results=30, shared demotion helper in plantnet.identify_image, agreement rule extracted to app/services/agreement.py, setting regional_demotion_affects_auto_approve (default OFF), non-European labels, read-only dry run**
+
+**Built:**
+- data/reference/plantnet_europe_species.json (5 European lists, fetch date + source per list)
+- scripts/refresh_plantnet_europe_lists.py (catalogue endpoint only, no ID quota)
+- app/services/regional_demotion.py: stable re-rank, non_european flag, raw_rank, display_slots (never hides raw top-N)
+- PlantNet nb-results=30 (same quota cost; Aconitum napellus now #23 raw -> #8 demoted)
+- app/services/agreement.py: decide_agreement() pure rule used by scan
+- Setting regional_demotion_affects_auto_approve (default OFF) + reviewer note 'agreement after regional demotion (raw PN #1: X)' when ON
+- Labels 'not native to Europe — planted?' on review card, Second Opinion, Retry ID
+- species_candidates_json stores rank (demoted) + pn_raw_rank + non_european
+**Fixed:**
+- scan: agreement now computed before min-confidence check so the agreed species is the one stored/judged
+**Files:** `app/integrations/plantnet.py`, `app/services/regional_demotion.py`, `app/services/agreement.py`, `app/services/settings_service.py`, `app/api/scan.py`, `app/api/reidentify.py`, `frontend/review.html`, `scripts/refresh_plantnet_europe_lists.py`, `data/reference/plantnet_europe_species.json`, `tests/test_regional_demotion.py`, `tests/test_agreement.py`, `tests/fixtures/regional_demotion_ab.json`
+**Pending:**
+- Melvin: browser check of non-European labels (review card, Second Opinion, Retry ID)
+- Melvin decides whether to turn regional_demotion_affects_auto_approve ON (dry run: 0 new, 0 lost at 0.7)
+- Review approved non-European look-alikes found in dry run: 19805/19820 Corylus cornuta, 20572 Rosa maximowicziana, 21472 Quercus velutina, 22131 Ulmus laciniata
+- Demotion surfaces tiny-score European names on non-plant photos (e.g. fungus 24347)
+
+### 2026-10-19 19:24
+**Second Opinion routing fix (category-aware sources, override, per-source slots, iNat double-division fix) + PlantNet regional project recon/A-B (read-only)**
+
+**Built:**
+- Second Opinion: sources default from obs_category (fungi -> iNat+GBIF, no PlantNet), optional body.sources override honoured incl. PlantNet on fungi
+- Second Opinion: per-source top-5 guaranteed slots, explicit per-source empty/error warnings
+- review.html: Sources selector, click-time category, accurate loading text, setCategory closes open panel
+- [second-opinion] audit log line per call
+**Fixed:**
+- Second Opinion divided iNat scores by 100 twice (already 0-1 from score_image) - iNat candidates were ~100x too small and always lost the pooled top-10
+- Empty Second Opinion now shows recorded warnings instead of 'check API keys'
+**Files:** `app/api/reidentify.py`, `frontend/review.html`
+**Pending:**
+- Melvin live check: category switch closes Second Opinion panel; Sources selector + loading text
+- Decide PlantNet project per pipeline (A/B: all vs k-middle-europe/k-northern-europe - no weurope project exists)
+- PlantNet uploads of 4.8-8.2 MB photos stall (write timeout x3); iNat ReadError when run concurrently with PlantNet upload
+- Correction: reidentify.js disables PlantNet checkbox for fungi (no override there)
+
 ### 2026-10-18 09:35
 **Snapshot** — End of session — Session ended from Settings page
 DB: `snapshots/db_20261018_093543.sqlite`

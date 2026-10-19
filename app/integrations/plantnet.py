@@ -10,6 +10,14 @@ Request:
   - images: image file bytes
   - organs: organ type per image (auto | leaf | flower | fruit | bark | habit)
   - lang: result language (default "en")
+  - nb-results: how many candidates to return (query param). Measured 19 Oct
+    2026: 30 returns 30 results at the same 1-request quota cost as the old
+    default of 10 — Aconitum napellus surfaced at #23 where it was absent before.
+
+Regional demotion: identify_image() re-ranks the parsed candidates with
+app.services.regional_demotion (European-listed first, scores untouched,
+non-European flagged, PlantNet's raw rank kept as raw_rank). Every image-ID
+path goes through here, so every path gets the same ranking.
 
 Auth: api-key query parameter.
 
@@ -31,6 +39,8 @@ _log = logging.getLogger(__name__)
 PLANTNET_BASE = "https://my-api.plantnet.org/v2/identify"
 DEFAULT_PROJECT = "all"
 DEFAULT_ORGAN = "auto"
+# Candidates requested per call — same quota cost as fewer (see module docstring).
+DEFAULT_NB_RESULTS = 30
 
 # (connect, read) rather than a scalar.
 #
@@ -109,7 +119,12 @@ class PlantNetCandidate:
     family: Optional[str]
     genus: Optional[str]
     gbif_id: Optional[str]
-    rank: int                  # 1 = top result
+    rank: int                  # 1 = top result (after regional demotion)
+    # PlantNet's own rank before regional demotion — audit only.
+    raw_rank: Optional[int] = None
+    # True when the species is in none of PlantNet's European regional lists.
+    # Ranking/label only — never a verdict, never hides the candidate.
+    non_european: bool = False
     # Reference images from PlantNet — populated when include_related_images=True.
     # Each dict: {"url": str, "organ": str, "author": str}
     # URL points to PlantNet's CDN (medium-size); lazy-load safe.
@@ -192,9 +207,16 @@ async def identify_image(
     lat: Optional[float] = None,
     lng: Optional[float] = None,
     include_related_images: bool = False,
+    nb_results: int = DEFAULT_NB_RESULTS,
+    regional_demotion: bool = True,
 ) -> PlantNetResult:
     """
     Send one image to PlantNet and return structured results.
+
+    nb_results: candidates requested (PlantNet `nb-results`); same quota cost.
+    regional_demotion: re-rank so European-listed species come first (see
+    app.services.regional_demotion). Scores are never changed; raw_rank keeps
+    PlantNet's order. Only experiments should pass False.
 
     lat/lng: accepted for API compatibility but NOT forwarded to PlantNet.
     The v2 identify endpoint does not accept geographic query parameters —
@@ -214,6 +236,7 @@ async def identify_image(
         "api-key": api_key,
         "lang": lang,
         "include-related-images": "true" if include_related_images else "false",
+        "nb-results": int(nb_results),
     }
     try:
         with open(image_path, "rb") as img_file:
@@ -318,4 +341,10 @@ async def identify_image(
 
     result = _parse_response(payload)
     result.attempts = attempts
+    if regional_demotion:
+        from app.services.regional_demotion import demote_candidates
+        result.candidates = demote_candidates(result.candidates)
+    else:
+        for c in result.candidates:
+            c.raw_rank = c.rank
     return result

@@ -129,8 +129,8 @@ def load() -> tuple[str, dict]:
 .badge.toxic, .badge.deadly {{ background:{b['toxic'][0]}; color:{b['toxic'][1]}; font-weight:700; }}
 .badge.edible   {{ background:{b['edible'][0]}; color:{b['edible'][1]}; }}
 .badge.inedible {{ background:{b['inedible'][0]}; color:{b['inedible'][1]}; }}
-/* Apiaceae ID card: species.html .warn-badge colours */
-.badge.apiaceae {{ background:{warn_bg}; color:{warn_fg}; font-weight:700; }}
+/* Apiaceae ID card + "toxicity unknown" (fail closed): species.html .warn-badge colours */
+.badge.apiaceae, .badge.unknown {{ background:{warn_bg}; color:{warn_fg}; font-weight:700; }}
 /* caution: the walk panel has no caution colour — use the app's --amber token */
 .badge.caution  {{ background:var(--amber); color:var(--ink); }}
 """

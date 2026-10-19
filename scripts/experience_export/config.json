@@ -1,12 +1,8 @@
 {
-  "_notes": "Foraging Experience export config. Edit and re-run: ~/foragingid-venv/bin/python scripts/experience_export/export.py",
+  "_notes": "Foraging Experience export config (page-wide). Per-walk slug/title/intro/where/hide/more walks: --overrides JSON (see overrides/). Run: ~/foragingid-venv/bin/python scripts/experience_export/export.py --walk-id N --overrides FILE [--default] [--plan-only]",
 
-  "walk_id": 4,
-  "walk_name": "Rümmelsbühl foray",
-  "title": "Foraging Experience — Gresgen",
   "language": "en",
 
-  "intro": "A guided foraging walk above Gresgen in the southern Black Forest. Meet the plants of the meadows, hedges and forest edge — what to pick, what to leave, and how to tell them apart.",
   "cta_label": "Book or ask a question",
   "contact_url": "https://melvinjarman.co.uk/contact",
 
@@ -35,16 +31,13 @@
   "recipe_sources_allowed": ["curator", "Friture Sauvage menu, Hofgut LEO, 5 July 2026", "ai_generated"],
   "recipe_source_priority": ["curator", "Friture Sauvage menu, Hofgut LEO, 5 July 2026", "ai_generated"],
 
-  "_apiaceae_note": "Page-level rule (15 Oct 2026): all Apiaceae shown as look-alike / ID cards — no edible label, no recipe. DB unchanged.",
-  "apiaceae_id_only": true,
   "_exclude_recipe_ids_note": "6 = 'Field Mint Broth…' stored against Prunus avium (wrong species).",
   "exclude_recipe_ids": [6],
   "exclude_recipe_species_ids": [],
   "_teaser_note": "Teaser = first self-contained sentence of the approved recipe text; sentences matching these regexes (case-insensitive) are skipped.",
   "teaser_skip_patterns": ["\\bSheffield\\b", "\\bmedic", "\\bremed", "\\bheal(s|ing|er)?\\b", "\\bcures?\\b", "\\btonic\\b", "\\btherap", "\\bdiuretic", "\\bailment", "\\bdigestion"],
 
-  "_preview_note": "dist/preview.html — embed card for melvinjarman.co.uk/b. Empty/null = automatic (hero = first teaser's plant; teasers = first 3 by recipe_source_priority).",
-  "preview_where": "Rümmelsbühl · Gresgen, southern Black Forest",
+  "_preview_note": "preview.html — embed card for melvinjarman.co.uk/b (place line = overrides where_en). Empty/null = automatic (hero = first teaser's plant; teasers = first 3 by recipe_source_priority).",
   "preview_hero_species_id": null,
   "preview_recipe_ids": [],
 

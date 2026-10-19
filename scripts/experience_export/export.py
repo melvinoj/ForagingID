@@ -99,6 +99,20 @@ def json_inline(obj) -> str:
             .replace("</", "<\\/").replace("\u2028", "\\u2028").replace("\u2029", "\\u2029"))
 
 
+def fill(tpl: str, values: dict, name: str) -> str:
+    """Fill {{KEY}} placeholders. Fails if a key the code fills is missing from
+    the template (it would silently vanish) or a placeholder is left unfilled."""
+    in_tpl = set(re.findall(r"\{\{([A-Z0-9_]+)\}\}", tpl))
+    missing = [k for k in values if k not in in_tpl]
+    if missing:
+        die(f"templates/{name}: placeholders the export fills are missing from the template: {missing}")
+    left = sorted(in_tpl - set(values))
+    if left:
+        die(f"templates/{name}: unfilled placeholders {left}")
+    # One pass, so filled text is never re-scanned for placeholders.
+    return re.sub(r"\{\{([A-Z0-9_]+)\}\}", lambda m: values[m.group(1)], tpl)
+
+
 def sri_tag(kind: str) -> str:
     url, integrity = ASSETS[kind]
     if kind.endswith("_css"):
@@ -282,15 +296,21 @@ def build_tree_html(species_meta: dict, taxonomy: dict, slot_deg: float, app_roo
                  sum(len(sp) for orders in taxonomy["FUNGI"].values() for fams in orders.values()
                      for gens in fams.values() for sp in gens.values())
     tpl = (HERE / "templates" / "tree.html").read_text(encoding="utf-8")
-    out = (tpl.replace("{{TAXONOMY_STYLE}}", style.group(1))
-              .replace("{{APP_ROOT}}", app_root_css)
-              .replace("{{D3}}", sri_tag("d3_js"))
-              .replace("{{DATA}}", "window.__EXPORT_TAXONOMY__ = " + json_inline(taxonomy) + ";\n"
-                       "window.__EXPORT_SPECIES__ = " + json_inline(species_meta) + ";\n"
-                       f"window.__EXPORT_GENUS_SLOT_DEG__ = {slot_deg:.4f};\n"
-                       f"window.__EXPORT_TREE_COUNT__ = {tree_count};\n"
-                       "window.__EXPORT_SKIP_CLASS_REDISTRIBUTION__ = true;\n")
-              .replace("{{TAXONOMY_SCRIPT}}", script))
+    # TAXONOMY_SCRIPT last: the app's script may itself contain "{{" (template
+    # literals), so the unfilled check runs on the template before it goes in.
+    out = fill(tpl.replace("{{TAXONOMY_SCRIPT}}", "\x00TAXONOMY_SCRIPT\x00"), {
+        "TAXONOMY_STYLE": style.group(1),
+        "APP_ROOT": app_root_css,
+        "D3": sri_tag("d3_js"),
+        "DATA": "window.__EXPORT_TAXONOMY__ = " + json_inline(taxonomy) + ";\n"
+                "window.__EXPORT_SPECIES__ = " + json_inline(species_meta) + ";\n"
+                f"window.__EXPORT_GENUS_SLOT_DEG__ = {slot_deg:.4f};\n"
+                f"window.__EXPORT_TREE_COUNT__ = {tree_count};\n"
+                "window.__EXPORT_SKIP_CLASS_REDISTRIBUTION__ = true;\n",
+    }, "tree.html")
+    if out.count("\x00TAXONOMY_SCRIPT\x00") != 1:
+        die("templates/tree.html: {{TAXONOMY_SCRIPT}} must appear exactly once")
+    out = out.replace("\x00TAXONOMY_SCRIPT\x00", script)
     return out, applied
 
 
@@ -361,16 +381,18 @@ def build_preview(cfg: dict, ov: dict, data: dict, pub: dict, app_css: str) -> t
         more_html = ('<div class="more-walks">More walks: ' + " · ".join(
             f'<a href="{html.escape(m["url"])}" target="_top">{html.escape(m["title"])}</a>' for m in more) + "</div>")
     tpl = (HERE / "templates" / "preview.html").read_text(encoding="utf-8")
-    out = (tpl.replace("{{APP_STYLES}}", app_css)
-              .replace("{{LANG}}", html.escape(cfg.get("language", "en")))
-              .replace("{{TITLE}}", html.escape(ov["title_en"]))
-              .replace("{{WHERE}}", html.escape(ov["where_en"]))
-              .replace("{{CARD_CLASS}}", "card has-more" if more else "card")
-              .replace("{{HERO}}", f'<img src="{hero["photo"]}" alt="{html.escape(hero["en"] or hero["sci"])}">')
-              .replace("{{ROUTE_SVG}}", route_svg(data["walk"]["line"], data["walk"]["stops"], data["walk"]["straight_from"]))
-              .replace("{{STATS}}", "".join(stats))
-              .replace("{{TEASERS}}", teasers)
-              .replace("{{MORE_WALKS}}", more_html))
+    out = fill(tpl, {
+        "APP_STYLES": app_css,
+        "LANG": html.escape(cfg.get("language", "en")),
+        "TITLE": html.escape(ov["title_en"]),
+        "WHERE": html.escape(ov["where_en"]),
+        "CARD_CLASS": "card has-more" if more else "card",
+        "HERO": f'<img src="{hero["photo"]}" alt="{html.escape(hero["en"] or hero["sci"])}">',
+        "ROUTE_SVG": route_svg(data["walk"]["line"], data["walk"]["stops"], data["walk"]["straight_from"]),
+        "STATS": "".join(stats),
+        "TEASERS": teasers,
+        "MORE_WALKS": more_html,
+    }, "preview.html")
     return out, {"hero": f"{hero['id']} {hero['sci']}", "recipes": [f"{r['recipe_id']} {r['dish']}" for r in chosen],
                  "more_walks": [m["title"] for m in more]}
 
@@ -538,6 +560,8 @@ def main(argv=None):
         ci = conn.execute("SELECT * FROM culinary_info WHERE species_id = ?", (sid,)).fetchone()
         species[sid] = sp
         ci_by_sp[sid] = dict(ci) if ci else {}
+        for note in gates.taxonomy_warnings(sp):
+            warnings.append(f"taxonomy: species {sid} {sp['scientific_name']}: {note}")
 
     texts = load_print_pdf_texts()
 
@@ -718,13 +742,15 @@ def main(argv=None):
                                                          "paras": texts["disclaimer_paras"]},
     }
     tpl = (HERE / "templates" / "index.html").read_text(encoding="utf-8")
-    page = (tpl.replace("{{TITLE}}", html.escape(ov["title_en"]))
-               .replace("{{LANG}}", html.escape(cfg.get("language", "en")))
-               .replace("{{CANONICAL}}", f'<link rel="canonical" href="{html.escape(canonical)}">')
-               .replace("{{LEAFLET_CSS}}", sri_tag("leaflet_css"))
-               .replace("{{LEAFLET_JS}}", sri_tag("leaflet_js"))
-               .replace("{{APP_STYLES}}", app_css)
-               .replace("{{DATA}}", json_inline(data)))
+    page = fill(tpl, {
+        "TITLE": html.escape(ov["title_en"]),
+        "LANG": html.escape(cfg.get("language", "en")),
+        "CANONICAL": f'<link rel="canonical" href="{html.escape(canonical)}">',
+        "LEAFLET_CSS": sri_tag("leaflet_css"),
+        "LEAFLET_JS": sri_tag("leaflet_js"),
+        "APP_STYLES": app_css,
+        "DATA": json_inline(data),
+    }, "index.html")
     preview_html, preview_info = build_preview(cfg, ov, data, pub, app_css)
 
     # Pre-write checks (run in --plan-only too)
@@ -733,8 +759,6 @@ def main(argv=None):
         die("preview.html must stay script-free")
     if not cfg.get("show_brand", False) and "landmemory" in out_text.lower():
         die("'LandMemory' found in output while show_brand is false")
-    if "{{" in page or "{{" in tree_html or "{{" in preview_html:
-        die("unreplaced template placeholder in output")
     for p in pub.values():                                  # gate cross-checks on the final data
         if (p["toxic"] or p["apiaceae"]) and p["badge"]["kind"] in ("edible", "caution"):
             die(f"toxic/Apiaceae species with edible badge: {p['sci']}")

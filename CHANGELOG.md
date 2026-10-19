@@ -1,56 +1,76 @@
 ## Current State
 
-Current State — 19 Oct 2026
+_Last updated: 19 Oct 2026_
 
-### Completed 19 Oct
-- Second Opinion: routes by obs_category (fungi → no PlantNet; PlantNet tickable as manual override), per-source top-5 slots, explicit empty-source warnings, iNat gets lat/lng/date; fixed iNat score divided by 100 twice (Second Opinion only — scan, retry-identify, reidentify, lookup checked OK); setCategory closes an open panel
-- PlantNet regional demotion: project stays 'all', nb-results=30 (still 1 call); non-European candidates demoted not hidden, labelled "not native to Europe — planted?"; raw + demoted rank stored; lists in data/reference/plantnet_europe_species.json + scripts/refresh_plantnet_europe_lists.py; scan agreement now checked before min-confidence (OFF path matches all 223 logged decisions + 100k generated cases)
-- Setting regional_demotion_affects_auto_approve added, default OFF; dry run 0 gained / 0 lost at 0.7 (coverage 265 of 2,069 P1 rows)
-- PlantNet A/B (45 fair pairs): regional projects 28/39 top-1/top-5 vs all 26/38; regional loses garden exotics (Helianthus, Fuchsia, Platanus) — hence demotion instead of switching
-- 5 suspected misIDs sent to review (review_label data_trust, dry-run note appended): 19805, 19820, 20572, 21472, 22131 — snapshot db_20261019_200454 (commit 835bea6e), edits 19694–19698
-- Ulmus laciniata card 740 traced: new card from obs 22131 (new photo), not a restore of deleted 619
+### Build status
+Server: START_ForagingID.command — uvicorn foreground + tee to logs/server_<ts>.log; port check; cleanup trap. Claude Code never starts the server.
+Launcher: --reload-dir app + absolute --reload-exclude scripts/, migrations/, tests/; --timeout-graceful-shutdown 5 (any app/ edit reloads and cancels background tasks — check background_processes first).
+WAL; busy_timeout 30000; synchronous=NORMAL. Snapshot endpoint takes `description` (not `label`).
+Latest snapshot before data fixes: db_20261019_204819 (commit 26807341).
+
+### Completed 16–19 Oct
+- Toxic guard (frontend _culinaryGate + backend culinary_allowed), fail closed; all recipe endpoints gated.
+- Walk membership by route proximity (buffer, 7a stops, AI-agreed chips, human-confirmed filter, renumber, older-photo review); saved-walk loading UX; walk 4 line fixed (dashed straight legs 22→26→1, 2.9 km).
+- Wrong-species AI recipes 5–8 archived. Legal: Impressum + Datenschutz live.
+- Publish-as-experience Stage B1 complete (scripts/experience_export only):
+  - CLI --walk-id/--overrides/--out/--plan-only/--default; species/stops only from walk_membership; root + w/<slug>/ output with canonical.
+  - Gates: public = human-confirmed observations only; unverified edible/caution fails the build; toxicity not 'none' fails closed (⚠ Toxicity unknown badge); Apiaceae = ID card only, matched by family OR genus OR first word of name.
+  - Dashed straight legs from straight_from; DE title/intro/where only when filled; preview card restructured (no nested links, one-line dish names, More walks row); strict placeholder check; config.json cleaned; overrides/walk4.json (slug ruemmelsbuehl).
+  - Checks a–e passed: walk 4 = 59 species, 28 stops, ☠ at 4/6/10/24, 236 images 0 EXIF/GPS.
+- DB taxonomy fix (history rows 136–143): 144 Heracleum sphondylium + 492 Berula erecta → Apiaceae; 162 Epilobium tetragonum + 482 Epilobium palustre → Onagraceae/Epilobium. Edibility untouched.
 
 ### Pending / next
-1. Browser checks: Second Opinion on #24356 (no PlantNet, panel closes on category switch, ⚙ selector); demotion label on review cards
-2. Decide regional_demotion_affects_auto_approve ON/OFF; if ON, watch next P1 batch log for "agreement after regional demotion"
-3. Review the 5 data_trust items (21472, 22131 suggestions weak — judge from photo); then card 740 → 0 obs, add to junk cleanup
-4. Image downscale before API upload (~1600 px): 4.8–8.2 MB photos stall uploads; iNat fails when uploading alongside PlantNet
-5. Publish B1 in progress in its own thread (partial gates.py/export.py/overrides edits swept into commit 835bea6e)
-6. Browser check walk 4 (dashed legs, summary, Google link, GPX, toxic stops ☠ only)
-7. Republish stale experience page once B1 built; then B2, C
-8. Invalidate approved wrong-species drafts 94–105 (26 May batch)
-9. Caffeinate: confirm off after scan-page toggle and through a real reload
-10. Walk Stage 4 filters; Stage 5 backend (ORS elevation, PUT saved walk, draft autosave)
-11. PWA install on Pixel 8 via ngrok static domain
+1. Melvin: walk 4 browser check (line, summary, Google link, GPX, ☠ stops) + measure 500px preview card (on paper: ~30px spare with More walks).
+2. Walk 3: Atropa bella-donna + Senecio ovatus are AI-agreed only → left off the page with no ☠. Confirm in review.
+3. Stage B2 (prompt written in planning thread, incl. critical-hazards addendum): experience_publications migration; --plan-json; new blocker for unconfirmed toxic/deadly/unknown AI-agreed species on route; curator-only /api/experience router (all GETs too) incl. plan + verify-species (edible/caution + toxicity none only); saved-walk delete guard (identity + 409 if published); critical hazards section pinned in review + red Review nav badge + banner (computed at read time, no status change).
+4. Then Stage C (publish panel UI), republish walk 4.
+5. Invalidate approved wrong-species drafts 94–105 (26 May batch).
+6. Caffeinate off-check; Walk Stage 4/5; PWA on Pixel 8 via ngrok.
 
 ### Known issues / backlog
-- Ingest option C: fungi still go to PlantNet once at ingest while category is plant (e.g. #24347 Aleuria aurantia filed as plant); category_suggested never feeds obs_category
-- Audit: approved/manually_verified obs whose species is on no European list (some planted, some misIDs)
-- Demotion lifts tiny-score European names on non-plant photos (cosmetic; possible ~1% floor)
-- Species lookup sends iNat no photo date (seasonal ranking only)
-- Check overrides/ contents committed in 835bea6e
-- SAFETY: Aruncus dioicus 'edible', unverified, toxicity none — Melvin to decide
-- SAFETY: remaining unverified "edible"/toxic species app-wide (Heracleum sphondylium, Chaerophyllum hirsutum, Sambucus ebulus, Hypholoma fasciculare, Iris pseudacorus …)
-- No UI path to human-verify an already-'edible' species (planned as Publish B2 verify endpoint)
-- Recipe regenerate (AI) and curator recipe writes not gated on toxicity; audit recipe check uses edibility only
-- Recipes have no audit/history table
-- Participant guest token on localhost/LAN sees admin buttons (/api/me host-only) — endpoints must check identity
-- DELETE /api/walk/saves/{id} has no identity check
-- GPS accuracy not recorded (Pixel EXIF) — membership accuracy filter inert
-- Re-ID sweep: remaining obs of H. perfoliatum, Knautia arvernensis, Thymus serpyllum/praecox/polytrichus, Rubus gratus outside the walks
-- Anthriscus caucalis (138): inedible + toxic contradiction
-- Junk/zero-obs cards awaiting cleanup OK (keep 653 Oenanthe crocata)
-- Identification Stage B remainder: GBIF out-of-range flag
-- Enrichment paths not gated; enrichment queue in-memory; fungus re-enrich wipes pending edibility suggestion
-- Identify — 2013 job at 90/2367
-- iNaturalist token live, expires ~13:41 20 Oct — refresh before next processing
-- Google Drive token invalid; Ollama 'mistral' not installed
-- Disk tight — move exports/old snapshots to DIGIERA
-- Docs drift: CLAUDE.md Alembic head, PhoneForaging path
-- Tracked leftovers: your_db.db, current.txt; review_status 'not_applicable' (1 row)
-- Field-recorder companion (Capacitor: background GPS + pocket proximity alerts) — on the simmer
+- DECISION (Melvin): app has no Apiaceae rule — walk panel/cards/proximity alerts show edible + recipes for unverified Apiaceae. Option: culinary content for Apiaceae only once human-verified.
+- SAFETY: Aruncus dioicus 'edible', unverified — Melvin to decide; other unverified edible/toxic species app-wide (Chaerophyllum hirsutum, Sambucus ebulus, Hypholoma fasciculare, Iris pseudacorus …).
+- Taxonomy: ~96 species with genus in family + 12 null family (enrichment/gbif only fill empty family) → GBIF pass; 144/492 lack order/class (missing from tree); Marasmius oreades no family.
+- wikidata.py lists Apiaceae as "likely edible" family (pending suggestion only) — remove.
+- Recipe regenerate + curator recipe writes not toxicity-gated; recipes have no audit table.
+- Participant guest token on localhost sees admin buttons; DELETE /api/walk/saves/{id} no identity check (B2 fixes).
+- GPS accuracy not recorded (Pixel EXIF). Anthriscus caucalis (138) inedible+toxic contradiction.
+- Enrichment paths not gated; enrichment queue in-memory. Identify 2013 job at 90/2367.
+- iNaturalist token expired; Google Drive token invalid; Ollama 'mistral' not installed.
+- Disk tight — move exports/old snapshots to DIGIERA. Docs drift: CLAUDE.md Alembic head, PhoneForaging path.
 
 ## History
+
+### 2026-10-19 21:02
+**Snapshot** — End of session — Session ended from Settings page
+DB: `snapshots/db_20261019_210216.sqlite`
+
+### 2026-10-19 21:02
+**Session ended** — Session ended from Settings page
+
+### 2026-10-19 20:55
+**Publish B1 part 2: taxonomy fixes 144/492/Epilobium, Apiaceae genus gate, dashed route + DE text + unknown badge, preview card restructure, strict placeholder check, config cleanup; verified a-e (walk 4 browser check still pending - Melvin chose to build anyway)**
+
+**Built:**
+- gates.py: APIACEAE_GENERA - Apiaceae = family OR genus OR first word of scientific name -> ID card only
+- gates.py: taxonomy_warnings (family not *aceae / genus vs name) listed as WARNINGs in --plan-only
+- index.html: route dashed from straight_from with 'no mapped footpath' tooltip (as app); German title/intro/where lines shown only when filled
+- app_styles.py: .badge.unknown shares the warn-badge colours (Apiaceae badge)
+- preview.html: card no longer one <a> - photo/title + button links (target=_top), teasers plain text, More walks row outside links ({{CARD_CLASS}}, {{MORE_WALKS}}, hidden when empty); dish names one line with ellipsis; CSS height budget documented (30px slack with More walks)
+- export.py: fill() fails if a filled placeholder is missing from a template or a template placeholder is unfilled (index, preview, tree)
+**Fixed:**
+- DB (snapshot db_20261019_204819): 144 Heracleum sphondylium family Heracleum->Apiaceae, genus NULL->Heracleum; 492 Berula erecta family Berula->Apiaceae, genus NULL->Berula; 162 Epilobium tetragonum family Epilobium->Onagraceae, genus Symphyotrichum->Epilobium; 482 Epilobium palustre family Epilobium->Onagraceae, genus Euthamia->Epilobium. History rows 136-143 (species_edibility_history, changed_by=human). Read back by ID; edibility/toxicity/verification untouched
+- config.json: removed walk_id, walk_name, title, intro, preview_where, apiaceae_id_only (+ apiaceae note)
+- Placeholder regex now allows digits ({{D3}} - caught by the new check)
+**Files:** `data/foragingid.db`, `scripts/experience_export/gates.py`, `scripts/experience_export/export.py`, `scripts/experience_export/app_styles.py`, `scripts/experience_export/config.json`, `scripts/experience_export/templates/index.html`, `scripts/experience_export/templates/preview.html`
+**Pending:**
+- Melvin: walk 4 browser check + 500px card measurement
+- Melvin: walk 3 - Atropa bella-donna (deadly) and Senecio ovatus are AI-agreed only, so excluded from the page (no warning shown) until human-confirmed
+- Heracleum sphondylium 144 / Berula 492 / Epilobium 162, 482: order/class/phylum still NULL - not placed in the tree (GBIF lineage pass)
+- B2
+- C
+- Backlog: GBIF taxonomy pass for 98 family=genus + 12 null-family species
+- Backlog: app/ has no Apiaceae rule at all; wikidata.py:41 _LIKELY_EDIBLE_FAMILIES includes Apiaceae (suggestion only) - see B1 part 2 report
 
 ### 2026-10-19 20:48
 **Snapshot** — Manual snapshot

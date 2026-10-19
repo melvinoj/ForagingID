@@ -37,6 +37,17 @@ from app.models.species import culinary_allowed
 APPROVED_REVIEW = ("approved", "manually_verified")
 TOXIC_SEVERITIES = ("toxic", "deadly")
 APIACEAE = "Apiaceae"
+# Carrot-family genera (fixed list, Melvin 19 Oct 2026). The family column is
+# unreliable — 98 species hold the genus there — so a genus match alone is
+# enough to make a species an ID card.
+APIACEAE_GENERA = frozenset({
+    "Heracleum", "Berula", "Conium", "Cicuta", "Oenanthe", "Aethusa", "Anthriscus", "Chaerophyllum",
+    "Daucus", "Aegopodium", "Angelica", "Pimpinella", "Sium", "Torilis", "Carum", "Foeniculum", "Apium",
+    "Pastinaca", "Smyrnium", "Myrrhis", "Sanicula", "Astrantia", "Peucedanum", "Laserpitium", "Meum",
+    "Seseli", "Bupleurum", "Eryngium", "Silaum", "Selinum", "Conopodium", "Petroselinum", "Levisticum",
+    "Coriandrum", "Anethum", "Scandix", "Caucalis", "Falcaria", "Trinia", "Cnidium", "Physospermum",
+    "Molopospermum", "Ligusticum", "Imperatoria",
+})
 
 
 class GateError(RuntimeError):
@@ -68,8 +79,28 @@ def is_deadly(sp: dict) -> bool:
     return (sp.get("toxicity_severity") or "none") == "deadly"
 
 
+def _first_word(name) -> str:
+    return (name or "").strip().split(" ")[0]
+
+
 def is_apiaceae(sp: dict) -> bool:
-    return (sp.get("family") or "") == APIACEAE
+    """Any of: family Apiaceae, genus in APIACEAE_GENERA, or the scientific
+    name's first word in APIACEAE_GENERA. Any match = ID card only (rule 4)."""
+    return ((sp.get("family") or "") == APIACEAE
+            or (sp.get("genus") or "") in APIACEAE_GENERA
+            or _first_word(sp.get("scientific_name")) in APIACEAE_GENERA)
+
+
+def taxonomy_warnings(sp: dict) -> list:
+    """Data-quality notes for --plan-only (warnings, never failures)."""
+    out = []
+    fam, genus = sp.get("family"), sp.get("genus")
+    if not fam or not fam.endswith("aceae"):
+        out.append(f"family {fam!r} is not a family name")
+    first = _first_word(sp.get("scientific_name"))
+    if genus and first and genus != first:
+        out.append(f"genus {genus!r} disagrees with scientific name {sp.get('scientific_name')!r}")
+    return out
 
 
 def toxicity_known_safe(sp: dict) -> bool:

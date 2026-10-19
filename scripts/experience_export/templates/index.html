@@ -25,6 +25,9 @@
   .hero h1 { font-family: var(--font-display); font-weight: 400; color: var(--app-heading);
     font-size: clamp(1.5rem, 5vw, 2.1rem); line-height: 1.2; margin: 0 0 8px; }
   .hero p { margin: 0 0 12px; max-width: 62ch; }
+  .hero p.de { font-family: var(--font-display); color: var(--leaf-pale); font-size: 1.05rem; margin-top: -4px; }
+  .hero p.where { font-size: 0.85rem; color: var(--leaf-pale); margin-bottom: 6px; }
+  .hero p[hidden] { display: none; }
   .meta { font-size: 0.8rem; color: var(--moss-light); margin-bottom: 16px; }
   .cta { display: inline-flex; align-items: center; min-height: var(--touch-min); padding: 0 20px;
     background: var(--app-forest); color: var(--paper); border-radius: 7px; font-weight: 600;
@@ -147,7 +150,11 @@
 <header class="hero">
   <div class="wrap">
     <h1 id="title"></h1>
+    <p class="de" id="title-de" lang="de" hidden></p>
     <p id="intro"></p>
+    <p id="intro-de" lang="de" hidden></p>
+    <p class="where" id="where" hidden></p>
+    <p class="where" id="where-de" lang="de" hidden></p>
     <div class="meta" id="meta"></div>
     <a class="cta" id="cta" href="#" target="_top" rel="noopener"></a>
   </div>
@@ -252,6 +259,11 @@ window.DATA = {{DATA}};
   document.title = D.title;
   document.getElementById("title").textContent = D.title;
   document.getElementById("intro").textContent = D.intro;
+  // German / place lines: shown only when the curator filled them in (never machine-translated).
+  [["title-de", D.title_de], ["intro-de", D.intro_de], ["where", D.where], ["where-de", D.where_de]].forEach(function (p) {
+    var el = document.getElementById(p[0]);
+    if (p[1]) { el.textContent = p[1]; el.hidden = false; }
+  });
   var km = D.walk.distance_m ? (D.walk.distance_m / 1000).toFixed(1) + " km" : "";
   var hrs = D.walk.duration_min ? "about " + (Math.round(D.walk.duration_min / 30) / 2) + " h walking" : "";
   document.getElementById("meta").textContent =
@@ -341,8 +353,18 @@ window.DATA = {{DATA}};
     var bounds = [];
     if (D.walk.line) {
       var ll = D.walk.line.map(function (c) { return [c[1], c[0]]; });
-      L.polyline(ll, { color: getComputedStyle(document.documentElement).getPropertyValue("--app-forest").trim() || "#2d5016",
-                       weight: 4, opacity: 0.9 }).addTo(map);
+      var lineColour = getComputedStyle(document.documentElement).getPropertyValue("--app-forest").trim() || "#2d5016";
+      var sf = D.walk.straight_from;
+      if (sf !== null && sf !== undefined) {
+        // As the app (frontend/index.html): routed part solid; from vertex sf on,
+        // straight legs between stops (no mapped footpath) dashed with a tooltip.
+        L.polyline(ll.slice(0, sf + 1), { color: lineColour, weight: 4, opacity: 0.9 }).addTo(map);
+        L.polyline(ll.slice(sf), { color: lineColour, weight: 3.5, dashArray: "7 6", opacity: 0.9 })
+          .bindTooltip("Straight line between stops — no mapped footpath here", { sticky: true })
+          .addTo(map);
+      } else {
+        L.polyline(ll, { color: lineColour, weight: 4, opacity: 0.9 }).addTo(map);
+      }
       bounds = bounds.concat(ll);
     }
     D.walk.stops.forEach(function (st) {

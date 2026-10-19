@@ -41,6 +41,10 @@ Latest snapshot before data fixes: db_20261019_204819 (commit 26807341).
 
 ## History
 
+### 2026-10-19 21:03
+**Snapshot** — before B2 experience_publications migration
+DB: `snapshots/db_20261019_210354.sqlite`
+
 ### 2026-10-19 21:02
 **Snapshot** — End of session — Session ended from Settings page
 DB: `snapshots/db_20261019_210216.sqlite`

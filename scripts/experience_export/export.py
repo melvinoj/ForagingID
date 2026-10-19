@@ -412,9 +412,15 @@ def parse_args(argv=None):
                     "hide_species_ids, more_walks")
     ap.add_argument("--out", type=Path, default=REPO / "dist", help="output root (default dist/)")
     ap.add_argument("--plan-only", action="store_true", help="print the plan; write no files")
+    ap.add_argument("--db", type=Path, default=DB_PATH,
+                    help="SQLite database, opened read-only (default data/foragingid.db; the API passes the app's own)")
+    ap.add_argument("--plan-json", action="store_true",
+                    help="like --plan-only, but the plan is JSON on stdout (app/api/experience.py reads it)")
     ap.add_argument("--default", action="store_true", dest="is_default",
                     help="this walk is the root walk: <out>/index.html (+ a copy at <out>/w/<slug>/)")
-    return ap.parse_args(argv)
+    args = ap.parse_args(argv)
+    args.plan_only = args.plan_only or args.plan_json
+    return args
 
 
 def load_overrides(path, walk) -> dict:
@@ -477,19 +483,27 @@ def saved_straight_from(route: dict, line) -> tuple:
 
 # ── main build ───────────────────────────────────────────────────────────────
 
+# Filled as main() runs so a --plan-json BuildError can still report what was
+# known (walk, blockers) — see __main__.
+_PARTIAL: dict = {}
+
+
 def main(argv=None):
     args = parse_args(argv)
+    _PARTIAL.clear()
+    _PARTIAL["plan_json"] = args.plan_json
     cfg = json.loads((HERE / "config.json").read_text(encoding="utf-8"))
     hide = set(cfg.get("hide_obs_ids", []))
     overrides = {int(k): int(v) for k, v in (cfg.get("photo_overrides") or {}).items()}
     warnings = []
 
-    conn = sqlite3.connect(f"file:{DB_PATH}?mode=ro", uri=True)
+    conn = sqlite3.connect(f"file:{Path(args.db).resolve()}?mode=ro", uri=True)
     conn.row_factory = sqlite3.Row
 
     walk = conn.execute("SELECT * FROM saved_walks WHERE id = ?", (args.walk_id,)).fetchone()
     if not walk:
         die(f"saved_walks id {args.walk_id} not found")
+    _PARTIAL["walk"] = {"id": walk["id"], "name": walk["name"]}
     ov = load_overrides(args.overrides, walk)
     hide_sp = ov["hide_species_ids"]
     route = json.loads(walk["route_geojson"]) if walk["route_geojson"] else {}
@@ -550,6 +564,42 @@ def main(argv=None):
                       else f"{o['review_status']}/{o['identification_status']}")
                       for o in obs_order if o["species_id"] == sid})
         hidden_species[sid] = why
+    # Rule 7: an AI-agreed-only species that is toxic/deadly/unknown is on the
+    # route but not on the page (no ☠ at its stop) → BLOCKER. The plan still
+    # prints; the full build writes nothing and fails.
+    blockers, ai_agreed_out = [], []
+    for sid, e in sorted(ai_agreed.items(), key=lambda kv: kv[1]["name"] or ""):
+        row = conn.execute("SELECT * FROM species WHERE id = ?", (sid,)).fetchone() if sid is not None else None
+        sp_ai = dict(row) if row else None
+        hazard = gates.unconfirmed_hazard(sp_ai)
+        ai_agreed_out.append({
+            "species_id": sid, "name": e["name"], "stops": e["stops"],
+            "edibility_status": sp_ai.get("edibility_status") if sp_ai else None,
+            "toxicity_severity": sp_ai.get("toxicity_severity") if sp_ai else None,
+            "blocker": hazard,
+        })
+        if hazard:
+            where = ("stop " if len(e["stops"]) == 1 else "stops ") + ", ".join(e["stops"])
+            blockers.append(f"hazard on route not human-confirmed: {e['name']} {where}")
+    # Rule 7 per stop: the per-species check above misses a toxic species that is
+    # human-confirmed at one stop (so it IS on the page) but only AI-agreed at
+    # another — that stop would carry no ☠. Checked per member observation.
+    sp_cache = {}
+    def _species_row(sid):
+        if sid not in sp_cache:
+            r = conn.execute("SELECT * FROM species WHERE id = ?", (sid,)).fetchone() if sid is not None else None
+            sp_cache[sid] = dict(r) if r else None
+        return sp_cache[sid]
+    for st_m in mem_stops:
+        for sp_m in st_m["species"]:
+            bad = [oid for oid in sp_m["obs_ids"]
+                   if oid not in rows     # not loaded → cannot show it is safe → blocks
+                   or gates.obs_unconfirmed_hazard(rows[oid], _species_row(rows[oid]["species_id"]))]
+            if bad:
+                blockers.append(f"hazard at stop {st_m['label']} not human-confirmed: {sp_m['name']} "
+                                f"(obs {', '.join(str(b) for b in bad)})")
+    _PARTIAL["blockers"] = blockers
+
     unknown_hide = sorted(hide_sp - set(mem_species))
     if unknown_hide:
         warnings.append(f"hide_species_ids not on this walk (no effect): {unknown_hide}")
@@ -774,9 +824,9 @@ def main(argv=None):
         if sid in pub or any(sid in st["species"] for st in stops) or any(r["species_id"] == sid for r in recipes_out):
             die(f"hidden species {sid} still present in the output")
 
-    # ── write (skipped by --plan-only) ──
+    # ── write (skipped by --plan-only / --plan-json, and when a blocker stands) ──
     meta, size = None, 0
-    if not args.plan_only:
+    if not args.plan_only and not blockers:
         page_dir.mkdir(parents=True, exist_ok=True)
         for name in OWNED_FILES:
             (page_dir / name).unlink(missing_ok=True)
@@ -813,6 +863,45 @@ def main(argv=None):
         size = sum(f.stat().st_size for d in filter(None, (page_dir, mirror_dir))
                    for f in [*(d / n for n in OWNED_FILES), *(d / "photos").rglob("*")] if f.is_file())
 
+    n_main = len(photo_plan); n_extra = sum(len(pp["extras"]) for pp in photo_plan.values())
+    if args.plan_json:
+        # Same content as the text report below, structured. stdout is ONLY this JSON.
+        plan = {
+            "ok": True,
+            "buildable": not blockers,
+            "walk": {"id": walk["id"], "name": walk["name"], "title_en": ov["title_en"], "title_de": ov["title_de"],
+                     "slug": ov["slug"], "is_default": args.is_default, "canonical": canonical,
+                     "writes": str(page_dir), "mirror": str(mirror_dir) if mirror_dir else None},
+            "distance": {"distance_m": walk["distance_m"], "duration_min": walk["duration_min"],
+                         "route_vertices": len(line or []), "straight_from": straight_from},
+            "observations": {"member": len(obs_order), "pass": len(passing), "fail": len(failing)},
+            "stops": [{"label": st["n"], "species_ids": st["species"], "toxic": st["toxic"]} for st in stops],
+            "emptied_stops": emptied_stops,
+            "public_species": [{
+                "id": p["id"], "scientific_name": p["sci"], "en": p["en"], "badge": p["badge"]["kind"],
+                "edibility_status": species[p["id"]].get("edibility_status"),
+                "toxicity_severity": species[p["id"]].get("toxicity_severity"),
+                "edibility_verified": bool(species[p["id"]].get("edibility_verified")),
+                "verified_by": species[p["id"]].get("edibility_verified_by"),
+                "apiaceae": p["apiaceae"], "safety": sorted(p["safety"]),
+            } for p in data["species"]],
+            "ai_agreed_excluded": ai_agreed_out,
+            "hidden": [{"species_id": sid, "why": why} for sid, why in hidden_species.items()],
+            "recipes": {"included": [{"recipe_id": r["recipe_id"], "species_id": r["species_id"], "dish": r["dish"],
+                                      "source": r["source"]} for r in recipes_out],
+                        "excluded": [{"recipe_id": rid, "species": name, "why": why}
+                                     for rid, name, why in recipe_excluded]},
+            "tree": {"placed": len(species) - len(unplaced), "unplaced": unplaced},
+            "images_planned": 2 * (n_main + n_extra),
+            "warnings": warnings,
+            "blockers": blockers,
+            "failures": [{"obs_id": o["id"], "species_id": o["species_id"], "species": o["species_primary"],
+                          "review_status": o["review_status"], "identification_status": o["identification_status"],
+                          "human_confirmed": gates.is_human_confirmed(o)} for o in failing],
+        }
+        print(json.dumps(plan, ensure_ascii=False, default=str))
+        return
+
     # Report
     print("=" * 72)
     print(f"Foraging Experience export — walk {walk['id']} '{walk['name']}'"
@@ -827,8 +916,9 @@ def main(argv=None):
     for sid, why in hidden_species.items():
         print(f"  hidden {sid}: {why}")
     print("AI-agreed — needs your review before they can appear:" + ("" if ai_agreed else " none"))
-    for sid, e in sorted(ai_agreed.items(), key=lambda kv: kv[1]["name"] or ""):
-        print(f"  {sid:>4} {e['name']:<28} stops {', '.join(e['stops'])}")
+    for a in ai_agreed_out:
+        print(f"  {a['species_id'] if a['species_id'] is not None else '?':>4} {a['name']:<28} "
+              f"stops {', '.join(a['stops'])}  toxicity {a['toxicity_severity']}" + ("  ← BLOCKER" if a["blocker"] else ""))
     badges = Counter(p["badge"]["kind"] for p in pub.values())
     print(f"Badges: {dict(badges)}")
     for p in sorted(pub.values(), key=lambda p: p["badge"]["kind"]):
@@ -854,7 +944,6 @@ def main(argv=None):
           + ", ".join(s["n"] + ("☠" if s["toxic"] else "") for s in stops))
     if emptied_stops:
         print(f"  numbered points with no species shown (hidden / AI-agreed only): {emptied_stops}")
-    n_main = len(photo_plan); n_extra = sum(len(pp["extras"]) for pp in photo_plan.values())
     if meta:
         print(f"Images: {meta['files']} written ({n_main} species × 2 sizes + {n_extra} extra photos × 2 sizes); "
               f"GPS tags exiftool={meta['exiftool_gps_tags']} PIL={meta['pil_gps_tags']}; "
@@ -864,12 +953,21 @@ def main(argv=None):
         print(f"Images (planned): {n_main} species × 2 sizes + {n_extra} extra photos × 2 sizes = {2 * (n_main + n_extra)} files")
     for w in warnings:
         print(f"WARNING: {w}")
+    for b in blockers:
+        print(f"BLOCKER: {b}")
     print("=" * 72)
+    if blockers and not args.plan_only:
+        die(f"{len(blockers)} blocker(s), nothing written: " + "; ".join(blockers))
 
 
 if __name__ == "__main__":
     try:
         main()
     except (BuildError, gates.GateError, app_styles.StyleDrift) as e:
+        if _PARTIAL.get("plan_json"):
+            # The plan could not be completed; stdout stays JSON for the API.
+            print(json.dumps({"ok": False, "buildable": False, "build_error": str(e),
+                              "walk": _PARTIAL.get("walk"), "blockers": _PARTIAL.get("blockers", [])},
+                             ensure_ascii=False, default=str))
         print(f"BUILD FAILED: {e}", file=sys.stderr)
         sys.exit(1)

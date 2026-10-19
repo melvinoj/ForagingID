@@ -21,6 +21,12 @@ Rules (Melvin, 15 Oct 2026; tightened for Publish B1, 18 Oct 2026):
      whatever the data (was config apiaceae_id_only; now unconditional).
   5. Recipes: status='approved' only; never is_medicinal_prep.
   6. No medicinal content anywhere.
+  7. A species on the route that is AI-agreed only (excluded by rule 1) and
+     toxic/deadly or of unknown toxicity is a BLOCKER: the full build fails
+     (the plan still prints) until a human confirms or re-identifies it.
+     Also per STOP: any AI-agreed-only member observation at a stop whose
+     species is toxic/deadly/unknown blocks, even if that species is
+     human-confirmed at another stop.
 
 Safety text (look-alike / preparation warnings) is published ONLY when the
 current value is curator-authored: the latest history row for that field is
@@ -32,10 +38,9 @@ from __future__ import annotations
 import sqlite3
 
 from app.models.observation import is_human_confirmed
-from app.models.species import culinary_allowed
+from app.models.species import culinary_allowed, is_toxic_severity
 
 APPROVED_REVIEW = ("approved", "manually_verified")
-TOXIC_SEVERITIES = ("toxic", "deadly")
 APIACEAE = "Apiaceae"
 # Carrot-family genera (fixed list, Melvin 19 Oct 2026). The family column is
 # unreliable — 98 species hold the genus there — so a genus match alone is
@@ -71,8 +76,7 @@ def obs_passes(obs: dict, hide_obs_ids: set, hide_species_ids=frozenset()) -> bo
 # ── species verdict ──────────────────────────────────────────────────────────
 
 def is_toxic(sp: dict) -> bool:
-    return (sp.get("edibility_status") == "toxic"
-            or (sp.get("toxicity_severity") or "none") in TOXIC_SEVERITIES)
+    return sp.get("edibility_status") == "toxic" or is_toxic_severity(sp.get("toxicity_severity"))
 
 
 def is_deadly(sp: dict) -> bool:
@@ -101,6 +105,22 @@ def taxonomy_warnings(sp: dict) -> list:
     if genus and first and genus != first:
         out.append(f"genus {genus!r} disagrees with scientific name {sp.get('scientific_name')!r}")
     return out
+
+
+def unconfirmed_hazard(sp) -> bool:
+    """Rule 7 (B2, 19 Oct 2026): an AI-agreed-only species on the route that is
+    toxic/deadly OR of unknown toxicity blocks the full build — it is left off
+    the page, so its stop would carry no ☠. sp=None (observation not linked to
+    a species row) is unknown, so it blocks too (fails closed)."""
+    return sp is None or is_toxic(sp) or not toxicity_known_safe(sp)
+
+
+def obs_unconfirmed_hazard(obs: dict, sp) -> bool:
+    """Rule 7, per stop (B2 follow-up, 19 Oct 2026): this member observation is
+    AI-agreed only AND its species is a hazard (unconfirmed_hazard). Blocks even
+    when the same species is human-confirmed at another stop — the page would
+    show ☠ there but not at this stop."""
+    return not is_human_confirmed(obs) and unconfirmed_hazard(sp)
 
 
 def toxicity_known_safe(sp: dict) -> bool:

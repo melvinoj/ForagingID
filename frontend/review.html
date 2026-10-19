@@ -1241,10 +1241,31 @@
         integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
           integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+<style>
+  /* Critical hazards (B2) */
+  #critical-banner { background:#c62828; color:#fff; font-weight:700; padding:10px 16px; margin:0 0 10px;
+                     border-radius:8px; cursor:pointer; }
+  #critical-section { border:2px solid #c62828; background:#fff5f5; border-radius:10px; padding:12px 14px; margin:0 0 14px; }
+  #critical-section h2 { color:#b71c1c; font-size:1rem; margin:0 0 4px; }
+  #critical-section .crit-help { font-size:0.8rem; color:#5f2120; margin:0 0 10px; }
+  #critical-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(230px,1fr)); gap:10px; }
+  .crit-card { background:#fff; border:1px solid #e57373; border-radius:8px; overflow:hidden; display:flex; flex-direction:column; }
+  .crit-card img, .crit-card .no-thumb { width:100%; height:150px; object-fit:cover; display:block; }
+  .crit-body { padding:8px 10px; font-size:0.82rem; display:flex; flex-direction:column; gap:4px; }
+  .crit-badge { align-self:flex-start; background:#c62828; color:#fff; font-weight:700; font-size:0.72rem;
+                border-radius:10px; padding:1px 8px; }
+  .crit-badge.deadly { background:#000; }
+  .crit-actions { display:flex; gap:6px; flex-wrap:wrap; margin-top:4px; }
+  .crit-actions button { font-size:0.78rem; padding:4px 8px; border-radius:5px; cursor:pointer; border:1px solid #999; background:#f5f5f5; }
+  .crit-actions .crit-confirm { background:#2d8016; color:#fff; border-color:#2d8016; }
+</style>
 </head>
 <body>
 
 <!-- Nav chip + drawer injected by /static/js/site-header.js (Map Redesign P3-nav) -->
+
+<!-- Critical hazards banner (B2) — filled by loadCritical(); hidden at 0 -->
+<div id="critical-banner" style="display:none" onclick="_showCriticalSection()"></div>
 
 <details id="ingest-form">
   <summary>Scan photo folder</summary>
@@ -1276,6 +1297,14 @@
 
 <!-- ── Tab 1: Review Queue ───────────────────────────────────────────────── -->
 <div id="tab-pane-review" class="tab-pane active">
+<!-- Critical hazards (B2): toxic/deadly species on a saved walk, observation
+     AI-agreed only. GET /api/experience/critical, computed at read time — shown
+     regardless of the filters and pagination below; no review_status change. -->
+<section id="critical-section" style="display:none">
+  <h2>☠ Critical — hazard on a walk, not human-confirmed</h2>
+  <p class="crit-help">These are on a saved walk but only AI-agreed, so a published walk page would leave them off with no ☠ at their stop. Confirm the species if it is right, or re-identify it. Pins stay on the map either way.</p>
+  <div id="critical-grid"></div>
+</section>
 <div id="toolbar">
   <!-- Group 1: Status -->
   <div class="filter-group">
@@ -2084,6 +2113,90 @@ function renderGrid(observations) {
   grid.innerHTML = observations.map(_makeCardHtml).join('');
 }
 
+// ── Critical hazards (B2) ──────────────────────────────────────────────────
+// Toxic/deadly species on a saved walk whose observation is AI-agreed only
+// (GET /api/experience/critical — curator-only, computed at read time). Pinned
+// above the toolbar so filters/pagination never hide it. An item drops off once
+// the observation is human-confirmed or its species is no longer toxic.
+
+async function loadCritical() {
+  const section = document.getElementById('critical-section');
+  const banner  = document.getElementById('critical-banner');
+  const grid    = document.getElementById('critical-grid');
+  let d = null;
+  try {
+    const r = await fetch('/api/experience/critical');
+    d = r.ok ? await r.json() : null;
+  } catch (_) { d = null; }
+  if (window.__refreshCriticalBadge) window.__refreshCriticalBadge();
+  const items = (d && d.items) || [];
+  if (!items.length) {
+    section.style.display = 'none';
+    banner.style.display = 'none';
+    grid.innerHTML = '';
+    return;
+  }
+  const n = d.count;
+  banner.textContent = `☠ ${n} critical item${n === 1 ? '' : 's'} in review — hazard on a walk, not human-confirmed`;
+  banner.style.display = '';
+  section.style.display = '';
+  grid.innerHTML = items.map(_critCardHtml).join('');
+}
+
+function _critCardHtml(it) {
+  const sev = it.severity === 'deadly' ? 'deadly' : 'toxic';
+  const sp = _resc(it.species || '').replace(/'/g, "\\'");
+  const img = it.thumbnail
+    ? `<img src="${_esc(it.thumbnail)}" alt="photo" loading="lazy" onclick="_critOpenPhoto(${it.obs_id}, '${sp}')">`
+    : '<div class="no-thumb">🌿</div>';
+  return `<div class="crit-card" id="crit-${it.obs_id}-${it.walk_id}">
+    ${img}
+    <div class="crit-body">
+      <span class="crit-badge ${sev}">☠ ${sev === 'deadly' ? 'Deadly' : 'Toxic'}</span>
+      <strong><em>${_esc(it.species)}</em></strong>
+      <span>Walk: ${_esc(it.walk_name)} · stop ${_esc(it.stop)}</span>
+      <span style="color:#888">#${it.obs_id} · ${_esc(it.review_status)} (AI-agreed)</span>
+      <div class="crit-actions">
+        <button class="crit-confirm" onclick="critConfirm(${it.obs_id}, '${sp}', '${sev}', this)">✓ Confirm species</button>
+        <button onclick="showRetryId(${it.obs_id}, this)">🔄 Re-identify</button>
+      </div>
+      <div id="retry-panel-${it.obs_id}" style="display:none"></div>
+    </div>
+  </div>`;
+}
+
+// Confirm = the existing manual-verify path (PATCH review → manually_verified,
+// which stamps reviewed_at → is_human_confirmed). Not 'approved': re-approving
+// an already-approved row does not stamp reviewed_at.
+async function critConfirm(obsId, species, sev, btn) {
+  if (!confirm(`Confirm #${obsId} is ${species} (${sev})?\n\nIt becomes human-confirmed and will be shown with ☠ on a published walk page.`)) return;
+  btn.disabled = true;
+  try {
+    const r = await fetch(`/api/observations/${obsId}/review?status=manually_verified`, { method: 'PATCH' });
+    if (!r.ok) {
+      const e = await r.json().catch(() => ({}));
+      throw new Error(e.detail || `HTTP ${r.status}`);
+    }
+    toast(`✓ #${obsId} confirmed as ${species}`);
+  } catch (e) {
+    btn.disabled = false;
+    toast(`❌ Confirm failed for #${obsId}: ${e.message}`);
+    return;
+  }
+  loadCritical();
+}
+
+// Not openCardPhoto(): that builds its list from the current grid page only.
+function _critOpenPhoto(obsId, species) {
+  openLightbox([{ src: `/api/observations/${obsId}/photo`, caption: `${species} · #${obsId}` }], 0);
+}
+
+function _showCriticalSection() {
+  const tabBtn = document.querySelector('.review-tab[data-tab="review"]');
+  if (tabBtn && !tabBtn.classList.contains('active')) switchReviewTab('review', tabBtn);
+  document.getElementById('critical-section').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
 // ── Regional demotion label ───────────────────────────────────────────────
 // PlantNet candidates absent from every European regional list carry
 // non_european: true (app/services/regional_demotion.py). They are ranked lower,
@@ -2507,6 +2620,7 @@ async function _retryApprove(obsId, sciName, commonName, confidence, sourceApi, 
       `<div style="font-size:0.78rem;color:#2d8016;padding:4px 0">✓ <em>${_esc(sciName)}</em> set — press <strong>✓ Approve</strong> to add to the map.</div>`;
 
     toast(`✓ ${sciName} set — press Approve to confirm`);
+    loadCritical();   // a re-identified critical item may now be confirmed / non-toxic
   } catch(e) {
     if (btn) { btn.disabled = false; btn.textContent = 'Approve'; }
     if (resultsDiv) resultsDiv.innerHTML = `<div class="retry-empty">❌ ${_esc(e.message)}</div>`;
@@ -3608,6 +3722,7 @@ _populatePrefilterDropdown();
 }
 
 initPage();
+loadCritical();
 
 // ── Lightbox ──────────────────────────────────────────────────────────────
 

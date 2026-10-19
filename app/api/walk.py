@@ -10,7 +10,7 @@ Endpoints:
   POST /api/walk/saves/{id}/accept      — accept older photos near the route (curator)
   POST /api/walk/saves/{id}/exclude     — remove proximity-joined photos (curator)
   POST /api/walk/saves/{id}/renumber    — current stops become the saved snapshot, 1..N (curator)
-  DELETE /api/walk/saves/{id}   — delete a saved walk
+  DELETE /api/walk/saves/{id}   — delete a saved walk (curator; 409 while published as an experience)
 """
 
 import json
@@ -317,11 +317,27 @@ async def renumber_walk(
 # ---------------------------------------------------------------------------
 
 @router.delete("/saves/{walk_id}")
-async def delete_walk(walk_id: int, db: AsyncSession = Depends(get_db)):
+async def delete_walk(
+    walk_id: int, db: AsyncSession = Depends(get_db), identity: Identity = Depends(get_identity),
+):
+    """Curator only. 409 while an experience page for this walk is published.
+    Draft publications go with the walk; 'unpublished' ones stay as history
+    (saved_walk_id → NULL by the FK's ON DELETE SET NULL)."""
+    from app.models.experience import ExperiencePublication
+    _require_curator(identity)
     result = await db.execute(select(SavedWalk).where(SavedWalk.id == walk_id))
     walk = result.scalar_one_or_none()
     if not walk:
         raise HTTPException(404, detail="Walk not found")
+    pubs = (await db.execute(select(ExperiencePublication).where(
+        ExperiencePublication.saved_walk_id == walk_id))).scalars().all()
+    published = [p.slug for p in pubs if p.status == "published"]
+    if published:
+        raise HTTPException(409, detail=f"Walk is published as {', '.join(repr(s) for s in published)} "
+                                        f"— unpublish it before deleting the walk")
+    for p in pubs:
+        if p.status == "draft":
+            await db.delete(p)
     await db.delete(walk)
     await db.commit()
     return {"ok": True}

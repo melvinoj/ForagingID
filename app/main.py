@@ -18,6 +18,7 @@ from app.services.settings_service import load_settings_from_db
 from app.api import observations, map, ingest, identify, culinary, scan, reidentify, syncthing, connections, audit, settings as settings_api, recipes, sharing, notes as notes_api, enrich as enrich_api, dev as dev_api, trust as trust_api
 from app.api import resources as resources_api
 from app.api import walk as walk_api
+from app.api import experience as experience_api
 from app.api import about as about_api
 from app.api import nearby as nearby_api
 from app.api import edibility as edibility_api
@@ -53,6 +54,7 @@ from app.models.observation import DeletedHash as _DeletedHash  # noqa: F401 —
 from app.models.species import SpeciesSynonym as _SpeciesSynonym  # noqa: F401 — ensures species_synonyms is in Base.metadata
 from app.models.species import SpeciesEdibilityHistory as _SpeciesEdibilityHistory  # noqa: F401 — ensures species_edibility_history is in Base.metadata
 from app.models import user as _user_models  # noqa: F401 — ensures User (users) is in Base.metadata
+from app.models import experience as _experience_models  # noqa: F401 — ensures ExperiencePublication is in Base.metadata
 
 log = logging.getLogger(__name__)
 
@@ -217,6 +219,7 @@ app.include_router(notes_api.router)
 app.include_router(enrich_api.router)
 app.include_router(dev_api.router)
 app.include_router(walk_api.router)
+app.include_router(experience_api.router)
 app.include_router(about_api.router)
 app.include_router(nearby_api.router)
 app.include_router(trust_api.router)

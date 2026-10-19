@@ -19,7 +19,7 @@
     { href: '/encounters', label: 'Encounters', badgeId: 'nav-badge-encounters' },
     { href: '/lists',      label: 'Booklets' },
     { href: '/workshops',  label: 'Workshops', curatorOnly: true },
-    { href: '/review',     label: 'Review', badgeId: 'nav-badge-review', curatorOnly: true },
+    { href: '/review',     label: 'Review', badgeId: 'nav-badge-review', criticalBadgeId: 'nav-badge-critical', curatorOnly: true },
     { href: '/scan',       label: 'Scan', curatorOnly: true },
     { href: '/settings',   label: 'Settings', curatorOnly: true },
     { href: '/about',      label: 'About' }
@@ -33,7 +33,8 @@
     chip.setAttribute('aria-label', 'Open navigation');
     chip.setAttribute('aria-haspopup', 'true');
     chip.setAttribute('aria-expanded', 'false');
-    chip.innerHTML = '<img src="/static/icons/dandelion-icon.svg" alt="" width="27" height="27" style="filter:brightness(0) invert(1)">';
+    chip.innerHTML = '<img src="/static/icons/dandelion-icon.svg" alt="" width="27" height="27" style="filter:brightness(0) invert(1)">' +
+      '<span id="nav-chip-critical-dot" aria-hidden="true"></span>';   // red dot: critical hazards > 0 (_initCriticalBadge)
     chip.onclick = window.openNavDrawer;
 
     var scrim = document.createElement('div');
@@ -80,6 +81,12 @@
         badge.className = 'nav-badge';
         badge.id = item.badgeId;
         a.appendChild(badge);
+      }
+      if (item.criticalBadgeId) {
+        var crit = document.createElement('span');
+        crit.className = 'nav-badge nav-badge-critical';
+        crit.id = item.criticalBadgeId;
+        a.appendChild(crit);
       }
       if (item.curatorOnly) {
         a.classList.add('curator-nav');
@@ -157,6 +164,7 @@
       } else {
         document.querySelectorAll('.curator-nav').forEach(function (el) { el.style.display = ''; });
         _initEncountersBadge();
+        _initCriticalBadge();
         _loadJobWidget();
       }
     }).catch(function () {});
@@ -175,6 +183,32 @@
       badge.classList.add('visible');
     }).catch(function () {});
   }
+
+  // Red ☠ count: toxic/deadly species on a saved walk whose observation is
+  // AI-agreed only (GET /api/experience/critical — curator-only, computed at
+  // read time). Curator branch only; hidden at 0. Same pattern as the
+  // Encounters transcript badge.
+  function _initCriticalBadge() {
+    fetch('/api/experience/critical').then(function (r) {
+      return r.ok ? r.json() : null;
+    }).then(function (d) {
+      var count = d && d.count || 0;
+      var badge = document.getElementById('nav-badge-critical');
+      var dot = document.getElementById('nav-chip-critical-dot');
+      var chip = document.getElementById('site-nav-chip');
+      var msg = count + ' toxic/deadly observation' + (count === 1 ? '' : 's') +
+        ' on a walk, not human-confirmed';
+      // Same count drives the drawer badge and the dot on the closed chip.
+      if (dot) dot.classList.toggle('visible', !!count);
+      if (chip) chip.setAttribute('aria-label', count ? 'Open navigation — ' + msg : 'Open navigation');
+      if (!badge) return;
+      if (!count) { badge.classList.remove('visible'); return; }
+      badge.textContent = '☠ ' + count;
+      badge.title = msg;
+      badge.classList.add('visible');
+    }).catch(function () {});
+  }
+  window.__refreshCriticalBadge = _initCriticalBadge;
 
   function _initReviewBadge() {
     // Links to whichever bucket (pending vs needs_review) is larger, same

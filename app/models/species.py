@@ -464,3 +464,17 @@ def culinary_allowed(toxicity_severity: Optional[str]) -> bool:
 
 # SQL form of culinary_allowed() for queries that join Species.
 CULINARY_ALLOWED_SQL = Species.toxicity_severity == "none"
+
+
+# ---------------------------------------------------------------------------
+# Known hazard — the ONLY definition of "toxicity_severity says toxic or
+# deadly". Used by the critical-hazards review list (app/api/experience.py) and
+# the experience export gates (scripts/experience_export/gates.py). Unknown /
+# NULL is NOT a known hazard here (culinary_allowed() is the fail-closed rule
+# for that); callers that must fail closed on unknown combine the two.
+# ---------------------------------------------------------------------------
+TOXIC_SEVERITIES = ("toxic", "deadly")
+
+
+def is_toxic_severity(toxicity_severity: Optional[str]) -> bool:
+    return toxicity_severity in TOXIC_SEVERITIES

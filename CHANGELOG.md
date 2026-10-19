@@ -6,40 +6,87 @@ _Last updated: 19 Oct 2026_
 Server: START_ForagingID.command — uvicorn foreground + tee to logs/server_<ts>.log; port check; cleanup trap. Claude Code never starts the server.
 Launcher: --reload-dir app + absolute --reload-exclude scripts/, migrations/, tests/; --timeout-graceful-shutdown 5 (any app/ edit reloads and cancels background tasks — check background_processes first).
 WAL; busy_timeout 30000; synchronous=NORMAL. Snapshot endpoint takes `description` (not `label`).
-Latest snapshot before data fixes: db_20261019_204819 (commit 26807341).
+Alembic head: 0054 (experience_publications). Snapshots this session: db_20261019_204819, db_20261019_210354.
 
 ### Completed 16–19 Oct
 - Toxic guard (frontend _culinaryGate + backend culinary_allowed), fail closed; all recipe endpoints gated.
-- Walk membership by route proximity (buffer, 7a stops, AI-agreed chips, human-confirmed filter, renumber, older-photo review); saved-walk loading UX; walk 4 line fixed (dashed straight legs 22→26→1, 2.9 km).
-- Wrong-species AI recipes 5–8 archived. Legal: Impressum + Datenschutz live.
-- Publish-as-experience Stage B1 complete (scripts/experience_export only):
+- Walk membership by route proximity; saved-walk loading UX; walk 4 line fixed (dashed straight legs 22→26→1, 2.9 km). Wrong-species recipes 5–8 archived. Impressum + Datenschutz live.
+- Publish-as-experience Stage B1 (scripts/experience_export):
   - CLI --walk-id/--overrides/--out/--plan-only/--default; species/stops only from walk_membership; root + w/<slug>/ output with canonical.
-  - Gates: public = human-confirmed observations only; unverified edible/caution fails the build; toxicity not 'none' fails closed (⚠ Toxicity unknown badge); Apiaceae = ID card only, matched by family OR genus OR first word of name.
-  - Dashed straight legs from straight_from; DE title/intro/where only when filled; preview card restructured (no nested links, one-line dish names, More walks row); strict placeholder check; config.json cleaned; overrides/walk4.json (slug ruemmelsbuehl).
-  - Checks a–e passed: walk 4 = 59 species, 28 stops, ☠ at 4/6/10/24, 236 images 0 EXIF/GPS.
-- DB taxonomy fix (history rows 136–143): 144 Heracleum sphondylium + 492 Berula erecta → Apiaceae; 162 Epilobium tetragonum + 482 Epilobium palustre → Onagraceae/Epilobium. Edibility untouched.
+  - Gates: public = human-confirmed observations only; unverified edible/caution fails the build; toxicity not 'none' fails closed; Apiaceae = ID card only, matched by family OR genus OR first word of name.
+  - Dashed legs; DE fields only when filled; preview card restructured; strict placeholder check; overrides/walk4.json (slug ruemmelsbuehl).
+- DB taxonomy fix (history 136–143): 144 Heracleum + 492 Berula → Apiaceae; 162/482 Epilobium → Onagraceae/Epilobium.
+- Stage B2:
+  - Migration 0054 experience_publications (at most one default via partial unique index; saved_walk_id ON DELETE SET NULL).
+  - export.py --plan-json + --db. Hazard blockers per species AND per stop: any AI-agreed-only observation of a toxic/deadly/unknown-toxicity species, or an unloadable photo, fails the build (verified on DB copy).
+  - /api/experience curator-only on all routes (publications CRUD, plan via subprocess, verify-species edible/caution + toxicity none only, critical list computed at read time).
+  - Walk DELETE: curator check + 409 while published; map dialog shows the slug.
+  - review.html Critical section + banner; ☠ count on Review nav link; red dot on nav chip (site-header.js/.css). Confirm uses manually_verified.
+  - Live DB: only migration 0054; all other tests on copies.
 
 ### Pending / next
-1. Melvin: walk 4 browser check (line, summary, Google link, GPX, ☠ stops) + measure 500px preview card (on paper: ~30px spare with More walks).
-2. Walk 3: Atropa bella-donna + Senecio ovatus are AI-agreed only → left off the page with no ☠. Confirm in review.
-3. Stage B2 (prompt written in planning thread, incl. critical-hazards addendum): experience_publications migration; --plan-json; new blocker for unconfirmed toxic/deadly/unknown AI-agreed species on route; curator-only /api/experience router (all GETs too) incl. plan + verify-species (edible/caution + toxicity none only); saved-walk delete guard (identity + 409 if published); critical hazards section pinned in review + red Review nav badge + banner (computed at read time, no status change).
-4. Then Stage C (publish panel UI), republish walk 4.
-5. Invalidate approved wrong-species drafts 94–105 (26 May batch).
-6. Caffeinate off-check; Walk Stage 4/5; PWA on Pixel 8 via ngrok.
+1. Melvin browser checks: walk 4 (line, summary, Google link, GPX, ☠ stops 4/6/10/24); 500px preview card measurement; review Critical section + banner + ☠ badge + nav chip dot.
+2. Melvin: confirm walk 3 hazards in review — Atropa obs 22224 + 22225 (stop 13), Senecio 22231 (stop 16). Walk 3 build is blocked until then.
+3. Stage C: publish panel UI (confirm step warns the exact route is public + unpublish ≠ erasure; AI-agreed review list; verify buttons; publish/push to foraging-experience). Then republish walk 4.
+4. Invalidate approved wrong-species drafts 94–105 (26 May batch).
+5. Caffeinate off-check; Walk Stage 4/5; PWA on Pixel 8 via ngrok.
 
 ### Known issues / backlog
 - DECISION (Melvin): app has no Apiaceae rule — walk panel/cards/proximity alerts show edible + recipes for unverified Apiaceae. Option: culinary content for Apiaceae only once human-verified.
 - SAFETY: Aruncus dioicus 'edible', unverified — Melvin to decide; other unverified edible/toxic species app-wide (Chaerophyllum hirsutum, Sambucus ebulus, Hypholoma fasciculare, Iris pseudacorus …).
-- Taxonomy: ~96 species with genus in family + 12 null family (enrichment/gbif only fill empty family) → GBIF pass; 144/492 lack order/class (missing from tree); Marasmius oreades no family.
+- /api/me judges guests by host, ignores tokens — participant token on localhost sees curator nav (endpoints refuse it). Fix before first workshop-guest session.
+- export.py read-only open fails on a WAL DB with no -shm file (fresh copies, or server stopped) — fails safe; switch to a query-only connection.
+- Taxonomy: ~96 species with genus in family + 12 null family → GBIF pass; 144/492 lack order/class (missing from tree); Marasmius oreades no family.
 - wikidata.py lists Apiaceae as "likely edible" family (pending suggestion only) — remove.
 - Recipe regenerate + curator recipe writes not toxicity-gated; recipes have no audit table.
-- Participant guest token on localhost sees admin buttons; DELETE /api/walk/saves/{id} no identity check (B2 fixes).
 - GPS accuracy not recorded (Pixel EXIF). Anthriscus caucalis (138) inedible+toxic contradiction.
 - Enrichment paths not gated; enrichment queue in-memory. Identify 2013 job at 90/2367.
 - iNaturalist token expired; Google Drive token invalid; Ollama 'mistral' not installed.
 - Disk tight — move exports/old snapshots to DIGIERA. Docs drift: CLAUDE.md Alembic head, PhoneForaging path.
 
 ## History
+
+### 2026-10-19 21:26
+**Snapshot** — End of session — Session ended from Settings page
+DB: `snapshots/db_20261019_212625.sqlite`
+
+### 2026-10-19 21:26
+**Session ended** — Session ended from Settings page
+
+### 2026-10-19 21:23
+**B2 follow-up (safety): hazard blocker per stop as well as per species; red dot on the closed nav chip when critical count > 0.**
+
+**Built:**
+- gates.obs_unconfirmed_hazard + export.py per-stop BLOCKER 'hazard at stop <label> not human-confirmed: <species> (obs ...)' — fires even when the species is human-confirmed at another stop; obs missing from the load also blocks (fail closed); per-species blocker kept
+- site-header.js/css: #nav-chip-critical-dot on the drawer chip, driven by the same /api/experience/critical count as the ☠ Review badge (curator branch only, hidden at 0); chip aria-label names the count
+**Files:** `scripts/experience_export/gates.py`, `scripts/experience_export/export.py`, `frontend/static/js/site-header.js`, `frontend/static/css/site-header.css`
+**Pending:**
+- Melvin: browser check review Critical section + badge + chip dot; confirm walk 3 Atropa 22224/22225 + Senecio 22231; Stage C
+- export.py opens the DB with mode=ro: a fresh WAL-mode DB copy with no -shm file fails to open (live DB unaffected while the server runs)
+
+### 2026-10-19 21:14
+**Publish-as-experience Stage B2: experience_publications table, export --plan-json + hazard blocker, curator-only /api/experience router (publications, plan, verify-species, critical), saved-walk delete guard, critical hazards in review + red nav badge. No publish/push.**
+
+**Built:**
+- Migration 0054 experience_publications (slug unique; one default via partial unique index + code; saved_walk_id FK ON DELETE SET NULL) + model, noqa import
+- export.py --plan-json (structured plan on stdout) and --db; rule 7 BLOCKER: AI-agreed-only species on route that is toxic/deadly/unknown (or unlinked) fails the full build, plan still prints, nothing written
+- app/models/species.py is_toxic_severity() shared predicate; gates.is_toxic uses it
+- app/api/experience.py (router-level curator dependency on every route incl. GETs): publications list/get/create/patch, plan (subprocess --plan-json against the app's own DB), verify-species (edible/caution + toxicity none only; 2 history rows; re-read by id), critical (read-time, per observation)
+- DELETE /api/walk/saves/{id}: curator check; 409 naming slug if published; drafts deleted with the walk; unpublished kept as history
+- review.html: pinned Critical section (above filters/pagination) + red banner; Confirm species = PATCH review manually_verified; Re-identify = existing retry-ID panel; site-header red ☠ count badge on Review (curator only, hidden at 0)
+**Fixed:**
+- Walk DELETE had no identity check
+- index.html walk delete shows the API detail (409 slug) instead of bare HTTP status
+**Files:** `migrations/versions/0054_experience_publications.py`, `app/models/experience.py`, `app/main.py`, `app/models/species.py`, `app/api/experience.py`, `app/api/walk.py`, `scripts/experience_export/export.py`, `scripts/experience_export/gates.py`, `frontend/review.html`, `frontend/static/js/site-header.js`, `frontend/static/css/site-header.css`, `frontend/index.html`
+**Pending:**
+- Melvin: browser-check review Critical section, banner and red nav badge (implemented, unverified live)
+- Walk 3: Atropa bella-donna (obs 22224, 22225, stop 13) + Senecio ovatus (22231, stop 16) still AI-agreed only — confirm in review
+- C publish panel UI (confirm step warns the exact route is public + unpublish ≠ erasure; AI-agreed review list; verify buttons)
+- republish walk 4
+- DECISION Melvin: app-side Apiaceae culinary gate
+- DECISION Melvin: per-stop hazard gap — toxic species human-confirmed at one stop but AI-agreed-only at another stop shows no ☠ there and raises no blocker
+- /api/me is host-based, ignores tokens (participant token on localhost still sees curator nav; endpoints themselves 403)
+- CLAUDE.md Alembic head now 0054
 
 ### 2026-10-19 21:03
 **Snapshot** — before B2 experience_publications migration

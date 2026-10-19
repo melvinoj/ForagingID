@@ -7040,7 +7040,10 @@ async function deleteSavedWalk(id) {
   if (!confirm('Delete this saved walk?')) return;
   try {
     const r = await fetch(`/api/walk/saves/${id}`, { method: 'DELETE' });
-    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    if (!r.ok) {
+      const d = await r.json().catch(() => ({}));
+      throw new Error(d.detail || `HTTP ${r.status}`);   // 409 names the published slug
+    }
     if (_walkSaved && _walkSaved.id === id) {
       _walkSaved = null;          // the shown walk is no longer saved — title back to stop count
       _walkRefreshTitles();

@@ -15,6 +15,13 @@
   touch-action: manipulation; -webkit-tap-highlight-color: transparent;
 }
 #site-nav-chip:hover { background: var(--moss); }
+/* Critical hazards dot (B2) — chip is position:fixed, so it anchors this. */
+#nav-chip-critical-dot {
+  display: none; position: absolute; top: 1px; right: 1px;
+  width: 12px; height: 12px; border-radius: 50%;
+  background: #c62828; border: 2px solid #fff; pointer-events: none;
+}
+#nav-chip-critical-dot.visible { display: block; }
 
 #nav-drawer-scrim {
   display: none; position: fixed; inset: 0; z-index: 1400;
@@ -65,3 +72,4 @@
   text-align: center; display: none;
 }
 .nav-badge.visible { display: inline-block; }
+.nav-badge-critical { background: #c62828; color: #fff; }

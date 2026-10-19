@@ -1,37 +1,34 @@
 ## Current State
 
-_Last updated: 18 Oct 2026_
+Current State — 19 Oct 2026
 
-### Build status
-Server: START_ForagingID.command — uvicorn foreground + tee to logs/server_<ts>.log; port check; cleanup trap. Claude Code never starts the server.
-Launcher flags active: --reload-dir app + absolute --reload-exclude scripts/, migrations/, tests/; --timeout-graceful-shutdown 5 (reload now cancels running background tasks after 5 s — always check background_processes before app/ edits).
-Walk membership migration applied (Alembic head per CHANGELOG). WAL; busy_timeout 30000; synchronous=NORMAL.
-Snapshot before today's data fixes: db_20261018_081958 (commit 66095a85).
-
-### Completed 16–18 Oct
-- Toxic guard: shared _culinaryGate (frontend) + culinary_allowed() (backend) — culinary content only when toxicity_severity='none', fail closed ("⚠ toxicity unknown"); covers stop cards, walk sheet, export summary, proximity alerts and all 7 recipe read endpoints. Proven against a DB copy.
-- Multi-species stops: export summary + proximity alerts list every species per stop; note stops export correctly.
-- Walk membership by route proximity: computed on load from saved obs + confirmed obs within buffer (default 25 m, slider 10–60) since save date, minus manual removals; "AI-agreed" chips; "Human-confirmed only" filter; "7a"-style new stops + "Renumber stops"; older-photo candidates as a review list; stops resolved from current observations (stale labels fixed). Shared membership module used by walk API, experience export and foray auto-populate.
-- Saved-walk loading: sheet collapses, route drawn, map fits walk, other pins hidden ("Show all pins" toggle), walk panel opens; "Open a saved walk" in Tools; stop counts fixed.
-- Walk 4 line fixed: 4.3 km routing detour through Gresgen replaced by straight dashed legs 22→1 ("no mapped footpath"); all stops 0–37 m from line; 2.9 km / ~35 min (was 6.4 km). Older-photo candidates 37 → 0 (artefact of the bad line).
-- Wrong-species AI recipes archived (5 Stellaria, 6 Prunus avium "Field Mint Broth", 7 Prunus domestica, 8 Cardamine flexuosa) — 26 May batch; none were on the published page.
-- Export summary: walk name as title, correct distance, LandMemory footer, rendered recipe Markdown, recipe priority curator > own menu > ai_generated (no repeats), repeat species as "Also here … (see stop N)".
-- Google Maps export: 10 points spread along the whole route; GPX download (full track + stop waypoints).
-- Experience export build fixed (broken since 16 Oct by toxic-guard style move); rebuilds cleanly, not published.
-- Bulk approval of 17 Oct Rümmelsbühl photos completed (after an earlier reload interrupted it).
-- Legal: Impressum + Datenschutz live; experience footer Contact · Impressum · Datenschutz.
+### Completed 19 Oct
+- Second Opinion: routes by obs_category (fungi → no PlantNet; PlantNet tickable as manual override), per-source top-5 slots, explicit empty-source warnings, iNat gets lat/lng/date; fixed iNat score divided by 100 twice (Second Opinion only — scan, retry-identify, reidentify, lookup checked OK); setCategory closes an open panel
+- PlantNet regional demotion: project stays 'all', nb-results=30 (still 1 call); non-European candidates demoted not hidden, labelled "not native to Europe — planted?"; raw + demoted rank stored; lists in data/reference/plantnet_europe_species.json + scripts/refresh_plantnet_europe_lists.py; scan agreement now checked before min-confidence (OFF path matches all 223 logged decisions + 100k generated cases)
+- Setting regional_demotion_affects_auto_approve added, default OFF; dry run 0 gained / 0 lost at 0.7 (coverage 265 of 2,069 P1 rows)
+- PlantNet A/B (45 fair pairs): regional projects 28/39 top-1/top-5 vs all 26/38; regional loses garden exotics (Helianthus, Fuchsia, Platanus) — hence demotion instead of switching
+- 5 suspected misIDs sent to review (review_label data_trust, dry-run note appended): 19805, 19820, 20572, 21472, 22131 — snapshot db_20261019_200454 (commit 835bea6e), edits 19694–19698
+- Ulmus laciniata card 740 traced: new card from obs 22131 (new photo), not a restore of deleted 619
 
 ### Pending / next
-1. Browser check walk 4: dashed legs + line under every stop; export summary (title, 2.9 km, no recipe at stops 1–2, "Also here" lines); Google link covers the loop; GPX opens with full track; toxic stops 4/6/10/24 ☠ only.
-2. Published experience page is stale (old line, 6.4 km, pre-membership species) — republish via the Publish flow once built. Export draws straight legs solid, not dashed — handle in B1.
-3. Publish as experience — Stage B1 (export refactor: --walk-id/--overrides/--out/--plan-only, hide_species_ids, "More walks" line inside 500 px card; must use membership module). Decisions: repo app-owned; root = default walk + /w/<slug>/ (canonical → root); per-walk title/intro/where overrides; verify action edible+caution only; confirm step warns exact route public + unpublish ≠ erasure; review list shows AI-agreed species.
-4. Then B2 (experience_publications table, curator-only router incl. GETs, verify endpoint, saved-walk delete guard) and C (panel UI).
-5. Invalidate approved wrong-species drafts 94–105 from the 26 May batch (taste/medicinal) — not showing now, but stale.
-6. Caffeinate: confirm off after scan-page toggle (Activity Monitor search) and through a real reload.
-7. Walk Stage 4 filters; Stage 5 backend (ORS elevation, PUT saved walk, draft autosave).
-8. PWA install on Pixel 8 via ngrok static domain.
+1. Browser checks: Second Opinion on #24356 (no PlantNet, panel closes on category switch, ⚙ selector); demotion label on review cards
+2. Decide regional_demotion_affects_auto_approve ON/OFF; if ON, watch next P1 batch log for "agreement after regional demotion"
+3. Review the 5 data_trust items (21472, 22131 suggestions weak — judge from photo); then card 740 → 0 obs, add to junk cleanup
+4. Image downscale before API upload (~1600 px): 4.8–8.2 MB photos stall uploads; iNat fails when uploading alongside PlantNet
+5. Publish B1 in progress in its own thread (partial gates.py/export.py/overrides edits swept into commit 835bea6e)
+6. Browser check walk 4 (dashed legs, summary, Google link, GPX, toxic stops ☠ only)
+7. Republish stale experience page once B1 built; then B2, C
+8. Invalidate approved wrong-species drafts 94–105 (26 May batch)
+9. Caffeinate: confirm off after scan-page toggle and through a real reload
+10. Walk Stage 4 filters; Stage 5 backend (ORS elevation, PUT saved walk, draft autosave)
+11. PWA install on Pixel 8 via ngrok static domain
 
 ### Known issues / backlog
+- Ingest option C: fungi still go to PlantNet once at ingest while category is plant (e.g. #24347 Aleuria aurantia filed as plant); category_suggested never feeds obs_category
+- Audit: approved/manually_verified obs whose species is on no European list (some planted, some misIDs)
+- Demotion lifts tiny-score European names on non-plant photos (cosmetic; possible ~1% floor)
+- Species lookup sends iNat no photo date (seasonal ranking only)
+- Check overrides/ contents committed in 835bea6e
 - SAFETY: Aruncus dioicus 'edible', unverified, toxicity none — Melvin to decide
 - SAFETY: remaining unverified "edible"/toxic species app-wide (Heracleum sphondylium, Chaerophyllum hirsutum, Sambucus ebulus, Hypholoma fasciculare, Iris pseudacorus …)
 - No UI path to human-verify an already-'edible' species (planned as Publish B2 verify endpoint)
@@ -43,17 +40,33 @@ Snapshot before today's data fixes: db_20261018_081958 (commit 66095a85).
 - Re-ID sweep: remaining obs of H. perfoliatum, Knautia arvernensis, Thymus serpyllum/praecox/polytrichus, Rubus gratus outside the walks
 - Anthriscus caucalis (138): inedible + toxic contradiction
 - Junk/zero-obs cards awaiting cleanup OK (keep 653 Oenanthe crocata)
-- Identification Stage B: GBIF out-of-range flag; PlantNet weurope vs all test
+- Identification Stage B remainder: GBIF out-of-range flag
 - Enrichment paths not gated; enrichment queue in-memory; fungus re-enrich wipes pending edibility suggestion
 - Identify — 2013 job at 90/2367
-- iNaturalist token expired — refresh before next processing
+- iNaturalist token live, expires ~13:41 20 Oct — refresh before next processing
 - Google Drive token invalid; Ollama 'mistral' not installed
 - Disk tight — move exports/old snapshots to DIGIERA
 - Docs drift: CLAUDE.md Alembic head, PhoneForaging path
 - Tracked leftovers: your_db.db, current.txt; review_status 'not_applicable' (1 row)
-- Field-recorder companion (Capacitor: background GPS + pocket proximity alerts) — on the simmer; GPX tracker + GPX import covers screen-off tracking meanwhile
+- Field-recorder companion (Capacitor: background GPS + pocket proximity alerts) — on the simmer
 
 ## History
+
+### 2026-10-19 20:45
+**Snapshot** — End of session — Session ended from Settings page
+DB: `snapshots/db_20261019_204530.sqlite`
+
+### 2026-10-19 20:45
+**Session ended** — Session ended from Settings page
+
+### 2026-10-19 20:05
+**Sent 5 suspected non-European misIDs to review via POST /api/audit/send-to-review (snapshot db_20261019_200454 first); traced Ulmus laciniata card 740 (read-only)**
+
+**Fixed:**
+- 19805, 19820 (Corylus cornuta), 20572 (Rosa maximowicziana), 21472 (Quercus velutina), 22131 (Ulmus laciniata) -> needs_review, review_label=data_trust, [Audit] dry-run note appended; species unchanged
+**Pending:**
+- Melvin: correct species in review for the 5 rows (suggested Corylus avellana x2, Rosa arvensis, Quercus rubra, Ulmus glabra)
+- Species 740 Ulmus laciniata will be orphaned if 22131 is corrected; species card created by scan _upsert_species_card for a new photo on 17 Jul (no name-level guard against re-creating deleted species)
 
 ### 2026-10-19 20:04
 **Snapshot** — before sending 5 suspected misIDs to review (19805,19820,20572,21472,22131)

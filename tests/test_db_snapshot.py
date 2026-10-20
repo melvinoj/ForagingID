@@ -78,7 +78,7 @@ def test_snapshot_is_plain_file_readable_readonly():
     assert c.execute("SELECT count(*) FROM t").fetchone()[0] == 5
     c.close(); live.close()
     assert not (d / "db_20261020_120000.sqlite-wal").exists()
-    assert not (d / "db_20261020_120000.sqlite.partial").exists()
+    assert sorted(f.name for f in d.iterdir() if f.name.startswith("db_")) == ["db_20261020_120000.sqlite"]
 
 
 def test_snapshot_sees_rows_committed_by_another_open_connection():

@@ -82,6 +82,10 @@ def backup_to_file(src_path: Path, dest_path: Path) -> dict:
         raise SnapshotError(f"backup failed: {exc}") from exc
     finally:
         src.close()
+    # The backup copies the source's WAL header, so SQLite opened -wal/-shm for the
+    # partial file; after journal_mode=DELETE and close they are leftovers.
+    for side in (tmp.with_name(tmp.name + "-wal"), tmp.with_name(tmp.name + "-shm")):
+        side.unlink(missing_ok=True)
     if qc != "ok":
         tmp.unlink(missing_ok=True)
         raise SnapshotError(f"snapshot quick_check failed: {qc}")

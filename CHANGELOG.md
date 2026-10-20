@@ -98,6 +98,10 @@ Snapshots 20 Oct: db_20261020_053600, _062739, _063515, _072552 (re-route, Rümm
 
 ## History
 
+### 2026-10-20 21:19
+**Snapshot** — Batch 2: backup-API snapshot re-check (no side files)
+DB: `snapshots/db_20261020_211916.sqlite`
+
 ### 2026-10-20 21:18
 **Snapshot** — Batch 2: first snapshot through the SQLite backup API (verification)
 DB: `snapshots/db_20261020_211829.sqlite`

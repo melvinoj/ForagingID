@@ -74,6 +74,8 @@
   .walk-stop-sp img, .walk-stop-sp .noimg { width: 52px; height: 52px; border-radius: 6px; object-fit: cover;
     flex: 0 0 auto; background: var(--leaf-pale); }
   .walk-stop-species { font-family: var(--font-display); font-style: italic; }
+  .walk-stop-also { font-size: 0.82rem; margin-top: 6px; color: #556040; }
+  .walk-stop-also .badge { margin-right: 2px; }
 
   .chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 4px 0 4px; }
   .chip { min-height: 36px; padding: 0 14px; border-radius: 18px; border: 1px solid rgba(255,255,255,.18);
@@ -254,6 +256,18 @@ window.DATA = {{DATA}};
       (common ? '<div class="walk-stop-common">' + esc(common) + "</div>" : "") +
       '<div class="walk-stop-meta">' + badge(s) + "</div></div></div>";
   }
+  // Species already shown at an earlier stop: one compact line, safety badge
+  // kept (rp.badge is set by gates.repeat_line_badge), no photo or recipe.
+  function alsoHere(s, rp) {
+    return '<div class="walk-stop-also">Also here: ' + (rp.badge ? badge({ badge: rp.badge }) + " " : "") +
+      '<span class="walk-stop-species">' + esc(s.sci) + "</span> — see stop " + esc(rp.first) + "</div>";
+  }
+  function stopBody(st) {
+    var full = st.species.filter(function (id) { return !st.repeat[id]; });
+    var rep  = st.species.filter(function (id) { return st.repeat[id]; });
+    return full.map(function (id) { return stopSpecies(byId[id]); }).join("") +
+      rep.map(function (id) { return alsoHere(byId[id], st.repeat[id]); }).join("");
+  }
 
   // ── header ──
   document.title = D.title;
@@ -301,7 +315,7 @@ window.DATA = {{DATA}};
     return '<div class="walk-stop-card" id="stop-' + st.n + '">' +
       '<div class="stop-head" data-stop="' + st.n + '"><span class="walk-stop-num">' + st.n + "</span>" +
       (st.species.length > 1 ? st.species.length + " species here" : "Stop " + st.n) + "</div>" +
-      st.species.map(function (id) { return stopSpecies(byId[id]); }).join("") + "</div>";
+      stopBody(st) + "</div>";
   }).join("");
 
   var markers = {};
@@ -372,7 +386,7 @@ window.DATA = {{DATA}};
       var m = L.marker([st.lat, st.lng], { icon: icon, title: "Stop " + st.n })
         .addTo(map)
         .bindPopup('<div class="stop-head"><span class="walk-stop-num">' + st.n + "</span>Stop " + st.n + "</div>" +
-                   st.species.map(function (id) { return stopSpecies(byId[id]); }).join(""), { maxWidth: 290 });
+                   stopBody(st), { maxWidth: 290 });
       markers[st.n] = m;
       bounds.push([st.lat, st.lng]);
     });

@@ -46,6 +46,37 @@ Alembic head: 0054 (experience_publications). Snapshots this session: db_2026101
 
 ## History
 
+### 2026-10-20 05:36
+**Snapshot** — before straight_ranges + walk reorder + little foray (id 3) detour fix
+DB: `snapshots/db_20261020_053600.sqlite`
+
+### 2026-10-20 05:34
+**Diagnosis only (no writes): little foray (id 3) route line + 13.5 km, repeat-species report, stop order/numbering logic; proposals awaiting Melvin's OK.**
+
+**Pending:**
+- little foray (id 3) line not visible: data valid (LineString 462 vertices, [lng,lat], closed loop) and the loader takes the same saved-geometry branch as id 4 (index.html:5884 → solid polyline at 5985); cause not found statically — needs Melvin's console check
+- little foray (id 3) 13.5 km = saved ORS line length (13,436 m); ORS detours on legs 5→6, 8→9→10→11, 16→17→18 (up to 1.3 km north of the stops)
+- Stop 1 = southernmost stop on both walks: _clusterStops sorts pins by latitude (index.html:5685), _nnRoute starts at stops[0] (5604); direction = nearest-neighbour from there; ORS follows the given order; saved order is stored in waypoints_json and used as-is on load
+- PROPOSAL awaiting OK: straight legs as vertex ranges (straight_ranges, reads old straight_from) + server reorder endpoint (Reverse direction / Start here) that reorders waypoints and reverses/rotates the saved line and ranges; distance kept, no ORS call
+- PROPOSAL awaiting OK: little foray (id 3) detour legs → straight dashed ranges, distance recomputed (needs explicit OK — changes the saved figure)
+- Fix wrong function name in index.html _walkRepeatSplit comment (species_first_stop does not exist)
+- Melvin: earlier report 'one walk doesn't load / no pins' — no cause found in the repeat-line diff; need symptoms if it recurs
+
+### 2026-10-20 05:20
+**Walk panel: same species only once per walk (full card at first stop, compact 'Also here … — see stop N' line after, safety badge kept) in the app walk panel and the experience export walk tab; route-line diagnosis (cause not found statically — needs Melvin's console check).**
+
+**Built:**
+- frontend/index.html: _walkRepeatSplit(route) — the one JS repeat rule, now used by renderWalkPanel AND exportWalkSummary (replaces the summary's inline loop); _walkEdibBadge() extracted from the stop card so full and compact lines share one badge; compact line keeps ☠ toxic/deadly, ⚠ toxicity unknown or caution, no recipe/edible-parts; repeat-only stops still render
+- scripts/experience_export: gates.REPEAT_BADGE_KINDS + repeat_line_badge (deadly/toxic/unknown/caution/apiaceae kept); export.py st['repeat'] per stop (st['species'] unchanged, so hidden check, ☠ flag and per-stop blocker untouched) + pre-write check that no repeat drops a safety badge; template stopBody/alsoHere for stop cards and marker popups; plan-json stops[].repeats
+**Fixed:**
+- Dryopteris filix-mas on Rümmelsbühl foray (id 4): full card at stop 4 only; stop 6 shows 'Also here: ☠ … — see stop 4'
+**Files:** `frontend/index.html`, `scripts/experience_export/export.py`, `scripts/experience_export/gates.py`, `scripts/experience_export/templates/index.html`, `dist/ (rebuilt, gitignored)`
+**Pending:**
+- Route line missing on Rümmelsbühl foray (id 4) and little foray (id 3): data + API + code path verified correct (saved geometry used, no ORS call in logs); cause not found statically — Melvin to run the console check and paste the result, then fix
+- Melvin: browser check of compact repeat lines in the walk panel (unverified live)
+- Melvin: browser check review Critical section + badge + chip dot; Stage C
+- Daucus carota (Apiaceae) shows no badge on app repeat line (app has no Apiaceae rule — existing DECISION)
+
 ### 2026-10-19 21:26
 **Snapshot** — End of session — Session ended from Settings page
 DB: `snapshots/db_20261019_212625.sqlite`

@@ -5763,6 +5763,38 @@ function _stopSpecies(s) {
   return s.p && s.p.species_primary ? [s.p.species_primary] : [];
 }
 
+// Repeat rule — the ONE implementation, shared by the walk panel stop cards and
+// the summary export: a species gets its full section at the first stop it
+// appears at in walk order; every later stop lists it as a compact "Also here"
+// line pointing back to that stop (label as displayed, "7a" included).
+// Returns one {label, full: [names], repeats: [{name, first_label}]} per stop.
+// (The static experience export can't load this file — its Python mirror is
+// species_first_stop() in scripts/experience_export/export.py.)
+function _walkRepeatSplit(route) {
+  const firstStopOf = {};
+  return (route || []).map((stop, i) => {
+    const label = _stopLabel(stop, i);
+    const full = [], repeats = [];
+    for (const name of _stopSpecies(stop)) {
+      if (firstStopOf[name] === undefined) { firstStopOf[name] = label; full.push(name); }
+      else if (firstStopOf[name] !== label) repeats.push({ name, first_label: firstStopOf[name] });
+    }
+    return { label, full, repeats };
+  });
+}
+
+// Walk panel species badge (full card AND compact repeat line). Blocked by the
+// toxic guard → the ☠ / ⚠ toxicity-unknown warning, never an edibility label;
+// otherwise the edibility verdict.
+function _walkEdibBadge(gate, edib) {
+  if (!gate.ok) return _culinaryGateBadge(gate);
+  if (!edib) return '';
+  return `<span style="font-size:0.68rem;padding:1px 6px;border-radius:4px;font-weight:600;
+             background:${edib==='edible'?'#d1f5da':edib==='toxic'?'#dc2626':edib==='inedible'?'#fef3c7':edib==='medicinal'?'#e0e7ff':'#f3f3f3'};
+             color:${edib==='edible'?'#166534':edib==='toxic'?'#fff':edib==='inedible'?'#854d0e':edib==='medicinal'?'#3730a3':'#555'}">
+             ${_esc(edib)}</span>`;
+}
+
 // ORS public directions API: max 50 coordinates per request. A circular walk
 // sends the start again at the end, so it can hold one stop fewer.
 function _walkMaxStops() { return _walkCircular ? 49 : 50; }
@@ -6178,6 +6210,7 @@ function renderWalkPanel(route, enrichMap) {
   const _season = _currentSeason();
   const _seasonIcon = { spring: '🌱', summer: '☀️', autumn: '🍂', winter: '❄️', 'year-round': '🔄' };
   let html = '';
+  const _repeatSplit = _walkRepeatSplit(route);
   for (let i = 0; i < route.length; i++) {
     const { p, lat, lng } = route[i];
 
@@ -6209,7 +6242,7 @@ function renderWalkPanel(route, enrichMap) {
     const _stop    = route[i];
     const _spList  = _stopSpecies(_stop);
     let speciesHtml = '';
-    for (const spName of _spList) {
+    for (const spName of _repeatSplit[i].full) {
       const _enrichData = enrichMap[spName];
       const ci       = _enrichData?.culinary || null;
       const spData   = _enrichData?.species  || null;
@@ -6251,13 +6284,7 @@ function renderWalkPanel(route, enrichMap) {
 
       // Blocked species (toxic/deadly/unknown): the badge is the toxicity
       // warning, never an edibility label (whatever edibility_status says).
-      const edibBadge = !_gate.ok
-        ? _culinaryGateBadge(_gate)
-        : edib
-        ? `<span style="font-size:0.68rem;padding:1px 6px;border-radius:4px;font-weight:600;
-             background:${edib==='edible'?'#d1f5da':edib==='toxic'?'#dc2626':edib==='inedible'?'#fef3c7':edib==='medicinal'?'#e0e7ff':'#f3f3f3'};
-             color:${edib==='edible'?'#166534':edib==='toxic'?'#fff':edib==='inedible'?'#854d0e':edib==='medicinal'?'#3730a3':'#555'}">
-             ${_esc(edib)}</span>` : '';
+      const edibBadge = _walkEdibBadge(_gate, edib);
 
       // Culinary notes: brief hint from edible_parts / taste_notes / preparation_methods
       let culinaryNotesHtml = '';
@@ -6283,6 +6310,20 @@ function renderWalkPanel(route, enrichMap) {
       </div>`;
     }
 
+    // Repeats: one compact line each — safety badge only (☠ toxic/deadly,
+    // ⚠ toxicity unknown, or caution), no recipe, no edible-parts text.
+    let alsoHtml = '';
+    for (const rp of _repeatSplit[i].repeats) {
+      const _ed   = enrichMap[rp.name];
+      const _g    = _culinaryGate(_ed ? _ed._toxicity : null);
+      const _pin  = (_stop.pins || []).map(x => x.p).find(pp => pp.species_primary === rp.name) || {};
+      const _edib = _ed?.species?.edibility_status || _pin.edibility_status;   // same source as the full card
+      const _b    = (!_g.ok || _edib === 'caution') ? _walkEdibBadge(_g, _edib) : '';
+      alsoHtml += `<div class="walk-stop-also" style="font-size:0.75rem;color:#556040;margin-top:4px">
+        Also here: ${_b} <em>${_esc(rp.name)}</em>${_walkMemberChips(_stop, rp.name)} — see stop ${_esc(rp.first_label)}
+      </div>`;
+    }
+
     const _joinedStop = _stop.origin === 'joined';
     html += `<div class="walk-stop-card"${_joinedStop ? ' style="border-style:dashed"' : ''}>
       <div>
@@ -6291,7 +6332,8 @@ function renderWalkPanel(route, enrichMap) {
         ${_spList.length > 1 ? `<span style="font-size:0.72rem;color:#556040;font-weight:600">${_spList.length} species here</span>` : ''}
         ${distStr2 ? `<span class="walk-stop-dist">${_esc(distStr2)}</span>` : ''}
       </div>
-      ${speciesHtml || `<div style="font-size:0.75rem;color:#999;margin-top:4px">No confirmed species here now</div>`}
+      ${speciesHtml}${alsoHtml}
+      ${(speciesHtml || alsoHtml) ? '' : `<div style="font-size:0.75rem;color:#999;margin-top:4px">No confirmed species here now</div>`}
     </div>`;
   }
   document.getElementById('walk-stops-scroll').innerHTML = html;
@@ -7082,7 +7124,7 @@ async function exportWalkSummary() {
   // by /api/sharing/export-walk).
   // A species already listed at an earlier stop becomes a compact "also here"
   // line (with its ☠ warning if blocked) instead of a second full block.
-  const _firstStopOf = {};          // species → label of the first stop listing it
+  const _repeatSplit = _walkRepeatSplit(_activeWalkRoute);   // shared with the walk panel
   const _dishesShown = new Set();   // summary-wide: the same dish is never shown twice
   const stops = _activeWalkRoute.map((stop, i) => {
     const { p, lat, lng } = stop;
@@ -7091,15 +7133,13 @@ async function exportWalkSummary() {
           _activeWalkRoute[i-1].lat, _activeWalkRoute[i-1].lng,
           lat, lng
         );
-    const label = _stopLabel(stop, i);
-    const also_here = [];
-    const names = _stopSpecies(stop).filter(spName => {
-      if (_firstStopOf[spName] === undefined) { _firstStopOf[spName] = label; return true; }
-      const ed = _activeWalkEnrich?.[spName];
+    const label = _repeatSplit[i].label;
+    const names = _repeatSplit[i].full;
+    const also_here = _repeatSplit[i].repeats.map(rp => {
+      const ed = _activeWalkEnrich?.[rp.name];
       const gate = _culinaryGate(ed ? ed._toxicity : null);
-      also_here.push({ species_scientific: spName, first_label: _firstStopOf[spName],
-                       toxicity_warning: gate.ok ? null : gate.label });
-      return false;
+      return { species_scientific: rp.name, first_label: rp.first_label,
+               toxicity_warning: gate.ok ? null : gate.label };
     });
     const species = names.map(spName => {
       const ed = _activeWalkEnrich?.[spName];

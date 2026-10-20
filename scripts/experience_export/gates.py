@@ -198,6 +198,19 @@ def safety_texts(sp: dict, ci: dict, conn: sqlite3.Connection, toxic_fallback: s
     return out
 
 
+# ── repeat lines (species already shown at an earlier stop) ──────────────────
+
+# Badges a compact "Also here" line must keep — every safety signal: ☠ deadly /
+# toxic, ⚠ toxicity unknown, caution, and the Apiaceae look-alike warning.
+# Edible / inedible / none carry no warning, so the compact line drops them.
+REPEAT_BADGE_KINDS = ("deadly", "toxic", "unknown", "caution", "apiaceae")
+
+
+def repeat_line_badge(badge: dict):
+    """The badge for a repeat line (same dict edibility_badge() made), or None."""
+    return badge if badge["kind"] in REPEAT_BADGE_KINDS else None
+
+
 # ── recipes ──────────────────────────────────────────────────────────────────
 
 def recipe_allowed(sp: dict, ci: dict, recipe: dict, conn: sqlite3.Connection, cfg: dict):

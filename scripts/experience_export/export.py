@@ -725,6 +725,18 @@ def main(argv=None):
     for pos, st in enumerate(stops):
         for sid in st["species"]:
             first_stop.setdefault(sid, pos)
+    # Repeats: full species card only at the first stop in walk order; later
+    # stops get a compact "Also here … — see stop N" line that keeps the safety
+    # badge (gates.repeat_line_badge). Mirrors _walkRepeatSplit in
+    # frontend/index.html — not shared: this static page cannot load the app's
+    # JS, and the gate cross-checks below run here in Python. st["species"]
+    # still lists EVERY species at the stop (☠ flag, hidden check, blockers).
+    for st in stops:
+        st["repeat"] = {}
+        for sid in st["species"]:
+            first_label = stops[first_stop[sid]]["n"]
+            if first_label != st["n"]:
+                st["repeat"][str(sid)] = {"first": first_label, "badge": gates.repeat_line_badge(pub[sid]["badge"])}
     missing_from_stops = [pub[s]["sci"] for s in pub if s not in first_stop]
     if missing_from_stops:
         warnings.append(f"species not on any stop (listed last): {missing_from_stops}")
@@ -823,6 +835,10 @@ def main(argv=None):
     for sid in hide_sp:
         if sid in pub or any(sid in st["species"] for st in stops) or any(r["species_id"] == sid for r in recipes_out):
             die(f"hidden species {sid} still present in the output")
+    for st in stops:                                        # a repeat line never drops a safety badge
+        for k, rp in st["repeat"].items():
+            if pub[int(k)]["badge"]["kind"] in gates.REPEAT_BADGE_KINDS and rp["badge"] != pub[int(k)]["badge"]:
+                die(f"repeat line for {pub[int(k)]['sci']} at stop {st['n']} lost its {pub[int(k)]['badge']['kind']} badge")
 
     # ── write (skipped by --plan-only / --plan-json, and when a blocker stands) ──
     meta, size = None, 0
@@ -875,7 +891,9 @@ def main(argv=None):
             "distance": {"distance_m": walk["distance_m"], "duration_min": walk["duration_min"],
                          "route_vertices": len(line or []), "straight_from": straight_from},
             "observations": {"member": len(obs_order), "pass": len(passing), "fail": len(failing)},
-            "stops": [{"label": st["n"], "species_ids": st["species"], "toxic": st["toxic"]} for st in stops],
+            "stops": [{"label": st["n"], "species_ids": st["species"], "toxic": st["toxic"],
+                       "repeats": {k: {"first": v["first"], "badge": v["badge"]["kind"] if v["badge"] else None}
+                                   for k, v in st["repeat"].items()}} for st in stops],
             "emptied_stops": emptied_stops,
             "public_species": [{
                 "id": p["id"], "scientific_name": p["sci"], "en": p["en"], "badge": p["badge"]["kind"],

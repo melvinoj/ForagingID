@@ -3529,7 +3529,8 @@ function _cnRefreshDisplay(sciName) {
 
 // ── Pending AI Drafts inline review ───────────────────────────────────────
 
-const _PD_LABELS = { taste_notes: 'Taste & Texture', medicinal_notes: 'Medicinal & Herbalism', recipe: 'Recipe' };
+const _PD_LABELS = { taste_notes: 'Taste & Texture', medicinal_notes: 'Medicinal & Herbalism', recipe: 'Recipe',
+  preparation_warnings: 'Preparation warning — source text, not AI; approving makes it your text' };
 
 function initPendingDrafts(data) {
   const sec = document.getElementById('sec-pending-drafts');

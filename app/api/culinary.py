@@ -30,7 +30,7 @@ from app.services.ai_placeholder import is_ai_placeholder
 from app.models.culinary import CulinaryInfo
 from app.models.notes import MapNote
 from app.models.observation import Observation
-from app.models.species import CulinaryInfoHistory, EnrichmentSource, Species, SpeciesAIDraft, SpeciesCandidate, SpeciesRecipe, SpeciesEdibilityCondition, SpeciesLookalike, culinary_allowed
+from app.models.species import CulinaryInfoHistory, EnrichmentSource, Species, SpeciesAIDraft, SpeciesCandidate, SpeciesRecipe, SpeciesEdibilityCondition, SpeciesLookalike, culinary_allowed, CURATOR_DRAFT_FIELDS, is_curator_authored
 from app.models.encounter import Encounter
 from app.models.foray_session import SessionSpecies
 from app.models.notification import NotificationDismissal
@@ -391,6 +391,12 @@ async def ai_draft_review_queue(
     )
     rows = (await db.execute(stmt)).all()
 
+    # Curator-review drafts show what is in the field now (replaced on approval).
+    _cur_ids = {d.species_id for d, _ in rows if d.field_name in CURATOR_DRAFT_FIELDS}
+    ci_by_sp = {c.species_id: c for c in (await db.execute(
+        select(CulinaryInfo).where(CulinaryInfo.species_id.in_(_cur_ids))
+    )).scalars().all()} if _cur_ids else {}
+
     species_map: dict = OrderedDict()
     for draft, sp in rows:
         key = sp.scientific_name
@@ -401,13 +407,17 @@ async def ai_draft_review_queue(
                 "family": sp.family,
                 "drafts": [],
             }
-        species_map[key]["drafts"].append({
+        item = {
             "id": draft.id,
             "field_name": draft.field_name,
             "draft_text": draft.draft_text,
             "generated_at": draft.generated_at.isoformat() if draft.generated_at else None,
             "model": draft.model,
-        })
+        }
+        if draft.field_name in CURATOR_DRAFT_FIELDS:
+            _ci = ci_by_sp.get(draft.species_id)
+            item["current_text"] = getattr(_ci, draft.field_name, None) if _ci else None
+        species_map[key]["drafts"].append(item)
 
     result = []
     for sci_name, item in species_map.items():
@@ -2356,11 +2366,12 @@ async def approve_ai_draft(
     - Copies the approved text to culinary_info.{field}
     - Adds the field to ci.ai_approved_fields_json
 
-    Field must be one of: taste_notes, medicinal_notes, recipe, medicinal_folklore
+    Field must be one of: taste_notes, medicinal_notes, recipe, medicinal_folklore,
+    or a curator-review field (CURATOR_DRAFT_FIELDS: preparation_warnings).
     """
     if identity.is_guest:
         raise HTTPException(403, "Curator only")
-    _APPROVABLE = {"taste_notes", "medicinal_notes", "recipe", "medicinal_folklore"}
+    _APPROVABLE = {"taste_notes", "medicinal_notes", "recipe", "medicinal_folklore"} | CURATOR_DRAFT_FIELDS
     if field not in _APPROVABLE:
         raise HTTPException(400, f"field must be one of: {sorted(_APPROVABLE)}")
 
@@ -2396,6 +2407,54 @@ async def approve_ai_draft(
     # Server-derived provenance (is_guest 403 guard above → curator). body.approved_by ignored.
     draft.approved_by = "human"
 
+    # Curator-review drafts (D3-01): source text that becomes the field's value
+    # only by this approval. Approving (as-is or rewritten) IS the curator
+    # authoring it, so the history row is changed_by='human' with the real
+    # old_value — the row gates.human_authored() and the enrichment lock read.
+    # Not tracked in ai_approved_fields_json (it is not AI content).
+    if field in CURATOR_DRAFT_FIELDS:
+        if not (approved_text or "").strip():
+            raise HTTPException(422, f"Empty '{field}' — reject the draft instead of approving empty text.")
+        ci = await db.scalar(select(CulinaryInfo).where(CulinaryInfo.species_id == sp.id))
+        if not ci:
+            ci = CulinaryInfo(species_id=sp.id)
+            db.add(ci)
+            await db.flush()
+        current = getattr(ci, field, None)
+        latest = (await db.execute(
+            select(CulinaryInfoHistory.changed_by, CulinaryInfoHistory.new_value)
+            .where(CulinaryInfoHistory.culinary_info_id == ci.id)
+            .where(CulinaryInfoHistory.field_name == field)
+            .order_by(CulinaryInfoHistory.changed_at.desc(), CulinaryInfoHistory.id.desc())
+            .limit(1)
+        )).first()
+        # The field was hand-edited after this draft was queued: never replace
+        # curator text from a stale draft.
+        if latest and is_curator_authored(latest[0], latest[1], current) \
+                and approved_text.strip() != (current or "").strip():
+            raise HTTPException(
+                status_code=409,
+                detail=f"'{field}' already holds your own text (edited on the species page) — "
+                       "reject this draft, or change the text on the species page.",
+            )
+        setattr(ci, field, approved_text)
+        db.add(CulinaryInfoHistory(
+            culinary_info_id=ci.id,
+            field_name=field,
+            old_value=current,
+            new_value=approved_text,
+            changed_at=datetime.utcnow(),
+            changed_by="human",
+        ))
+        await db.commit()
+        return {
+            "ok": True,
+            "species": species_name,
+            "field": field,
+            "status": draft.status,
+            "approved_text_preview": approved_text[:200],
+        }
+
     # Apply to culinary_info
     ci = await db.scalar(select(CulinaryInfo).where(CulinaryInfo.species_id == sp.id))
     if not ci:
@@ -2417,6 +2476,7 @@ async def approve_ai_draft(
                 detail=f"Field '{field}' is human-locked and cannot be overwritten by an AI draft.",
             )
 
+    old_value = getattr(ci, field, None)   # B3-02: history records what the approval replaced
     setattr(ci, field, approved_text)
 
     # Track in ai_approved_fields_json
@@ -2430,7 +2490,7 @@ async def approve_ai_draft(
         db.add(CulinaryInfoHistory(
             culinary_info_id=ci.id,
             field_name=field,
-            old_value=None,
+            old_value=old_value,
             new_value=approved_text,
             changed_at=datetime.utcnow(),
             changed_by=f"ai_approved:human",
@@ -2605,11 +2665,13 @@ async def _generate_drafts_for_species(
         )
     else:
         # "Regenerate" path: force fresh drafts regardless of existing approved ones.
-        # 1. Invalidate any existing PENDING drafts (so they don't clutter the queue)
+        # 1. Invalidate any existing PENDING drafts (so they don't clutter the queue).
+        #    Curator-review drafts are not model output — regenerate never touches them.
         await db.execute(
             _upd(SpeciesAIDraft)
             .where(SpeciesAIDraft.species_id == sp.id)
             .where(SpeciesAIDraft.status == "pending")
+            .where(SpeciesAIDraft.field_name.notin_(CURATOR_DRAFT_FIELDS))
             .values(status="invalidated")
         )
         await db.flush()

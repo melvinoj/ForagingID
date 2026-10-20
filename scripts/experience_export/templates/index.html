@@ -122,6 +122,7 @@
   .warn { margin-top: 8px; font-size: 0.8rem; border-radius: 0 6px 6px 0; padding: 7px 9px; line-height: 1.4; }
   .warn.toxic { background: rgba(220,38,38,.14); color: #fecaca; border-left: 3px solid var(--app-toxic); }
   .warn.lookalike { background: rgba(200,155,60,.14); color: #f3e2bb; border-left: 3px solid var(--amber); }
+  .warn.caution { background: rgba(200,155,60,.14); color: #f3e2bb; border-left: 3px solid var(--amber); }
   .warn strong { display: block; margin-bottom: 2px; }
   .species-card .walk-stop-recipe { margin: 8px 0 0; }
   .walk-stop-recipe .line { margin-top: 3px; font-style: italic; line-height: 1.4; }
@@ -450,6 +451,7 @@ window.DATA = {{DATA}};
     var r = recipeBySpecies[s.id];
     var w = "";
     if (s.safety.toxic) w += '<div class="warn toxic"><strong>☠ Not safe to eat</strong>' + esc(s.safety.toxic) + "</div>";
+    if (s.safety.caution) w += '<div class="warn caution"><strong>⚠ Caution</strong>' + esc(s.safety.caution) + "</div>";
     if (s.safety.look_alike) w += '<div class="warn lookalike"><strong>Look-alikes</strong>' + esc(s.safety.look_alike) + "</div>";
     panelBody.innerHTML =
       (photos.length ? '<img class="sp-main" id="sp-main" src="' + esc(photos[0].photo) + '" data-full="' + esc(photos[0].photo) + '" alt="' + esc(s.en || s.sci) + '">' : "") +

@@ -27,6 +27,11 @@ Rules (Melvin, 15 Oct 2026; tightened for Publish B1, 18 Oct 2026):
      Also per STOP: any AI-agreed-only member observation at a stop whose
      species is toxic/deadly/unknown blocks, even if that species is
      human-confirmed at another stop.
+  8. Caution species (audit D3-01, Melvin 20 Oct 2026 — option C, B as
+     fallback): the caution reason is the curator-authored
+     preparation_warnings (an approved warning draft counts). With one, the
+     page shows it beside the caution badge. Without one, the species still
+     shows with its caution badge, but ALL its recipes are withheld.
 
 Safety text (look-alike / preparation warnings) is published ONLY when the
 current value is curator-authored: the latest history row for that field is
@@ -38,7 +43,7 @@ from __future__ import annotations
 import sqlite3
 
 from app.models.observation import is_human_confirmed
-from app.models.species import culinary_allowed, is_toxic_severity
+from app.models.species import culinary_allowed, is_curator_authored, is_toxic_severity
 
 APPROVED_REVIEW = ("approved", "manually_verified")
 APIACEAE = "Apiaceae"
@@ -53,6 +58,10 @@ APIACEAE_GENERA = frozenset({
     "Coriandrum", "Anethum", "Scandix", "Caucalis", "Falcaria", "Trinia", "Cnidium", "Physospermum",
     "Molopospermum", "Ligusticum", "Imperatoria",
 })
+
+
+# recipe_allowed() reason for rule 8 — export.py matches on it for the plan.
+CAUTION_WITHHELD = "caution species without an approved warning — recipes withheld"
 
 
 class GateError(RuntimeError):
@@ -143,7 +152,20 @@ def human_authored(conn: sqlite3.Connection, culinary_info_id, field: str, curre
             ORDER BY changed_at DESC, id DESC LIMIT 1""",
         (culinary_info_id, field),
     ).fetchone()
-    return bool(row) and row[0] == "human" and (row[1] or "").strip() == (current or "").strip()
+    return bool(row) and is_curator_authored(row[0], row[1], current)
+
+
+def is_caution(sp: dict) -> bool:
+    return sp.get("edibility_status") == "caution"
+
+
+def caution_warning(sp: dict, ci: dict, conn: sqlite3.Connection):
+    """Rule 8: the curator-authored caution reason (preparation_warnings), or
+    None. Toxic species are rule 3's (their warning is the toxic one)."""
+    if not is_caution(sp) or is_toxic(sp):
+        return None
+    pw = ci.get("preparation_warnings")
+    return pw.strip() if human_authored(conn, ci.get("id"), "preparation_warnings", pw) else None
 
 
 def may_claim_edible(sp: dict, ci: dict, conn: sqlite3.Connection, cfg: dict) -> bool:
@@ -195,6 +217,9 @@ def safety_texts(sp: dict, ci: dict, conn: sqlite3.Connection, toxic_fallback: s
             out["toxic"] = ci["preparation_warnings"].strip()
         else:
             out["toxic"] = toxic_fallback
+    caution = caution_warning(sp, ci, conn)                 # rule 8
+    if caution:
+        out["caution"] = caution
     return out
 
 
@@ -233,4 +258,6 @@ def recipe_allowed(sp: dict, ci: dict, recipe: dict, conn: sqlite3.Connection, c
         return False, "Apiaceae — ID card only"
     if not may_claim_edible(sp, ci, conn, cfg):
         return False, "no edible claim (not human-verified edible/caution)"
+    if is_caution(sp) and caution_warning(sp, ci, conn) is None:
+        return False, CAUTION_WITHHELD                       # rule 8
     return True, ""

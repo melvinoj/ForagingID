@@ -36,7 +36,7 @@ from app.integrations.culinary_links import CulinaryLink, fetch_culinary_links
 from app.integrations.claude_draft import AIDraftResult, generate_ai_drafts
 from app.models.culinary import CulinaryInfo
 from app.models.observation import Observation
-from app.models.species import CulinaryInfoHistory, EnrichmentSource, Species, SpeciesAIDraft
+from app.models.species import CulinaryInfoHistory, EnrichmentSource, Species, SpeciesAIDraft, CURATOR_DRAFT_FIELDS
 from app.services.ai_placeholder import is_ai_placeholder
 
 log = logging.getLogger(__name__)
@@ -1317,10 +1317,13 @@ async def _maybe_generate_ai_drafts(
         # after enrich_species' flush (e.g. a pending draft just queued by the
         # fungi edibility lookup).
         await session.flush()
+        # Curator-review drafts (CURATOR_DRAFT_FIELDS) are not model output —
+        # regenerate never invalidates them.
         await session.execute(
             _upd(SpeciesAIDraft)
             .where(SpeciesAIDraft.species_id == species.id)
             .where(SpeciesAIDraft.status == "pending")
+            .where(SpeciesAIDraft.field_name.notin_(CURATOR_DRAFT_FIELDS))
             .values(status="invalidated")
         )
         await session.flush()

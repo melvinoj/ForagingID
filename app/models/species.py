@@ -512,3 +512,28 @@ def display_common_name(preferred: Optional[str], common_names) -> str:
 # ---------------------------------------------------------------------------
 def is_fungal_kingdom(kingdom: Optional[str]) -> bool:
     return (kingdom or "").strip().lower() == "fungi"
+
+
+# ---------------------------------------------------------------------------
+# Curator-authored field text — the ONLY definition of "the CURRENT value of a
+# culinary_info field is curator-authored": the latest culinary_info_history
+# row for that field is changed_by='human' AND its new_value equals the current
+# value. 'ai_approved:human' (an AI draft a human approved) is NOT curator-
+# authored. Used by the experience export gates (gates.human_authored) and the
+# curator-review draft approval (culinary.approve_ai_draft).
+# ---------------------------------------------------------------------------
+def is_curator_authored(latest_changed_by: Optional[str], latest_new_value: Optional[str],
+                        current: Optional[str]) -> bool:
+    cur = (current or "").strip()
+    return bool(cur) and latest_changed_by == "human" and (latest_new_value or "").strip() == cur
+
+
+# ---------------------------------------------------------------------------
+# Curator-review drafts (audit D3-01, Melvin 20 Oct 2026) — draft fields whose
+# text is NOT model output: PFAF Known Hazards, or a field's existing text of
+# unknown origin, queued in species_ai_drafts for the curator to approve as-is
+# or rewrite. Approval IS the curator authoring the text (history
+# changed_by='human'). AI regenerate never invalidates these drafts, and the
+# review queue's "Approve all" never includes them.
+# ---------------------------------------------------------------------------
+CURATOR_DRAFT_FIELDS = frozenset({"preparation_warnings"})

@@ -563,6 +563,16 @@
       border-left: 3px solid #c4b5fd; border-radius: 0 5px 5px 0;
       padding: 10px 12px; margin-bottom: 8px;
     }
+    /* Curator-review warning drafts (D3-01): origin note + what the field holds now */
+    .ai-draft-origin {
+      font-size: 0.76rem; color: #92400e; background: #fffbeb;
+      border: 1px solid #fcd34d; border-radius: 5px; padding: 6px 9px; margin-bottom: 8px; line-height: 1.5;
+    }
+    .ai-draft-current {
+      font-size: 0.78rem; color: #555; line-height: 1.6; white-space: pre-wrap;
+      border-left: 3px solid #d4d4d8; border-radius: 0 5px 5px 0; padding: 6px 10px; margin-bottom: 8px;
+    }
+    .ai-draft-current-label { display: block; font-size: 0.7rem; font-weight: 700; color: #888; margin-bottom: 2px; }
     .ai-draft-edit-area {
       width: 100%; min-height: 120px; padding: 8px 10px;
       font-size: 0.83rem; line-height: 1.6; resize: vertical;
@@ -3897,6 +3907,8 @@ function _renderAIDraftCard(sp) {
   const cardId       = `draft-card-${_escId(sp.scientific_name)}`;
 
   const draftCount = (sp.drafts || []).length;
+  // Warning drafts are approved one by one — never by "Approve all".
+  const bulkCount  = (sp.drafts || []).filter(d => !_CURATOR_DRAFT_FIELDS.has(d.field_name)).length;
   return `<div class="ai-draft-species-card" id="${cardId}">
     <div class="ai-draft-species-header" onclick="aiDraftToggleCollapse('${escName}', event)">
       <div style="display:flex;align-items:center;gap:8px">
@@ -3924,23 +3936,37 @@ function _renderAIDraftCard(sp) {
     </div>
     <div class="ai-draft-fields">
       ${fieldsHtml}
-      <button class="ai-draft-approve-all-btn" id="${approveAllId}"
+      ${bulkCount ? `<button class="ai-draft-approve-all-btn" id="${approveAllId}"
         onclick="approveAllDrafts('${escName}')">
-        ✓ Approve all ${sp.drafts.length} draft${sp.drafts.length !== 1 ? 's' : ''} for this species
-      </button>
+        ✓ Approve all ${bulkCount} draft${bulkCount !== 1 ? 's' : ''} for this species${bulkCount < draftCount ? ' (not the warning)' : ''}
+      </button>` : ''}
     </div>
   </div>`;
 }
 
 function _fieldLabel(field) {
-  return { taste_notes: 'Taste & Texture', medicinal_notes: 'Medicinal & Herbalism Notes', recipe: 'Recipe', medicinal_folklore: 'Medicinal Folklore' }[field] || field;
+  return { taste_notes: 'Taste & Texture', medicinal_notes: 'Medicinal & Herbalism Notes', recipe: 'Recipe', medicinal_folklore: 'Medicinal Folklore', preparation_warnings: 'Preparation warning' }[field] || field;
 }
+
+// Curator-review drafts (app/models/species.py CURATOR_DRAFT_FIELDS): source
+// text, not AI output. Approving (as-is or edited) makes it the curator's text.
+const _CURATOR_DRAFT_FIELDS = new Set(['preparation_warnings']);
+const _WARNING_DRAFT_ORIGIN = {
+  pfaf:           'From PFAF (Known Hazards). Approve as-is or rewrite it — either way it becomes your text, and the published caution reason.',
+  unknown_origin: 'Text already in this field, origin unknown (machine-written, no history). Check it actually reads as a warning: approve, rewrite, or reject.',
+  marker_confirm: 'Locked as yours on 24 Jun, but the history holds a marker, not this text. Confirm it is your text (approve), or rewrite it.',
+};
 
 function _renderAIDraftField(sciName, d) {
   const escName  = _resc(sciName);
   const editId   = `ai-edit-${d.id}`;
   const isRecipe = d.field_name === 'recipe';
   const isTaste  = d.field_name === 'taste_notes';
+  const isCurator = _CURATOR_DRAFT_FIELDS.has(d.field_name);
+  const _norm = t => (t || '').trim().replace(/\s+/g, ' ');
+  const curatorHtml = isCurator ? `
+    <div class="ai-draft-origin">${_resc(_WARNING_DRAFT_ORIGIN[d.model] || `Source: ${d.model || 'unknown'}`)}</div>
+    ${_norm(d.current_text) !== _norm(d.draft_text) ? `<div class="ai-draft-current"><span class="ai-draft-current-label">In the field now — replaced when you approve:</span>${_resc(_norm(d.current_text) ? d.current_text : '(empty)')}</div>` : ''}` : '';
 
   // Season selector (only for recipe drafts)
   const seasonHtml = isRecipe ? `
@@ -3978,8 +4004,9 @@ function _renderAIDraftField(sciName, d) {
       </button>
     </div>` : '';
 
-  return `<div class="ai-draft-field" id="draft-field-${d.id}">
+  return `<div class="ai-draft-field${isCurator ? ' ai-draft-safety' : ''}" id="draft-field-${d.id}">
     <div class="ai-draft-field-label">${_fieldLabel(d.field_name)}</div>
+    ${curatorHtml}
     ${seasonHtml}
     <div class="ai-draft-text" id="draft-text-${d.id}">${_resc(d.draft_text || '')}</div>
     <textarea class="ai-draft-edit-area" id="${editId}">${_resc(d.draft_text || '')}</textarea>
@@ -4251,6 +4278,9 @@ function _removeDraftField(sciName, fieldEl) {
     if (!remaining.length) {
       cardEl.remove();
       _refreshAIDraftBadge();
+    } else if (!cardEl.querySelector('.ai-draft-field:not(.ai-draft-safety)')) {
+      const allBtn = cardEl.querySelector('.ai-draft-approve-all-btn');
+      if (allBtn) allBtn.remove();
     }
   }
 }
@@ -4319,7 +4349,8 @@ async function rejectDraftField(sciName, fieldName, draftId) {
 async function approveAllDrafts(sciName) {
   const cardEl        = document.getElementById(`draft-card-${_escId(sciName)}`);
   // Snapshot the field list before any removals start
-  const allFields     = cardEl ? [...cardEl.querySelectorAll('.ai-draft-field')] : [];
+  // Warning drafts (.ai-draft-safety) are never bulk-approved.
+  const allFields     = cardEl ? [...cardEl.querySelectorAll('.ai-draft-field:not(.ai-draft-safety)')] : [];
   const approveAllBtn = cardEl ? cardEl.querySelector('.ai-draft-approve-all-btn') : null;
   if (approveAllBtn) approveAllBtn.disabled = true;
 

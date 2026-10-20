@@ -724,6 +724,21 @@ def main(argv=None):
         if picked:
             recipes_out.append(picked)
 
+    # Rule 8 (D3-01) per caution species: approved warning shown, recipes kept
+    # or withheld. A caution species that is not human-verified never gets here
+    # (edibility_badge raised GateError above — that is a block, not a withhold).
+    caution_report = []
+    for sid, sp in species.items():
+        if not gates.is_caution(sp):
+            continue
+        caution_report.append({
+            "species_id": sid, "scientific_name": sp["scientific_name"], "badge": pub[sid]["badge"]["kind"],
+            "approved_warning": "caution" in pub[sid]["safety"],
+            "recipes_kept": [r["recipe_id"] for r in recipes_out if r["species_id"] == sid],
+            "recipes_withheld": [rid for rid, name, why in recipe_excluded
+                                 if name == sp["scientific_name"] and why == gates.CAUTION_WITHHELD],
+        })
+
     # Stops — from the computed membership. "n" is the app's stop label ("7",
     # "7a") so the page matches the walk panel and printed sheet. A stop whose
     # confirmed species are all hidden or AI-agreed-only stays as a numbered
@@ -866,6 +881,8 @@ def main(argv=None):
             die(f"recipe {r['recipe_id']} for Apiaceae: {sp['scientific_name']}")
         if gates.is_toxic(sp) or not gates.toxicity_known_safe(sp) or not gates.human_verified(sp):
             die(f"recipe {r['recipe_id']} for non-eligible species {sp['scientific_name']}")
+        if gates.is_caution(sp) and "caution" not in pub[r["species_id"]]["safety"]:
+            die(f"recipe {r['recipe_id']} for caution species without an approved warning: {sp['scientific_name']}")
     for sid in hide_sp:
         if sid in pub or any(sid in st["species"] for st in stops) or any(r["species_id"] == sid for r in recipes_out):
             die(f"hidden species {sid} still present in the output")
@@ -937,6 +954,7 @@ def main(argv=None):
                 "verified_by": species[p["id"]].get("edibility_verified_by"),
                 "apiaceae": p["apiaceae"], "safety": sorted(p["safety"]),
             } for p in data["species"]],
+            "caution": caution_report,
             "ai_agreed_excluded": ai_agreed_out,
             "hidden": [{"species_id": sid, "why": why} for sid, why in hidden_species.items()],
             "recipes": {"included": [{"recipe_id": r["recipe_id"], "species_id": r["species_id"], "dish": r["dish"],
@@ -977,6 +995,14 @@ def main(argv=None):
     for p in sorted(pub.values(), key=lambda p: p["badge"]["kind"]):
         extra = ",".join(k for k in p["safety"]) or "-"
         print(f"  {p['id']:>4} {p['sci']:<28} {p['badge']['kind']:<9} safety:{extra}")
+    n_warned = sum(c["approved_warning"] for c in caution_report)
+    print(f"Caution species: {len(caution_report)} — {n_warned} with an approved warning, "
+          f"{len(caution_report) - n_warned} without (their recipes are withheld)")
+    for c in caution_report:
+        state = "warning ✓" if c["approved_warning"] else "no approved warning"
+        recs = "; ".join(filter(None, (f"recipes kept {c['recipes_kept']}" if c["recipes_kept"] else "",
+                                       f"recipes WITHHELD {c['recipes_withheld']}" if c["recipes_withheld"] else "")))
+        print(f"  {c['species_id']:>4} {c['scientific_name']:<28} {c['badge']:<9} {state:<20} {recs or 'no eligible recipes'}")
     print(f"Tree: {sum(1 for _ in species) - len(unplaced)} placed, {len(unplaced)} not placed (no lineage): {unplaced}")
     print(f"Tree patches applied ({len(patches)}): " + "; ".join(patches))
     print(f"Recipes: {len(recipes_out)} included, {len(recipe_excluded)} excluded")

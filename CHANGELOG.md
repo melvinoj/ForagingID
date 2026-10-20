@@ -98,6 +98,10 @@ Snapshots 20 Oct: db_20261020_053600, _062739, _063515, _072552 (re-route, Rümm
 
 ## History
 
+### 2026-10-20 21:07
+**Snapshot** — Before D3-01 batch 1: queue 61 caution preparation_warnings drafts (36 PFAF, 19 unknown origin, 6 E-14 confirmations)
+DB: `snapshots/db_20261020_210754.sqlite`
+
 ### 2026-10-20 18:06
 **Snapshot** — before re-route of saved walk 5
 DB: `snapshots/db_20261020_180607.sqlite`

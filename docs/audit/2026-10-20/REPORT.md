@@ -6,7 +6,272 @@ Read-only logic audit. **No fixes were made.** Nothing under app/, frontend/, sc
 **Severity.** S0 safety · S1 data integrity · S2 visible bug · S3 tidy/maintainability · S4 cosmetic. Effort S/M/L. "Fix risk" = risk that fixing it breaks something.
 **Secrets.** Secret values seen in the DB are never reproduced here; they are referred to by key name only.
 
-Sections 1–8 (top-10, S0 list, matrices, parity tables, proposals, tidy list, rename inventory, SUSPECTED list) are assembled in Phase G from the findings log below.
+Sessions: 1 (Phases A–B), 2 (C–D), 3 (E–G). Sections 0–9 below were assembled in Phase G from the findings log, which follows them and holds the evidence for every ID cited.
+
+---
+
+## 0. Decisions from Melvin (20 Oct 2026)
+
+**Decided — no change** (recorded, not findings any more):
+
+| Item | Decision |
+|---|---|
+| B1-01 | No family- or toxicity-specific auto-approve veto, no app-side Apiaceae culinary rule. Dual-API agreement at the live threshold is the safeguard for every species. |
+| Threshold | `upload_auto_approve_threshold` stays **0.70**. |
+| A-01 | The ngrok share link giving curator access by default **stays** (Melvin's phone relies on it). Mitigated by the refreshable link below. |
+| B3-01 | A species rename clearing species-specific text **stays**. After a pure Latin-name update, warnings are re-added by hand. |
+
+**Decided — fix** (all in the fix order, section 9):
+
+| Item | Decision | Batch |
+|---|---|---|
+| B2-01, B2-04 | Map pin pop-up and Lists / browser print show **no edible-parts text** for toxic or deadly species, and show the ☠ badge. | 5 |
+| B2-03 | Printed outputs **always include preparation warnings**, including for caution species. | 6 |
+| B2-02 / P2 | Setting a species' verdict also sets `toxicity_severity`. | 3 |
+| A-02 | Guests can never read secret settings; `/api/settings` never returns secret values. | 4 |
+| Share link | A "New link" action creates a new secret link; the old link and old QR stop working at once; the QR and the copyable link update. Mechanism below. | 7 |
+| D3-01 | Option C, with B as fallback. PFAF preparation warnings for caution species are imported as **drafts into review**. Melvin approves them as-is or rewrites them, and approval counts as curator-authored. Until a caution species has an approved warning, the page **withholds its recipes**. First batch, then a republish of Rümmelsbühl foray (id 4). | 1, 1b |
+| Data | After the severity fix: *Amanita muscaria* (155), *Heracleum mantegazzianum* (688) and *Hedera helix* (745) → toxic; reject drafts 2920 and 2921. | 3 |
+
+**D3-01 review load** (DB copy 20 Oct 17:01; PFAF text parsed offline from the stored `enrichment_sources` HTML with the app's own `pfaf._parse`, no network):
+
+Of the **111 caution species**:
+
+| Count | State | What happens under the decision |
+|---|---|---|
+| **3** | Human-authored warning that matches the current text | Already publishable (incl. *Sambucus nigra*) |
+| **6** | Human-lock row is a marker string, not the text (**E-14**) | Melvin confirms the text is his |
+| **36** | PFAF has a warning | **= the review load** (23 identical to the current field, 12 worded differently, 1 field empty) |
+| 19 | Machine-written warning text with no history row and no PFAF source | Origin unknown. Proposed: same review queue, labelled "source unknown" |
+| 47 | No warning text anywhere (28 PFAF "None known", 19 no PFAF page) | Recipes withheld until Melvin writes one |
+
+8 caution species have approved recipes but no human warning (2 of them have a PFAF warning available).
+
+**Walk 4 today** (`walk_membership.compute` on the DB copy): 63 species, **15 caution**.
+- Publishable now: *Sambucus nigra* (but `gates.py` has no caution branch, so even that warning isn't shown today).
+- Marker-row confirmations: *Anthriscus sylvestris*, *Crataegus rhipidophylla*.
+- **7 PFAF drafts:** *Artemisia vulgaris*, *Tanacetum vulgare*, *Hypericum perforatum*, *Verbascum thapsus*, *Pimpinella major* (Apiaceae: approve as-is or rewrite by hand, never model-edited), *Chenopodium ficifolium*, *Artemisia absinthium*.
+- No text anywhere: *Geranium pyrenaicum*, *Genista sagittalis*, *Alchemilla monticola*, *Hypericum maculatum*, *Hypericum × desetangsii* (none has an approved recipe).
+- Recipes withheld until approval: *Artemisia vulgaris* (1), *Hypericum perforatum* (1).
+
+**Refreshable share link — proposed mechanism** (relates to A-01 / A-03):
+- **Keep the tunnel host (the origin) stable, and rotate a server-side secret instead of the URL.** A new origin would strand the phone's offline outbox, unsynced recordings, cached tiles and settings (Phase F group 3).
+  1. **Link and QR:** `https://<ngrok-host>/?k=<secret>`.
+  2. **Cookie:** the first request carrying a valid `k` sets an HttpOnly, Secure, SameSite=Lax cookie holding the secret's id, then redirects to the same URL without `k`.
+  3. **Middleware** (`main.py`): every request whose host is the tunnel host needs a valid cookie or `k`, compared in constant time with the stored **hash** of the current secret. Otherwise it gets 403: a small "This link has been replaced — ask for the new QR" page for navigations, JSON for `/api`.
+  4. **"New link" (Settings):** generates `secrets.token_urlsafe(24)` and stores only its sha256 as a hidden setting (never returned by `/api/settings` — A-02). It returns the full link once, and Settings re-renders the copy box and QR from that response. Old cookies and old QRs fail on their next request, with no ngrok restart. The endpoint must be **refused over the tunnel**, so an old-link holder can't rotate it.
+  5. **Unchanged:** tier logic (curator by default, guest when guest mode is ON — A-01 decision kept). Participant tokens still identify participants, but only after the share check passes.
+  6. **Phone:** after a rotation Melvin opens the new QR once. `sw.js` must not cache 401/403 navigations as the app shell. The outbox keeps retrying, since same-origin `fetch` sends the cookie.
+  7. **Secrets in logs:** the first request's `?k=` lands in the uvicorn access log (local only). Redact it in the E-12 log filter.
+- **Rejected alternatives:**
+  - Restarting ngrok for a new URL. On the free plan the dev domain is usually fixed (SUSPECTED, not checked), and if the URL does change, the origin changes.
+  - ngrok `--basic-auth`. Rotation means a restart; it brings browser credential prompts and cached credentials in the PWA, and can't go in a QR.
+- **A-03 later:** the same cookie could be required of non-loopback LAN devices. The `Host` header is reliable for tunnel traffic (ngrok routes on it), so step 3 can key on it. For everything else, check the socket peer (`request.client.host`) instead of trusting `Host: localhost`. Tunnel traffic also arrives from the local ngrok agent on 127.0.0.1, so the peer check applies only to non-tunnel hosts.
+
+---
+
+## 1. Top 10 by severity
+
+| # | ID | Sev | What | Status | Batch |
+|---|---|---|---|---|---|
+| 1 | D1-01 | S0 | `POST /api/lists/pdf` turns request text into live HTML and embeds any local file the server can read. With A-01, anyone holding the share link can do it. | decided fix | 4 |
+| 2 | A-02 | S0 | `GET /api/settings` returns the DeepSeek API key to any reader, incl. guests and share-link holders | decided fix | 4 |
+| 3 | B2-05 | S0 | Mis-classified hazards pass every gate (fly agaric caution, giant hogweed unknown, ivy NULL, all severity 'none'). Fly agaric has pending AI taste and recipe drafts 2920/2921. | decided fix | 3 |
+| 4 | B2-02 | S0 | No app code writes `toxicity_severity`; its default `'none'` counts as safe in gates R1–R5 | decided fix | 3 |
+| 5 | D3-01 | S0 | The public experience page lists caution species as "Edible with caution" with no reason, two with recipes | decided fix | 1 |
+| 6 | B2-01 | S0 | The map pin pop-up shows "🍴 Edible Parts" for toxic/deadly species, with no ☠ badge | decided fix | 5 |
+| 7 | B2-04 | S0 | The Lists screen and browser print show edible parts for toxic/deadly species | decided fix | 5 |
+| 8 | B2-03 | S0 | Printed and exported outputs drop look-alike and preparation warnings that doctrine requires | decided fix | 6 |
+| 9 | B5-01 | S0 | Any guest can read any encounter by id: transcripts, notes, exact coordinates, audio | **open — Melvin decides** | 8 |
+| 10 | B5-02 | S0 | Guests can list and download full-resolution personal photos filed as "not a plant" (381 person/animal, EXIF GPS) | **open — Melvin decides** | 8 |
+
+Next in line:
+- A-01 (S0, decided to stay; refreshable link, batch 7).
+- E-01 / E-02 (S1: snapshots and restore aren't WAL-safe; batch 2).
+- A-03 (S1, effectively S0 on venue Wi-Fi).
+- B4-01 (S1, 116 mutating endpoints rely on the host tier only).
+
+## 2. Full S0 list (12)
+
+| ID | Finding | Effort / fix risk | Status |
+|---|---|---|---|
+| A-01 | The "read-only" share link grants full curator access by default | S / medium | **Decided: stays.** Mitigation: refreshable link (batch 7) |
+| A-02 | `/api/settings` returns the DeepSeek key to any reader | S / low | Decided fix — batch 4 |
+| B2-01 | Map pop-up shows edible parts for toxic/deadly, no badge | S / low | Decided fix — batch 5 |
+| B2-02 | `toxicity_severity` never written; `'none'` treated as safe | M / medium | Decided fix — batch 3 |
+| B2-03 | Printed/exported outputs drop required safety text | M / low | Decided fix — batch 6 |
+| B2-04 | Lists screen + browser print show edible parts for toxic | S / low | Decided fix — batch 5 |
+| B2-05 | Mis-classified hazards pass every gate (data) | S / none | Decided fix — batch 3 (after B2-02) |
+| B3-01 | A species rename erases curator-authored safety text; the lock keeps it blank | S / low | **Decided: stays** (re-add by hand after a pure Latin-name update) |
+| B5-01 | Guests read any encounter by id | S / low | Open — batch 8 if Melvin agrees |
+| B5-02 | Guests list/download personal non-plant photos | S / low | Open — batch 8 if Melvin agrees |
+| D1-01 | PDF endpoint renders request HTML and embeds local files | S / low | Decided fix — batch 4 |
+| D3-01 | Caution species published with no reason, beside recipes | S + curator writing / low | Decided fix — batch 1, then 1b republish |
+
+A-03 is graded S1 at home but **effectively S0 when the laptop runs on venue or café Wi-Fi** (Melvin decides — batch 13).
+
+## 3. Matrices
+
+### 3a. Display-gate matrix (condensed from B2; render sites and rules R1–R9 are in B2)
+
+| Surface | Culinary content for toxic/deadly | Unknown / never-assessed severity | Caution: reason shown | Look-alike / prep warnings | ☠ / badge | Fix |
+|---|---|---|---|---|---|---|
+| Map pin pop-up | **shown** (no gate) | n/a | prep text if any (120 chars) | both, 120 chars | **none** | B2-01 → batch 5 |
+| Walk panel, "Also here", proximity alerts | hidden (R2) | fails closed | badge only | **none** | badge | — |
+| Export summary | hidden **client-side only** (R2) | closed | label only | **none** | label | B2-03 → 6; B2-09 → 11 |
+| Species page | culinary fields shown; recipes R6 | **fails open** (R3) | severity box | shown | severity box | B2-02 → 3 |
+| `GET /api/culinary`, `/profile` | full dict regardless | — | — | returned | — | P1 |
+| Lists screen | **edible parts shown** | — | — | look-alike only if toggled; no prep | none | B2-04 → 5, B2-03 → 6 |
+| Browser print | **edible parts shown** | — | — | field guide: look-alike if toggled, no prep; workshop: if toggled | none | B2-04 → 5, B2-03 → 6 |
+| PDF | hidden (R4/R5) | **fails open** | — | field guide: no prep; booklet: toxic/deadly only; workshop: always | ☠ booklet only | B2-03 → 6, B2-02 → 3 |
+| Personal list card | recipe gated (R1) | closed | — | — | — | — |
+| Experience page | hidden (R9) | closed | **dropped** (human-authored only; no caution branch) | human-authored only, toxic only | ☠ | D3-01 → 1 |
+| AI generation | blocked on edibility_status only (R7) | — | caution passes | — | — | B2-02/B2-05 → 3 |
+
+### 3b. Identity matrix (condensed from B4; per-endpoint list in Appendix A2)
+
+| Caller | Host tier | Writes reachable | Reads |
+|---|---|---|---|
+| localhost / LAN / `*.local`, no token | curator | **all 172** | everything |
+| Any client sending `Host: localhost` to port 8000 (A-03) | curator | **all 172** | everything |
+| ngrok link, guest mode OFF (default — A-01, kept) | curator | **all 172** | everything, incl. the DeepSeek key (A-02) and local files via the PDF endpoint (D1-01) |
+| ngrok link, guest mode ON, no token | guest | 4 whitelisted POSTs (2 then 403 in the handler) | all GETs: encounters by id (B5-01), non-plant photos (B5-02), reviewer notes on map pins (B5-03), CHANGELOG / snapshots / jobs (B5-05), `/api/settings` (A-02) |
+| Participant token on a curator-tier host | curator | the 116 host-tier-only endpoints | everything |
+| Curator token over ngrok, guest mode ON | guest | 4 whitelisted only (middleware ignores tokens) | as guest |
+
+## 4. Output parity
+
+Full tables: **D1** (browser print vs PDF: 18 aspects, 15 differ, 2 equal, 1 near-equal), **D3** (app gates vs experience gates). Cross-output summary:
+
+| Output | Edible parts for toxic | Look-alike | Prep warnings | Caution reason | Safety disclaimer | Names rule | Markdown renderer |
+|---|---|---|---|---|---|---|---|
+| Map pop-up | **shown** | 120 chars | 120 chars | prep text if any | none | — | raw text |
+| Walk stop card | hidden (R2) | none | none | badge only | none | ✓ "Common (Latin)" | plain snippet |
+| Export summary | hidden, client-side only | **none** | **none** | label only | **none** | ✓ | `_md_snippet` (server) |
+| Species page | shown when severity unknown (R3) | ✓ | ✓ | ✓ | — | — | `_renderMd` |
+| Lists screen | **shown** | if toggled | not in field guide | — | — | Latin first | `_mdLite` |
+| Browser print | **shown** | if toggled | workshop + toggle only | — | **none** | Latin first | `_mdLite` (copy) |
+| PDF | hidden (fails open on unknown) | field guide cut to 140 chars | booklet toxic/deadly only; field guide never | — | ✓ final page | Latin first | `_mdlite` (heading unescaped) |
+| Experience page | hidden | human-authored only | toxic only, human-authored | **dropped** | ✓ | ✓ | `recipe_teaser` |
+
+"—" = not examined in this audit.
+
+## 5. Improvement proposals, ranked by value / effort
+
+P1–P11 are from D4; P12–P18 are new in session 3.
+
+| Rank | # | Proposal | Value | Effort | Risk |
+|---|---|---|---|---|---|
+| 1 | P12 | **Snapshot and restore through the SQLite backup API** (E-01, E-02); restore only accepts files in `snapshots/` | High — the undo for every DB write | S | Low |
+| 2 | P3 | Escape by default in the PDF + restrict WeasyPrint's `url_fetcher` (D1-01) | High | S | Low |
+| 3 | P2 | Set `toxicity_severity` with the verdict (decided); later, "never assessed" = unknown | High | S–M | Medium (gates tighten) |
+| 4 | P1 | **One server-side safety gate** for every output (ends R1–R9 drift; closes B2-01..04, B2-09/10, D1-02, D3-01) | Highest | M | Medium |
+| 5 | P13 | Refreshable share link (mechanism in section 0) | High | M | Medium (phone flow) |
+| 6 | P11 | Guest-safe response filter per router (B5-01/02/03/05, A-02) | High | M | Low |
+| 7 | P16 | **Test harness**: pytest as a dev dependency + one fixture test per output surface, host tier/identity, predicates (E-10) | High (Code can't verify in a browser) | S–M | None |
+| 8 | P4 | One markdown renderer, Python + one JS module (E-05a) | Medium | S–M | Low |
+| 9 | P8 | Publication bookkeeping (C-05, D3-05) | Medium | S | Low |
+| 10 | P7 | Plan reports all blockers (D3-02) | Medium | S | Low |
+| 11 | P5 | Names helper everywhere | Medium | S | Low |
+| 12 | P6 | One badge spec in tokens.css (also removes D3-03's JS regex) | Medium | M | Low |
+| 13 | P14 | **Project-relative DB paths** (`file_path`, `confirmed_copy_path`, `audio_path`), resolved at read time; anchor `_is_deletable` to the project root (E-05g, Phase F group 4) | Medium (makes any folder move free) | M | Medium (17.7k rows; Write Protocol) |
+| 14 | P15 | Shared front-end core (`static/js/core/esc.js`, `md.js`, `safety-gate.js`) to replace 16 `_esc` copies and the gate copies | Medium | S–M | Low |
+| 15 | P18 | index.html split (E-08), after B2-01 and P6 | Medium | M | Medium (load-order hazards) |
+| 16 | P10 | Drop the full mirror copy (D3-04) | Low–Medium | S | Low |
+| 17 | P17 | Access-log filter for polling endpoints, `[TIMING]` behind debug, log rotation (E-12) | Low | S | None |
+| 18 | P9 | Keep builds deterministic | Low | S | None |
+
+## 6. Tidy list (S3 / S4)
+
+| ID | Item | Effort |
+|---|---|---|
+| E-04 | End-session date parse breaks for most dates → exports all encounters | S |
+| E-05 | Duplicates: 6 markdown renderers; 8 copies of the edibility block-list; 3 `_copy_to_confirmed` copies (1 dead); 16 `_esc`; snapshot commits the whole tree from Re-route; mixed path conventions; substring delete guard | S–M |
+| E-06 | 74 silent `except Exception: pass/continue`; 10 unreferenced `create_task` sites | S each |
+| E-07 | Dead code: 7 Python functions, 26 JS functions, git-banner.js, scratch page, 3 unused deps, 14 old migrate scripts | S |
+| E-08 | 14 functions ≥200 lines; index.html split proposal | M |
+| E-09 | Docs drift (CLAUDE.md ×8, architecture.md fungi routing, current_phase.md, stale code comments in 6 files) | S |
+| E-10 | 33 tests, none for gates, identity, PDF or snapshots; pytest missing | S–M |
+| E-11 | Reloads cancel jobs; launch.json second server on the same DB; LibreSSL warning | S |
+| E-12 | Logs: 97% access lines, 57 MB, no rotation | S |
+| A-05 | Stray files in the tree | S |
+| A-06 | 11 empty tables, several with live models/endpoints | S |
+| A-07 | Settings drift (`auto_approve_threshold` dead row, keys outside the registry) | S |
+| A-08 | Endpoints with no caller | S |
+| A-09 | `obsidian_vault_path` row | S |
+| A-10 | Version strings 0.1.0 vs 0.2.0 | S |
+| B1-06 | Evidence writes escape the terminal guard | S |
+| B1-07 | Threshold docs drift | S |
+| B2-09 | Export summary / PDF trust client-supplied culinary data | S (folded into P1) |
+| B2-10 | Rule drift across the two gate families | (P1) |
+| B3-03 | Draft rows misstate provenance | S |
+| B3-04 | Unapprovable edibility drafts pile up | S |
+| B4-02 | Guards inconsistent within a feature | S each |
+| B5-03 | Map GeoJSON ships `reviewer_notes` for every pin | S |
+| C-07 | `resolve_species_id` / FK backfill use exact `scientific_name`, not `name_key` | S |
+| C-08 | Disk residue | S |
+| D1-04 | Data-quality issues visible in print | S |
+| D2-01 | Repeat-line warning badge always red | S |
+| D3-03 | Export reads app styles from index.html JS by regex | (P6) |
+| D3-04 | Default build writes a 30 MB photo mirror | S |
+
+## 7. Rename inventory (summary — detail in Phase F)
+
+| Group | Count | Recommend |
+|---|---|---|
+| 1 User-facing strings | 11 places left (PDF title + filename, shared-photo filename, `/docs` title, banners, backup path text, About text ×4 in DB, About AI prompt) | **Now** |
+| 2 Code identifiers | ~45 comments/loggers; GeoJSON key `"foragingid"` in 6 files + 3 walks | Comments/loggers when touched; **GeoJSON key never** |
+| 3 Client storage | 15 localStorage keys, IDB `foragingid_walks`, 4 SW caches (+ `fid_` family incl. the outbox) | **Never** (renaming loses unsynced recordings and outbox items, offline tiles, settings) |
+| 4 DB contents | 15,566 + 2,116 + 9 absolute paths; 3 walk rows; 1 setting; About text | Only with a folder move; do P14 (relative paths) first |
+| 5 Filesystem/tooling | folder, DB filename (17 refs), venv, launcher, Claude data dir (169 MB + memory), `/tmp` + backup dirs | **Never** for venv/DB/launcher; folder at Phase 14 only |
+| 6 External | GitHub repo, 7 UA strings (2 with unreachable contacts), Drive folder, Hostinger text | UA contacts **now**; repo at Phase 14 / when public; Hostinger by hand |
+
+## 8. SUSPECTED items and what would confirm each
+
+| ID | Suspicion | What would confirm it |
+|---|---|---|
+| B1-08 | The review card for obs 24353 was rendered before 10:58:27 UTC and never reloaded | Reload review.html for obs 24353 and compare the % with Second Opinion |
+| C-01 (risk) | A phone-side delete or rotation could reach the 131 photos that exist only in the Syncthing folder | Check that folder's Syncthing type (send-only / receive-only / send-receive) and versioning in the Syncthing UI |
+| C-04 (cause) | Two overlapping review-card submits wrote the common name | Trace review.html's approve path for a double submit; add a submit lock and see if it recurs |
+| C-06 (origin) | Pre-June automated PFAF/Wikidata derivation + the init_db provenance backfill wrote verdicts without history | Compare against the earliest snapshot (locally only `db_pre_review_label_backfill`, 28 Jun; older ones may be in `/Volumes/DIGIERA/ForagingID_Backup`) |
+| D1 (WeasyPrint) | The PDF works only if nothing imports WeasyPrint before `lists_pdf.py` | Grep for other WeasyPrint importers whenever one is added; or set `DYLD_LIBRARY_PATH` in the launcher |
+| D2 (Google link) | Mobile browsers honour only 3 of the 8 waypoints | Open the walk-4 link in a phone browser |
+| D3 (preview card) | Fixed 500 px card clips long text silently | View preview.html at 500 px |
+| E-02 (mixing) | A partly checkpointed WAL can leave a mixed-state DB after restore | A scratch test with a partial checkpoint (not needed — the fix is the same) |
+| E-11 | A second server (launch.json, port 8001) would double-ingest / double-spend | Don't run it. Remove the config, or point it at a scratch DB |
+| E-14 (origin) | The six marker rows came from a one-off SQL on 24 Jun | Melvin recalls whether he wrote those six texts |
+| Share link | The free ngrok dev domain is fixed across restarts | Start/stop sharing twice and compare URLs (not needed for the proposed mechanism) |
+| F group 6 | `github.com/foragingid` (Wikidata UA) isn't Melvin's account; the Hostinger page still names ForagingID | Open the URL; read the Hostinger page |
+| A-09, B5-04, `experience_publications` | (earlier SUSPECTED) | Resolved in sessions 2–3: A-09 confirmed (C), B5-04 settled for walk 4 (D3), publications explained (C-05) |
+
+## 9. Fix order
+
+Rules for every batch:
+- Apply only while no background job runs: an app/ save reloads uvicorn and cancels tasks (E-11).
+- **DB writes follow the Write Protocol:** snapshot, read-only diagnostic, write, then read-back of the specific rows by ID.
+- **Until batch 2 lands, the pre-write snapshot is the Settings snapshot *plus* a consistent copy** (`sqlite3 data/foragingid.db ".backup snapshots/db_<ts>_manual.sqlite"`), because the Settings snapshot isn't WAL-safe (E-01).
+- Code's verification ends at static read-back plus scratch-copy runs. Live checks are Melvin's, named per batch.
+
+| Batch | Items | Files | Verification |
+|---|---|---|---|
+| **1** | **D3-01** (decided C + B) + B3-02 + E-14. (1) Import PFAF Known Hazards for caution species as pending `preparation_warnings` drafts, from the stored PFAF HTML (36), skipping fields with any human row; also the 19 "source unknown" texts if Melvin agrees. (2) Approving a warning draft writes `culinary_info` + a history row `changed_by='human'` with the real `old_value` (B3-02). (3) `gates.py`: caution branch publishes the approved warning; caution species without one get no recipes; the plan lists "recipes withheld". (4) Melvin confirms the six E-14 texts. | `app/services/enrichment.py` (or a new small service), `app/api/culinary.py` (approve path), `frontend/review.html` (if warning drafts don't render), `scripts/experience_export/gates.py`, `export.py`, `templates/index.html` | Code: draft rows and history rows read back by id. `--plan-only --walk-id 4` on a scratch DB copy shows warning / withheld per caution species. Melvin: approve one draft and see it on the species page. |
+| **1b** | **Republish Rümmelsbühl foray (id 4)** — Melvin's step (public). Prerequisites: walk-4 reviews (7 drafts, 2 confirmations); clear the rule-2 blocker (*Rosa dumalis* 'edible' not human-verified, D3); optionally backfill the `experience_publications` row (C-05) | experience export (no app code) | `--plan-only` has no blockers. Built page: every caution species has a warning or no recipe. Melvin checks the live page. |
+| **2** | **E-01 + E-02** snapshot/restore through the backup API; restore accepts only `snapshots/` files and hex hashes. S1, not S0 — placed here because every later batch writes data and relies on it. If strict S0-first is preferred, move it after batch 8 and keep the manual `.backup` step. | `app/api/dev.py` | Code: the scratch reproductions (`waltest`) re-run against the new functions on throw-away DBs. Melvin: Settings snapshot → `integrity_check` ok and row counts equal the live DB. |
+| **3** | **B2-02** (decided): `PATCH /api/edibility/status` sets `toxicity_severity` — toxic → 'toxic' unless already 'deadly'; never lowered automatically; relaxing needs an explicit curator severity in the same request. Then **B2-05 data** (decided): 155, 688, 745 → toxic (Melvin in the UI, or the endpoint after a snapshot); reject drafts 2920, 2921 | `app/api/edibility.py`, verdict controls in `frontend/species.html` / `review.html` if a severity choice is added | Code: read back species 155/688/745 (all fields), their history rows, drafts 2920/2921. Melvin: ☠ on those species' pins and walk badges. |
+| **4** | **A-02** (decided): `/api/settings` returns no secret values (`is_set` only) and refuses guests. **D1-01**: autoescape on, `\| safe` only for `mdlite`/`season_str`, escape the `_mdlite` heading, `url_fetcher` limited to `frontend/static/print` | `app/api/settings.py`, `app/services/settings_service.py`, `frontend/settings.html`, `app/api/lists_pdf.py`, `app/templates/print_pdf.html` | Code: scratch `generate_pdf` with a hostile payload (`<img src=file:///…>`, `<script>`, HTML in a heading) → escaped text, no embedded file (pypdf). Melvin: Settings still shows keys as set; a normal PDF looks the same. |
+| **5** | **B2-01 + B2-04** (decided) via one shared `static/js/safety-gate.js`: toxic/deadly by `edibility_status` OR severity → no edible parts, ☠ badge | `frontend/index.html` (`_injectEnrichment`, `showDetail`), `frontend/lists.html`, `frontend/print.html`, new `frontend/static/js/safety-gate.js`, `frontend/static/sw.js` (APP_SHELL + version bump) | Code: read-back + the shared-element trace (CLAUDE.md point 4). Melvin: tap a toxic pin; open a list with *Conium* in Lists + browser print → no edible parts, ☠ shown. |
+| **6** | **B2-03** (decided): prep warnings always in printed outputs incl. caution; look-alike uncut for hazardous species; Export summary gains warning fields | `frontend/print.html`, `app/templates/print_pdf.html`, `app/api/lists_pdf.py`, `app/api/sharing.py`, `frontend/index.html` (export payload) | Code: the 9 scratch PDFs re-run with the D1 fixture → `pdftotext` shows *Sambucus* and *Coprinus* warnings in all 3 layouts and *Conium*'s look-alike uncut. Melvin: browser print + Export summary for walk 4. |
+| **7** | **Refreshable share link** (decided; section 0) | `app/main.py`, `app/api/sharing.py`, `app/services/settings_service.py`, `frontend/settings.html`, `frontend/static/sw.js`, `app/api/identity.py` (`/api/me` tokens) | Code: middleware tests (P16) with fake Host/cookie. Melvin: new QR works on the phone; the old link shows "replaced" at once; the outbox flushes after re-opening. |
+| **8** | **B5-01, B5-02** (open — Melvin decides), with B5-03 and B5-05 if agreed | `app/api/encounters.py`, `observations.py`, `scan.py`, `map.py`, `dev.py` | Code: guest-identity tests. Melvin: a guest-mode phone gets 403 on `/api/encounters/1` and on a non-plant photo. |
+| 9 | S1 routing integrity: B1-02 (re-queue the 2 P2 rows), B1-03 (terminal guard in the kingdom audit), B1-05, B1-06 | `app/api/trust.py`, `observations.py`, `scan.py` | Read-back by id. |
+| 10 | S1 photo safety: C-02, C-01 (one-off copy of 131 photos + path update), E-05c/g (log failed copies; anchor `_is_deletable`) | `app/services/file_cleanup.py`, `observations.py`, `bulk_actions.py`, `observation_service.py` | Read-back by id; file existence checks. |
+| 11 | S1 verdict trail and locks: C-06, B2-06, B2-07, B2-08 (now 51 NULL), B3-05, B2-09 | mostly curator passes; `app/api/edibility.py` | Read-back by id. |
+| 12 | Publication bookkeeping and build: C-05 / P8, D3-05, D3-02 / P7, D3-04 / P10 | `scripts/experience_export/*`, `app/api/experience.py` | Scratch builds. |
+| 13 | Identity (Melvin decides A-03): socket-peer check, B4-01 dependency on the 116, B4-02, A-04 | `app/main.py`, `app/api/sharing.py`, `identity.py`, routers | Tests (P16). Melvin: phone on LAN and via the link. |
+| 14 | Quick S2 bugs: E-03, E-04, B1-08 candidate/score, C-03, C-04, D1-03, D2-01 | `reidentify.py`, `dev.py`, `scan.py`/review paths | Read-back + the logged repro (obs 24348). |
+| 15 | P4 markdown renderer + P5 names + P15 shared JS core | `static/js/core/*`, the renderers listed in E-05a | Scratch PDFs + Melvin's visual check. |
+| 16 | P18 index.html split (after batch 5; after P6 if chosen; recording removal decided first) | `frontend/index.html`, new `static/css` + `static/js/index/*`, `sw.js`, `scripts/experience_export/app_styles.py` | Byte-equal concatenation check + boundary scan; Melvin's 8-point checklist (E-08). |
+| 17 | Tidy: E-07 dead code, E-09 docs, E-12 logs, A-05…A-10, rename group 1 strings, UA contacts | various | Read-back; app starts clean (Melvin). |
 
 ---
 
@@ -829,7 +1094,7 @@ DB copy for this phase: fresh `.backup` taken 20 Oct 2026 16:19 local (integrity
 |---|---|---|---|---|
 | P1 | **One server-side safety gate** that every output asks: `culinary_allowed` + verdict + severity coupling, keyed on *both* edibility_status and toxicity_severity, returning {badge, may_show_culinary, required_warnings}. Map pop-up, walk panel, species page, Export summary, PDF/print, personal card and the experience gates all consume it. The PDF and Export summary re-check server-side instead of trusting the payload. | Closes B2-01..04, B2-09/10, D1-02, D3-01 in one place; ends the R1–R9 drift | M (one module + 9 call sites; renderers keep their HTML) | Medium: four renderers change at once; needs a fixture test per surface |
 | P2 | **Set `toxicity_severity` with the verdict** in `PATCH /api/edibility/status` (toxic → at least 'toxic'; inedible → curator chooses), and treat "never assessed" as unknown rather than the 'none' default (nullable column, or a `toxicity_assessed` flag) | Fixes B2-02 / B2-06 at the root; makes "fails closed" real | S–M (migration + one endpoint + a curator pass over ~490 rows) | Medium: gates go stricter until the curator pass completes (intended) |
-| P3 | **Escape by default in the PDF**: autoescape on, explicit `| safe` only for `mdlite` / `season_str`, and a WeasyPrint `url_fetcher` limited to `frontend/static/print` | Closes D1-01 | S | Low |
+| P3 | **Escape by default in the PDF**: autoescape on, explicit `\| safe` only for `mdlite` / `season_str`, and a WeasyPrint `url_fetcher` limited to `frontend/static/print` | Closes D1-01 | S | Low |
 | P4 | **One markdown renderer**: species.html `_renderMd`, print.html / lists.html `_mdLite`, `lists_pdf._mdlite`, `sharing._md_snippet` → one Python renderer (server) + one JS module (`static/js/md.js`) with the same rules (escape first; headings, bold, italic, lists), also used for id_notes / PFAF clean-up | Consistent recipes; no raw `**` / "[105]" in handouts (known backlog) | S–M | Low |
 | P5 | **Names helper everywhere**: load `species-names.js` in species.html, lists.html, print.html, seasons.html and sightings.html, and use `display_common_name` in `lists_pdf._flatten_species` | Names rule consistent in handouts | S | Low |
 | P6 | **Consistent badges**: one badge spec (colour + text) for edible / caution / inedible / toxic / deadly / unknown, exported once (tokens.css), read by app, PDF, Export summary and the experience export (also removes D3-03's JS-regex extraction) | Visual + safety consistency; less export fragility | M | Low |
@@ -838,6 +1103,285 @@ DB copy for this phase: fresh `.backup` taken 20 Oct 2026 16:19 local (integrity
 | P9 | **Deterministic builds**: already byte-identical (verified). Keep it by pinning Pillow and recording the DB snapshot name in the plan | Reproducible publishes | S | None |
 | P10 | **Drop the full mirror copy** for the default walk (redirect or a small index only under `w/<slug>/`) | −30 MB per publish in a public repo | S | Low (old links keep working if a redirect page stays) |
 | P11 | **Close the guest-readable data paths** (B5-01/02/03/05, A-02) with one "guest-safe" response filter per router | Privacy | M | Low |
+
+### Phase E — Tidy / maintainability (session 3)
+
+DB copy for this session: `<scratch>/audit.db`, `sqlite3 .backup` at 20 Oct 2026 17:01 local, integrity_check ok (16,130 observations, 712 species). Scratch reproductions in `<scratch>/waltest/` (throw-away DBs only).
+
+**E-01 · S1 · CONFIRMED (mechanism reproduced in scratch; no loss found in the 4 snapshots of 20 Oct) — Snapshots copy only the main DB file while the DB runs in WAL mode.**
+- `create_snapshot()` copies with `shutil.copy2(DB_PATH, db_snap)` (`dev.py:305-307`). No checkpoint and no SQLite backup API anywhere (`grep -rn wal_checkpoint app scripts` → none). The DB is WAL (`database.py:92-95`; `PRAGMA journal_mode` → `wal`).
+- Committed transactions that are still in `foragingid.db-wal` aren't in the copy. Scratch: WAL DB, 50 rows committed with the connection still open (as the server's pool is), `copy2` → live 50 rows, copy **0 rows**.
+- Checked against the live copy: snapshots `_104015`, `_112509`, `_114350`, `_165919` each contain every `processing_logs` / `observation_edits` / `culinary_info_history` row created before their timestamp. The WAL happened to be checkpointed in time. Luck, not design.
+- The CLAUDE.md note "a snapshot's mtime records when the DB was last written … a large gap means the DB was idle" is wrong under WAL: the main file's mtime is the last **checkpoint**, not the last write.
+- The 272 MB copy also runs synchronously in the event loop (S4).
+- Fix: `sqlite3.connect(DB).backup(dest)` in a thread (what this audit uses), or `VACUUM INTO`. Effort S. Fix risk: low.
+
+**E-02 · S1 · CONFIRMED (scratch) — Restore copies the snapshot over the live WAL DB; the running server's WAL is then replayed on top, so a restore can be silently undone.**
+- `restore_snapshot()` runs `shutil.copy2(snap_db, DB_PATH)` while the server holds open connections, and leaves `-wal`/`-shm` in place (`dev.py:458-464`).
+- Scratch: snapshot with 2,000 rows (taken with the backup API) → 3,000 more inserts and deletes left in the WAL → snapshot copied over the main file. The open connection still sees **3,333** rows; after close and reopen the file also has 3,333 rows (integrity ok). **The restore had no effect.** With a partly checkpointed WAL the result can be a mix of pages from two states (not reproduced).
+- `db_path` and `commit_hash` are free client strings: any readable file can be copied over the DB, and `git checkout <anything>` runs. Curator tier only, but see A-01/A-03.
+- Fix: restore through the backup API into the live connection (`snap.backup(live)`), which SQLite keeps consistent under WAL; or restore only with the server stopped. Also accept only paths inside `snapshots/` and hashes matching `^[0-9a-f]{7,40}$`. Effort S. Fix risk: low.
+
+**E-03 · S2 · CONFIRMED (log + code) — Second Opinion returns 500 whenever GBIF adds a name the image APIs didn't.**
+- GBIF-only entries are built without `"non_european"` (`reidentify.py:576-583`). The sort key reads `x["non_european"]` (`:611-613`), so it raises `KeyError`.
+- Log: `logs/server_20261016_064852.log` line 83749: `POST /api/observations/24348/second-opinion?organ=auto` → 500, `KeyError: 'non_european'`.
+- Not in CHANGELOG. Effort S (`x.get("non_european", False)`, or add the key at `:578`). Fix risk: none.
+
+**E-04 · S3 · CONFIRMED — End-session "since last snapshot" parse breaks for most dates** (carry-over).
+- `dev.py:708`: `ts_line.split("+")[0].split("-0")[0]` cuts any date containing "-0" (months Jan–Sep, days 01–09). `fromisoformat` then raises, and the code falls back to exporting **all** encounters to Obsidian.
+- It also reads the second-latest snapshot (`--skip=1`) as naive local time.
+- Effort S. Fix risk: low.
+
+**E-05 · S3 · CONFIRMED — Duplicated logic inventory.**
+- **(a) Markdown renderers:** 6 implementations, 4 rule sets.
+
+  | Where | Rules |
+  |---|---|
+  | `species.html:4122` `_renderMd` | escape first; `#`–`###`, bold, italic; single newline → `<br>` |
+  | `print.html:362` and `lists.html:1771` `_mdLite` | byte-identical copies; headings + bold only |
+  | `lists_pdf.py:61` `_mdlite` | same rules, but heading text is **not escaped** (`<h3>{h.group(1)}</h3>`) — part of D1-01 |
+  | `sharing.py:406/418` `_md_inline` / `_md_snippet` | escape first; bold, italic, code, lists, title dedupe, length cap |
+  | `export.py:160` `recipe_teaser` | strips to plain text |
+
+  → P4.
+- **(b) Edibility gates:** R1–R9 (B2). On top of those, the block-list literal `("toxic","inedible","not_edible")` appears in **8 places**: `culinary.py:1610, 1950, 2581, 3090, 3133, 3300` and `enrichment.py:1293, 1663`.
+  - Two of them also list `'unclear'`. `'not_edible'` and `'unclear'` aren't in the documented enum, and no species uses either.
+  - Live values: edible 284 · unknown 177 · caution 111 · NULL **51** (B2-08 said 48; 3 species added since 12:24, incl. *Hedera helix* id 745) · inedible 50 · toxic 39.
+- **(c) `_copy_to_confirmed`:** three identical copies — `bulk_actions.py:54`, `observations.py:107` (**dead, no caller**), `observation_service.py:45`.
+  - All three are `except Exception: pass`, so a failed confirmed-copy leaves no trace (related to C-01).
+  - Their docstrings say the copies are "git-tracked". They aren't: `.gitignore:70` ignores `photos/confirmed_plants/*`.
+- **(d) HTML escape helper `_esc`:** 16 copies in 15 files, in 3 variants:
+  - escapes `"`;
+  - escapes `"` and `'`;
+  - textContent-only (`seasons.html:368`, `job-status-widget.js:510`). Neither is used inside an attribute today (checked).
+- **(e) ORS:** not duplicated. One helper, `walk._ors_post` (`walk.py:62`), serves both the map proxy and re-route.
+  - The API-dashboard probe tests the `foot-walking` profile while the app uses `foot-hiking` (`api_dashboard.py:283` vs `walk.py:40`).
+  - The probe reports any status other than 401/403 (incl. 429 and 5xx) as "live". S4.
+- **(f) Snapshot code:** one implementation, called by the Settings button, end-session and walk re-route (`walk.py:423-426`).
+  - Every call runs `git add -A && git commit` (`dev.py:322-345`). So an in-app **Re-route commits whatever is in the working tree**, including half-finished edits from a Code session.
+  - This conflicts with CLAUDE.md's "single commit point". S3.
+- **(g) Path handling:** three conventions on one table.
+  - `observations.file_path` is absolute: 15,566 under `/Users/melvinjarman/ForagingID/`, 551 under `~/Local(unsynced)/PhoneForaging`, 13 `__removed__/…`.
+  - `confirmed_copy_path` is absolute (2,116).
+  - `thumbnail_path` is relative, `data/thumbnails/…` (16,029).
+  - Relative paths depend on the server's working directory: `config.py:53` (`sqlite+aiosqlite:///./data/foragingid.db`), `encounters.py:783` (`Path("./uploads/reading_notes")`), and `main.py` `FileResponse("frontend/…")`.
+  - `file_cleanup._is_deletable` (`file_cleanup.py:38`) is a substring test on `"/uploads/"` etc., not anchored to the project root. An archive path like `/Volumes/DIGIERA/…/uploads/…` would qualify. No such row today (checked).
+
+**E-06 · S3 · CONFIRMED — Silent failures and unreferenced tasks.**
+- 0 bare `except:`.
+- 292 broad `except Exception` handlers in app/ + experience_export; **74 swallow with only `pass`/`continue`**. Most are JSON-parse fallbacks (harmless). The ones that matter:
+  - `copy_single` ×3 (E-05c).
+  - `culinary.py:2631`: edibility conditions silently left out of the AI-draft context.
+  - `culinary.py:2809, 3202, 3218, 3407, 3422` and `scan.py:2524, 3161, 3346`: job and heartbeat status writes. A failed write leaves a job looking stuck or "stalled".
+  - `reidentify.py:1181`.
+  - `dev.py:415`: snapshot list from git.
+- Fire-and-forget `asyncio.create_task(...)` with no reference kept (carry-over, re-verified): `syncthing.py:166, 469, 507, 682, 774`; `culinary.py:2793`; `scan.py:835, 2080`; `ingest.py:52`; `enrich.py:461`. The event loop holds only weak references, so a task can be garbage-collected mid-run, and its exceptions surface only as "Task exception was never retrieved".
+- Effort S per site. Fix risk: low.
+
+**E-07 · S3 · CONFIRMED — Dead code.**
+- **Python:** 6 module functions are never referenced — `hashing.py:18 perceptual_hash`, `encounter_extract.py:114 _has_recipe_cue`, `gdrive.py:162 sync_changelog`, `inaturalist.py:430 get_regional_obs_count`, `enrich_gate.py:163 queued_names`, `pipeline_lock.py:85 pipeline_acquired_at` — plus `observations.py:107 _copy_to_confirmed`.
+- **JS:** 26 functions are never referenced:
+  - scan.html 8 (`onP2SessionChange`, `onPauseClick`, `onProcessDeltaClick`, `onResumeClick`, `onDeleteSessionClick`, `_stopP2Polling`, `_hideNarration`, `_escAttr`);
+  - index.html 7 (`_expandSearchChip`, `_watchLayerHealth`, `_toggleSpecies`, `_toggleMonth`, `_pickSeasonalRecipe`, `toggleSavedWalksList`, `_closeNotePanel`);
+  - review.html 3 (`topScore`, `saveCorrection`, `loadLocationReview`);
+  - lists.html 3;
+  - 1 each in seasons, print, settings (`saveSnapshot`), species, `encounters-main.js`.
+
+  The count includes inline `onclick` strings, so "unreferenced" means no caller anywhere in frontend/.
+- **Files and dependencies:**
+  - `git-banner.js` is loaded by no page (its copy text hard-codes `cd ~/ForagingID`).
+  - `scratch-filename-test.html` is a stray file.
+  - 3 pinned dependencies are never imported: geopy, piexif, aiofiles.
+  - 14 pre-Alembic `scripts/migrate_*.py` one-offs remain.
+- Dead endpoints and settings: A-07, A-08.
+- Effort S. Fix risk: low.
+
+**E-08 · S3 · CONFIRMED — Oversized functions and files.**
+- **14 Python functions ≥200 lines:**
+
+  | Function | Lines |
+  |---|---|
+  | `scan.py:1209 _identify_scanned_inner` | **783** (every routing rule lives in this one function) |
+  | `export.py:508 main` | 506 |
+  | `audit.py:76 run_audit` | 433 |
+  | `enrichment.py:1235 _maybe_generate_ai_drafts` | 398 |
+  | `scan.py:2708 _run_archive_scan` | 389 |
+  | `scan.py:231 scan_image` | 386 |
+  | `settings_service.py:44 _build_registry` | 350 (data, fine) |
+  | `reidentify.py:399 second_opinion` | 265 |
+  | `culinary.py:1279 merge_species` | 251 |
+  | `enrichment.py:62 enrich_species` | 250 |
+  | `enrichment.py:1639 _section_ai_draft` | 245 |
+  | `culinary.py:1844 species_profile` | 212 |
+  | `database.py:77 init_db` | 206 |
+  | `walk_membership.py:272 compute` | 201 |
+
+- **Files:** culinary.py 3,653 · scan.py 3,367 · enrichment.py 1,985 · index.html 9,613 · scan.html 6,057 · review.html 5,998.
+- **index.html split proposal** (fits the no-bundler rule and D3-03):
+  - **Mechanism:** plain classic `<script src>` files, loaded in today's order. Classic scripts share one global scope, so top-level `const`/`let`/functions and inline `onclick="fn()"` keep working with no code changes.
+  - Four hazards to check at every file boundary:
+    1. Function hoisting doesn't cross files: a top-level call in file N to a function declared in file N+1 fails at load.
+    2. A top-level read of a later file's `const` hits the TDZ.
+    3. `sw.js` `APP_SHELL` (`sw.js:38-…`) must list the new files and `CACHE_VERSION` must be bumped, or the offline PWA loses the map code.
+    4. **D3-03:** `app_styles.py` regex-reads the `.walk-stop-*` / `.walk-header` CSS rules (top-level, 4-space indent) and the badge colours in `_culinaryGateBadge` / `renderWalkPanel` from `frontend/index.html` (`app_styles.py:27-43, 82-101`). Moving them breaks the experience build loudly (`StyleDrift`, not silently). Either repoint `app_styles.py` in the same change, or do P6 first (badge spec in tokens.css) and drop the JS regex.
+  - **Proposed files, in load order:**
+
+    | File | From index.html | Lines | Contents / note |
+    |---|---|---|---|
+    | `static/css/index.css` | `:22-1878` | 1,856 | all CSS |
+    | `js/index/map-core.js` | `:2644-3597` | ~950 | map init, GPS, config sheet, layers, overlays, heatmap, sidebar, near-me, discover |
+    | `pins-filters.js` | `:3598-4591` | ~990 | |
+    | `detail-card.js` | `:4592-5159` | ~570 | the B2-01 fix lands here |
+    | `walk-build.js` | `:5160-6276` | ~1,120 | |
+    | `walk-panel.js` | `:6277-6689` | ~410 | badge regex target |
+    | `walk-saved.js` | `:6690-7631` | ~940 | |
+    | `walk-alerts-record.js` | `:7632-8983` | ~1,350 | mostly IIFEs already — lowest risk, move first |
+    | `search-notes-find.js` | `:8984-9605` | ~620 | contains `// ── Init` at `:9388`, so it loads last |
+
+  - **Verification Code can do without a browser:** a scratch script showing that the new files, concatenated, equal the old inline script byte-for-byte, plus a boundary scan for hazards 1–2. Then Melvin runs a fixed live checklist: map loads; pin tap card; walk build; saved-walk load; Export summary; recording HUD; Find tab; offline reload.
+  - **Decision for Melvin first:** CHANGELOG says in-app recording is "no longer needed" (simmer list). If so, `:7806-8983` + `walk-record.js` (~1,380 lines) could be removed instead of moved.
+
+**E-09 · S3 · CONFIRMED — Docs vs reality.**
+- **CLAUDE.md:**
+  - Alembic head says `0050`; live is `0054`.
+  - Copy-on-ingest is credited to "migration 0021"; 0021 is `add_batch_state_to_scan_sessions` (both landed in the same session, per docs/current_phase.md).
+  - "config.py's `phone_foraging_dir` is stale and points at a non-existent path" — **no longer true**. It resolves to `~/Local(unsynced)/PhoneForaging`, which exists and equals the `photo_library_path` DB setting.
+  - The "2158/2158" card/map figure is stale (session 2: 2,474 cards = 2,425 pins + 49 without GPS).
+  - "uploads/ ~88% (12,239 of 13,855)" — now 13,955 of 16,130 = 86.5%.
+  - `photos/pipeline2/` is described as "P2 (Syncthing/Takeout)". Actually P1 Syncthing and P2 archive rescans copy there; browser uploads stay in `uploads/`.
+  - The snapshot-mtime note (E-01).
+  - The "## Current Phase" / "## Next Steps" sections are stale. End-session rewrites them only when `current_phase` is passed (`dev.py:526-555`), which it hasn't been since June.
+- **docs/architecture.md** (19 Jul): "Fungi → iNaturalist + Mushroom Observer". The identification core sends fungi to **iNaturalist only** (`scan.py:1270-1276`); Mushroom Observer is a name/link lookup in Second Opinion and enrichment.
+- **docs/current_phase.md:** last updated 3 June (Phase 10.9) — superseded by CHANGELOG.
+- **Code comments:**
+  - `syncthing.py:1087` "≥80%" (live 0.70; B1-07).
+  - "git-tracked" in `observations.py:110`, `observation_service.py:48`, `config.py:98-108` (E-05c).
+  - `.claude/launch.json` `"//"` says CLAUDE.md's run command omits `--port` (it has `--port 8000`).
+  - `dev.py:382` says `~/ForagingID/snapshots/`.
+  - A-10 (version strings).
+
+**E-10 · S3 · CONFIRMED — Test coverage is thin, and the test runner isn't installed.**
+- `tests/` has 3 files and **33 tests** (agreement, regional demotion, taxonomy keys). **All pass** (run with a plain function runner; pytest isn't in the venv or in requirements.txt).
+- No tests cover:
+  - display gates R1–R9;
+  - the shared predicates (`is_terminal_review_status`, `is_phone_origin`, `qualifies_as_identified`, `requires_forced_review`);
+  - `classify_host` / `get_identity`;
+  - experience `gates.py`;
+  - PDF escaping;
+  - snapshot/restore;
+  - `walk_route` / `walk_membership`.
+- Highest value: one fixture test per output surface for P1, and host-tier/identity tests before the share-link change. Effort S–M.
+
+**E-11 · S3 · CONFIRMED (hazards) / SUSPECTED (impact of the second server) — Launcher and reload hazards.**
+- **Reloads cancel running work.** Any app/ `.py` save reloads the server and cancels running tasks: 18 × "Cancel N running task(s), timeout graceful shutdown exceeded" in the current log (16–20 Oct). The in-memory state below is lost on every reload:
+  - enrich-gate queue;
+  - `_pending_deletes` 30 s undo timers (orphaned files would stay in `/tmp/foragingid_undo`; 0 files there today);
+  - syncthing `_state`;
+  - P2 SSE sessions.
+
+  Already known (memory). Restated because **every fix batch that touches app/ must be applied while no job runs**.
+- **A second server.** `.claude/launch.json` defines one on **port 8001 against the same DB**, with `--reload --reload-dir app` and none of the launcher's excludes. If a preview tool started it, it would run its own auto-scan loop, orphan sweep and caffeinate.
+  - The pipeline mutex is in-process only (`pipeline_lock.py:27-40`), so two processes could ingest and identify concurrently.
+  - `UNIQUE(file_hash)` stops duplicate rows, but not double API spend or lock contention.
+  - Not run. SUSPECTED impact.
+- **Startup warnings.** Every start logs a urllib3 `NotOpenSSLWarning` (system Python 3.9.6 links LibreSSL 2.8.3) — 79 times in this log. The WeasyPrint `DYLD_LIBRARY_PATH` dependency: see D1.
+
+**E-12 · S4 · CONFIRMED — Log noise.**
+- Current log (16–20 Oct): 84,792 lines, 6 MB. `logs/` holds 57 MB in 23 files and is never rotated.
+- 97% of lines are uvicorn access lines:
+  - `GET /api/queue/list` 23,623 and `GET /api/processes/active` 23,623 (job-widget polling);
+  - `/health` 8,131;
+  - three scan-stats endpoints at ~5,280 each.
+- 18 `[TIMING]` print lines per startup × 79 startups.
+- Proposal: an access-log filter for the polling endpoints, `[TIMING]` behind debug, log rotation. Effort S.
+
+**E-13 · No finding — Python 3.9 compatibility is clean.**
+- Every `.py` in app/, scripts/, tests/ and migrations compiles under the venv's 3.9.6.
+- An AST scan found none of these: `match`, runtime PEP 604 unions, `zip(strict=)`, 3.10+ stdlib names (`TaskGroup`, `tomllib`, `typing.Self` …), or `dataclass(slots/kw_only)`.
+- The one `str | None` annotation (`scripts/backfill_top_score.py:24`) sits under `from __future__ import annotations`, which is fine.
+- `pip check` is clean, and every pin in requirements.txt matches the installed version. CONFIRMED.
+
+**E-14 · S1 · CONFIRMED (data) — Six human-lock history rows for `preparation_warnings` hold a marker string, not the text.**
+- `culinary_info_history` #613–618, all dated 2026-06-24 19:26:42 UTC, `changed_by='human'`, `old_value` NULL, `new_value` = the literal "(human-authored preparation_warnings)". Species: *Anthriscus sylvestris* (ci 66), *Crataegus rhipidophylla* (27), *Geranium endressii* (56), *Populus tremula* (59), *Lysimachia nummularia* (71), *Sisymbrium officinale* (299).
+- The current text (242–677 chars) is unchanged since at least the 28 Jun snapshot (`db_pre_review_label_backfill.sqlite`, byte-equal). It's **not** the PFAF text.
+- **Effect 1:** the enrichment lock treats these fields as human-locked, which is correct.
+- **Effect 2:** `gates.human_authored()` requires the latest human row to equal the current text, so the experience page treats them as **not** human-authored. Two of them are on walk 4 (*Anthriscus sylvestris*, *Crataegus rhipidophylla*).
+- **Effect 3:** history doesn't hold what was locked (same class as B3-02 / C-06).
+- Origin SUSPECTED: a one-off SQL on 24 Jun. No code writes this string, and `git log -S"(human-authored"` over app/scripts/migrations finds nothing relevant. To confirm: Melvin recalls whether he wrote those six texts.
+- Effort S (Melvin confirms each → a real `human` history row with the text). Fix risk: none.
+
+### Phase F — Rename inventory ForagingID → LandMemory (read-only counts)
+
+Sweep: `git ls-files | xargs grep -Ii "foraging[-_ ]\?id"` → **287 hits in 75 tracked files** (`foragingid` 183, `ForagingID` 103, `foraging_id` 1). CHANGELOG.md alone has 71; docs and audits hold most of the rest. DB, client-storage and filesystem counts come from the scratch DB copy and direct listing.
+
+**User-facing rename is already mostly done.** All 16 page `<title>`s, the PWA manifest (`name`/`short_name` "LandMemory"), the site header, the Export summary footer + GPX `creator`, and the experience page (`show_brand: false`; built `dist/` has **0** "foragingid" strings) already say LandMemory.
+
+| # | Group | Count | What breaks if renamed | Migration needed | Risk | Recommend |
+|---|---|---|---|---|---|---|
+| 1 | **User-facing strings** | 11 places | Nothing | One DB text edit (About), done by Melvin in the About editor | None | **Now** (cheap) |
+| 2 | **Code identifiers** | ~45 comment/docstring/log lines + the GeoJSON key in 6 files | GeoJSON key: line, straight legs and circular flag stop reading on 3 walks unless code and data change together | Comments: none. Key: 3-row JSON migration + reader fallback | Low (comments) / Medium (key) | Comments, loggers, UA: when touched. `/tmp`/backup names: when nothing is pending. **GeoJSON key: never** (internal, never public) |
+| 3 | **Client storage** (per device: laptop browser + Pixel PWA) | 15 `foragingid_*` localStorage keys + per-walk keys; 1 IndexedDB `foragingid_walks`; 4 SW caches; plus the `fid_` family | Settings, booklet selection, offline tiles; **unsynced recordings and outbox items are lost** | A one-time in-page migrator on each device | **Medium-High** | **Never** for keys. If the origin ever changes, client storage starts empty anyway |
+| 4 | **DB contents** | ~17,700 path values + 3 walk rows + 1 setting + About text | Folder rename/move → photos and audio 404 everywhere; file_cleanup can't find files | Folder move: snapshot + replace() UPDATE on 3 columns (~17.7k rows) with read-back; better first, store project-relative paths | Medium | Only together with a folder move; prefer the relative-path change first. About text: now (group 1) |
+| 5 | **Filesystem / tooling** | 1 folder, 1 DB filename (17 code refs), 1 venv, launcher, Claude data dir, `/tmp` + backup dirs | Every absolute path; Claude Code memory/history appear lost | Copy memory; recreate venv; rename DB with server stopped; update launcher/shortcut | Medium | **Never** for venv / DB filename / launcher internals. Folder: at Phase 14 only, with group 4 first |
+| 6 | **External** | GitHub repo, 7 UA strings, Drive folder, Hostinger text | Little (GitHub redirects renamed repos) | `git remote set-url` after a GitHub rename | Low | **Now** for the UA contact (needs a fix anyway). GitHub repo: Phase 14 or when made public. Hostinger: check by hand |
+
+**Group detail:**
+
+- **Group 1 — user-facing strings still saying ForagingID (11 places):**
+  - PDF `<title>` (`print_pdf.html:5`, shown in PDF viewers and metadata);
+  - PDF download filename `foragingid-list.pdf` (`lists_pdf.py:242`, `print.html:827`);
+  - shared-photo filename `foragingid_obs<id>.<ext>` (`review.html:5924`);
+  - FastAPI title (`main.py:182`, `/docs`);
+  - `start.sh:42` banner and the launcher filename/echo;
+  - backup path text in Settings (`settings.html:674`);
+  - **About page text**: `about_content.full_description`, 4 occurrences in the DB (seeded by migration 0004 `:23-42`);
+  - the About AI prompt (`about.py:38`), so generated About drafts say ForagingID.
+
+  (User-Agent strings are external — group 6.)
+- **Group 2 — code identifiers:**
+  - Loggers `foragingid.inaturalist` / `.api_dashboard` / `.prefilter` (3).
+  - `keep_awake` reason strings (2).
+  - About 25 comments/docstrings in app/ and 20 in scripts/.
+  - `/tmp/foragingid_undo` (`file_cleanup.py:19`).
+  - `EXTERNAL_BACKUP_DIR` "ForagingID_Backup" (`dev.py:62`; existing backups live there).
+  - **The `route_geojson` foreign member `"foragingid"`** (straight legs, circular flag) is read and written in `walk_route.py` (12), `walk_membership.py:94`, `walk.py` (3), `index.html` (4), `export.py:491`, `walk_straighten_legs.py` (4), and is stored in **3 `saved_walks` rows**. Renaming needs the 6 files and a 3-row JSON migration changed together, plus a reader fallback (`get("landmemory") or get("foragingid")`).
+  - No module names, settings keys or DB column names contain the name.
+- **Group 3 — client storage:**
+  - **localStorage — 15 `foragingid_*` keys:** `current_list` (the booklet selection in progress), `list_cover`, `list_style`, `content_toggles`, `sr_data`, `sr_limit`, `list_map_snapshot`, `default_layer`, `layer_version`, `field_mode`, `prox_threshold`, `show_de`, `active_session_id`, `nomatch_handled`, plus per-walk `foragingid_walk_human_only_<id>`.
+  - **The `fid_` family** (abbreviation, not matched by the sweep): `fid_map_pos`, `fid_species_cached_at/_n`, `fid-sec-*`.
+  - **IndexedDB:** `foragingid_walks` (`index.html:8132`) holds GPS walk recordings not yet synced. `fid_encounter_queue` (`encounter-queue.js:39`) is the **offline encounter outbox** (voice notes and photos not yet uploaded).
+  - **SW caches:** `foragingid-v7-static` / `-runtime` (versioned, safe with a bump); `foragingid-tiles` (offline map tiles from "Cache area") and `foragingid-species` (offline profiles).
+  - **What renaming loses on every device:** saved settings and the booklet selection; **unsynced recordings and outbox items**; offline tiles and profiles, until re-cached.
+  - The SW cleanup only deletes keys starting `foragingid-` (`sw.js:248`), so renamed caches would leave the old ones orphaned unless the filter covers both.
+  - A per-device migrator would have to run online, before the next offline outing.
+  - This also matters for the share link: a **new ngrok host** is a new origin, which strands everything above on the phone (see the share-link proposal).
+- **Group 4 — DB contents:** rows with `/ForagingID/` in path columns, per table/column (scratch copy):
+
+  | Table.column | Rows | Kind |
+  |---|---|---|
+  | `observations.file_path` | **15,566** | absolute path |
+  | `observations.confirmed_copy_path` | **2,116** | absolute path |
+  | `encounters.audio_path` | 9 | absolute path |
+  | `saved_walks.route_geojson` | 3 | `"foragingid"` JSON key (group 2) |
+  | `app_settings.obsidian_vault_path` | 1 | `~/Documents/Obsidian/ForagingID` (external folder) |
+  | `about_content.full_description` | 1 row (4 hits) | user-facing |
+  | `processing_logs.message` | 169 | historical, leave |
+
+  `thumbnail_path` (relative), `photo_library_path` and settings keys are unaffected.
+- **Group 5 — filesystem / tooling:**
+  - **Project folder** `/Users/melvinjarman/ForagingID`: all group-4 paths. The **Claude Code per-project data dir** is keyed by folder path: `~/.claude/projects/-Users-melvinjarman-ForagingID` (169 MB of transcripts + `memory/` with 6 memories). A renamed folder starts with an empty dir, so memory would have to be copied by hand. Two older dirs exist from earlier locations (`-Users-melvinjarman-Documents-ForagingID`, `-Volumes-DIGIERA-ForagingID`).
+  - **DB filename** `data/foragingid.db`: `config.py:53`, `dev.py:58`, `export.py:51`, 14 scripts, `.gitignore:29-32`. A rename must happen with the server stopped and must move `-wal`/`-shm` too (or checkpoint first).
+  - **Venv** `~/foragingid-venv`: has absolute shebangs, so it can't be renamed, only recreated. Referenced by the launcher (`:19-20`), `start.sh:13-15`, export docs, CLAUDE.md, architecture.md.
+  - **Launcher** `START_ForagingID.command`: the filename, and Melvin's Finder/Dock shortcut.
+  - `.claude/launch.json` config `"foragingid"`.
+  - **Undo and backup dirs:** `/tmp/foragingid_undo`; `/Volumes/DIGIERA/ForagingID_Backup`; Obsidian vault folder.
+  - **Unaffected:** Syncthing watch folder `~/Local(unsynced)/PhoneForaging` (no name). The Syncthing folder label/ID wasn't checked (config is outside the repo). `snapshots/` is neutral.
+- **Group 6 — external:**
+  - **GitHub:** `origin` = `github.com/melvinoj/ForagingID` (end-session pushes there). The public site repo/URL `melvinoj.github.io/foraging-experience/` carries no old name.
+  - **User-Agent strings:** 7 (PFAF, Wikidata, Trompenburg, culinary links, FAO, GBIF backfill, data-source registry). `wikidata.py:28` points at `https://github.com/foragingid` (SUSPECTED: not Melvin's account), and `pfaf.py:35` gives "contact: foragingid@local" (not a real contact). Wikimedia's UA policy asks for a reachable contact, so fix these regardless (S4).
+  - **Google Drive folder** "ForagingID" (`gdrive.py:27`; token invalid anyway).
+  - **Hostinger page** (`melvinjarman.co.uk/b`): text not in the repo, not checked (no external calls). Check by hand.
+- **Overall: rename the user-facing leftovers now; never the internals.** The folder, DB filename, venv, storage keys and GeoJSON key give no user-visible benefit and carry real breakage (paths, outbox, memory). Revisit at Phase 14 only if the folder moves anyway (multi-tenant/Postgres), after switching DB paths to project-relative.
 
 <!-- PHASE-FINDINGS-INSERT-ABOVE -->
 

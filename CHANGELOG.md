@@ -100,6 +100,10 @@ Snapshots 20 Oct: db_20261020_053600, _062739, _063515, _072552 (re-route, Rümm
 
 ### 2026-10-20 17:59
 **Snapshot** — before re-route of saved walk 5
+DB: `snapshots/db_20261020_175941.sqlite`
+
+### 2026-10-20 17:59
+**Snapshot** — before re-route of saved walk 5
 DB: `snapshots/db_20261020_175921.sqlite`
 
 ### 2026-10-20 17:58

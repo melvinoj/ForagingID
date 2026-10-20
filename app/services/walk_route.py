@@ -274,14 +274,38 @@ def straighten_legs(waypoints: list, route: dict, circular: bool, legs: list) ->
 # touching a new stop, or bridging a dropped one, go to ORS; a new leg ORS
 # detours on is kept as a straight dashed leg instead (DETOUR_* below).
 
-DETOUR_FACTOR  = 3.0      # routed > factor × straight + slack → detour
-DETOUR_SLACK_M = 150.0
+# routed > factor × straight + slack → detour. Real paths on the test walks
+# route at 1.3–1.6× straight; the detours seen were 3–16× (20 Oct 2026).
+DETOUR_FACTOR  = 2.0
+DETOUR_SLACK_M = 100.0
 ORS_MAX_POINTS = 50       # ORS directions: coordinates per request
 REROUTE_MAX_REQUESTS = 10
 
 
 def is_detour(routed_m: float, straight_m: float) -> bool:
     return routed_m > DETOUR_FACTOR * straight_m + DETOUR_SLACK_M
+
+
+def insert_cheapest(saved: list, new: list, closed: bool) -> list:
+    """Stops in walking order "as if they were there all along": saved stops
+    keep their order (stop 1 first); each new stop is inserted between the two
+    consecutive stops where it adds the least straight-line distance (a closed
+    loop may also take the leg back to stop 1). Items need lat/lng."""
+    P = lambda s: [s["lng"], s["lat"]]
+    order = list(saved)
+    for s in new:
+        if not order:
+            order.append(s)
+            continue
+        n = len(order)
+        gaps = [(i, i + 1) for i in range(n - 1)] + ([(n - 1, 0)] if closed or n == 1 else [])
+        cost = lambda g: (_hav(P(order[g[0]]), P(s)) + _hav(P(s), P(order[g[1]]))
+                          - _hav(P(order[g[0]]), P(order[g[1]])))
+        options = [(cost(g), g[0] + 1) for g in gaps]
+        if not closed:                       # an open walk may also start or end at the new stop
+            options += [(_hav(P(s), P(order[0])), 0), (_hav(P(order[-1]), P(s)), n)]
+        order.insert(min(options)[1], s)
+    return order
 
 
 def plan_reroute(old_waypoints: list, route: dict, new_stops: list) -> dict:

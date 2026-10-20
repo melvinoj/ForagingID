@@ -2375,7 +2375,7 @@
           <button id="walk-gpx-btn" class="walk-map-btn" onclick="walkDownloadGpx()"
             style="background:#fff;color:#2d5016;border:1px solid #b8d48a;cursor:pointer"
             title="Download the full route line as a GPX track (with stops as waypoints)">⬇ Download GPX</button>
-          <button id="walk-save-btn" class="walk-save-btn" onclick="promptSaveWalk()">💾 Save walk</button>
+          <button id="walk-save-btn" class="walk-save-btn" onclick="walkSaveClick()">💾 Save walk</button>
           <button id="walk-export-btn" class="walk-map-btn"
             onclick="exportWalkSummary()"
             style="background:#f0f4e8;color:#2d5016;border:1px solid #b8d48a;cursor:pointer"
@@ -4501,10 +4501,13 @@ function renderMarkers() {
 
     const mkPins = L.marker([lat, lng], wsel ? { icon: wsel, zIndexOffset: 1000 } : { icon: pinIcon });
     if (wsel && p.species_primary) {
-      // Edit walk: selected pins keep their name label; any other pin shows it on hover (desktop).
-      const sel = _walkPinSel.ids.has(Number(p.id));
-      [mkCluster, mkPins].forEach(m => m.bindTooltip(spNameHtml(p.species_primary, p.common_name),
-        { permanent: sel, direction: 'top', offset: [0, -10], className: 'walk-pin-label' }));
+      // Edit walk: pending pins keep their name label; any other pin shows it on hover
+      // (desktop). Pins layer only (walk mode always uses it); a label can never break the redraw.
+      const sel = _walkPending.add.has(Number(p.id)) || _walkPending.remove.has(Number(p.id));   // pending
+      try {
+        mkPins.bindTooltip(spNameHtml(p.species_primary, p.common_name),
+          { permanent: sel, direction: 'top', offset: [0, -10], className: 'walk-pin-label' });
+      } catch (_) {}
     }
     mkPins.on('click', () => handlePinClick(p, lat, lng, mkPins));
     pinsGroup.addLayer(mkPins);
@@ -5221,6 +5224,7 @@ function _exitWalkMode() {
   _walkLastPins = null;
   _walkRouteStatus = null;
   _walkPinSelExit();
+  _walkPendingClear();
   _walkHighlightClear();
   _walkSaved = null;
   _walkLineClosed = false;
@@ -6048,6 +6052,12 @@ function _drawWalkLayer(suppressFitBounds) {
   if (_walkRouteLayer) map.removeLayer(_walkRouteLayer);
   _walkRouteLayer = L.layerGroup().addTo(map);
   _walkRouteLayer._walkBuildSeq = _walkBuildSeq;   // which route build drew it (loadSavedWalk's stale check)
+  // Point-to-point: flag the start (first stop) and the finish (last saved stop —
+  // where the line ends) so the one-way shape is unmistakable on the map.
+  let finishIdx = -1;
+  if (!_walkCircular && route.length > 1) {
+    for (let k = route.length - 1; k >= 0; k--) { if (route[k].origin !== 'joined') { finishIdx = k; break; } }
+  }
   const latLngs = route.map((s, i) => {
     // Stops that joined a saved walk by route proximity ("7a") are a lighter green.
     const bg = s.p.is_note ? '#f59e0b' : (s.origin === 'joined' ? '#5f8f35' : '#2d5016');
@@ -6057,7 +6067,10 @@ function _drawWalkLayer(suppressFitBounds) {
       html: `<div style="width:28px;height:28px;border-radius:50%;background:${bg};
                  color:white;font-size:0.72rem;font-weight:700;
                  display:flex;align-items:center;justify-content:center;
-                 border:2px solid white;box-shadow:0 2px 6px rgba(0,0,0,.3)">${_esc(_stopLabel(s, i))}</div>`,
+                 border:2px solid white;box-shadow:0 2px 6px rgba(0,0,0,.3);position:relative">${_esc(_stopLabel(s, i))}${
+                 (finishIdx >= 0 && (i === 0 || i === finishIdx))
+                   ? `<span title="${i === 0 ? 'Start' : 'Finish'}" style="position:absolute;top:-13px;right:-12px;font-size:15px;line-height:1">${i === 0 ? '🚩' : '🏁'}</span>`
+                   : ''}</div>`,
       iconSize: [28, 28], iconAnchor: [14, 14],
     });
     const stopMk = L.marker([s.lat, s.lng], { icon: stopIcon }).addTo(_walkRouteLayer);
@@ -6448,6 +6461,7 @@ function renderWalkPanel(route, enrichMap) {
     </div>`;
   }
   document.getElementById('walk-stops-scroll').innerHTML = html;
+  _syncWalkSaveBtn();          // loaded walk: "Save changes (N)"; new walk: "Save walk"
 
   // Bottom sheet summary (phone only — mirrors walk-title / walk-sub for the sheet)
   _wbsUpdateSummary(route);
@@ -6861,7 +6875,8 @@ async function loadSavedWalk(id) {
     if (!r.ok) throw new Error(`HTTP ${r.status}`);
     const w = await r.json();
     if (stale()) return;
-    _walkPinSelExit();              // another walk: selection and highlights belong to the old one
+    _walkPinSelExit();              // another walk: marks and highlights belong to the old one
+    _walkPendingClear();
     _walkHighlightClear();
     if (!w.waypoints || !w.waypoints.length) {
       alert('This saved walk has no waypoints.');
@@ -7049,6 +7064,7 @@ function _syncWalkPinsBtn() {
     edit.textContent = _walkPinSel ? '✓ Editing walk' : '✎ Edit walk';
     edit.style.background = _walkPinSel ? '#fde7d4' : '#fff';
   }
+  _syncWalkSaveBtn();
 }
 
 // Names rule (static/js/species-names.js formats): the common name for a species
@@ -7303,7 +7319,16 @@ function walkOlderHighlight() {
 // photo does) or removes it (exclude path; saved stops stay on the line).
 // No ORS call; the line, distance and time never change. Leaving the mode
 // clears the selection and restores the pins-hidden setting.
-var _walkPinSel = null;          // { ids: Set, msg: string } while "✎ Edit walk" is on (var: renderMarkers reads it)
+var _walkPinSel = null;          // {} while "✎ Edit walk" is on (var: renderMarkers reads it)
+// Pending marks — kept when Edit walk is switched off (so "Save changes (N)"
+// still saves them); dropped only on Save, loading another walk, or leaving
+// walk mode (Melvin 20 Oct 2026: a discard on leaving edit mode lost his marks).
+var _walkPending = { add: new Set(), remove: new Set() };
+
+function _walkPendingClear() {
+  _walkPending.add.clear();
+  _walkPending.remove.clear();
+}
 
 function _walkMemberSet() {
   return new Set(((_savedWalkData && _savedWalkData.membership && _savedWalkData.membership.member_obs_ids) || []).map(Number));
@@ -7311,52 +7336,41 @@ function _walkMemberSet() {
 
 // Pin icon in select mode: on the walk = solid green ring, not on it = grey
 // hollow ring; selected = thick orange ring. Same touch target as other pins.
+// Pin icon in Edit walk: on the walk = green ring, not on it = grey ring;
+// pending add = green "+" disc, pending remove = red "−" disc. Same touch target.
 function _walkSelIcon(id, category, members) {
   const vis   = _PIN_VIS;
-  const touch = isMobile() ? 44 : vis + 8;
-  const sel   = _walkPinSel && _walkPinSel.ids.has(id);
+  const touch = isMobile() ? 44 : vis + 12;
+  const add   = _walkPending.add.has(id);
+  const rem   = _walkPending.remove.has(id);
   const mem   = members.has(id);
+  if (add || rem) {
+    const d = 20, bg = add ? '#16a34a' : '#dc2626';
+    const disc = `<div style="width:${d}px;height:${d}px;border-radius:50%;background:${bg};border:2px solid #fff;`
+      + `box-shadow:0 0 0 2px ${bg},0 1px 4px rgba(0,0,0,.4);color:#fff;font:700 15px/1 sans-serif;`
+      + `display:flex;align-items:center;justify-content:center">${add ? '+' : '−'}</div>`;
+    const html = `<div style="width:${touch}px;height:${touch}px;display:flex;align-items:center;justify-content:center">${disc}</div>`;
+    return L.divIcon({ className: '', html, iconSize: [touch, touch], iconAnchor: [touch / 2, touch / 2] });
+  }
   const { fill } = _pinColor(category);
-  const style = sel ? `background:${fill};border:2px solid white;box-shadow:0 0 0 5px #ea580c,0 1px 4px rgba(0,0,0,.35)`
-              : mem ? `background:${fill};border:2px solid white;box-shadow:0 0 0 3px #2d5016,0 1px 4px rgba(0,0,0,.35)`
+  const style = mem ? `background:${fill};border:2px solid white;box-shadow:0 0 0 3px #2d5016,0 1px 4px rgba(0,0,0,.35)`
               :       `background:#fff;border:3px solid #9ca3af;box-shadow:0 1px 3px rgba(0,0,0,.3)`;
   return L.divIcon({ className: '', html: _pinHtml(vis, style, touch), iconSize: [touch, touch], iconAnchor: [touch / 2, touch / 2] });
-}
-
-function _walkPinSelBar() {
-  let bar = document.getElementById('walk-pinsel-bar');
-  if (!bar) {
-    bar = document.createElement('div');
-    bar.id = 'walk-pinsel-bar';
-    bar.setAttribute('data-guest-hide', '');
-    bar.style.cssText = 'position:fixed;top:64px;left:50%;transform:translateX(-50%);z-index:1200;background:#fff;'
-      + 'border:1px solid #b8d48a;border-radius:10px;box-shadow:0 2px 10px rgba(0,0,0,.25);padding:6px 10px;'
-      + 'display:none;align-items:center;gap:8px;flex-wrap:wrap;font-size:0.8rem;color:#2d5016;max-width:calc(100vw - 24px)';
-    document.body.appendChild(bar);
-  }
-  if (!_walkPinSel) { bar.style.display = 'none'; return; }
-  const n = _walkPinSel.ids.size, btn = 'min-height:36px;padding:4px 12px;border-radius:8px;border:1px solid #b8d48a;background:#f0f4e8;color:#2d5016;font-family:inherit;cursor:pointer';
-  bar.innerHTML = `<strong>${n} selected</strong>
-    <button style="${btn}" onclick="walkPinSelApply('accept')" ${n ? '' : 'disabled'}>Add to walk</button>
-    <button style="${btn}" onclick="walkPinSelApply('exclude')" ${n ? '' : 'disabled'}>Remove from walk</button>
-    <button style="${btn};background:#2d5016;color:#fff" onclick="walkToggleEdit()">Done</button>
-    ${_walkPinSel.msg ? `<span style="color:#92400e;flex-basis:100%">${_esc(_walkPinSel.msg)}</span>` : ''}
-    <span style="color:#777;flex-basis:100%;font-size:0.72rem">Tap pins to select · green ring = on the walk · grey = not</span>`;
-  bar.style.display = 'flex';
 }
 
 function walkToggleEdit() {
   if (_walkPinSel) { _walkPinSelExit(); return; }
   if (!_savedWalkView || !_onSavedRoute(_activeWalkRoute)) return;
-  _walkPinSel = { ids: new Set(), msg: '' };
+  _walkPinSel = {};                          // marks go to _walkPending — nothing written until Save changes
   _savedWalkView.hidePins = false;           // every pin is selectable
   _applyLayer();
   renderMarkers();
   _syncWalkPinsBtn();
-  _walkPinSelBar();
 }
 
-// Leave Edit walk: selection cleared, back to the walk's own markers only.
+// Leave Edit walk: back to the walk's own markers only. Pending marks are KEPT
+// (Save changes still shows and saves them); loading another walk or leaving
+// walk mode drops them (_walkPendingClear).
 function _walkPinSelExit() {
   if (!_walkPinSel) return;
   _walkPinSel = null;
@@ -7364,42 +7378,85 @@ function _walkPinSelExit() {
   _applyLayer();
   renderMarkers();
   _syncWalkPinsBtn();
-  _walkPinSelBar();
 }
 
+// Tap in Edit walk: a pin not on the walk → pending add; on the walk →
+// pending remove; tap again → unmarked. Nothing is written until Save changes.
 function _walkPinToggle(p) {
   if (!_walkPinSel || p.id == null) return;
   const id = Number(p.id);
-  if (_walkPinSel.ids.has(id)) _walkPinSel.ids.delete(id); else _walkPinSel.ids.add(id);
-  _walkPinSel.msg = '';
+  const set = _walkMemberSet().has(id) ? _walkPending.remove : _walkPending.add;
+  if (set.has(id)) set.delete(id); else set.add(id);
+  _syncWalkSaveBtn();          // first — the count must update even if a redraw fails
   renderMarkers();
-  _walkPinSelBar();
 }
 
-// Add / Remove the selection. Add sends only pins not on the walk, Remove only
-// pins on it; the server checks eligibility (confirmed rule) and says why it
-// skipped any. Every write is read back by id on the server.
-async function walkPinSelApply(kind) {
-  if (!_walkPinSel || !_walkPinSel.ids.size) return;
-  const mem = _walkMemberSet();
-  const all = [..._walkPinSel.ids];
-  const ids = kind === 'accept' ? all.filter(id => !mem.has(id)) : all.filter(id => mem.has(id));
-  const notes = [];
-  const wrong = all.length - ids.length;
-  if (wrong) notes.push(`${wrong} ${kind === 'accept' ? 'already on the walk' : 'not on the walk'} — skipped`);
-  let out = null;
-  if (ids.length) out = await _walkMembershipCall(kind, 'POST', { obs_ids: ids });
-  if (!_walkPinSel) return;                  // walk cleared meanwhile
-  const skipped = (out && out.skipped) || [];
-  const done = out ? ids.length - skipped.length : 0;
-  if (done) notes.unshift(`${done} ${kind === 'accept' ? 'added' : 'removed'}`);
-  const why = {};
-  skipped.forEach(sk => { const k = sk.reason.replace(/ \(.*\)$/, ''); why[k] = (why[k] || 0) + 1; });
-  Object.entries(why).forEach(([k, n]) => notes.push(`${n} ${k} — skipped`));
-  _walkPinSel.ids.clear();
-  _walkPinSel.msg = notes.join(' · ');
-  renderMarkers();
-  _walkPinSelBar();
+function _walkPendingCount() {
+  return _walkPending.add.size + _walkPending.remove.size;
+}
+
+// The panel's save button. Loaded saved walk → "Save changes (N)": commits the
+// pending marks to THIS walk (never prompts for a name, never makes a copy),
+// disabled when nothing is pending. New, unsaved walks → "Save walk" as before.
+function _syncWalkSaveBtn() {
+  const btn = document.getElementById('walk-save-btn');
+  if (!btn || _walkSaving) return;
+  if (_savedWalkView && _onSavedRoute(_activeWalkRoute)) {
+    const n = _walkPendingCount();
+    btn.textContent = n ? `💾 Save changes (${n})` : '💾 Save changes';
+    btn.disabled = !n;
+    btn.title = n ? `${_walkPending.add.size} to add · ${_walkPending.remove.size} to remove`
+                  : 'Turn on ✎ Edit walk and tap pins to add or remove them';
+  } else if (btn.textContent.startsWith('💾 Save changes')) {
+    btn.textContent = '💾 Save walk';
+    btn.disabled = false;
+    btn.title = '';
+  }
+}
+
+function walkSaveClick() {
+  if (_savedWalkView && _onSavedRoute(_activeWalkRoute)) { walkSaveChanges(); return; }
+  promptSaveWalk();
+}
+
+// Commit: pending adds → accept path, pending removes → exclude path (each
+// read back by id on the server). The result is checked against the returned
+// members before the marks are cleared; the outcome goes to the status line.
+async function walkSaveChanges() {
+  if (_walkSaving) return;
+  const adds = [..._walkPending.add], rems = [..._walkPending.remove];
+  if (!adds.length && !rems.length) {
+    _showWalkSaveStatus('Nothing to save — turn on ✎ Edit walk and tap pins to mark them', false);
+    return;
+  }
+  _walkSaving = true;
+  const btn = document.getElementById('walk-save-btn');
+  if (btn) { btn.disabled = true; btn.textContent = '💾 Saving…'; }
+  const notes = [], why = {};
+  const tally = o => (o.skipped || []).forEach(k => { const r = k.reason.replace(/ \(.*\)$/, ''); why[r] = (why[r] || 0) + 1; });
+  let out = null, ok = true;
+  try {
+    if (adds.length) { out = await _walkMembershipCall('accept', 'POST', { obs_ids: adds }); if (out) tally(out); else ok = false; }
+    if (ok && rems.length) { out = await _walkMembershipCall('exclude', 'POST', { obs_ids: rems }); if (out) tally(out); else ok = false; }
+    if (ok && out) {
+      const mem = new Set((out.membership.member_obs_ids || []).map(Number));
+      notes.push(`${adds.filter(id => mem.has(id)).length} added`, `${rems.filter(id => !mem.has(id)).length} removed`);
+      Object.entries(why).forEach(([r, n]) => notes.push(`${n} ${r} — skipped`));
+      _walkPendingClear();
+      _showWalkSaveStatus('Saved changes: ' + notes.join(' · '), true);
+      // New stops are side-stops until the line goes through them: go straight
+      // on to the Re-route preview (same dialog as ↻ Re-route — cancel keeps them as side-stops).
+      if (adds.some(id => mem.has(id))) setTimeout(walkReroute, 0);
+    } else {
+      _showWalkSaveStatus('Changes not saved — they are still marked; try Save changes again', false);
+    }
+  } catch (e) {
+    _showWalkSaveStatus('Save changes failed: ' + e.message, false);
+  } finally {
+    _walkSaving = false;
+    _syncWalkSaveBtn();
+    try { renderMarkers(); } catch (_) {}
+  }
 }
 
 // "↻ Re-route" (walk.py reroute_walk / walk_route.plan_reroute): dry run first,

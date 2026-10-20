@@ -46,6 +46,64 @@ Alembic head: 0054 (experience_publications). Snapshots this session: db_2026101
 
 ## History
 
+### 2026-10-20 10:31
+**Snapshot** — before re-route of saved walk 5
+DB: `snapshots/db_20261020_103151.sqlite`
+
+### 2026-10-20 07:51
+**Melvin: re-route 'still the same' + circular toggle 'does nothing'. Log: no reroute request since the Save-changes→Re-route chain shipped (his accept came before it); the one toggle click DID switch Rümmelsbühl foray (id 4) to point-to-point (DB circular=0, panel redrawn) — visible change was only the 165 m dashed 28→1 leg. Added start/finish flags in point-to-point.**
+
+**Built:**
+- Point-to-point view: 🚩 on the start stop, 🏁 on the finish stop (last saved stop) so the one-way shape is obvious
+**Files:** `frontend/index.html`
+**Pending:**
+- LIVE STATE: Rümmelsbühl foray (id 4) is now point-to-point (2,787 m / 34 min shown) — switch back with the toggle if not intended
+- Rümmelsbühl side-stops 21a/26a/26b still side-stops — press ↻ Re-route (no reroute request in the log since the chain shipped)
+- Melvin: browser check of flags + Save changes → Re-route chain
+- Stage C publish panel; republish walk 4
+
+### 2026-10-20 07:43
+**New stops become part of the walk 'as if there all along': Save changes with adds opens the Re-route preview; re-route places far side-stops by cheapest insertion (near ones keep their place along the line); detour rule tightened.**
+
+**Built:**
+- walk_route.insert_cheapest: saved stops keep order (stop 1 first); far hand-added side-stops (off_route_m) inserted where they add least straight-line distance; side-stops the line already passes keep their chainage place
+- Save changes → when photos were added, goes straight on to the existing Re-route dry-run dialog (cancel keeps side-stops)
+- Detour rule: routed > 2× straight + 100 m → dashed straight leg (was 3× + 150 m); real paths here route at 1.3–1.6×
+**Files:** `app/services/walk_route.py`, `app/api/walk.py`, `frontend/index.html`
+**Pending:**
+- Melvin: Rümmelsbühl foray (id 4) still has side-stops 21a/26a/26b live — press ↻ Re-route (DB-copy result: 31 stops 1–31, 26→26a→21a→26b→27 with 26b→27 dashed, 4,542 m / 55 min, members unchanged, other dashed legs kept)
+- Browser check of Save changes → Re-route chain
+- Stage C publish panel; republish walk 4
+
+### 2026-10-20 07:39
+**Fix: 'Save changes' did nothing — no accept/exclude request reached the server. Pending marks were discarded on switching Edit walk off, leaving the button disabled; now kept until saved.**
+
+**Built:**
+- _walkPending (add/remove sets) separate from the Edit-walk flag: survives switching Edit walk off; cleared only on save, loading another walk, or leaving walk mode
+- walkSaveChanges: never silent — 'Nothing to save …', 'Changes not saved — still marked', or the error message on the status line
+**Fixed:**
+- Save changes no-op: server log had no POST accept/exclude after the click (page was the current build); leaving Edit walk discarded the marks and disabled the button
+- Button count now updates before the pin redraw; name labels bound only on the pins-layer marker inside a guard so a label can't break the redraw
+**Files:** `frontend/index.html`
+**Pending:**
+- Melvin: reload the map page, mark pins, Save changes (with Edit walk on or off) — check the status line
+- Stage C publish panel; republish walk 4
+
+### 2026-10-20 07:35
+**Edit walk: staged edits (+ pending add / − pending remove on pins) committed by 'Save changes (N)' on loaded walks; floating Add/Remove bar removed; Save walk on a loaded walk no longer makes a copy.**
+
+**Built:**
+- Tap in ✎ Edit walk: non-member → pending add (green + disc), member → pending remove (red − disc), tap again → unmarked; pending pins keep their name label
+- walk-save-btn → walkSaveClick: loaded saved walk = 'Save changes (N)' (disabled at 0; accept then exclude paths, server read-back + client check against returned members, result on the status line); new walks = 'Save walk' unchanged
+- Pending marks are discarded on leaving Edit walk / loading another walk / exiting walk mode (chosen: simple)
+**Fixed:**
+- Add/Remove bar 'not visible': it was rendered (position:fixed top-centre of the window, z-index 1200, appended to <body>, not the panel) — removed in favour of the in-panel Save changes button
+**Files:** `frontend/index.html`
+**Pending:**
+- Melvin: browser check — + / − marks, Save changes (N) count, status line, undo by re-marking
+- Live: Rümmelsbühl foray (id 4) re-routed by Melvin 07:25 (snapshot db_20261020_072552): 28 stops, 2,952 m / 36 min, 6 dashed segments identical, members 136 unchanged
+- Stage C publish panel; republish walk 4
+
 ### 2026-10-20 07:25
 **Snapshot** — before re-route of saved walk 4
 DB: `snapshots/db_20261020_072552.sqlite`

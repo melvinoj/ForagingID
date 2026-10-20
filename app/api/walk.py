@@ -452,10 +452,18 @@ async def reroute_walk(
     kept = [st for st in mem["stops"] if st["is_note"] or st["species"]]
     dropped = [st["label"] for st in mem["stops"] if not (st["is_note"] or st["species"])]
     added = [st["label"] for st in kept if st["origin"] == "joined"]
-    # Old stop 1 stays stop 1 on a loop.
-    if walk_route.line_coords(route) and walk_route.is_closed(walk_route.line_coords(route)):
-        k0 = next((k for k, st in enumerate(kept) if st["origin"] == "saved" and st["label"] == "1"), 0)
-        kept = kept[k0:] + kept[:k0]
+    # Walking order "as if they were there all along": saved stops keep their
+    # order (old stop 1 first on a loop). A side-stop the line already passes
+    # (within the route buffer — no "m off route") keeps its place along the
+    # line; a far, hand-added one goes where it adds the least distance
+    # (walk_route.insert_cheapest), not simply after the stop its label names.
+    closed = bool(walk_route.line_coords(route)) and walk_route.is_closed(walk_route.line_coords(route))
+    base = [st for st in kept if st["origin"] == "saved" or not st.get("off_route_m")]
+    far = [st for st in kept if st["origin"] == "joined" and st.get("off_route_m")]
+    if closed:
+        k0 = next((k for k, st in enumerate(base) if st["origin"] == "saved" and st["label"] == "1"), 0)
+        base = base[k0:] + base[:k0]
+    kept = walk_route.insert_cheapest(base, far, closed)
     new_stops = [{"lat": st["lat"], "lng": st["lng"], "label": st["label"],
                   "old_index": int(st["label"]) - 1 if st["origin"] == "saved" else None} for st in kept]
     if len(new_stops) < 2:

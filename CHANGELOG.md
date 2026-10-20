@@ -1,102 +1,97 @@
 ## Current State
 
-END SESSION — the audit session is finished; this CHANGELOG Current State rewrite via /api/dev/end-session is allowed.
+END SESSION — rewrite CHANGELOG Current State via /api/dev/end-session.
 
-_Last updated: 20 Oct 2026 (evening)_
+_Last updated: 20 Oct 2026 (late evening)_
 
 ### Build status
 Server: START_ForagingID.command — uvicorn foreground + tee to logs/server_<ts>.log; port check; cleanup trap. Claude Code never starts the server.
 Launcher: --reload-dir app + absolute --reload-exclude scripts/, migrations/, tests/; --timeout-graceful-shutdown 5 (any app/ edit reloads and cancels background tasks — check background_processes first).
-WAL; busy_timeout 30000; synchronous=NORMAL. Snapshot endpoint takes `description` (not `label`) and also makes a git commit.
-Alembic head: 0054 (experience_publications).
-Snapshots 20 Oct: db_20261020_053600, _062739, _063515, _072552 (re-route, Rümmelsbühl foray id 4), _103750 (fungi backfill), _112509 (placeholder clean-up; commit a336e152). The deep audit used scratch .backup copies only — no snapshots, no writes.
+WAL; busy_timeout 30000; synchronous=NORMAL. Alembic head: 0054.
+Snapshots: now via SQLite backup API (WAL-safe, batch 2); restore is transactional, refused while jobs run, takes a db_<ts>_prerestore snapshot first; restart the server after a restore. Snapshot endpoint takes `description` and commits the whole working tree (git add -A, no push). The manual .backup copy is no longer needed.
+Snapshots 20 Oct: db_20261020_053600, _062739, _063515, _072552, _103750, _112509, _210754, _211829, _211916, _213039, _221253.
+Tests: 122 passing across 11 files (pytest not installed — run as the audit did).
 
 ### Completed 20 Oct
-- Saved walks — route line:
-  - Line now draws on both walks.
-  - little foray (id 3): ORS detour legs replaced with dashed straight legs; 13.5 → 4.6 km / 55 min; members unchanged.
-  - Straight legs can be several dashed stretches per walk; Rümmelsbühl's old straight_from reads the same.
-  - loadSavedWalk load-sequence guard: overlapping loads can't mix map and panel.
-- Stop order:
-  - Stop 1 was the southernmost pin, then greedy nearest-next (ORS follows the given order).
-  - Start here (no dialog) + ⇄ Reverse added; dashed legs stay on the same physical legs; reversing twice restores exactly.
-- Circular / point-to-point toggle on loaded walks: drops/restores the closing leg; persists via PATCH …/loop; exports follow it; button disabled while in flight; stale drawn-area rebuild fixed.
-- Repeat species: first stop gets the full card, later stops a compact "Also here … see stop N" line with badge — app panel, Export summary, experience page.
-- Walk panel:
-  - "← Saved walks" button.
-  - Show all pins + Select pins merged into "✎ Edit walk"; staged edits + "Save changes" (Save walk on a loaded walk no longer makes copies) — working per Melvin.
-  - No species cards on pin tap while a saved walk is loaded (rest of app unchanged); name labels on selected/hovered pins.
-  - Older-photos tick → its pins light up.
-  - Stop cards trimmed: name, common name, badge, member chips, Species profile link, foraging_notes snippet (plain, ~160 chars) only. Recipe snippets and edible-parts/taste hint removed (walk panel only; recipes stay in Export summary + experience page).
-- ↻ Re-route: dry-run preview, snapshot, ORS only on changed legs, kept legs keep exact geometry, detours >3× + 150 m kept dashed; side-stops promoted to real stops, empty stops dropped. Used live on Rümmelsbühl foray (id 4): 2,895 → 2,952 m, now 28 stops 1–28.
-- Joined-stop labels kept after line fix: 2a→5a (id 3), 12a→11a (id 4). Labels are derived from geometry.
-- Names rule: short species references show "Common (Latin)" everywhere (display_common_name server-side, species-names.js frontend); badges kept.
-- Create-from-map sheet retracts while drawing. Map freeze after save/build fixed.
-- Fungi category rule: confirming an observation as a kingdom-Fungi species sets obs_category=fungi (plant→fungi only, audit row) on all approve/correct paths. 84 misfiled confirmed rows backfilled; 118 confirmed fungi now filed as Fungi.
-- Jobs queue pop-up: draggable by header, remembers position (jsw-pos-v1), falls back to top-right if off-screen — browser-checked by Melvin.
-- Caffeinate: now watches the uvicorn reloader (survives --reload); start reuses an existing process; keep_awake() for jobs still follows the worker.
-- AI placeholder clean-up (changed_by='human:placeholder_clear', non-locking, full old text in history #2793–2828):
-  - 10 taste_notes refusals → NULL.
-  - 14 medicinal_notes refusals/milder → standard "No known traditional medicinal uses".
-  - 11 edible_parts "None known" → NULL.
-  - Urtica dioica foraging_notes "test" → NULL.
-  - Shared is_ai_placeholder() (ai_placeholder.py) replaces both marker lists; runs at all AI draft-creation points and at approve (unedited placeholder refused).
-  - PFAF parser treats "None known" in Edible Uses as no data.
-- Review Critical section, ☠ badge and nav chip red dot: confirmed by Melvin.
-- Deep audit (read-only), sessions 1–2: Phases A–D done → docs/audit/2026-10-20/REPORT.md (findings A-01…D3-05, proposals P1–P11) + STATUS.md. No code or DB changes.
+- Saved walks: line draws on both walks; little foray (id 3) detours → dashed straight legs (4.6 km); multi-stretch dashed legs; load-sequence guard; Start here + ⇄ Reverse; circular/point-to-point display toggle (PATCH …/loop); repeat species → compact "Also here … see stop N" with badge (panel, Export summary, experience page); "← Saved walks"; "✎ Edit walk" (staged edits + Save changes; no species cards on pin tap in walk mode; name labels); older-photos tick lights pins; stop cards trimmed to name/badge/link/foraging notes; ↻ Re-route (dry run, snapshot, changed legs only) — used on Rümmelsbühl foray (id 4): 28 stops, 2,952 m.
+- Names rule "Common (Latin)" everywhere; fungi category rule + 84 rows backfilled; jobs pop-up draggable; caffeinate watches the uvicorn reloader; AI placeholder clean-up + shared is_ai_placeholder(); PFAF "None known" = no data.
+- Deep audit (read-only), complete: docs/audit/2026-10-20/REPORT.md (sections 0 decisions, 1–8 summary, 9 fix order) + STATUS.md.
+- Fix batch 1 (D3-01): 61 preparation-warning drafts for caution species in review (ids 3178–3238: 36 PFAF, 19 unknown origin, 6 E-14 confirmations); approval/rewrite = curator-authored; never in Approve all; AI Regen can't wipe them; export gate withholds recipes of caution species without an approved warning; "⚠ Caution" box on the page; B3-02 old-value fix; import_caution_warning_drafts.py (idempotent).
+- Fix batch 2 (E-01/E-02): WAL-safe snapshot + restore, 13 tests.
+- Fix batch 3 (B2-02): severity_for_verdict — every verdict writer sets severity with history; new species start 'unknown'; 230 never-assessed species backfilled to severity unknown (fail closed: no culinary text until a verdict); Amanita muscaria (155), Heracleum mantegazzianum (688), Hedera helix (745) → toxic; drafts 2920/2921 rejected.
+- Fix batch 14: E-03 Second Opinion 500 fixed (one candidate builder); GBIF-only names sort last, "name match only", no %, never feed auto-approve; Review badge = queue count (REVIEW_QUEUE, 389); B1-08 confirmed species first in candidates with its own score (666 rows rewritten; map pins show "—" when no own score); C-03 synonym/name_key lookup (21950/22074 → Erigeron canadensis 342; new bare cards 848 Filipendula vulgaris, 849 Ganoderma applanatum); C-04 Approve only promotes a recognised scientific name (21585 → Picea abies; junk card 685 orphaned); E-04 end-session date parse; D1-03 false PDF disclaimer sentence removed; D2-01 amber repeat badge.
 
 ### Decisions 20 Oct — settled, do not re-raise
-- No family- or toxicity-specific auto-approve veto, no app-side Apiaceae culinary rule: dual-API agreement at the live threshold is the safeguard for every species. Daucus carota settled.
-- Auto-approve threshold stays 0.70 (upload_auto_approve_threshold).
-- ngrok share link giving curator access by default stays (Melvin's phone relies on it) — but it must become refreshable (see fix pass).
-- Species rename clearing species-specific text stays (after a pure Latin-name update, re-add warnings by hand).
-- Experience page, caution species (audit D3-01): option C with B as fallback — PFAF preparation warnings for caution species are imported as drafts into review; Melvin approves as-is or rewrites (approval counts as curator-authored). Until a caution species has an approved warning, its recipes are withheld from the page.
-- Fly agaric (Amanita muscaria), giant hogweed (Heracleum mantegazzianum), ivy (Hedera helix) → toxic.
-- LandMemory name: TMview check 20 Oct found no LandMemory / Land Memory / Land of Memory marks in UK/EU (nearest: EU "memoryland", 2023, classes 35/41/42/43/44). No registration — roll with it; rename if ever challenged. Internal ForagingID names stay for now (rename inventory = audit Phase F).
+- No family/toxicity auto-approve veto, no app-side Apiaceae rule; dual-API agreement at 0.70 is the safeguard (threshold stays 0.70). Daucus carota settled.
+- ngrok link = curator by default stays, but becomes refreshable ("New link": old link + QR die, QR/link update; secret also required for LAN — only localhost without it).
+- Species rename clearing species text stays. Species merges allowed again only via a merge that re-keys species_resources and other species-keyed tables (update CLAUDE.md when batch 11b lands).
+- D3-01: option C with B fallback (as built in batch 1).
+- Deadly: verdict toxic + severity deadly; "☠ deadly" / "☠ toxic" shown consistently on every surface (batch 5).
+- Close B5-01/02 (guests: confirmed plant photos only; encounters curator-only) — batch 8.
+- Remove in-app GPS walk recording (before the index.html split). Remove the circular toggle: label Loop if last stop within ~300 m of stop 1, else One-way.
+- LandMemory: TMview clear in UK/EU; no registration, rename if challenged; internals stay ForagingID (audit Phase F inventory: ~11 user-facing leftovers to rename; don't rename storage/folders).
 
 ### Pending / next
-1. Deep audit session 3 (read-only): Phases E (tidy), F (rename inventory), G (summary + fix order). STATUS.md says "Resume at Phase E".
-2. Fix pass, in the audit's fix order (S0 first). Decided so far:
-   - D1-01: POST /api/lists/pdf autoescape + restrict WeasyPrint url_fetcher (any curator-tier caller can embed local files today).
-   - Map pin pop-up (B2-01) and Lists / browser print (B2-04): no edible-parts text for toxic or deadly species; ☠ badge.
-   - Printed outputs always include preparation warnings, incl. caution species (B2-03).
-   - Setting a species' verdict also sets toxicity_severity (B2-02).
-   - /api/settings never returns secret values; guests can't load it (A-02).
-   - Refreshable share link: "New link" makes a new secret link; old link and old QR stop working at once; QR and copyable link update.
-   - D3-01 per the decision above, then republish Rümmelsbühl foray (id 4); Melvin approves/rewrites the St John's wort and elder warnings.
-   - Data, after the severity fix: fly agaric, giant hogweed, ivy → toxic; reject drafts 2920 and 2921.
-3. Melvin checks still open: Ctrl+C the server → `pgrep -fl "^caffeinate"` prints nothing; Rümmelsbühl trimmed stop cards; caffeinate button state after a reload.
-4. Melvin decides: clear Alchemilla mollis (cid 129) edible_parts "None Known" (human-locked by a no-op 1 June save).
-5. Bulk reject ~100 pending medicinal_notes refusal drafts.
-6. Melvin: confirm walk 3 hazards — Atropa obs 22224 + 22225, Senecio 22231. little foray (id 3) build blocked until then.
-7. Stage C publish panel: confirm warns the exact route goes public and past versions stay in repo history/archives; freeze stop labels at publish; AI-agreed review list; verify buttons; register the live walk-4 page in experience_publications (audit C-05).
-8. Invalidate approved wrong-species drafts 94–105 (26 May batch).
-9. Walk Stage 4/5; PWA on Pixel 8 via ngrok.
+1. Melvin (1b): approve/rewrite walk 4 warning drafts (16 of the 19 unknown-origin texts aren't warnings — rewrite or reject); human-verify Rosa dumalis; then republish Rümmelsbühl foray (id 4).
+2. Melvin browser checks: batch 1 (AI Draft Review warning cards, Approve all excludes warnings, species page shows approved warning); batch 2 (Save snapshot works); batch 3 (NOT SAFE box on 155/688/745; amber "not yet assessed" e.g. Rorippa sylvestris; "⚠ toxicity unknown" on walk cards; verdict refusal on toxic→edible); batch 14 (Second Opinion 24149 "name match only" last; card 24353 46.1%; pick-then-Approve keeps the pick; refusal toast for typed common name; badge = queue).
+3. Batch 3b (next Code session, prompt ready): verdict-draft approve path + verdict sweep from stored sources; plus 15957 → card 530, enrich 848/849 (21453/21454 → fungi), reject draft 2335, reject 381 person_animal pre-filter rows.
+4. Then the fix order in REPORT.md section 9: batches 4–8 (settings secrets + PDF file-read; one shared safety gate incl. map/print + deadly badge; printed warnings; refreshable link + LAN secret; guest data paths), 11b (merges, GBIF synonym sweep e.g. fireweed, English common-name backfill), 15b walk batch (stop/pin/lasso editing, Start here everywhere, Loop label, route-line zoom/drag bug — reproduce first), S1 data fixes (C-01 copy 131 Syncthing-only photos, C-02, C-05 register the walk-4 page, C-06), tidy.
+5. Older items: Alchemilla mollis (cid 129) "None Known" decision; bulk reject ~100 medicinal refusal drafts; walk 3 hazards (Atropa 22224/22225, Senecio 22231); Stage C publish panel; invalidate drafts 94–105; Walk Stage 4/5; PWA on Pixel 8.
 
 ### Known issues / backlog
-- Audit items for Melvin to decide with the full report: A-03 anyone on the same Wi-Fi gets curator access; B5-01 guests can read encounters by id (transcripts, notes, coordinates); B5-02 guests can list/download non-plant photos (381 person/animal, EXIF GPS); C-01 131 confirmed photos (27 May–3 Jun) exist only in the Syncthing PhoneForaging folder — one-off copy; C-02 rejecting an encounter's photo deletes its only copy (encounters 14, 15 already lost); C-06 379 verdicts have no history row.
-- ID quality (one fix pass, after the S0s): implausible regional IDs (e.g. Micromeria douglasii, Pyxine albovirens, Carpinus orientalis near Gresgen) + candidate/score bug (audit B1-08): confirm/correct never moves the confirmed species to the front of species_candidates_json or stores its score → review card %, "Also:" line, map-pin confidence and top_score show another species' score; card doesn't re-render after a name change.
-- Raw PFAF text formatting (doubled labels, citation brackets) in map pop-up, Export summary, species page, print/lists → one markdown/clean-up renderer (audit P4).
-- Guests no longer see medicinal_notes on the 14 reset rows (new marker not in the guest trusted-source list) — acceptable for now.
-- Jobs widget never shows below 640 px wide (running jobs invisible on phone).
-- Root cause of little foray's original line not drawing never found; fixed by data change + load guard. Repro only if it recurs.
-- Ewden brook circular (id 1) has no saved line (predates geometry saving) — re-save to fix.
-- Walk panel has too many buttons — revisit layout. Pop-ups (Re-route result, Renumber) — Melvin to revisit if needed.
-- On the simmer: better stop ordering for new walks (greedy nearest-next from the southernmost pin leaves long jumps at the end); dashed legs (fix paths in OSM, or drag points on dashed legs in Edit walk; GPX track as line — in-app recording no longer needed); review-card look-alike hint when the top two candidates are a known pair.
-- Unreviewed fungi (6) stay plant until approved; auto-approved photos not covered by the fungi rule.
-- SAFETY: Aruncus dioicus 'edible' unverified — Melvin to decide; other unverified edible/toxic species app-wide (Chaerophyllum hirsutum, Sambucus ebulus, Hypholoma fasciculare, Iris pseudacorus …).
-- /api/me judges guests by host, ignores tokens — fix before the first workshop-guest session.
-- export.py read-only open fails on a WAL DB with no -shm file — fails safe; switch to a query-only connection.
-- Taxonomy: ~96 species with genus in family + 12 null family → GBIF pass; 144/492 lack order/class.
-- wikidata.py suggests "likely edible" from family membership — remove family heuristics (same logic as the no-veto decision).
-- Recipe regenerate + curator recipe writes not toxicity-gated; recipes have no audit table.
-- GPS accuracy not recorded (Pixel EXIF). Anthriscus caucalis (138) inedible+toxic contradiction.
-- Enrichment paths not gated; enrichment queue in-memory. Identify 2013 job at 90/2367.
-- iNaturalist token expired; Google Drive token invalid; Ollama 'mistral' not installed.
-- Disk tight — move exports/old snapshots to DIGIERA.
-- Docs drift: CLAUDE.md Alembic head (0054), PhoneForaging path, copy-on-ingest migration ref, card/map counts; syncthing.py "≥80%" docstring (live 0.70). Add to CLAUDE.md: report walks by name + ID; "design/diagnose only / wait for OK" = no code edits.
+- Pending pre-filter rows: 1,169 "no plant signal" (re-identify costs PlantNet quota) and ~650 unprocessed files from the 2013 Takeout run (needs DIGIERA mounted).
+- Species rename doesn't rename stored candidate entries (renamed species show no %); orphan rule missed card 685.
+- Implausible regional IDs (Micromeria douglasii, Pyxine albovirens, Carpinus orientalis, Gentiana vernayi near Gresgen).
+- Raw PFAF formatting → one markdown renderer (P4). Guests don't see medicinal_notes on 14 reset rows (ok). Jobs widget hidden below 640 px.
+- Walk: Ewden brook circular (id 1) has no saved line; too many buttons; on the simmer: better stop ordering, OSM path fixes / dragging dashed legs, look-alike hint on review cards.
+- SAFETY: Aruncus dioicus 'edible' unverified; other unverified species (Chaerophyllum hirsutum, Sambucus ebulus, Hypholoma fasciculare, Iris pseudacorus …) — covered by 3b sweep.
+- wikidata.py family-based "likely edible" heuristic — remove. Recipe regenerate/curator recipe writes not toxicity-gated; no recipe audit table.
+- export.py read-only open fails on WAL DB without -shm (fails safe). GPS accuracy not recorded. Enrichment queue in-memory.
+- Tokens: iNaturalist expired; Google Drive invalid; Ollama 'mistral' not installed. Disk tight — move exports/old snapshots to DIGIERA.
+- Docs drift: CLAUDE.md (Alembic 0054, PhoneForaging path, card counts, snapshot notes updated in batch 2); add: report walks by name + ID; "design/diagnose only / wait for OK" = no code edits.
+- Syncthing: laptop folder Receive Only + ignore deletes (correct); set Pixel 8 folder to Send Only.
 
 ## History
+
+### 2026-10-20 22:28
+**Snapshot** — End of session — Session ended from Settings page
+DB: `snapshots/db_20261020_222853.sqlite`
+
+### 2026-10-20 22:28
+**Session ended** — Session ended from Settings page
+
+### 2026-10-20 22:17
+**Fix pass batch 14 part 2: Second Opinion GBIF-only names score-less and last (Melvin's decision); E-04 End-session UTC date parse; B1-08 confirmed species first with its own score (code + 666-row backfill); C-03 confirmed names always get a linked species row (code + 5 rows); C-04 cause confirmed by reproduction, approve promotes only recognised names (code + obs 21585); D1-03 PDF disclaimer false sentence removed; D2-01 repeat-line badge colour; report on the 1,667 pending rows (pre-filter rejects, 2013 batch).**
+
+**Built:**
+- reidentify.merge_second_opinion_candidates: GBIF-only = confidence None + name_match_only, sorted after every photo-backed candidate; review.html shows 'name match only', sends confidence null
+- dev.git_commit_time_utc(): git %cI -> naive UTC for the encounter export 'since'
+- species_link.confirmed_candidate_first() + candidate_own_score(): after a human species change the chosen species is candidates[0] with its best stored image score; top_score follows; curator entry with score None when no API listed it
+- species_link.resolve_species_id: exact -> name_key -> registered synonym; ensure_species_row() on every approve path (bare row, severity unknown)
+- species_link.promotable_suggestion(): approve (single 409 / bulk skip) promotes species_suggested only if a stored candidate, a species card in use, or a registered synonym; hand-set species clears species_suggested
+- review.html: card names species_primary, % only when candidates[0] is that species; _rerenderCard after Second Opinion / Look up / Request ID picks; per-card name-save lock before Approve; server reason shown on failure
+- map.py: pin confidence only when candidates[0] is the pin's species
+- sharing._toxicity_warning_colors(): one badge colour rule for full block and Also-here line
+- scripts/backfill_confirmed_candidate_first.py, scripts/fix_c03_c04_rows.py (dry run default, read-back by id)
+- Tests: test_b1_08_confirmed_candidate.py (9), test_species_link_c03_c04.py (9), test_batch14_e04_d1_03_d2_01.py (6), test_second_opinion_merge.py updated (9); fixture b1_08_obs24353.json
+**Fixed:**
+- Second Opinion obs 24149: Gentiana verna #1, G. vernayi last with no score
+- E-04: End session no longer falls back to exporting all encounters on '-0' dates; compares UTC to UTC
+- B1-08 data: 666 confirmed rows fixed (snapshot db_20261020_221253 first); observation_edits 20167-21103; read-back 0 mismatches; 24353 now L. nemorum 0.4613
+- C-03 data: 21950/22074 -> species 342 (synonym), 21382 -> new 848 Filipendula vulgaris, 21453/21454 -> new 849 Ganoderma applanatum; edits 20161-20165
+- C-04 data: 21585 'norway spruce' -> 'Picea abies' (edit 20166); junk species 685 orphan-marked
+- C-04 cause CONFIRMED: stale-read approve promoted the typed Look-up text (reproduced on last committed code)
+- Threshold recheck skips curator entries; audit check 4 ignores curator entries
+- D1-03: removed 'Human-created and/or reviewed content is indicated where shown.' from print_pdf.html
+- D2-01: '⚠ toxicity unknown' repeat-line badge amber
+**Files:** `app/api/reidentify.py`, `app/api/dev.py`, `app/api/observations.py`, `app/api/bulk_actions.py`, `app/api/trust.py`, `app/api/map.py`, `app/api/scan.py`, `app/api/audit.py`, `app/api/sharing.py`, `app/services/species_link.py`, `app/services/observation_service.py`, `app/templates/print_pdf.html`, `frontend/review.html`, `scripts/backfill_confirmed_candidate_first.py`, `scripts/fix_c03_c04_rows.py`, `tests/test_second_opinion_merge.py`, `tests/test_b1_08_confirmed_candidate.py`, `tests/test_species_link_c03_c04.py`, `tests/test_batch14_e04_d1_03_d2_01.py`, `tests/fixtures/b1_08_obs24353.json`, `docs/audit/2026-10-20/REPORT.md`, `docs/audit/2026-10-20/STATUS.md`
+**Pending:**
+- Melvin browser checks (REPORT section 9, batch 14 part 2 list): Second Opinion 24149 'name match only' row last; card re-render after a pick; 24353 card 46.1% + Also line; Approve right after a Look-up pick; typed common name -> 409 toast; 24353 pin 46%; walk-4 Export summary amber repeat badge; PDF disclaimer; End session encounter export since=UTC
+- Melvin decides: obs 15957 (Taraxacum sect. Taraxacum linked to 286 T. officinale; own card 530) relink or rename
+- Melvin: enrich new bare species 848 Filipendula vulgaris and 849 Ganoderma applanatum; tap Fungi on 21453/21454 if wanted; reject AI draft 2335 (junk card 685)
+- Melvin decides: triage of the 1,667 pre-filter rejects (person_animal 381 first; no_plant_signal 1,169 may hide plants -> unlock = PlantNet quota ~3 days); finish 2013 batch (~650 files never processed: Rescan -> Filter -> Identify with DIGIERA mounted)
+- Follow-up (not done): species rename cascade does not rename candidate entries -> renamed species' cards/pins show no %; orphan GC misses a name card when species_primary and species_id disagree
+- Next: 1b (Melvin), then 3b
 
 ### 2026-10-20 22:12
 **Snapshot** — Before batch 14 part 2 data: C-03 link 5 obs (2 bare species rows), C-04 obs 21585 -> Picea abies, B1-08 confirmed species first on 667 rows

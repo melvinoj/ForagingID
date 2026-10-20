@@ -269,7 +269,7 @@ Rules for every batch:
 | **1b** | **Republish Rümmelsbühl foray (id 4)** — Melvin's step (public). Prerequisites: walk-4 reviews (7 drafts, 2 confirmations); clear the rule-2 blocker (*Rosa dumalis* 'edible' not human-verified, D3); optionally backfill the `experience_publications` row (C-05) | experience export (no app code) | `--plan-only` has no blockers. Built page: every caution species has a warning or no recipe. Melvin checks the live page. |
 | **2** ✅ done 20 Oct | **E-01 + E-02** snapshot/restore through the backup API; restore accepts only `snapshots/` files and hex hashes. S1, not S0 — placed here because every later batch writes data and relies on it. If strict S0-first is preferred, move it after batch 8 and keep the manual `.backup` step. | `app/api/dev.py` | Code: the scratch reproductions (`waltest`) re-run against the new functions on throw-away DBs. Melvin: Settings snapshot → `integrity_check` ok and row counts equal the live DB. |
 | **3** ✅ done 20 Oct | **B2-02** (decided): `PATCH /api/edibility/status` sets `toxicity_severity` — toxic → 'toxic' unless already 'deadly'; never lowered automatically; relaxing needs an explicit curator severity in the same request. Then **B2-05 data** (decided): 155, 688, 745 → toxic (Melvin in the UI, or the endpoint after a snapshot); reject drafts 2920, 2921 | `app/api/edibility.py`, verdict controls in `frontend/species.html` / `review.html` if a severity choice is added | Code: read back species 155/688/745 (all fields), their history rows, drafts 2920/2921. Melvin: ☠ on those species' pins and walk badges. |
-| **14** (moved — runs straight after 3, Melvin 20 Oct evening; **E-03 + Review badge ✅ done 20 Oct** — E-04, B1-08, C-03, C-04, D1-03, D2-01 still open) | Quick S2 bugs: E-03 (Second Opinion 500 — reproduces on *Gentiana verna*, obs 24149), **Review menu badge count = the review queue's count** (shows 2,080 vs the queue's 386; new, Melvin 20 Oct evening), E-04, B1-08 candidate/score, C-03, C-04, D1-03, D2-01 | `reidentify.py`, `dev.py`, `scan.py`/review paths | Read-back + the logged repro (obs 24348). |
+| **14** ✅ done 20 Oct (moved — ran straight after 3, Melvin 20 Oct evening; part 1 E-03 + Review badge, part 2 the rest + GBIF-only ranking) | Quick S2 bugs: E-03 (Second Opinion 500 — reproduces on *Gentiana verna*, obs 24149), **Review menu badge count = the review queue's count** (shows 2,080 vs the queue's 386; new, Melvin 20 Oct evening), E-04, B1-08 candidate/score, C-03, C-04, D1-03, D2-01 | `reidentify.py`, `dev.py`, `scan.py`/review paths | Read-back + the logged repro (obs 24348). |
 | **3b** | **Verdict sweep** (new, Melvin 20 Oct evening; after 3, which couples verdict and severity): every species whose verdict is NULL/unknown, or whose verdict and severity disagree (e.g. *Atropa bella-donna*: severity deadly, verdict unknown), gets a **proposed verdict + severity from its stored sources as a review draft**. Melvin approves; nothing is set automatically. Needs an approve path for verdict drafts that writes through batch 3's coupled `PATCH /api/edibility/status` (today `edibility_status` drafts can't be approved — B3-04). Proposals are source-derived only, never a family heuristic (no-veto decision; cf. wikidata.py backlog item). | `app/api/edibility.py`, `app/api/culinary.py` (approve path), `frontend/review.html`, a dry-run-first script like batch 1's | Code: dry run lists every proposal with its source; drafts read back by id. Melvin: approve a few; species page and pins show the new verdict/severity. |
 | **4** | **A-02** (decided): `/api/settings` returns no secret values (`is_set` only) and refuses guests. **D1-01**: autoescape on, `\| safe` only for `mdlite`/`season_str`, escape the `_mdlite` heading, `url_fetcher` limited to `frontend/static/print` | `app/api/settings.py`, `app/services/settings_service.py`, `frontend/settings.html`, `app/api/lists_pdf.py`, `app/templates/print_pdf.html` | Code: scratch `generate_pdf` with a hostile payload (`<img src=file:///…>`, `<script>`, HTML in a heading) → escaped text, no embedded file (pypdf). Melvin: Settings still shows keys as set; a normal PDF looks the same. |
 | **5** | **B2-01 + B2-04** (decided) **+ "deadly" label everywhere** (batch-3 extension, Melvin 20 Oct evening: verdict stays toxic; severity deadly shows "☠ deadly", plain toxic "☠ toxic" — on the map, walk, species page/grid, review, Lists/print/PDF, Export summary and experience page) via one shared `static/js/safety-gate.js` (and its server twin for PDF / Export summary / experience page): toxic/deadly by `edibility_status` OR severity → no edible parts, ☠ badge | `frontend/index.html` (`_injectEnrichment`, `showDetail`), `frontend/lists.html`, `frontend/print.html`, new `frontend/static/js/safety-gate.js`, `frontend/static/sw.js` (APP_SHELL + version bump) | Code: read-back + the shared-element trace (CLAUDE.md point 4). Melvin: tap a toxic pin; open a list with *Conium* in Lists + browser print → no edible parts, ☠ shown. |
@@ -286,6 +286,111 @@ Rules for every batch:
 | 15b | **Walk batch** (new items, Melvin 20 Oct evening; before the index.html split, after batch 5 so `index.html` isn't edited by two batches at once). (1) **Edit walk:** tapping a numbered stop marks the whole stop for removal; tapping a pin marks the pin; a lasso inside Edit walk marks everything inside for add/remove; all pending until Save changes. (2) **Remove the circular / point-to-point toggle**: the walk is labelled Loop when the last stop is within ~300 m of stop 1, else One-way. The stored `loop` flag (PATCH …/loop) and the exports that follow it need a migration path: derive it, don't drop it silently. (3) **Start here on every stop** of any walk; one-way from a middle stop reorders, so it goes through the Re-route preview. (4) **Bug:** route line distorts, then disappears after zooming in and dragging, until the walk is reloaded — **reproduce first** (Melvin), no fix from code reading alone. (5) **Remove in-app GPS walk recording** (decided): inventory the recording code, its IDB stores/outbox entries and endpoints first; unsynced recordings on the phone must be flushed or exported before removal. | `frontend/index.html`, `app/api/walk.py`, `frontend/static/sw.js`, recording endpoints | Read-back + shared-element trace (CLAUDE.md point 4). Melvin: each Edit-walk gesture, the Loop/One-way label on walks 1, 3, 4, Start here from a middle stop, the zoom/drag repro, phone has no recording UI and the outbox still flushes. |
 | 16 | P18 index.html split (after batch 5; after P6 if chosen; after 15b) | `frontend/index.html`, new `static/css` + `static/js/index/*`, `sw.js`, `scripts/experience_export/app_styles.py` | Byte-equal concatenation check + boundary scan; Melvin's 8-point checklist (E-08). |
 | 17 | Tidy: E-07 dead code, E-09 docs, E-12 logs, A-05…A-10, rename group 1 strings, UA contacts | various | Read-back; app starts clean (Melvin). |
+
+### Batch 14 (part 2) — result (20 Oct 2026, late evening)
+
+Snapshot first: Settings snapshot `db_20261020_221253` (quick_check ok, commit 4f20de43). Tests: 122 in 11 files, all pass (27 new). Browser-unverified — Melvin's checks are listed at the end.
+
+**Second Opinion, GBIF-only names (Melvin's decision):**
+- `merge_second_opinion_candidates`: a GBIF-only name gets **no score** (`confidence: null`, `name_match_only: true`) and sorts after every photo-backed candidate, demoted non-European ones included. GBIF's own order is kept among name matches. The fixed 0.50 is gone.
+- `review.html`: such a row shows "name match only" instead of a %, and picking it sends `confidence: null`.
+- Recorded obs 24149: *Gentiana verna* (PlantNet 0.52) is #1; *G. vernayi* is last with no score.
+- **Can a GBIF-only name count toward auto-approve or agreement? No — confirmed in code:**
+  - The only auto-approve is in `scan._identify_scanned` (`scan.py`, `obs.review_status = "approved"` on `_dual_agree`). `_dual_agree` comes from `agreement.decide_agreement(PlantNet candidates, iNat hits, …)`. That function has no GBIF input, and scan never calls the GBIF name search.
+  - `dual_source_agreement` is written only there, and it's guarded by the terminal check.
+  - Second Opinion is read-only. Picking a row calls `confirm-species`, which sets `manually_verified` (a human decision).
+  - Since B1-08 the stored score comes from stored image evidence only. The client's confidence is logged, never stored, so a GBIF pick has score `None`.
+  - Tests: `test_gbif_only_name_reaches_no_agreement_or_auto_approve_input`, `test_gbif_name_match_pick_never_gets_a_score_or_approval`.
+
+**E-04 — End Session "since last snapshot":**
+- `dev.py` reads `git log --format=%cI` and parses it with the new `git_commit_time_utc()`. Every date works now (before, any date with "-0" in it failed). The value is converted to naive UTC, the zone `encounter_date` is stored in. A trailing `Z` is accepted (Python 3.9).
+
+**B1-08 — the confirmed species and its own score:**
+- **One rule:** `species_link.confirmed_candidate_first()`. After a human species change, the chosen species' entry moves to `candidates[0]`, and `top_score` = that entry's score.
+- **"Its own score"** = the best stored image score for that species: its listed score, or iNat's gate min(vision, combined) if higher. When it's raised, the original is kept as `listed_score`, with `score_basis: "inaturalist"`.
+  - 24353 *Lysimachia nemorum*: 0.4613, the same 46% Second Opinion showed (was "31.9%", Micromeria's).
+  - A species no API listed gets a curator entry with score `None`. No score is invented, and a client-sent number is never stored.
+- **Called from:** `update_observation_status` (confirm-species, correct, single approve promotion), `retry-confirm`, trust bulk-reassign, bulk approve promotion. Never from scan, where machine order is evidence.
+- **Readers:**
+  - The map pin's `confidence` is shown only when `candidates[0]` is the pin's species. A renamed species or an older row shows none, never another species' score.
+  - The review card names `species_primary` (it used to name `candidates[0]`), shows a % only when `candidates[0]` is that species, and builds "Also:" from the others.
+  - The threshold recheck skips curator entries.
+  - Audit check 4 ("corrected to a name no API suggested") ignores curator entries, so it still fires.
+- **Re-render:** after a Second Opinion, Look up or Request ID pick, the card is rebuilt from the saved row (`_rerenderCard`, which keeps the selection).
+- **Data — `scripts/backfill_confirmed_candidate_first.py`:**
+  - 666 confirmed rows: 183 listed but not first, 78 not listed by any API, 405 with no candidates at all.
+  - The no-candidate rows rendered "No match found" with the genuine-no-match flag that "Select no-match → Reject" deletes files by.
+  - Guarded UPDATEs; 0 skipped; read-back by id 0 mismatches. `observation_edits` 20167–21103 (937 rows, old and new values, `backfill:B1-08`).
+  - All 2,547 confirmed non-scene rows now have their own species first. Example: 8262 *Anthriscus sylvestris* had shown *Chaerophyllum hirsutum*'s 83% and now shows its own 0.5%.
+  - 27 rows whose front was already right keep a slightly different `top_score` (rounding, or older corrections). Their pins read the front score, so they're left alone.
+
+**C-03 — confirmed pins with no species row:**
+- **Cause:** the confirm paths left the species row to `trigger_ai_drafts_for_species`, a background task that created the row in the same session as the network enrichment. Any enrichment failure rolled the new row back. Separately, `resolve_species_id` was exact-name only (C-07).
+- **Fix:**
+  - `resolve_species_id`: exact name → name_key → registered synonym.
+  - New `ensure_species_row()`: every approve path gives a confirmed species name a linked row. It's a bare row born `toxicity_severity='unknown'` (fails closed); enrichment still fills it later.
+- **Data (`scripts/fix_c03_c04_rows.py`):**
+  - 21950, 22074 *Conyza canadensis* → linked to synonym card 342 (*Erigeron canadensis*).
+  - 21382 → new bare card 848 *Filipendula vulgaris*; 21453, 21454 → new bare card 849 *Ganoderma applanatum*.
+  - `observation_edits` 20161–20165 (`audit_fix:C-03`). Read back by id.
+  - **Not run:** enrichment for 848/849, so their verdict and severity stay unknown. 21453/21454 stay filed as plant until 849 has a kingdom; Melvin can tap 🍄.
+
+**C-04 — obs 21585 'norway spruce':**
+- **Cause, CONFIRMED by reproduction on the last committed code:**
+  1. Look up saves the typed text as `species_suggested`.
+  2. The Approve request read the row before the Look-up pick (`confirm-species` *Picea abies*) committed.
+  3. Approve then promoted the typed text unchecked.
+  - The scratch run reproduces the live row exactly: `'norway spruce'`, species_id 366, approved.
+- **Fix:**
+  - Approve (single and bulk) promotes a suggestion only when it's a recognised scientific name: a stored candidate, a species card in use (not orphan-marked), or a registered synonym. Otherwise single approve returns 409 with the reason, and bulk approve leaves the row untouched (counted as an error).
+  - A species set by hand clears the pending suggestion.
+  - `review.html`: Approve waits for any name save in flight on the same card, and shows the server's reason on failure.
+  - Test: the race on a throw-away DB → 409, and the pick stands.
+- **Data:**
+  - 21585 → *Picea abies* (edit 20166, `audit_fix:C-04`), still approved.
+  - The junk card 685 'norway spruce' is now orphan-marked (not deleted). The orphan rule hadn't marked it, because the row's `species_id` was already 366.
+  - 685 still has an empty `culinary_info` row and a pending AI draft 2335 (medicinal_notes) — Melvin can reject it.
+- **Not changed:** 15957 *Taraxacum sect. Taraxacum* is linked to 286 *T. officinale*, while its own card is 530. Melvin picks: relink it to 530, or rename it to *T. officinale*.
+
+**D1-03:** the PDF disclaimer's sentence "Human-created and/or reviewed content is indicated where shown." is removed (no output marks provenance). The rest is word for word. If Melvin wants provenance markers instead, that's a separate M-sized change.
+
+**D2-01:** `sharing._toxicity_warning_colors()` is the one badge colour rule for the Export summary's full block and its "Also here" line: ☠ red, ⚠ amber.
+
+**Report — the 1,667 `pending` observations (no changes):**
+- **What they are:**
+  - All 1,667 are pre-filter rejects: `identification_status='not_plant'`, `processing_stage='prefilter_rejected'`.
+  - By design, a pre-filter reject is saved as `pending` and skips identification until someone overrides it (`scan.py`, `syncthing.py`). It's a triage pile, not a stuck queue.
+  - None has an edit row (never triaged). 16 have `triage_keep=1` and 3 have `never_reject`.
+  - Not in the review queue or the nav badge (since batch 14 part 1). Reachable via Review → Status "Pending" and the Scan page's pre-filter lists.
+- **By source and category:**
+  - 1,631 `file_upload`, 36 `syncthing`.
+  - no_plant_signal 1,169; person_animal 381 (34 of them P1) — the B5-02 photos; indoor 60; sky 25; UI/blank 24; screenshot 8.
+- **Age:**
+  - 1,615 were created on **27 Jul 2026, 05:52–06:12 UTC**: 1,614 of them are 2013 photos from the Takeout 2013 process-delta.
+  - Also 16 on 7 Jun (2023 photos), 1 on 20 Jun, 2 on 13 Jul, and 33 P1 rejects on 15–19 Oct.
+- **Files:** 1,664 files exist (2.06 GB, mostly `uploads/`), 3 are missing; all thumbnails exist.
+- **The "stalled identify job at 90/2367" is the same run, and its counter is misleading:**
+  - Job 62 / process 149 ("Identify — 2013 (2,367)", session 31) counted only files that reached identification (90).
+  - The logs show it worked through about 1,714 of the 2,367 delta files (1,615 pre-filter rejects + 99 passes) before it stopped at 06:12:18.
+  - Job 62 was cancelled on 15 Oct; a retry (job 63) stopped with "No filter results — run Filter first".
+  - So the 1,614 are the finished part of that run. About **650 files of the 2013 delta were never processed** (estimate: 2,367 − 1,714; confirming it needs a rescan with DIGIERA mounted).
+- **What clearing them would take (Melvin decides; nothing is automatic):**
+  1. **Triage by category** in Review → Status "Pending" (select mode).
+     - Reject removes the app copy. The 2013 Takeout originals stay on DIGIERA; for P1 rows the PhoneForaging source stays.
+     - person_animal (381) is the natural first batch, and it also shrinks B5-02's exposure.
+  2. **no_plant_signal (1,169) may hide real plants** missed by the pre-filter. To rescue them: bulk "Unlock pre-filter".
+     - It runs identification with forced review, so each rescued row ends in the review queue or as below-threshold.
+     - Cost: PlantNet quota (about 500/day on the free plan — SUSPECTED; Second Opinion shows the remaining count), so about 3 days. iNat runs only after the expired token is refreshed (backlog).
+  3. **To finish the 2013 batch:** with DIGIERA mounted, Rescan → Filter → Identify for the ~650 unprocessed files. Expect about 94% of them to become new pre-filter rejects at the 27 Jul rate.
+
+**Melvin's browser checks (unverified here):**
+- **Review, Second Opinion on 24149:** the *G. vernayi* row is last and says "name match only" (the label fits the 34 px column?). Picking a % row re-renders the card with the chosen name, its %, and an "Also:" line without it.
+- **Review → Approved, card 24353:** "Lysimachia nemorum 46.1%", "Also: Veronica sublobata, Veronica hederifolia".
+- **Approve race:** pick from Look up, then press Approve at once → it approves with the picked name. A typed common name with no pick → Approve shows the 409 reason in a toast.
+- **Map:** the 24353 pin pop-up shows 46%; a curator-named pin shows "—".
+- **Export summary for walk 4:** a repeated "⚠ toxicity unknown" line badge is amber.
+- **PDF:** the final disclaimer has no provenance sentence.
+- **Settings → End session:** the encounter export reports `since=<UTC time of the previous snapshot>`, not "all". Melvin runs End session.
 
 ### Batch 14 (part) — result (20 Oct 2026, evening): E-03 + Review badge
 

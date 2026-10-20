@@ -46,6 +46,25 @@ Alembic head: 0054 (experience_publications). Snapshots this session: db_2026101
 
 ## History
 
+### 2026-10-20 10:37
+**Snapshot** — before fungi category backfill (confirmed fungal species filed as plant)
+DB: `snapshots/db_20261020_103750.sqlite`
+
+### 2026-10-20 10:35
+**Melvin browser feedback: Create-from-map sheet retracts while drawing; map 'froze' after building/saving a new walk (walk draw kept map dragging disabled) fixed; fungi filed as plant diagnosed (no change — ingest running, decision needed).**
+
+**Built:**
+- 'Create from map': walk bottom sheet slides fully off-screen while the area is drawn (wbs-drawing), back on completion or cancel (_exitLassoSelect)
+**Fixed:**
+- Map froze after Save walk: _enterWalkMode attaches the rectangle/circle draw (map.dragging.disable) and only a saved-walk load or exit released it; _buildWalkRoute now detaches it once the walk is built ('← Draw new area' re-attaches). Server log: no GET /api/walk/saves/5 between the save and Melvin's reload
+**Files:** `frontend/index.html`
+**Pending:**
+- DECISION Melvin: fungi filed as plant — scan.py:1609-1613 only sets category_suggested='fungi' (by design 'only suggest, never overwrite'); 84 confirmed observations of fungal species (81 approved, 3 manually_verified) have obs_category='plant' vs 34 correct; 198 plant rows carry the fungi suggestion. Options: category follows the confirmed species' kingdom on approve/correct + snapshot-and-backfill the 84; or accept the suggestion at ingest. Fungi were NOT auto-approved (force_review re-checked at scan.py:1737; the 3 approved rows were Melvin's 08:28 bulk approve)
+- Note: Anthropic API credits exhausted (Melvin screenshot) — AI enrichment drafts will fail until topped up
+- Parked by Melvin: implausible regional IDs
+- Melvin: browser check — Create from map sheet retract; map pans after building/saving a new walk
+- Stage C publish panel; republish walk 4
+
 ### 2026-10-20 10:31
 **Snapshot** — before re-route of saved walk 5
 DB: `snapshots/db_20261020_103151.sqlite`

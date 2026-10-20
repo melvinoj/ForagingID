@@ -139,6 +139,11 @@ async def _bulk_review_task(obs_ids: List[int], status: str, pid: Optional[int])
                 # below_threshold via single approve. One definition now.
                 #
                 # No species is invented and species_primary is never written.
+                # A confirmed fungus is filed as fungi — shared rule (observation_service).
+                if status in confirmed_statuses:
+                    from app.services.observation_service import apply_species_category
+                    await apply_species_category(session, obs, "human")
+
                 if (
                     status in confirmed_statuses
                     and qualifies_as_identified(obs)

@@ -384,6 +384,8 @@
     /* walk mode active = handle peeks; open = full sheet slides up */
     #walk-bottom-sheet.wbs-active { transform: translateY(calc(100% - 44px)); }
     #walk-bottom-sheet.wbs-open { transform: translateY(0); }
+    /* "Create from map": the sheet gets out of the way while the area is drawn */
+    #walk-bottom-sheet.wbs-drawing { transform: translateY(100%) !important; }
     /* ── Laptop: slide-up with quickbar above handle ─────────────────────────── */
     #wbs-quickbar { display: none; flex-direction: column; border-bottom: 1px solid #eef0ea; flex-shrink: 0; }
     .wbs-qb-btn {
@@ -3846,6 +3848,8 @@ function _enterLassoSelect() {
 }
 
 function _exitLassoSelect() {
+  const _sheet = document.getElementById('walk-bottom-sheet');
+  if (_sheet) _sheet.classList.remove('wbs-drawing');   // "Create from map" sheet comes back
   if (!_lassoActive) return;
   _lassoActive  = false;
   _lassoDrawing = false;
@@ -5301,7 +5305,10 @@ function _wbsRestoreRouteContent() {
 
 // Quickbar / entry card actions (laptop only — phone guards via CSS + isMobile checks)
 window._wbsStartLasso = function() {
-  // Quickbar stays visible; lasso activates over the map
+  // The whole sheet retracts so all the map is free to draw on (Melvin 20 Oct
+  // 2026); _exitLassoSelect brings it back — on a drawn area or a cancel.
+  const sheet = document.getElementById('walk-bottom-sheet');
+  if (sheet) sheet.classList.add('wbs-drawing');
   _enterLassoSelect();
 };
 
@@ -5960,6 +5967,11 @@ async function _buildWalkRoute(bounds, circle, suppressFitBounds = false) {
   _startProxWatch();            // 10a.5 — begin proximity watch if field mode on
   _activeWalkEnrich = enrichMap;
   renderWalkPanel(route, enrichMap);
+  // The area is drawn and the walk built: give the map back (pan / zoom / tap).
+  // The rectangle/circle draw kept map dragging disabled after a walk was built
+  // and saved — "the map froze" (Melvin 20 Oct 2026). "← Draw new area"
+  // (clearWalkMode) attaches the draw again.
+  _detachWalkDraw();
 }
 
 // ── Routing for the current _activeWalkRoute (new, regrouped or loaded) ────

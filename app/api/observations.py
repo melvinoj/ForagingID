@@ -811,6 +811,8 @@ async def reject_undo(
     obs.review_status = "approved"
     obs.reviewed_at = datetime.utcnow()
     _log_edit(db, obs, "review_status", prev_status, "approved")
+    from app.services.observation_service import apply_species_category
+    await apply_species_category(db, obs, "human")      # a confirmed fungus is filed as fungi
 
     db.add(ProcessingLog(
         observation_id=obs.id,

@@ -503,3 +503,12 @@ def display_common_name(preferred: Optional[str], common_names) -> str:
         return str(v).strip()
     except (ValueError, TypeError):
         return str(raw).split(",")[0].strip()
+
+
+
+# ---------------------------------------------------------------------------
+# Fungal species — the ONLY definition of "this species is a fungus" for the
+# observation category rule (observation_service.apply_species_category).
+# ---------------------------------------------------------------------------
+def is_fungal_kingdom(kingdom: Optional[str]) -> bool:
+    return (kingdom or "").strip().lower() == "fungi"

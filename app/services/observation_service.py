@@ -5,6 +5,26 @@ from app.models.observation import Observation, ObservationEdit, qualifies_as_id
 from app.services.species_link import set_observation_species
 from app.config import settings
 
+async def apply_species_category(session: AsyncSession, obs: Observation, edited_by: str = "human") -> bool:
+    """A CONFIRMED observation of a fungal species is filed as fungi (Melvin,
+    20 Oct 2026). The ONLY place this rule lives — called by every approve /
+    correct path: update_observation_status (single approve, correct-species,
+    reidentify confirm, trust accept), the bulk approve worker and the
+    restore-from-rejected path. Only plant → fungi: scene rows and rows already
+    fungi are untouched, and nothing is ever moved back to plant. Audit row
+    written; returns True when it changed the category."""
+    from sqlalchemy import select
+    from app.models.species import Species, is_fungal_kingdom
+    if obs.obs_category != "plant" or not obs.species_id:
+        return False
+    kingdom = await session.scalar(select(Species.kingdom).where(Species.id == obs.species_id))
+    if not is_fungal_kingdom(kingdom):
+        return False
+    _log_edit(session, obs, "obs_category", obs.obs_category, "fungi", edited_by)
+    obs.obs_category = "fungi"
+    return True
+
+
 def _log_edit(
     session: AsyncSession,
     obs: Observation,
@@ -96,6 +116,9 @@ async def update_observation_status(
         if obs.review_label is not None:
             _log_edit(session, obs, "review_label", obs.review_label, None, edited_by)
             obs.review_label = None
+
+        # A confirmed fungus is filed as fungi (species' kingdom, not the AI guess).
+        await apply_species_category(session, obs, edited_by)
 
         # Auto-copy photo to confirmed folder on first entry
         if prev_status not in confirmed_statuses and not obs.confirmed_copy_path:

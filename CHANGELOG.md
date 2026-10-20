@@ -1,50 +1,91 @@
 ## Current State
 
-_Last updated: 19 Oct 2026_
+_Last updated: 20 Oct 2026_
 
 ### Build status
 Server: START_ForagingID.command — uvicorn foreground + tee to logs/server_<ts>.log; port check; cleanup trap. Claude Code never starts the server.
 Launcher: --reload-dir app + absolute --reload-exclude scripts/, migrations/, tests/; --timeout-graceful-shutdown 5 (any app/ edit reloads and cancels background tasks — check background_processes first).
 WAL; busy_timeout 30000; synchronous=NORMAL. Snapshot endpoint takes `description` (not `label`).
-Alembic head: 0054 (experience_publications). Snapshots this session: db_20261019_204819, db_20261019_210354.
+Alembic head: 0054 (experience_publications).
+Snapshots this session: db_20261020_053600, db_20261020_062739, db_20261020_063515, db_20261020_072552 (re-route, Rümmelsbühl foray id 4), db_20261020_103750 (fungi backfill).
 
-### Completed 16–19 Oct
-- Toxic guard (frontend _culinaryGate + backend culinary_allowed), fail closed; all recipe endpoints gated.
-- Walk membership by route proximity; saved-walk loading UX; walk 4 line fixed (dashed straight legs 22→26→1, 2.9 km). Wrong-species recipes 5–8 archived. Impressum + Datenschutz live.
-- Publish-as-experience Stage B1 (scripts/experience_export):
-  - CLI --walk-id/--overrides/--out/--plan-only/--default; species/stops only from walk_membership; root + w/<slug>/ output with canonical.
-  - Gates: public = human-confirmed observations only; unverified edible/caution fails the build; toxicity not 'none' fails closed; Apiaceae = ID card only, matched by family OR genus OR first word of name.
-  - Dashed legs; DE fields only when filled; preview card restructured; strict placeholder check; overrides/walk4.json (slug ruemmelsbuehl).
-- DB taxonomy fix (history 136–143): 144 Heracleum + 492 Berula → Apiaceae; 162/482 Epilobium → Onagraceae/Epilobium.
-- Stage B2:
-  - Migration 0054 experience_publications (at most one default via partial unique index; saved_walk_id ON DELETE SET NULL).
-  - export.py --plan-json + --db. Hazard blockers per species AND per stop: any AI-agreed-only observation of a toxic/deadly/unknown-toxicity species, or an unloadable photo, fails the build (verified on DB copy).
-  - /api/experience curator-only on all routes (publications CRUD, plan via subprocess, verify-species edible/caution + toxicity none only, critical list computed at read time).
-  - Walk DELETE: curator check + 409 while published; map dialog shows the slug.
-  - review.html Critical section + banner; ☠ count on Review nav link; red dot on nav chip (site-header.js/.css). Confirm uses manually_verified.
-  - Live DB: only migration 0054; all other tests on copies.
+### Completed 20 Oct
+- Saved walks — route line:
+  - Line now draws on both walks.
+  - little foray (id 3): ORS detour legs replaced with dashed straight legs; 13.5 → 4.6 km / 55 min; members unchanged.
+  - Straight legs can be several dashed stretches per walk; Rümmelsbühl's old straight_from reads the same.
+  - loadSavedWalk load-sequence guard: overlapping loads can't mix map and panel.
+- Stop order:
+  - Stop 1 was the southernmost pin, then greedy nearest-next (ORS follows the given order).
+  - Start here (no dialog) + ⇄ Reverse added; dashed legs stay on the same physical legs; reversing twice restores exactly.
+- Circular / point-to-point toggle on loaded walks: drops/restores the closing leg; persists via PATCH …/loop; exports follow it; button disabled while in flight; stale drawn-area rebuild fixed.
+- Repeat species: first stop gets the full card, later stops a compact "Also here … see stop N" line with badge — app panel, Export summary, experience page.
+- Walk panel: "← Saved walks" button. Show all pins + Select pins merged into "✎ Edit walk". No species cards on pin tap while a saved walk is loaded (rest of app unchanged). Name labels on selected/hovered pins.
+- Older-photos tick → its pins light up.
+- Edit walk staged edits + "Save changes" (Save walk on a loaded walk no longer makes copies): working per Melvin's browser test.
+- ↻ Re-route: dry-run preview, snapshot, ORS only on changed legs, kept legs keep exact geometry, detours >3× + 150 m kept dashed; side-stops promoted to real stops, empty stops dropped. Used live on Rümmelsbühl foray (id 4): 2,895 → 2,952 m, now 28 stops 1–28.
+- Joined-stop labels kept after line fix: 2a→5a (id 3), 12a→11a (id 4). Labels are derived from geometry.
+- Names rule: short species references show "Common (Latin)" everywhere (display_common_name server-side, species-names.js frontend); badges kept.
+- Create-from-map sheet retracts while drawing. Map freeze after save/build fixed (browser-unverified).
+- Fungi category rule: confirming an observation as a kingdom-Fungi species sets obs_category=fungi (plant→fungi only, audit row) on all approve/correct paths. 84 misfiled confirmed rows backfilled (snapshot db_20261020_103750); 118 confirmed fungi now filed as Fungi.
+- Review Critical section, ☠ badge and nav chip red dot: confirmed by Melvin.
 
 ### Pending / next
-1. Melvin browser checks: walk 4 (line, summary, Google link, GPX, ☠ stops 4/6/10/24); 500px preview card measurement; review Critical section + banner + ☠ badge + nav chip dot.
-2. Melvin: confirm walk 3 hazards in review — Atropa obs 22224 + 22225 (stop 13), Senecio 22231 (stop 16). Walk 3 build is blocked until then.
-3. Stage C: publish panel UI (confirm step warns the exact route is public + unpublish ≠ erasure; AI-agreed review list; verify buttons; publish/push to foraging-experience). Then republish walk 4.
-4. Invalidate approved wrong-species drafts 94–105 (26 May batch).
-5. Caffeinate off-check; Walk Stage 4/5; PWA on Pixel 8 via ngrok.
+1. Jobs queue pop-up: make it movable so it can't hide controls (first item next session; agree behaviour with Melvin before prompting).
+2. Walk panel display fixes:
+   - Achillea nobilis edible parts shows AI placeholder text ("There is not enough information…").
+   - Verbascum densiflorum edible parts "None known" (status edible is correct; the text is wrong).
+   - Raw markdown in panel recipes; PFAF "Edible Parts: Edible Uses:" doubling + citation brackets.
+3. Melvin: confirm walk 3 hazards in review — Atropa obs 22224 + 22225, Senecio 22231. little foray (id 3) build blocked until then.
+4. Stage C publish panel:
+   - Confirm warns: exact route public; unpublish hides the page but past versions stay in public repo history / archives.
+   - Freeze stop labels at publish time.
+   - AI-agreed review list; verify buttons. Then republish Rümmelsbühl foray (id 4).
+5. Invalidate approved wrong-species drafts 94–105 (26 May batch).
+6. Caffeinate off-check; Walk Stage 4/5; PWA on Pixel 8 via ngrok.
 
 ### Known issues / backlog
-- DECISION (Melvin): app has no Apiaceae rule — walk panel/cards/proximity alerts show edible + recipes for unverified Apiaceae. Option: culinary content for Apiaceae only once human-verified.
-- SAFETY: Aruncus dioicus 'edible', unverified — Melvin to decide; other unverified edible/toxic species app-wide (Chaerophyllum hirsutum, Sambucus ebulus, Hypholoma fasciculare, Iris pseudacorus …).
-- /api/me judges guests by host, ignores tokens — participant token on localhost sees curator nav (endpoints refuse it). Fix before first workshop-guest session.
-- export.py read-only open fails on a WAL DB with no -shm file (fresh copies, or server stopped) — fails safe; switch to a query-only connection.
-- Taxonomy: ~96 species with genus in family + 12 null family → GBIF pass; 144/492 lack order/class (missing from tree); Marasmius oreades no family.
-- wikidata.py lists Apiaceae as "likely edible" family (pending suggestion only) — remove.
+- Root cause of little foray's original line not drawing never found (old 462-vertex geometry valid); fixed by data change + load guard. Repro only if it recurs.
+- Ewden brook circular (id 1) has no saved line (predates geometry saving) — re-save to fix.
+- Walk panel has too many buttons — revisit layout. Pop-ups (Re-route result, Renumber) — Melvin to revisit if needed.
+- Stop ordering is greedy nearest-next from the southernmost pin → long jumps at the end. Better ordering for new walks: on the simmer.
+- Dashed legs: idea on the simmer — fix missing paths in OSM, or drag points on dashed legs in Edit walk; GPX track as line. Recording walks in-app no longer needed.
+- Implausible regional IDs parked (e.g. Pyxine albovirens, Carpinus orientalis near Gresgen).
+- Unreviewed fungi (6) stay plant until approved; auto-approved photos not covered by the fungi rule.
+- SAFETY: Aruncus dioicus 'edible' unverified — Melvin to decide; other unverified edible/toxic species app-wide (Chaerophyllum hirsutum, Sambucus ebulus, Hypholoma fasciculare, Iris pseudacorus …). Daucus carota settled — do not re-raise.
+- /api/me judges guests by host, ignores tokens — fix before first workshop-guest session.
+- export.py read-only open fails on a WAL DB with no -shm file — fails safe; switch to a query-only connection.
+- Taxonomy: ~96 species with genus in family + 12 null family → GBIF pass; 144/492 lack order/class.
+- wikidata.py lists Apiaceae as "likely edible" family (suggestion only) — remove.
 - Recipe regenerate + curator recipe writes not toxicity-gated; recipes have no audit table.
 - GPS accuracy not recorded (Pixel EXIF). Anthriscus caucalis (138) inedible+toxic contradiction.
 - Enrichment paths not gated; enrichment queue in-memory. Identify 2013 job at 90/2367.
 - iNaturalist token expired; Google Drive token invalid; Ollama 'mistral' not installed.
-- Disk tight — move exports/old snapshots to DIGIERA. Docs drift: CLAUDE.md Alembic head, PhoneForaging path.
+- Disk tight — move exports/old snapshots to DIGIERA.
+- Docs drift: CLAUDE.md Alembic head (0054), PhoneForaging path. Add to CLAUDE.md: report walks by name + ID; "design/diagnose only / wait for OK" = no code edits.
 
 ## History
+
+### 2026-10-20 10:40
+**Snapshot** — End of session — Session ended from Settings page
+DB: `snapshots/db_20261020_104015.sqlite`
+
+### 2026-10-20 10:40
+**Session ended** — Session ended from Settings page
+
+### 2026-10-20 10:38
+**Fungi category: a confirmed observation of a species whose kingdom is Fungi is filed as obs_category 'fungi'; backfilled the 84 confirmed rows filed as plant.**
+
+**Built:**
+- app/models/species.py is_fungal_kingdom; app/services/observation_service.py apply_species_category (only plant → fungi, scenes / existing fungi untouched, never back to plant, audit row) — called from update_observation_status (single approve, correct-species, reidentify confirm, trust accept), the bulk approve worker and restore-from-rejected
+- Tested on a DB copy: single approve + manually_verified + bulk approve of fungi → fungi with audit rows; plant (Cannabis sativa) and scene rows untouched
+**Fixed:**
+- Backfill (snapshot db_20261020_103750 first): 84 approved/manually_verified observations of fungal species changed plant → fungi, one observation_edits row each (edited_by 'backfill: confirmed fungal species (Melvin 20 Oct 2026)'); read back by id: 84/84 fungi, 0 remaining, 118 confirmed fungal rows now filed as fungi
+**Files:** `app/models/species.py`, `app/services/observation_service.py`, `app/api/bulk_actions.py`, `app/api/observations.py`, `observations (84 rows obs_category)`
+**Pending:**
+- Not covered by the rule: P1 dual-agree AUTO-approve in scan.py (automated, not a human approve) and needs_review/pending rows (6 fungal rows still plant until approved); lichens (kingdom Fungi, e.g. Pyxine albovirens) now file as fungi
+- Melvin: browser check — fungi pins colour, review cards show Fungi
+- Stage C publish panel; republish walk 4
 
 ### 2026-10-20 10:37
 **Snapshot** — before fungi category backfill (confirmed fungal species filed as plant)

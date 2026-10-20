@@ -32,6 +32,7 @@ from typing import List, Optional
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
+from app.services import db_snapshot
 from app.services.changelog_service import (
     append_history_entry,
     get_current_state,
@@ -69,10 +70,10 @@ EXTERNAL_BACKUP_DIR = EXTERNAL_DRIVE / "ForagingID_Backup"
 #   - delete everything else
 #
 # Age and recency are keyed off the FILENAME timestamp (db_YYYYMMDD_HHMMSS),
-# never st_mtime. Snapshots are written with shutil.copy2, which preserves the
-# SOURCE database's mtime — so a snapshot file's mtime records when the DB was
-# last written, not when the snapshot was taken. Sorting by mtime silently
-# picks the wrong "most recent" set.
+# never st_mtime. Snapshots before 20 Oct 2026 were written with shutil.copy2,
+# which preserved the SOURCE database's mtime (the last checkpoint, under WAL);
+# since fix batch 2 they are written by the SQLite backup API (mtime = when the
+# snapshot was taken). The filename stays the only reliable clock.
 _RETENTION_KEEP_RECENT = 8
 _RETENTION_DAILY_DAYS  = 7
 
@@ -287,7 +288,9 @@ class SnapshotRequest(BaseModel):
 async def create_snapshot(body: SnapshotRequest = None):  # type: ignore[assignment]
     """
     Create a timestamped snapshot:
-    1. Copy foragingid.db → snapshots/db_YYYYMMDD_HHMMSS.sqlite
+    1. Back up foragingid.db → snapshots/db_YYYYMMDD_HHMMSS.sqlite through the
+       SQLite backup API (WAL included; quick_check'd; audit E-01). On failure
+       nothing else happens — no CHANGELOG entry, no commit.
     2. Optionally rewrite ## Current State in CHANGELOG.md
     3. Append a snapshot entry to ## History
     4. git add -A && git commit (allow-empty) with message "snapshot: TIMESTAMP"
@@ -301,10 +304,14 @@ async def create_snapshot(body: SnapshotRequest = None):  # type: ignore[assignm
     # 1. Ensure snapshots dir exists
     SNAPSHOTS_DIR.mkdir(parents=True, exist_ok=True)
 
-    # 2. Copy DB
+    # 2. Back up DB (WAL-safe; in a thread so the event loop keeps serving)
     db_snap = SNAPSHOTS_DIR / f"db_{ts}.sqlite"
+    db_check: Optional[str] = None
     if DB_PATH.exists():
-        shutil.copy2(DB_PATH, db_snap)
+        try:
+            db_check = (await asyncio.to_thread(db_snapshot.backup_to_file, DB_PATH, db_snap))["quick_check"]
+        except db_snapshot.SnapshotError as exc:
+            raise HTTPException(500, detail=f"DB snapshot failed — nothing recorded or committed: {exc}")
 
     # 3. Optionally rewrite Current State
     if body.current_state:
@@ -364,6 +371,7 @@ async def create_snapshot(body: SnapshotRequest = None):  # type: ignore[assignm
         "timestamp":       ts,
         "timestamp_human": ts_human,
         "db_snapshot":     str(db_snap),
+        "db_quick_check":  db_check,
         "commit_hash":     commit_hash,
         "git_error":       git_error,
         "snapshots_pruned": pruned,
@@ -447,27 +455,78 @@ async def restore_snapshot(body: RestoreRequest):
     """
     Restore to a snapshot.  Two independent operations — either or both:
 
-    1. db_path  → overwrite foragingid.db with the snapshot DB
+    1. db_path  → replace foragingid.db's content with the snapshot DB
     2. commit_hash → git checkout <hash>  (puts repo in detached-HEAD state)
+
+    DB restore — the safe sequence (audit E-02; db_snapshot.py has the detail):
+      a. db_path must be an existing snapshots/db_*.sqlite file; commit_hash hex only
+      b. the snapshot must pass integrity_check
+      c. refused (409) while a background job is running — it would keep writing
+      d. a pre-restore snapshot of the current DB is taken first
+         (snapshots/db_<ts>_prerestore.sqlite — the restore can be undone)
+      e. snapshot → live through the SQLite backup API (one write transaction
+         through the live WAL: open connections see it at once, no WAL replay
+         can undo it), checkpoint, quick_check
+      f. the in-process settings cache is reloaded from the restored DB
+    Other in-process state (job queue, scan status) is not — restart the server.
 
     ⚠️ DESTRUCTIVE.  Frontend must display a confirmation before calling.
     Restart the server after a code restore for changes to take effect.
     """
     results: dict = {}
 
+    # a. Validate both inputs before touching anything
+    snap_db: Optional[Path] = None
+    commit: Optional[str] = None
+    try:
+        if body.db_path:
+            snap_db = db_snapshot.validate_snapshot_path(body.db_path, SNAPSHOTS_DIR)
+        if body.commit_hash:
+            commit = db_snapshot.validate_commit_hash(body.commit_hash)
+    except ValueError as exc:
+        raise HTTPException(400, detail=str(exc))
+    if not snap_db and not commit:
+        raise HTTPException(400, detail="Provide commit_hash and/or db_path.")
+
     # 1. Restore database
-    if body.db_path:
-        snap_db = Path(body.db_path)
-        if not snap_db.exists():
-            raise HTTPException(400, detail=f"DB snapshot not found: {body.db_path}")
-        shutil.copy2(snap_db, DB_PATH)
+    if snap_db:
+        # b. Snapshot integrity
+        info = await asyncio.to_thread(db_snapshot.snapshot_info, snap_db)
+        if info["integrity_check"] != "ok":
+            raise HTTPException(400, detail=f"Snapshot failed integrity_check — not restored: {info['integrity_check']}")
+        # c. No running jobs (a stale 'running' row older than 10 min does not block)
+        running = await asyncio.to_thread(_running_jobs)
+        if running:
+            raise HTTPException(409, detail="A background job is running — stop it or wait, then restore: "
+                                            + "; ".join(running))
+        # d. Pre-restore snapshot
+        pre = SNAPSHOTS_DIR / f"db_{datetime.now().strftime('%Y%m%d_%H%M%S')}_prerestore.sqlite"
+        try:
+            await asyncio.to_thread(db_snapshot.backup_to_file, DB_PATH, pre)
+        except db_snapshot.SnapshotError as exc:
+            raise HTTPException(500, detail=f"Pre-restore snapshot failed — not restored: {exc}")
+        # e. Restore through the backup API
+        try:
+            res = await asyncio.to_thread(db_snapshot.restore_from_file, snap_db, DB_PATH)
+        except db_snapshot.SnapshotError as exc:
+            raise HTTPException(500, detail=f"Restore failed — live DB unchanged; pre-restore snapshot {pre.name}: {exc}")
+        # f. Settings cache
+        try:
+            from app.database import AsyncSessionLocal
+            from app.services.settings_service import load_settings_from_db
+            async with AsyncSessionLocal() as session:
+                await load_settings_from_db(session)
+        except Exception as exc:                                 # restore stands; restart fixes the cache
+            log.warning("restore: settings cache reload failed — %s", exc)
         results["db_restored"] = str(snap_db)
+        results["pre_restore_snapshot"] = str(pre)
+        results["db_restore"] = {**res, "snapshot_alembic_revision": info["alembic_revision"]}
 
     # 2. Git checkout
-    if body.commit_hash:
+    if commit:
         try:
             result = subprocess.run(
-                ["git", "checkout", body.commit_hash],
+                ["git", "checkout", commit],
                 cwd=PROJECT_ROOT, capture_output=True, text=True,
             )
             if result.returncode != 0:
@@ -475,20 +534,34 @@ async def restore_snapshot(body: RestoreRequest):
                     500,
                     detail=f"git checkout failed: {result.stderr or result.stdout}",
                 )
-            results["git_restored"] = body.commit_hash
+            results["git_restored"] = commit
         except HTTPException:
             raise
         except Exception as exc:
             raise HTTPException(500, detail=f"git checkout error: {exc}")
 
-    if not results:
-        raise HTTPException(400, detail="Provide commit_hash and/or db_path.")
-
     return {
         "ok": True,
         **results,
-        "note": "Restart the server to apply any code changes.",
+        "note": "Restart the server to apply any code changes and reset in-memory job state."
+                + (f" Undo the DB restore with snapshot {Path(results['pre_restore_snapshot']).name}."
+                   if "pre_restore_snapshot" in results else ""),
     }
+
+
+def _running_jobs() -> list:
+    """background_processes rows still 'running' with a heartbeat/update in the last 10 min (UTC)."""
+    import sqlite3
+    conn = sqlite3.connect(str(DB_PATH), timeout=30)
+    try:
+        rows = conn.execute(
+            """SELECT process_id, process_type, COALESCE(detail, '') FROM background_processes
+                WHERE status = 'running'
+                  AND COALESCE(last_heartbeat, updated_at) > datetime('now', '-10 minutes')"""
+        ).fetchall()
+    finally:
+        conn.close()
+    return [f"#{pid} {ptype} {detail}".strip() for pid, ptype, detail in rows]
 
 
 # ---------------------------------------------------------------------------

@@ -368,17 +368,20 @@ window.DATA = {{DATA}};
     if (D.walk.line) {
       var ll = D.walk.line.map(function (c) { return [c[1], c[0]]; });
       var lineColour = getComputedStyle(document.documentElement).getPropertyValue("--app-forest").trim() || "#2d5016";
-      var sf = D.walk.straight_from;
-      if (sf !== null && sf !== undefined) {
-        // As the app (frontend/index.html): routed part solid; from vertex sf on,
-        // straight legs between stops (no mapped footpath) dashed with a tooltip.
-        L.polyline(ll.slice(0, sf + 1), { color: lineColour, weight: 4, opacity: 0.9 }).addTo(map);
-        L.polyline(ll.slice(sf), { color: lineColour, weight: 3.5, dashArray: "7 6", opacity: 0.9 })
+      // As the app (frontend/index.html): routed parts solid; straight legs
+      // between stops (D.walk.straight_ranges, vertex ranges) dashed with a tooltip.
+      var at = 0;
+      function solid(a, b) {
+        if (b > a) L.polyline(ll.slice(a, b + 1), { color: lineColour, weight: 4, opacity: 0.9 }).addTo(map);
+      }
+      (D.walk.straight_ranges || []).forEach(function (r) {
+        solid(at, r[0]);
+        L.polyline(ll.slice(r[0], r[1] + 1), { color: lineColour, weight: 3.5, dashArray: "7 6", opacity: 0.9 })
           .bindTooltip("Straight line between stops — no mapped footpath here", { sticky: true })
           .addTo(map);
-      } else {
-        L.polyline(ll, { color: lineColour, weight: 4, opacity: 0.9 }).addTo(map);
-      }
+        at = r[1];
+      });
+      solid(at, ll.length - 1);
       bounds = bounds.concat(ll);
     }
     D.walk.stops.forEach(function (st) {

@@ -46,6 +46,53 @@ Alembic head: 0054 (experience_publications). Snapshots this session: db_2026101
 
 ## History
 
+### 2026-10-20 06:27
+**Snapshot** — before circular toggle persistence + load-sequence guard
+DB: `snapshots/db_20261020_062739.sqlite`
+
+### 2026-10-20 06:23
+**Restored '⇄ Reverse' next to '← Saved walks' (no pop-up); diagnoses only for: little foray (id 3) old line not drawing, stop-1 choice, circular toggle on loaded walks.**
+
+**Built:**
+- frontend/index.html: #walk-reverse-btn '⇄ Reverse' in the loaded walk's button row (shown via _syncWalkPinsBtn) → walkReorder('reverse'); retested on a DB copy: every start + reverse on ids 3 and 4, 0 problems
+**Files:** `frontend/index.html`
+**Pending:**
+- Part 2: little foray (id 3) old line — geometry from db_20261020_053600 is clean (462 [lng,lat] pairs, no NaN/null/dups); static trace finds no failure on that path. Found: loadSavedWalk has no load-sequence guard (two overlapping loads can leave the map on one walk and the panel on the other; server log shows walk 3 + 4 loads in the same second three times). Proposed: sequence guard + a temporary test row with the old line for a live console check (needs OK)
+- Part 4: toggleWalkLoop on a loaded walk only flips _walkCircular (+ breaks the name signature, hides Start here); if an area was drawn earlier in the session it REBUILDS that old area over the loaded walk (_lastWalkBounds never cleared). Proposal awaiting OK
+- Melvin: browser check of ⇄ Reverse
+
+### 2026-10-20 05:54
+**Loaded-walk panel: '← Saved walks' button back to the saved-walks list; Reverse button removed (Start here covers it, Melvin); Start here runs without a confirm pop-up.**
+
+**Built:**
+- frontend/index.html: #walk-saved-btn '← Saved walks' in the loaded walk's button row (shown with Show all pins via _syncWalkPinsBtn) → walkBackToSaved() = _wbsLoadSaved() + scroll to the list
+**Fixed:**
+- Reverse direction button removed from the panel (server reorder mode 'reverse' kept, no UI)
+- Start here: no confirm dialog
+**Files:** `frontend/index.html`
+**Pending:**
+- Melvin: browser check of '← Saved walks' and Start here (no pop-up)
+- Stage C publish panel; republish walk 4
+
+### 2026-10-20 05:48
+**straight_ranges (multi-range dashed legs) + walk reorder endpoint (Reverse direction / Start here) + little foray (id 3) detour legs straightened; 7a labelling made pass-aware so labels stay coherent after reorder.**
+
+**Built:**
+- app/services/walk_route.py (new, pure): straight_ranges() reader (legacy straight_from = [[sf, n-1]]), reverse(), start_at(), straighten_legs(), stop_vertex_indices(); dashes kept per segment so they move with their physical legs
+- POST /api/walk/saves/{id}/reorder {mode: reverse | start, stop_label}: curator; no ORS; distance/duration/members unchanged; read back; 7a/note stops refused as a start
+- frontend/index.html: _walkStraightRangesOf + multi-range dashed drawing; save writes straight_ranges; '⇄ Reverse direction' button in the membership bar; 'Start here' on saved stops of a loaded circular walk; _refreshSavedWalk adopts the reordered line
+- walk_membership.compute: saved-stop chainage follows the walk's pass order; joined (7a) stops on retraced paths take the pass whose neighbouring saved stops are closest; closed-loop seam pass merged for joined stops — labels coherent under every start + reverse (tested all 25 / 19 starts on ids 4 / 3)
+- scripts/walk_straighten_legs.py: dry-run by default, refuses if members would change, read-back by id
+- experience export: walk_route reader, multi-range dashes on map + preview SVG
+**Fixed:**
+- little foray (id 3): legs 8→9→10→11 and 16→17→18 straightened (dashed); 13,486 m / 162 min → 4,608 m / 55 min; 462 → 133 vertices; members unchanged (40). Leg 5→6 left routed — obs 24281 (joined 5a) is 4 m off that path
+- index.html _walkRepeatSplit comment named a non-existent Python function
+**Files:** `app/services/walk_route.py`, `app/services/walk_membership.py`, `app/api/walk.py`, `frontend/index.html`, `scripts/walk_straighten_legs.py`, `scripts/experience_export/export.py`, `scripts/experience_export/templates/index.html`, `saved_walks id 3 (route_geojson, distance_m, duration_min)`, `dist/ rebuilt`
+**Pending:**
+- Melvin: browser check — little foray (id 3) line now drawn with 2 dashed stretches; Reverse direction + Start here on both walks; compact repeat lines
+- Label change from the pass-aware rule (read-time, no DB write): little foray (id 3) 2a→5a, Rümmelsbühl foray (id 4) 12a→11a — printed sheets / dist pages built earlier show the old labels
+- Stage C publish panel; republish walk 4
+
 ### 2026-10-20 05:36
 **Snapshot** — before straight_ranges + walk reorder + little foray (id 3) detour fix
 DB: `snapshots/db_20261020_053600.sqlite`

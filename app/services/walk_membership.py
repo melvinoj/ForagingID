@@ -41,6 +41,9 @@ DEFAULT_BUFFER_M      = 25.0
 BUFFER_MIN_M          = 10.0
 BUFFER_MAX_M          = 60.0
 DEFAULT_STOP_RADIUS_M = 30.0
+# A line that retraces a path passes a point more than once: every pass within
+# this of the nearest counts as a candidate (stop order / 7a labels below).
+PASS_TOLERANCE_M      = 15.0
 
 
 # ── field access (ORM row, sqlite3.Row-as-dict, or plain dict) ───────────────
@@ -164,6 +167,10 @@ class _Line:
         self.cum = [0.0]
         for (ax, ay), (bx, by) in zip(self.pts, self.pts[1:]):
             self.cum.append(self.cum[-1] + math.hypot(bx - ax, by - ay))
+        # Closed loop (circular walk): last vertex back at the first (same 30 m
+        # tolerance as walk_route.CLOSED_LOOP_TOLERANCE_M).
+        self.closed = len(self.pts) > 2 and math.hypot(self.pts[-1][0] - self.pts[0][0],
+                                                       self.pts[-1][1] - self.pts[0][1]) <= 30.0
 
     def project(self, p) -> tuple[float, float]:
         """(distance to the line, chainage along it) in metres. Ties keep the
@@ -181,6 +188,38 @@ class _Line:
             if d < best_d:
                 best_d, best_ch = d, self.cum[i] + t * math.sqrt(seg2)
         return best_d, best_ch
+
+    def passes(self, p, tol: float = PASS_TOLERANCE_M, merge_seam: bool = True) -> list:
+        """Chainage of each pass of the line within tol of the nearest point
+        (a retraced path is passed more than once) — one per pass, at that
+        pass's nearest point, ascending."""
+        px, py = p
+        if len(self.pts) == 1:
+            return [0.0]
+        hits = []
+        for i, ((ax, ay), (bx, by)) in enumerate(zip(self.pts, self.pts[1:])):
+            dx, dy = bx - ax, by - ay
+            seg2 = dx * dx + dy * dy
+            t = 0.0 if seg2 == 0 else max(0.0, min(1.0, ((px - ax) * dx + (py - ay) * dy) / seg2))
+            hits.append((math.hypot(px - ax - t * dx, py - ay - t * dy), self.cum[i] + t * math.sqrt(seg2)))
+        best = min(d for d, _ in hits)
+        runs, run = [], None                     # consecutive segments of one pass
+        for k, (d, ch) in enumerate(hits):
+            if d <= best + tol:
+                run = run or []
+                run.append((d, ch, k))
+            elif run:
+                runs.append(run)
+                run = None
+        if run:
+            runs.append(run)
+        # Closed loop: a pass running across the start/end seam is ONE pass
+        # (otherwise starting the walk at another stop could split it in two).
+        # Not for saved stops (merge_seam=False): stop 1 IS the start of the line.
+        if (merge_seam and len(runs) > 1 and self.closed and runs[0][0][2] == 0
+                and runs[-1][-1][2] == len(hits) - 1):
+            runs[0] = runs.pop() + runs[0]
+        return sorted(min(r)[1] for r in runs)    # one chainage per pass: its nearest point
 
 
 def search_bbox(walk) -> Optional[tuple]:
@@ -272,6 +311,17 @@ def compute(walk, saved_obs: dict, nearby_obs: Iterable) -> dict:
         stops.append(stop)
         anchors.append((stop, xy))
 
+    # Chainage of saved stops = the pass the walk makes in SAVED ORDER: the first
+    # close pass at or after the previous stop's (nearest pass if none). On a
+    # path walked out and back the nearest pass alone can be the wrong one, and
+    # which one wins would flip when the walk is reversed (walk_route.reverse).
+    prev_ch = 0.0
+    for st in stops:
+        cands = line.passes(frame.xy(st["lat"], st["lng"]), merge_seam=False)
+        later = [c for c in cands if c >= prev_ch]
+        st["_ch"] = later[0] if later else st["_ch"]
+        prev_ch = st["_ch"]
+
     on_walk = {sp["name"] for st in stops for sp in st["species"]}
 
     # Nearby confirmed observations not in the snapshot.
@@ -328,15 +378,34 @@ def compute(walk, saved_obs: dict, nearby_obs: Iterable) -> dict:
             home["t_min"] = taken
 
     # New stops: label after the saved stop that precedes them along the line.
-    by_prev = defaultdict(list)
-    for c in clusters:
-        cx, cy = c["sx"] / c["n"], c["sy"] / c["n"]
-        lat, lng = frame.latlng(cx, cy)
-        ch = line.project((cx, cy))[1]
+    # A new stop on a path the walk passes more than once takes the pass whose
+    # two neighbouring saved stops are physically closest to it — the same pair
+    # whichever way round the walk goes, so "7a" stays between the same stops.
+    circular = bool((_route_dict(walk).get("foragingid") or {}).get("circular"))
+
+    def _prev_at(ch):
         prev = None
         for st in stops:
             if st["_ch"] <= ch and (prev is None or st["_ch"] >= prev["_ch"]):
                 prev = st
+        return prev
+
+    def _pair_cost(xy, prev):
+        k = stops.index(prev) if prev is not None else -1
+        nxt = stops[k + 1] if k + 1 < len(stops) else (stops[0] if circular and stops else None)
+        cost = 0.0
+        for st in (prev, nxt):
+            if st is not None:
+                sx, sy = frame.xy(st["lat"], st["lng"])
+                cost += math.hypot(xy[0] - sx, xy[1] - sy)
+        return cost
+
+    by_prev = defaultdict(list)
+    for c in clusters:
+        cx, cy = c["sx"] / c["n"], c["sy"] / c["n"]
+        lat, lng = frame.latlng(cx, cy)
+        ch = min(line.passes((cx, cy)), key=lambda k: (_pair_cost((cx, cy), _prev_at(k)), k))
+        prev = _prev_at(ch)
         stop = {"origin": "joined", "is_note": False, "lat": lat, "lng": lng,
                 "species": [], "obs_ids": [], "joined_obs_ids": [], "_ch": ch}
         for o in c["obs"]:

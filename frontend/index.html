@@ -2354,6 +2354,15 @@
       <!-- Tab: Route stops -->
       <div id="walk-tab-stops">
         <div class="walk-export-row">
+          <!-- Loaded saved walk only (_syncWalkPinsBtn): back to the saved-walks list -->
+          <button id="walk-saved-btn" class="walk-map-btn" onclick="walkBackToSaved()"
+            style="display:none;background:#fff;color:#2d5016;border:1px solid #b8d48a;cursor:pointer"
+            title="Back to the list of saved walks — this walk stays on the map until you open another">← Saved walks</button>
+          <!-- Loaded saved walk only (_syncWalkPinsBtn). Circular: stop 1 stays, the
+               rest runs the other way (Start here keeps the direction). -->
+          <button id="walk-reverse-btn" class="walk-map-btn" data-guest-hide onclick="walkReorder('reverse')"
+            style="display:none;background:#fff;color:#2d5016;border:1px solid #b8d48a;cursor:pointer"
+            title="Walk the other way round — same line and distance, stops renumbered">⇄ Reverse</button>
           <a id="walk-google-btn" class="walk-map-btn google" href="#" target="_blank" rel="noopener">🗺 Google Maps</a>
           <button id="walk-gpx-btn" class="walk-map-btn" onclick="walkDownloadGpx()"
             style="background:#fff;color:#2d5016;border:1px solid #b8d48a;cursor:pointer"
@@ -5131,8 +5140,9 @@ let _walkOrsDistM     = 0;       // ORS-reported distance in metres
 let _walkOrsDurMin    = 0;       // ORS-reported duration in minutes
 let _walkCircular     = true;    // close the loop back to start
 let _walkRouteGeom    = null;    // ORS LineString geometry of the current route (saved with the walk)
-let _walkStraightFrom = null;    // saved walks: vertex index from which _walkRouteGeom is straight
-                                 // legs between stops (no mapped path) — drawn dashed; meta.straight_from
+let _walkStraightRanges = [];    // saved walks: vertex ranges [[a, b], …] of _walkRouteGeom drawn dashed —
+                                 // straight legs between stops (no mapped path / ORS detour). Read by
+                                 // _walkStraightRangesOf (meta.straight_ranges, legacy meta.straight_from)
 let _walkStopRadiusM  = 30;      // stop grouping radius (slider, 10–100 m)
 let _walkLastPins     = null;    // raw pins + notes from the last drawn area — regroup source
                                  // (null for a loaded saved walk: its stops are fixed)
@@ -5769,7 +5779,7 @@ function _stopSpecies(s) {
 // line pointing back to that stop (label as displayed, "7a" included).
 // Returns one {label, full: [names], repeats: [{name, first_label}]} per stop.
 // (The static experience export can't load this file — its Python mirror is
-// species_first_stop() in scripts/experience_export/export.py.)
+// the st["repeat"] loop in scripts/experience_export/export.py.)
 function _walkRepeatSplit(route) {
   const firstStopOf = {};
   return (route || []).map((stop, i) => {
@@ -5781,6 +5791,29 @@ function _walkRepeatSplit(route) {
     }
     return { label, full, repeats };
   });
+}
+
+// Dashed (straight) legs of a saved line: vertex ranges [[a, b], …], validated
+// and merged. meta.straight_ranges, or legacy meta.straight_from sf = [[sf, n-1]].
+// Same reading rule as straight_ranges() in app/services/walk_route.py.
+function _walkStraightRangesOf(meta, n) {
+  meta = meta || {};
+  let raw = [];
+  if (Array.isArray(meta.straight_ranges)) raw = meta.straight_ranges;
+  else if (Number.isInteger(meta.straight_from)) raw = [[meta.straight_from, n - 1]];
+  const flags = new Array(Math.max(n - 1, 0)).fill(false);
+  for (const r of raw) {
+    if (!Array.isArray(r) || r.length !== 2 || !Number.isInteger(r[0]) || !Number.isInteger(r[1])) continue;
+    if (!(r[0] >= 0 && r[0] < r[1] && r[1] <= n - 1)) continue;
+    for (let k = r[0]; k < r[1]; k++) flags[k] = true;
+  }
+  const out = [];
+  let start = null;
+  flags.concat([false]).forEach((f, k) => {
+    if (f && start === null) start = k;
+    else if (!f && start !== null) { out.push([start, k]); start = null; }
+  });
+  return out;
 }
 
 // Walk panel species badge (full card AND compact repeat line). Blocked by the
@@ -5874,7 +5907,7 @@ async function _routeWalk(opts = {}) {
   const route = _activeWalkRoute || [];
   if (!opts.keepSaved) { _walkOrsDistM = 0; _walkOrsDurMin = 0; }
   _walkRouteGeom   = null;
-  _walkStraightFrom = null;
+  _walkStraightRanges = [];
   _walkOrsFallback = false;
 
   let status;
@@ -5882,8 +5915,7 @@ async function _routeWalk(opts = {}) {
     status = { kind: 'single' };
   } else if (opts.savedGeom && Array.isArray(opts.savedGeom.coordinates)) {
     _walkRouteGeom = opts.savedGeom;   // exactly the shape that was saved — no ORS call
-    const sf = opts.straightFrom;
-    _walkStraightFrom = (Number.isInteger(sf) && sf >= 0 && sf < opts.savedGeom.coordinates.length - 1) ? sf : null;
+    _walkStraightRanges = _walkStraightRangesOf(opts.routeMeta, opts.savedGeom.coordinates.length);
     status = { kind: 'ok' };
   } else if (route.length > _walkMaxStops()) {
     status = { kind: 'capped', n: route.length, max: _walkMaxStops() };
@@ -5974,16 +6006,18 @@ function _drawWalkLayer(suppressFitBounds) {
   if (latLngs.length > 1) {
     if (_walkRouteGeom) {
       const ll = _walkRouteGeom.coordinates.map(([lng, lat]) => [lat, lng]);
-      if (_walkStraightFrom !== null) {
-        // Routed part solid; the straight legs (no mapped footpath) dashed and labelled.
-        L.polyline(ll.slice(0, _walkStraightFrom + 1), { color: '#2d5016', weight: 3.5, opacity: 0.85 })
-          .addTo(_walkRouteLayer);
-        L.polyline(ll.slice(_walkStraightFrom), { color: '#2d5016', weight: 3, dashArray: '7 6', opacity: 0.85 })
+      // Routed parts solid; the straight legs (no mapped footpath) dashed and labelled.
+      let at = 0;
+      const solid = (a, b) => { if (b > a) L.polyline(ll.slice(a, b + 1), { color: '#2d5016', weight: 3.5, opacity: 0.85 })
+                                             .addTo(_walkRouteLayer); };
+      for (const [a, b] of _walkStraightRanges) {
+        solid(at, a);
+        L.polyline(ll.slice(a, b + 1), { color: '#2d5016', weight: 3, dashArray: '7 6', opacity: 0.85 })
           .bindTooltip('Straight line between stops — no mapped footpath here', { sticky: true })
           .addTo(_walkRouteLayer);
-      } else {
-        L.polyline(ll, { color: '#2d5016', weight: 3.5, opacity: 0.85 }).addTo(_walkRouteLayer);
+        at = b;
       }
+      solid(at, ll.length - 1);
     } else if (_walkStraightLine) {
       // Chosen by the user after an ORS failure — dashed, and labelled as such.
       const sl = _walkCircular ? [...latLngs, latLngs[0]] : latLngs;
@@ -6211,6 +6245,10 @@ function renderWalkPanel(route, enrichMap) {
   const _seasonIcon = { spring: '🌱', summer: '☀️', autumn: '🍂', winter: '❄️', 'year-round': '🔄' };
   let html = '';
   const _repeatSplit = _walkRepeatSplit(route);
+  // The panel shows the loaded saved walk itself (not a route rebuilt from a
+  // drawn area meanwhile) — reorder actions act on that saved row.
+  const _isSavedRoute = !!(_savedWalkData && _walkSaved && _walkSaved.id === _savedWalkData.id
+                           && _walkSavedNameFor(route) !== null);
   for (let i = 0; i < route.length; i++) {
     const { p, lat, lng } = route[i];
 
@@ -6325,12 +6363,19 @@ function renderWalkPanel(route, enrichMap) {
     }
 
     const _joinedStop = _stop.origin === 'joined';
+    // "Start here": saved circular walks, saved stops only (a 7a stop is not a
+    // waypoint until Renumber stops), not the current stop 1.
+    const _canStartHere = !!(_savedWalkData && _walkCircular && !_joinedStop && _isSavedRoute
+                             && /^\d+$/.test(_stopLabel(_stop, i)) && _stopLabel(_stop, i) !== '1');
     html += `<div class="walk-stop-card"${_joinedStop ? ' style="border-style:dashed"' : ''}>
       <div>
         <span class="walk-stop-num"${_joinedStop ? ' style="background:#5f8f35"' : ''}>${_esc(_stopLabel(_stop, i))}</span>
         ${_joinedStop ? `<span style="font-size:0.72rem;color:#556040;font-weight:600">new stop · </span>` : ''}
         ${_spList.length > 1 ? `<span style="font-size:0.72rem;color:#556040;font-weight:600">${_spList.length} species here</span>` : ''}
         ${distStr2 ? `<span class="walk-stop-dist">${_esc(distStr2)}</span>` : ''}
+        ${_canStartHere ? `<button data-guest-hide onclick="walkReorder('start', '${_esc(_stopLabel(_stop, i))}')"
+            title="Make this stop 1 — same line, direction and distance"
+            style="float:right;font-size:0.66rem;padding:1px 6px;border-radius:4px;border:1px solid #b8d48a;background:#f0f4e8;color:#2d5016;cursor:pointer">Start here</button>` : ''}
       </div>
       ${speciesHtml}${alsoHtml}
       ${(speciesHtml || alsoHtml) ? '' : `<div style="font-size:0.75rem;color:#999;margin-top:4px">No confirmed species here now</div>`}
@@ -6670,7 +6715,7 @@ async function _saveWalk(btn, onSaved) {
       foragingid: Object.assign(
         { version: 2, circular: !!_walkCircular, stop_radius_m: _walkStopRadiusM },
         // Re-saving a loaded walk keeps its dashed straight legs.
-        (_walkRouteGeom && _walkStraightFrom !== null) ? { straight_from: _walkStraightFrom } : {}),
+        (_walkRouteGeom && _walkStraightRanges.length) ? { straight_ranges: _walkStraightRanges } : {}),
     },
     distance_m:  Math.round(distM),
     duration_min: _walkOrsDurMin > 0 ? _walkOrsDurMin : Math.round(distM / 80),
@@ -6818,7 +6863,7 @@ async function loadSavedWalk(id) {
     // only drawn if the user chooses it. Saved distance/duration kept.
     // fitBounds is done below by _fitSavedWalk, once the panel layout is known.
     if (!(await _routeWalk({ savedGeom: _savedGeom || null, keepSaved: true, suppressFitBounds: true,
-                             straightFrom: _meta ? _meta.straight_from : null }))) return;
+                             routeMeta: _meta }))) return;
 
     // Panel layout first (laptop: right-hand panel; phone: peek bar), then fit
     // the whole walk into the map area the panel leaves free.
@@ -6897,10 +6942,24 @@ function walkToggleAllPins() {
 }
 
 function _syncWalkPinsBtn() {
+  // "← Saved walks" and "⇄ Reverse" belong to the loaded saved walk too — same rule.
+  ['walk-saved-btn', 'walk-reverse-btn'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.style.display = _savedWalkView ? '' : 'none';
+  });
   const b = document.getElementById('walk-pins-btn');
   if (!b) return;
   b.style.display = _savedWalkView ? '' : 'none';
   if (_savedWalkView) b.textContent = _savedWalkView.hidePins ? '👁 Show all pins' : '🙈 Hide other pins';
+}
+
+// "← Saved walks" on a loaded walk: the panel's saved-walks list (the same view
+// as Tools → Open a saved walk), scrolled into sight. Picking a walk there
+// loads it; the current walk stays on the map until then.
+function walkBackToSaved() {
+  _wbsLoadSaved();
+  const sec = document.getElementById('wbs-saved-walks-section');
+  if (sec) sec.scrollIntoView({ block: 'start', behavior: 'smooth' });
 }
 
 // ── Loaded saved walk: route-proximity membership (walk_membership.py) ─────
@@ -7006,6 +7065,14 @@ function _renderWalkMembership() {
 async function _refreshSavedWalk(w) {
   if (!_savedWalkView || !w || !Array.isArray(w.stops)) return;   // walk was cleared meanwhile
   _savedWalkData = { id: w.id, name: w.name, stops: w.stops, membership: w.membership || null };
+  // A response that carries the saved line (reorder: reversed / rotated) replaces
+  // the drawn one and its dashed legs; distance/duration are never touched here.
+  const _rg   = w.route_geojson;
+  const _geom = _rg && _rg.features && _rg.features[0] && _rg.features[0].geometry;
+  if (_geom && Array.isArray(_geom.coordinates)) {
+    _walkRouteGeom      = _geom;
+    _walkStraightRanges = _walkStraightRangesOf(_rg.foragingid, _geom.coordinates.length);
+  }
   const route = _savedWalkRoute();
   _activeWalkRoute = route;
   _walkSelected    = route;
@@ -7071,6 +7138,14 @@ function walkExcludeJoined(ids) {
   if (!ids || !ids.length) return;
   if (!confirm(`Remove ${ids.length} new photo${ids.length !== 1 ? 's' : ''} of this species from the walk?`)) return;
   _walkMembershipCall('exclude', 'POST', { obs_ids: ids });
+}
+
+// "Start here" (mode 'start': same direction) and "⇄ Reverse" (mode 'reverse':
+// circular keeps stop 1, the rest runs the other way) — walk_route.py on the
+// server rotates / reverses the saved line: no ORS call, distance unchanged,
+// stops renumbered. No confirm step (Melvin, 20 Oct 2026).
+function walkReorder(mode, label) {
+  _walkMembershipCall('reorder', 'POST', { mode, stop_label: label || null });
 }
 
 function walkRenumber() {

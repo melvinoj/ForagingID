@@ -45,6 +45,7 @@ import app_styles  # noqa: E402
 # Walk membership (saved stops + photos that joined by route proximity) — the
 # app's own rule, imported, not re-implemented (pure Python, no DB access).
 from app.services import walk_membership as wm  # noqa: E402
+from app.services import walk_route  # noqa: E402  — straight (dashed) legs: one reading rule with the app
 
 DB_PATH   = REPO / "data" / "foragingid.db"
 DIST      = REPO / "dist"
@@ -316,9 +317,22 @@ def build_tree_html(species_meta: dict, taxonomy: dict, slot_deg: float, app_roo
 
 # ── preview card (preview.html — static, no JS) ──────────────────────────────
 
-def route_svg(line, stops, straight_from=None, size=100, pad=8) -> str:
+def _split_ranges(n: int, ranges: list) -> list:
+    """[(a, b, dashed)] covering vertices 0..n-1 — solid between the dashed ranges."""
+    out, at = [], 0
+    for a, b in ranges:
+        if a > at:
+            out.append((at, a, False))
+        out.append((a, b, True))
+        at = b
+    if at < n - 1:
+        out.append((at, n - 1, False))
+    return out
+
+
+def route_svg(line, stops, straight_ranges=(), size=100, pad=8) -> str:
     """Small static route drawing from the saved route line (no map tiles).
-    Vertices from straight_from on (no mapped footpath) are drawn dashed, as in the app."""
+    straight_ranges (no mapped footpath / ORS detour) are drawn dashed, as in the app."""
     pts = [(c[0], c[1]) for c in (line or [])] or [(st["lng"], st["lat"]) for st in stops]
     if not pts:
         return ""
@@ -336,9 +350,10 @@ def route_svg(line, stops, straight_from=None, size=100, pad=8) -> str:
     Y = lambda y: oy + (maxy - y) * sc                      # north up
     xy = [f"{X(x):.1f},{Y(y):.1f}" for x, y in zip(xs, ys)]
     style = 'style="fill:none;stroke:var(--leaf)" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"'
-    if line and straight_from is not None:
-        polys = (f'<polyline points="{" ".join(xy[:straight_from + 1])}" {style}/>'
-                 f'<polyline points="{" ".join(xy[straight_from:])}" {style} stroke-dasharray="3 3"/>')
+    if line and straight_ranges:
+        polys = "".join(f'<polyline points="{" ".join(xy[a:b + 1])}" {style}'
+                        + (' stroke-dasharray="3 3"' if dashed else "") + "/>"
+                        for a, b, dashed in _split_ranges(len(xy), straight_ranges))
     else:
         polys = f'<polyline points="{" ".join(xy)}" {style}/>'
     dots = "".join(f'<circle cx="{X(x):.1f}" cy="{Y(y):.1f}" r="1.8" style="fill:var(--paper)"/>' for x, y in zip(sx, sy))
@@ -388,7 +403,7 @@ def build_preview(cfg: dict, ov: dict, data: dict, pub: dict, app_css: str) -> t
         "WHERE": html.escape(ov["where_en"]),
         "CARD_CLASS": "card has-more" if more else "card",
         "HERO": f'<img src="{hero["photo"]}" alt="{html.escape(hero["en"] or hero["sci"])}">',
-        "ROUTE_SVG": route_svg(data["walk"]["line"], data["walk"]["stops"], data["walk"]["straight_from"]),
+        "ROUTE_SVG": route_svg(data["walk"]["line"], data["walk"]["stops"], data["walk"]["straight_ranges"]),
         "STATS": "".join(stats),
         "TEASERS": teasers,
         "MORE_WALKS": more_html,
@@ -470,15 +485,18 @@ def load_overrides(path, walk) -> dict:
     return ov
 
 
-def saved_straight_from(route: dict, line) -> tuple:
-    """route_geojson.foragingid.straight_from, validated exactly as the app does
-    (frontend/index.html: integer, 0 <= sf < len(coords) - 1, else ignored)."""
-    sf = (route.get("foragingid") or {}).get("straight_from")
-    if sf is None:
-        return None, None
-    if line and isinstance(sf, int) and not isinstance(sf, bool) and 0 <= sf < len(line) - 1:
-        return sf, None
-    return None, f"route straight_from={sf!r} is out of range for a {len(line or [])}-vertex line — drawn solid, as the app does"
+def saved_straight_ranges(route: dict, line) -> tuple:
+    """Dashed vertex ranges of the saved line — walk_route.straight_ranges, the
+    app's own reading rule (straight_ranges, or legacy straight_from). Invalid
+    entries are drawn solid, as the app does; that is reported as a warning."""
+    meta = route.get("foragingid") or {}
+    raw = meta.get("straight_ranges", meta.get("straight_from"))
+    if raw is None or not line:
+        return [], None
+    ranges = walk_route.straight_ranges(meta, len(line))
+    if not ranges:
+        return [], f"route straight legs {raw!r} are out of range for a {len(line)}-vertex line — drawn solid, as the app does"
+    return ranges, None
 
 
 # ── main build ───────────────────────────────────────────────────────────────
@@ -748,7 +766,7 @@ def main(argv=None):
             break
     if not line:
         warnings.append("walk has no saved route geometry — only stops are drawn")
-    straight_from, sf_warn = saved_straight_from(route, line)
+    straight_ranges, sf_warn = saved_straight_ranges(route, line)
     if sf_warn:
         warnings.append(sf_warn)
 
@@ -795,7 +813,7 @@ def main(argv=None):
         "datenschutz_url": None if datenschutz_placeholder else datenschutz,
         # distance/duration: the saved walk's own figures (the walk panel's), never a stop sum.
         "walk": {"name": walk["name"], "distance_m": walk["distance_m"], "duration_min": walk["duration_min"],
-                 "line": line, "straight_from": straight_from, "stops": stops},
+                 "line": line, "straight_ranges": straight_ranges, "stops": stops},
         # Walk order: the order plants are first met along the route (Melvin, 15 Oct 2026).
         # Toxicity is shown on each plant (badge/☠), never by list position.
         "species": [pub[s] for s in sorted(pub, key=lambda s: (first_stop.get(s, len(stops) + 1), pub[s]["en"] or pub[s]["sci"]))],
@@ -889,7 +907,7 @@ def main(argv=None):
                      "slug": ov["slug"], "is_default": args.is_default, "canonical": canonical,
                      "writes": str(page_dir), "mirror": str(mirror_dir) if mirror_dir else None},
             "distance": {"distance_m": walk["distance_m"], "duration_min": walk["duration_min"],
-                         "route_vertices": len(line or []), "straight_from": straight_from},
+                         "route_vertices": len(line or []), "straight_ranges": straight_ranges},
             "observations": {"member": len(obs_order), "pass": len(passing), "fail": len(failing)},
             "stops": [{"label": st["n"], "species_ids": st["species"], "toxic": st["toxic"],
                        "repeats": {k: {"first": v["first"], "badge": v["badge"]["kind"] if v["badge"] else None}
@@ -928,7 +946,7 @@ def main(argv=None):
     print(f"Slug: {ov['slug']}  default(root): {args.is_default}")
     print(f"Writes: {page_dir}/" + (f"  + copy {mirror_dir}/" if mirror_dir else "") + f"  canonical → {canonical}")
     print(f"Route: {len(line or [])} vertices; distance {walk['distance_m']} m / {walk['duration_min']} min (saved walk); "
-          + (f"dashed from vertex {straight_from} (no mapped footpath)" if straight_from is not None else "all solid"))
+          + (f"dashed vertex ranges {straight_ranges} (straight legs)" if straight_ranges else "all solid"))
     print(f"Observations: {len(obs_order)} member, {len(passing)} pass gate, {len(failing)} fail")
     print(f"Species: {len(pub)} shown, {len(hidden_species)} hidden, {len(ai_agreed)} AI-agreed only")
     for sid, why in hidden_species.items():

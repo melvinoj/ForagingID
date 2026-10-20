@@ -10,6 +10,7 @@ Endpoints:
   POST /api/walk/saves/{id}/accept      — accept older photos near the route (curator)
   POST /api/walk/saves/{id}/exclude     — remove proximity-joined photos (curator)
   POST /api/walk/saves/{id}/renumber    — current stops become the saved snapshot, 1..N (curator)
+  POST /api/walk/saves/{id}/reorder     — reverse direction / start at a saved stop (curator; no ORS)
   DELETE /api/walk/saves/{id}   — delete a saved walk (curator; 409 while published as an experience)
 """
 
@@ -309,6 +310,53 @@ async def renumber_walk(
     labels = [s["label"] for s in out["stops"]]
     if labels != [str(i + 1) for i in range(len(waypoints))] or out["obs_ids"] != obs_ids:
         raise HTTPException(500, f"renumber did not persist as written (labels {labels})")
+    return out
+
+
+class ReorderBody(BaseModel):
+    mode: str                          # 'reverse' | 'start'
+    stop_label: Optional[str] = None   # mode 'start': the saved stop that becomes stop 1
+
+
+@router.post("/saves/{walk_id}/reorder")
+async def reorder_walk(
+    walk_id: int, body: ReorderBody,
+    db: AsyncSession = Depends(get_db), identity: Identity = Depends(get_identity),
+):
+    """Reverse the direction, or start a circular walk at another saved stop.
+    The saved line is reversed / rotated (walk_route.py) — no ORS call;
+    distance_m / duration_min, members and removed/accepted photos unchanged.
+    Saved stop numbers follow the new order; 7a labels are recomputed on read."""
+    from app.services import walk_route
+    _require_curator(identity)
+    walk = await _load_walk(db, walk_id)
+    waypoints = [w for w in json.loads(walk.waypoints_json or "[]") if isinstance(w, dict)]
+    route = json.loads(walk.route_geojson) if walk.route_geojson else {}
+    circular = bool((route.get("foragingid") or {}).get("circular"))
+    dist, dur = walk.distance_m, walk.duration_min
+    try:
+        if body.mode == "reverse":
+            new_wps, new_route = walk_route.reverse(waypoints, route, circular)
+        elif body.mode == "start":
+            label = (body.stop_label or "").strip()
+            if not label.isdigit():
+                raise HTTPException(400, f"stop {label!r} is a new stop (joined by route proximity) — "
+                                         f"run Renumber stops first, then start there")
+            k = int(label) - 1
+            if 0 <= k < len(waypoints) and wm._is_note_wp(waypoints[k]):
+                raise HTTPException(400, f"stop {label} is a field note — start at a species stop")
+            new_wps, new_route = walk_route.start_at(waypoints, route, circular, k)
+        else:
+            raise HTTPException(400, "mode must be 'reverse' or 'start'")
+    except walk_route.RouteError as e:
+        raise HTTPException(409, str(e))
+    walk.waypoints_json = json.dumps(new_wps)
+    walk.route_geojson = json.dumps(new_route)
+    out = await _commit_and_reread(db, walk_id)
+    # Read-back by id: the row must hold exactly what was written, figures untouched.
+    if (out["waypoints"] != new_wps or out["route_geojson"] != new_route
+            or out["distance_m"] != dist or out["duration_min"] != dur):
+        raise HTTPException(500, "reorder did not persist as written")
     return out
 
 

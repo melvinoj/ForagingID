@@ -40,7 +40,8 @@ from app.api.walk import walk_membership_for
 from app.database import get_db
 from app.models.experience import ExperiencePublication
 from app.models.observation import Observation, is_human_confirmed
-from app.models.species import Species, SpeciesEdibilityHistory, culinary_allowed, is_toxic_severity
+from app.models.species import (Species, SpeciesEdibilityHistory, culinary_allowed, display_common_name,
+                                is_toxic_severity)
 from app.models.walk import SavedWalk
 
 log = logging.getLogger(__name__)
@@ -305,6 +306,7 @@ async def critical_hazards(db: AsyncSession = Depends(get_db)):
         thumb = Path(o.thumbnail_path).name if o.thumbnail_path else None
         items.append({
             "obs_id": o.id, "species": o.species_primary, "species_id": s.id,
+            "common": display_common_name(s.preferred_common_name, s.common_names) or None,
             "severity": s.toxicity_severity, "walk_id": w.id, "walk_name": w.name, "stop": label,
             "thumbnail": f"/thumbnails/{thumb}" if thumb else None,
             "review_status": o.review_status,

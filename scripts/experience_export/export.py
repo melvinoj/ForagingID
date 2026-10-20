@@ -45,7 +45,8 @@ import app_styles  # noqa: E402
 # Walk membership (saved stops + photos that joined by route proximity) — the
 # app's own rule, imported, not re-implemented (pure Python, no DB access).
 from app.services import walk_membership as wm  # noqa: E402
-from app.services import walk_route  # noqa: E402  — straight (dashed) legs: one reading rule with the app
+from app.services import walk_route  # noqa: E402
+from app.models.species import display_common_name  # noqa: E402  — names rule, one definition  — straight (dashed) legs: one reading rule with the app
 
 DB_PATH   = REPO / "data" / "foragingid.db"
 DIST      = REPO / "dist"
@@ -88,10 +89,8 @@ def first_name(raw) -> str:
 
 
 def en_name(sp: dict) -> str:
-    p = (sp.get("preferred_common_name") or "").strip()
-    if p and not p.startswith("["):
-        return p
-    return first_name(sp.get("preferred_common_name") or sp.get("common_names"))
+    """English common name — the app's own rule (app/models/species.py)."""
+    return display_common_name(sp.get("preferred_common_name"), sp.get("common_names"))
 
 
 def json_inline(obj) -> str:
@@ -547,6 +546,11 @@ def main(argv=None):
     nearby_rows = [dict(r) for r in conn.execute(
         f"SELECT {obs_cols} FROM observations WHERE latitude BETWEEN ? AND ? AND longitude BETWEEN ? AND ?",
         bb)] if bb else []
+    # Hand-added photos (accepted_obs_json) can lie outside the bbox — loaded by id.
+    extra = sorted(wm.accepted_ids(dict(walk)) - set(saved_rows) - {r["id"] for r in nearby_rows})
+    if extra:
+        nearby_rows += [dict(r) for r in conn.execute(
+            f"SELECT {obs_cols} FROM observations WHERE id IN ({','.join('?' * len(extra))})", extra)]
     membership = wm.compute(dict(walk), saved_rows, nearby_rows)
     mem_stops = membership["stops"]
     rows = dict(saved_rows)

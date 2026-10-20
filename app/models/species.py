@@ -478,3 +478,28 @@ TOXIC_SEVERITIES = ("toxic", "deadly")
 
 def is_toxic_severity(toxicity_severity: Optional[str]) -> bool:
     return toxicity_severity in TOXIC_SEVERITIES
+
+
+# ---------------------------------------------------------------------------
+# Display name — the ONLY server definition of a species' English common name
+# for short references (names rule, Melvin 20 Oct 2026: "Common (Latin)",
+# Latin alone only when there is no common name). preferred_common_name when
+# set (and not a stray JSON list), else the first of common_names (EN).
+# Used by map pins, the walk API, critical hazards, the walk summary export and
+# scripts/experience_export (en_name). Frontend formatting: _spNameHtml.
+# ---------------------------------------------------------------------------
+def display_common_name(preferred: Optional[str], common_names) -> str:
+    import json as _json
+    p = (preferred or "").strip()
+    if p and not p.startswith("["):
+        return p
+    raw = preferred or common_names
+    if not raw:
+        return ""
+    try:
+        v = _json.loads(raw) if isinstance(raw, str) else raw
+        if isinstance(v, list):
+            return str(v[0]).strip() if v else ""
+        return str(v).strip()
+    except (ValueError, TypeError):
+        return str(raw).split(",")[0].strip()

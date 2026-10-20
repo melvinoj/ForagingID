@@ -263,3 +263,102 @@ def straighten_legs(waypoints: list, route: dict, circular: bool, legs: list) ->
         coords = coords[:a + 1] + coords[b:]
         flags = flags[:a] + [True] + flags[b:]
     return _set_meta(route, coords, flags), line_length_m(coords)
+
+
+# ── re-route through stops (changed legs only) ───────────────────────────────
+# "↻ Re-route": the walk's CURRENT stops (saved + side-stops; saved stops left
+# with no species dropped) become its saved stops, and the line is rebuilt —
+# but only where it changed. A leg between two stops that were already
+# consecutive saved stops keeps its stored geometry AND its dashed flags, so a
+# detour once replaced by a straight dashed leg can never come back. Only legs
+# touching a new stop, or bridging a dropped one, go to ORS; a new leg ORS
+# detours on is kept as a straight dashed leg instead (DETOUR_* below).
+
+DETOUR_FACTOR  = 3.0      # routed > factor × straight + slack → detour
+DETOUR_SLACK_M = 150.0
+ORS_MAX_POINTS = 50       # ORS directions: coordinates per request
+REROUTE_MAX_REQUESTS = 10
+
+
+def is_detour(routed_m: float, straight_m: float) -> bool:
+    return routed_m > DETOUR_FACTOR * straight_m + DETOUR_SLACK_M
+
+
+def plan_reroute(old_waypoints: list, route: dict, new_stops: list) -> dict:
+    """new_stops: [{lat, lng, old_index (0-based saved position, or None for a
+    new stop)}] in the new order. Returns {legs, runs, closed} where each leg is
+    {i, j, kind: 'keep'|'route', range: (a, b) old vertex range for 'keep'} and
+    runs are lists of consecutive stop indices to send to ORS (≤ ORS_MAX_POINTS
+    each, adjacent runs share an end stop)."""
+    coords = line_coords(route)
+    closed = bool(coords) and is_closed(coords)
+    v = stop_vertex_indices(coords, old_waypoints, circular=closed) if coords else []
+    m, n_old = len(new_stops), len(old_waypoints)
+    pairs = [(i, i + 1) for i in range(m - 1)] + ([(m - 1, 0)] if closed and m > 1 else [])
+    legs = []
+    for i, j in pairs:
+        a, b = new_stops[i].get("old_index"), new_stops[j].get("old_index")
+        keep = None
+        if coords and a is not None and b is not None:
+            if b == a + 1:
+                keep = (v[a], v[b])
+            elif closed and j == 0 and a == n_old - 1 and b == 0:
+                keep = (v[a], len(coords) - 1)                 # the stored closing leg
+        legs.append({"i": i, "j": j, "kind": "keep" if keep and keep[1] > keep[0] else "route",
+                     "range": keep if keep and keep[1] > keep[0] else None})
+    runs, cur = [], []
+    for leg in legs:
+        if leg["kind"] == "route":
+            if cur and cur[-1] == leg["i"] and len(cur) < ORS_MAX_POINTS:
+                cur.append(leg["j"])
+            else:
+                if cur:
+                    runs.append(cur)
+                cur = [leg["i"], leg["j"]]
+        elif cur:
+            runs.append(cur)
+            cur = []
+    if cur:
+        runs.append(cur)
+    return {"legs": legs, "runs": runs, "closed": closed}
+
+
+def assemble_reroute(route: dict, new_stops: list, plan: dict, routed: dict) -> tuple:
+    """routed: {(i, j): {"coords": [[lng, lat], …]}} for every 'route' leg.
+    Returns (route_geojson, length_m, report) — the stored meta (circular,
+    stop radius…) is kept; dashes become straight_ranges."""
+    old = line_coords(route)
+    old_flags = _ranges_to_flags(straight_ranges(route.get("foragingid"), len(old)), len(old)) if old else []
+    coords, flags, report = [], [], []
+
+    def add(seg, seg_flags):
+        if coords and seg and coords[-1] == seg[0]:
+            seg = seg[1:]
+        elif coords and seg:
+            flags.append(False)                          # tiny join between two pieces at a stop
+        coords.extend(seg)
+        flags.extend(seg_flags)
+
+    for leg in plan["legs"]:
+        i, j = leg["i"], leg["j"]
+        if leg["kind"] == "keep":
+            a, b = leg["range"]
+            add(old[a:b + 1], old_flags[a:b])
+            continue
+        seg = routed[(i, j)]["coords"]
+        straight = _hav([new_stops[i]["lng"], new_stops[i]["lat"]], [new_stops[j]["lng"], new_stops[j]["lat"]])
+        if len(seg) >= 2 and not is_detour(line_length_m(seg), straight):
+            add(seg, [False] * (len(seg) - 1))
+            report.append({"i": i, "j": j, "kind": "routed", "m": round(line_length_m(seg))})
+        else:
+            ends = [seg[0], seg[-1]] if len(seg) >= 2 else [[new_stops[i]["lng"], new_stops[i]["lat"]],
+                                                              [new_stops[j]["lng"], new_stops[j]["lat"]]]
+            add(ends, [True])
+            report.append({"i": i, "j": j, "kind": "straight", "m": round(line_length_m(ends)),
+                           "routed_m": round(line_length_m(seg)) if len(seg) >= 2 else None})
+    out = copy.deepcopy(route) if route else {"type": "FeatureCollection", "features": []}
+    if not out.get("features"):
+        out["features"] = [{"type": "Feature", "geometry": {"type": "LineString", "coordinates": []}, "properties": {}}]
+    out = _set_meta(out, coords, flags)
+    out["foragingid"].pop("straight_note", None)          # described old leg numbers — no longer true
+    return out, line_length_m(coords), report

@@ -37,6 +37,10 @@ def members(conn, walk: dict) -> dict:
     bb = wm.search_bbox(walk)
     near = [dict(r) for r in conn.execute(
         f"SELECT {OBS_COLS} FROM observations WHERE latitude BETWEEN ? AND ? AND longitude BETWEEN ? AND ?", bb)] if bb else []
+    extra = sorted(wm.accepted_ids(walk) - set(saved) - {r["id"] for r in near})      # hand-added, any distance
+    if extra:
+        near += [dict(r) for r in conn.execute(
+            f"SELECT {OBS_COLS} FROM observations WHERE id IN ({','.join('?' * len(extra))})", extra)]
     m = wm.compute(walk, saved, near)
     return {st["label"]: sorted(o for sp in st["species"] for o in sp["obs_ids"]) for st in m["stops"]}
 

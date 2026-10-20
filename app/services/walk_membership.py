@@ -127,6 +127,13 @@ def _wp_obs_ids(wp: dict) -> list:
     return [int(wp["obs_id"])] if wp.get("obs_id") is not None else []
 
 
+def accepted_ids(walk) -> set:
+    """Photos the curator added to the walk by hand (accepted_obs_json). Callers
+    load these rows by id as well as the bbox query — an accepted photo can be
+    far from the line (compute lets it join whatever its distance)."""
+    return {int(x) for x in _json_list(_f(walk, "accepted_obs_json"))}
+
+
 def saved_obs_ids(walk) -> set:
     """Every observation id the saved snapshot references (obs_ids_json + stops)."""
     ids = {int(x) for x in _json_list(_f(walk, "obs_ids_json"))}
@@ -324,8 +331,12 @@ def compute(walk, saved_obs: dict, nearby_obs: Iterable) -> dict:
 
     on_walk = {sp["name"] for st in stops for sp in st["species"]}
 
-    # Nearby confirmed observations not in the snapshot.
+    # Nearby confirmed observations not in the snapshot. A photo the curator
+    # ACCEPTED (older-photos list, or "Select pins → Add to walk") always joins,
+    # whatever its distance from the line: it was added deliberately. Callers
+    # load accepted rows by id (accepted_ids) so a far one is in nearby_obs.
     joining, older = [], defaultdict(list)
+    off_line = {}                     # obs id → metres from the line (joined photos)
     seen = set()
     for o in nearby_obs:
         oid = int(_f(o, "id"))
@@ -337,16 +348,18 @@ def compute(walk, saved_obs: dict, nearby_obs: Iterable) -> dict:
         lat, lng = _f(o, "latitude"), _f(o, "longitude")
         if lat is None or lng is None:
             continue
+        picked = oid in accepted
         acc = _f(o, "gps_accuracy_m")
-        if acc is not None and acc > buffer_m:        # position less certain than the buffer
+        if not picked and acc is not None and acc > buffer_m:   # position less certain than the buffer
             continue
         xy = frame.xy(lat, lng)
         d, ch = line.project(xy)
-        if d > buffer_m:
+        if d > buffer_m and not picked:
             continue
         taken = _to_dt(_f(o, "photo_taken_at"))
-        if oid in accepted or (since is not None and taken is not None and taken >= since):
+        if picked or (since is not None and taken is not None and taken >= since):
             joining.append((o, xy, ch, taken))
+            off_line[oid] = d
         else:
             older[_f(o, "species_primary")].append((o, d))
 
@@ -428,6 +441,12 @@ def compute(walk, saved_obs: dict, nearby_obs: Iterable) -> dict:
         ordered.append(st)
         _emit(st["label"])
 
+    # "140 m off route": a stop holding a joined photo beyond the route buffer
+    # (only an accepted photo can be) shows how far from the line it is.
+    for st in ordered:
+        far = [off_line[o] for o in st.get("joined_obs_ids", []) if off_line.get(o, 0) > buffer_m]
+        st["off_route_m"] = round(max(far)) if far else None
+
     members = sorted({oid for st in ordered for sp in st["species"] for oid in sp["obs_ids"]})
     joined_count = sum(len(st["joined_obs_ids"]) for st in ordered)
     on_walk |= {sp["name"] for st in ordered for sp in st["species"]}
@@ -442,6 +461,8 @@ def compute(walk, saved_obs: dict, nearby_obs: Iterable) -> dict:
             "obs_ids":    sorted(int(_f(o, "id")) for o, _ in rows),
             "n":          len(rows),
             "nearest_m":  round(min(d for _, d in rows), 1),
+            # Pin positions, so the review list can highlight them on the map.
+            "points":     [[_f(o, "latitude"), _f(o, "longitude"), int(_f(o, "id"))] for o, _ in rows],
             "human":      any(is_human_confirmed(o) for o, _ in rows),
         })
     candidates.sort(key=lambda c: (-c["n"], c["species"]))

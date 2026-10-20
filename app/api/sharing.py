@@ -351,6 +351,7 @@ class WalkStop(BaseModel):
 
 class WalkRepeat(BaseModel):
     species_scientific: str
+    species_common: Optional[str] = None       # names rule: "Common (Latin)" on the compact line
     first_label: str                           # label of the stop where its full block is
     toxicity_warning: Optional[str] = None     # toxic guard label, kept on the compact line
 
@@ -541,7 +542,9 @@ def _build_walk_html(body: WalkExportRequest) -> str:
                 warn = (f' <span style="font-size:0.66rem;font-weight:700;padding:0 5px;border-radius:4px;'
                         f'background:#dc2626;color:#fff">{_h(r.toxicity_warning)}</span>'
                         if r.toxicity_warning else "")
-                parts.append(f'<em>{_h(r.species_scientific)}</em>{warn} (see stop {_h(r.first_label)})')
+                name = (f'{_h(r.species_common)} (<em>{_h(r.species_scientific)}</em>)' if r.species_common
+                        else f'<em>{_h(r.species_scientific)}</em>')             # names rule
+                parts.append(f'{name}{warn} (see stop {_h(r.first_label)})')
             species_html += (
                 f'<div style="font-size:0.75rem;color:#666;margin-top:{8 if s.species else 2}px">'
                 f'Also here: {", ".join(parts)}</div>'

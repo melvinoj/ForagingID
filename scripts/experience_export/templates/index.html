@@ -258,9 +258,15 @@ window.DATA = {{DATA}};
   }
   // Species already shown at an earlier stop: one compact line, safety badge
   // kept (rp.badge is set by gates.repeat_line_badge), no photo or recipe.
+  // Names rule (as the app's static/js/species-names.js): "Common (Latin)",
+  // Latin in italics; Latin alone only when there is no common name.
+  function spName(s) {
+    var latin = '<span class="walk-stop-species">' + esc(s.sci) + "</span>";
+    return s.en ? esc(s.en) + " (" + latin + ")" : latin;
+  }
   function alsoHere(s, rp) {
     return '<div class="walk-stop-also">Also here: ' + (rp.badge ? badge({ badge: rp.badge }) + " " : "") +
-      '<span class="walk-stop-species">' + esc(s.sci) + "</span> — see stop " + esc(rp.first) + "</div>";
+      spName(s) + " — see stop " + esc(rp.first) + "</div>";
   }
   function stopBody(st) {
     var full = st.species.filter(function (id) { return !st.repeat[id]; });

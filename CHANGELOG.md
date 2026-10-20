@@ -46,6 +46,77 @@ Alembic head: 0054 (experience_publications). Snapshots this session: db_2026101
 
 ## History
 
+### 2026-10-20 07:25
+**Snapshot** — before re-route of saved walk 4
+DB: `snapshots/db_20261020_072552.sqlite`
+
+### 2026-10-20 07:21
+**Walk editing: one '✎ Edit walk' toggle (replaces Show all pins + Select pins); no species cards from pin taps while a saved walk is loaded; names rule 'Common (Latin)' via one helper; circular toggle diagnosed + made one-request-at-a-time with explicit feedback; Rümmelsbühl membership report.**
+
+**Built:**
+- ✎ Edit walk: off = walk's own markers only; on = all pins, tap select/deselect, bar Add/Remove/Done; selected pins keep a name label, hover label on desktop; turning off clears selection
+- handlePinClick: while a saved walk is loaded, a pin tap never opens the species card (edit on: select; off: name label). Only pin path to showDetail is pin/cluster click → handlePinClick; outside walk mode unchanged
+- Walk stop markers: tap/hover label with the stop's species (names rule)
+- Names rule: app/models/species.py display_common_name (preferred_common_name, else first EN) used by map pins, walk API names map, critical hazards, export en_name; frontend/static/js/species-names.js spNameHtml/spNameText
+- Sites changed: older-photos list, pin labels, stop marker labels, walk panel 'Also here', re-route result message, species filter dropdown, note species-tag dropdown, Export summary 'Also here' (sharing.py), review critical cards + confirm/toast, experience page 'Also here'
+- Circular toggle: in-flight guard (button disabled while the PATCH runs) + hint 'Ends at stop N — leg back to stop 1 not drawn' / 'Returns to stop 1'
+**Fixed:**
+- Circular toggle 'does nothing': server log shows 7 PATCH /loop 200, each followed by the panel redraw (GET /api/walk/saves); four overlapping clicks sent the same value and their responses flipped the view back; on Rümmelsbühl foray (id 4) the visible change is only the 165 m dashed 26→1 leg and ~2.9→~2.7 km. Service worker is network-first (not stale)
+**Files:** `frontend/index.html`, `frontend/review.html`, `frontend/static/js/species-names.js`, `app/models/species.py`, `app/api/map.py`, `app/api/walk.py`, `app/api/experience.py`, `app/api/sharing.py`, `scripts/experience_export/export.py`, `scripts/experience_export/templates/index.html`
+**Pending:**
+- Melvin: browser check — Edit walk on/off, pin taps (no species card), labels (selected + hover), circular toggle feedback, names in panel/older list/critical cards/summary
+- Not changed (names rule): sightings.html lightbox link (ObservationOut has no common name), curator-tool toasts in review.html AI-draft/enrichment tabs, scan.html, workshops.html history, species.html internals; experience preview teasers show common name only (space)
+- Stage C publish panel; republish walk 4
+
+### 2026-10-20 06:55
+**'↻ Re-route through stops' for loaded saved walks: changed legs only via ORS, kept legs keep geometry + dashes, dry run → confirm → snapshot → write → read back.**
+
+**Built:**
+- walk_route.plan_reroute / assemble_reroute: legs between stops that were already consecutive keep their stored geometry and dashed flags; legs touching a new side-stop or bridging a dropped empty stop go to ORS in runs (≤50 points, ≤10 requests); a new leg ORS detours on (>3× straight + 150 m) is kept straight and dashed
+- POST /api/walk/saves/{id}/reroute {confirm}: dry run (stops before/after, added/dropped, legs kept/routed, ORS requests) — confirm takes a DB snapshot, routes, writes waypoints (1..N, old stop 1 first), line, distance (line length) and time (walk's pace), clears accepted list, reads back by id; any ORS failure writes nothing; result lists photos that newly joined along new legs
+- _ors_post shared by the map proxy and re-route
+- Frontend '↻ Re-route' button (loaded saved walk, curator): dry-run summary in a confirm dialog, result summary afterwards
+**Files:** `app/services/walk_route.py`, `app/api/walk.py`, `frontend/index.html`
+**Pending:**
+- Melvin: browser check of ↻ Re-route (dialog text, result, line redraw) — verified on a DB copy only, with real ORS calls
+- Note: new legs can pull in other confirmed photos by proximity (reported in the result, not auto-excluded)
+- Stage C publish panel; republish walk 4
+
+### 2026-10-20 06:51
+**Walk editing: older-photo ticks highlight their pins; 'Select pins' mode to add/remove photos as side-stops (accept/exclude paths, any distance); Part 3 re-route design proposed, not built.**
+
+**Built:**
+- Check: walk_membership.compute dropped accepted photos beyond the route buffer (and callers never loaded them; accept only took older candidates) — now accepted photos join at any distance, are loaded by id (walk API, export, straighten script), stops carry off_route_m
+- POST accept: any confirmed photo with GPS (skipped list with reasons: not confirmed / no GPS / already on the walk); un-excludes first so Add after Remove restores the row exactly
+- POST exclude: joined, hand-added or saved-stop photos; un-accepts first so Remove after Add restores the row exactly; saved stops never deleted
+- Older-photos list: ticking lights the species' pins (orange rings, own layer above all pins, shown while pins hidden); cleared on close / re-render / other walk / exit
+- ◎ Select pins (loaded saved walk, curator): tap toggles selection; on-walk = green ring, off-walk = grey ring, selected = orange; bar 'N selected · Add to walk · Remove from walk · Done' with skip reasons; pins shown while selecting, setting restored on Done
+- Stop card: 'N m off route' for side-stops beyond the buffer
+**Files:** `app/services/walk_membership.py`, `app/api/walk.py`, `frontend/index.html`, `scripts/experience_export/export.py`, `scripts/walk_straighten_legs.py`
+**Pending:**
+- Melvin: browser check of tick highlights and Select pins (taps on phone and laptop, bar messages, off-route label)
+- DECISION: Part 3 'Re-route through stops' design awaiting OK
+- Stage C publish panel; republish walk 4
+
+### 2026-10-20 06:36
+**Load-sequence guard in loadSavedWalk; circular / point-to-point toggle for loaded saved walks (persisted, view of the stored line, no ORS); stop-to-line matching made exact (DP) after it crept a rotated loop's seam; little foray (id 3) seam shift repaired.**
+
+**Built:**
+- loadSavedWalk: load token checked after every await; a stale load removes only the route layer its own build drew (layers tagged with _walkBuildSeq) — harness over the real function text: 6 interleavings of id 3 then id 4 all end map + panel on id 4
+- walk_route.shown_line: point-to-point on a closed line = cut at the last stop; circular on an open line = dashed straight leg back to stop 1; distance/time scaled from the saved figures; set_circular
+- PATCH /api/walk/saves/{id}/loop {circular}: only foragingid.circular written, read back by id (line, waypoints, distance unchanged); GET/refresh return `shown`
+- Reverse/Start here keyed on the STORED line being a closed loop (work in point-to-point view: reverse = last stop becomes 1)
+- Frontend: toggle on a loaded walk calls the endpoint; map, distance, GPX, Google Maps, Export summary use the shown line; title keeps the name; _lastWalkBounds/_lastWalkCircle cleared on load
+- Experience export uses shown_line (line, dashes, distance/time, loop_view in plan)
+**Fixed:**
+- toggleWalkLoop on a loaded walk did nothing (or rebuilt an old drawn area over it)
+- walk_route.stop_vertex_indices: greedy earliest-pass match → exact min-distance monotonic assignment (DP); Start here round trips crept the seam one vertex (little foray (id 3) was left rotated by 1 vertex) — 264 exact-coordinate round-trip checks now pass
+- little foray (id 3) live seam repaired via reorder (start 2, start back): line identical to the 19 Oct straighten write, stop order original, distance/members unchanged
+**Files:** `frontend/index.html`, `app/services/walk_route.py`, `app/services/walk_membership.py`, `app/api/walk.py`, `scripts/experience_export/export.py`, `saved_walks id 3 (route_geojson seam only)`
+**Pending:**
+- Melvin: browser check — toggle on both walks (little foray (id 3) p2p 3,909 m / 47 min; Rümmelsbühl foray (id 4) p2p 2,731 m / 33 min), Reverse, Start here in both views, ← Saved walks
+- Stage C publish panel; republish walk 4
+
 ### 2026-10-20 06:35
 **Snapshot** — before repairing little foray (id 3) seam shift via reorder
 DB: `snapshots/db_20261020_063515.sqlite`

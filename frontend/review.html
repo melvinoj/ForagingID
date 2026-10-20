@@ -1693,6 +1693,7 @@
   </div>
   <button class="lb-nav" id="lb-next" onclick="event.stopPropagation();_lbNav(+1)">›</button>
 </div>
+<script src="/static/js/species-names.js"></script>
 <script src="/static/js/lightbox.js"></script>
 
 <script>
@@ -2145,7 +2146,7 @@ async function loadCritical() {
 
 function _critCardHtml(it) {
   const sev = it.severity === 'deadly' ? 'deadly' : 'toxic';
-  const sp = _resc(it.species || '').replace(/'/g, "\\'");
+  const sp = _resc(spNameText(it.species || '', it.common)).replace(/'/g, "\\'");
   const img = it.thumbnail
     ? `<img src="${_esc(it.thumbnail)}" alt="photo" loading="lazy" onclick="_critOpenPhoto(${it.obs_id}, '${sp}')">`
     : '<div class="no-thumb">🌿</div>';
@@ -2153,7 +2154,7 @@ function _critCardHtml(it) {
     ${img}
     <div class="crit-body">
       <span class="crit-badge ${sev}">☠ ${sev === 'deadly' ? 'Deadly' : 'Toxic'}</span>
-      <strong><em>${_esc(it.species)}</em></strong>
+      <strong>${spNameHtml(it.species, it.common)}</strong>
       <span>Walk: ${_esc(it.walk_name)} · stop ${_esc(it.stop)}</span>
       <span style="color:#888">#${it.obs_id} · ${_esc(it.review_status)} (AI-agreed)</span>
       <div class="crit-actions">

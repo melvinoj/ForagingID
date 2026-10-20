@@ -270,6 +270,8 @@
     }
 
     .leaflet-touch .leaflet-interactive { stroke-width: 3; }
+    /* Species name labels on walk pins / stops (names rule: Common (Latin)) */
+    .leaflet-tooltip.walk-pin-label { font-size: 0.72rem; padding: 2px 7px; line-height: 1.35; }
 
     /* ── Note panel (still uses the old dropdown-panel look) ─────────────── */
     .tbar-panel {
@@ -2363,6 +2365,12 @@
           <button id="walk-reverse-btn" class="walk-map-btn" data-guest-hide onclick="walkReorder('reverse')"
             style="display:none;background:#fff;color:#2d5016;border:1px solid #b8d48a;cursor:pointer"
             title="Walk the other way round — same line and distance, stops renumbered">⇄ Reverse</button>
+          <button id="walk-edit-btn" class="walk-map-btn" data-guest-hide onclick="walkToggleEdit()"
+            style="display:none;background:#fff;color:#2d5016;border:1px solid #b8d48a;cursor:pointer"
+            title="Show every pin and tap pins to add them to this walk or remove them — the line and distance stay the same">✎ Edit walk</button>
+          <button id="walk-reroute-btn" class="walk-map-btn" data-guest-hide onclick="walkReroute()"
+            style="display:none;background:#fff;color:#2d5016;border:1px solid #b8d48a;cursor:pointer"
+            title="Rebuild the line through the current stops — only changed legs are re-routed (asks first)">↻ Re-route</button>
           <a id="walk-google-btn" class="walk-map-btn google" href="#" target="_blank" rel="noopener">🗺 Google Maps</a>
           <button id="walk-gpx-btn" class="walk-map-btn" onclick="walkDownloadGpx()"
             style="background:#fff;color:#2d5016;border:1px solid #b8d48a;cursor:pointer"
@@ -2372,10 +2380,6 @@
             onclick="exportWalkSummary()"
             style="background:#f0f4e8;color:#2d5016;border:1px solid #b8d48a;cursor:pointer"
             title="Generate a printable / shareable summary page">📋 Export summary</button>
-          <!-- Loaded saved walk only (_syncWalkPinsBtn): other pins are hidden by default -->
-          <button id="walk-pins-btn" class="walk-map-btn" onclick="walkToggleAllPins()"
-            style="display:none;background:#fff;color:#2d5016;border:1px solid #b8d48a;cursor:pointer"
-            title="Show or hide every other observation pin">👁 Show all pins</button>
         </div>
         <div id="walk-save-status" role="status"
              style="display:none;padding:2px 10px 4px;font-size:0.78rem;font-weight:600"></div>
@@ -2629,6 +2633,7 @@
         integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
 <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
 <script src="https://unpkg.com/leaflet.heat@0.2.0/dist/leaflet-heat.js"></script>
+<script src="/static/js/species-names.js"></script>
 <script src="/static/js/gps.js"></script>
 <script src="/static/js/walk-record.js"></script>
 <script src="/static/js/reidentify.js"></script>
@@ -4198,7 +4203,7 @@ async function loadSpeciesFilter() {
     _allSpeciesList = data.slice().sort((a, b) => a.scientific_name.localeCompare(b.scientific_name));
     _allSpeciesOptions = _allSpeciesList.map(sp => ({
       value: sp.scientific_name,
-      label: sp.scientific_name + (sp.common_names && sp.common_names.length ? ` (${sp.common_names[0]})` : ''),
+      label: spNameText(sp.scientific_name, sp.preferred_common_name || (sp.common_names && sp.common_names[0])),
     }));
     _populateSpeciesSelect('');
   } catch (_) { /* non-fatal */ }
@@ -4471,6 +4476,7 @@ function renderMarkers() {
 
   // ── Pins — bbox-bounded viewport set, filter-applied ────────────────────
   let visible = 0;
+  const _wMembers = _walkPinSel ? _walkMemberSet() : null;   // walk "✎ Edit walk" mode
   const visibleSpecies = new Set();
   for (const f of allFeatures) {
     const p = f.properties;
@@ -4486,11 +4492,20 @@ function renderMarkers() {
       : isHighlighted ? makeHighlightIcon(cat) : makeIcon(p.has_enrichment, false, cat);
     const pinIcon     = isSelected ? makeSelectRingIcon(cat) : makePinDotIcon(isHighlighted, cat);
 
-    const mkCluster = L.marker([lat, lng], { icon: clusterIcon });
+    // Walk "✎ Edit walk" mode: on-walk / not-on-walk / selected rings, drawn
+    // above the walk's stop markers so every pin can be tapped.
+    const wsel = _walkPinSel ? _walkSelIcon(Number(p.id), cat, _wMembers) : null;
+    const mkCluster = L.marker([lat, lng], wsel ? { icon: wsel, zIndexOffset: 1000 } : { icon: clusterIcon });
     mkCluster.on('click', () => handlePinClick(p, lat, lng, mkCluster));
     clusterGroup.addLayer(mkCluster);
 
-    const mkPins = L.marker([lat, lng], { icon: pinIcon });
+    const mkPins = L.marker([lat, lng], wsel ? { icon: wsel, zIndexOffset: 1000 } : { icon: pinIcon });
+    if (wsel && p.species_primary) {
+      // Edit walk: selected pins keep their name label; any other pin shows it on hover (desktop).
+      const sel = _walkPinSel.ids.has(Number(p.id));
+      [mkCluster, mkPins].forEach(m => m.bindTooltip(spNameHtml(p.species_primary, p.common_name),
+        { permanent: sel, direction: 'top', offset: [0, -10], className: 'walk-pin-label' }));
+    }
     mkPins.on('click', () => handlePinClick(p, lat, lng, mkPins));
     pinsGroup.addLayer(mkPins);
 
@@ -4535,6 +4550,18 @@ function renderMarkers() {
 // ── Pin click ─────────────────────────────────────────────────────────────
 
 function handlePinClick(p, lat, lng, marker) {
+  // A saved walk is loaded: a pin tap NEVER opens the species card (Melvin,
+  // 20 Oct 2026). Edit walk on → select / deselect; off → its name label only.
+  // Species cards stay reachable from the stop cards ("Species profile →").
+  // Outside a loaded saved walk everything below is unchanged.
+  if (_savedWalkView) {
+    if (_walkPinSel) _walkPinToggle(p);
+    else if (marker && p.species_primary) {
+      marker.bindTooltip(spNameHtml(p.species_primary, p.common_name),
+        { direction: 'top', offset: [0, -10], className: 'walk-pin-label' }).openTooltip();
+    }
+    return;
+  }
   // In select mode, a tap toggles the species in/out of the /lists selection
   // and does nothing else (no detail panel, no fly-to).
   if (_selectMode) { _selectModeToggle(p); return; }
@@ -5193,6 +5220,8 @@ function _exitWalkMode() {
   _walkSelected = [];
   _walkLastPins = null;
   _walkRouteStatus = null;
+  _walkPinSelExit();
+  _walkHighlightClear();
   _walkSaved = null;
   _walkLineClosed = false;
   _walkStraightLine = false;
@@ -5635,14 +5664,38 @@ function _syncWalkLoopUi() {
     btn.textContent = _walkCircular ? '🔄 Circular' : '➡ Point-to-point';
     btn.style.background = _walkCircular ? '#e8f4e0' : '#f0f4e8';
   }
-  if (hint) hint.textContent = _walkCircular ? 'Returns to start' : 'One-way route';
+  if (!hint) return;
+  // Loaded saved walk: say exactly what the view does to the saved line.
+  const rt = _savedWalkView && _activeWalkRoute && _activeWalkRoute.length ? _activeWalkRoute : null;
+  if (rt && _walkCircular) {
+    hint.textContent = _walkLineClosed ? 'Returns to stop 1' : 'Dashed straight leg back to stop 1';
+  } else if (rt) {
+    const last = _stopLabel(rt[rt.length - 1], rt.length - 1);
+    hint.textContent = _walkLineClosed ? `Ends at stop ${last} — leg back to stop 1 not drawn` : 'One-way route';
+  } else {
+    hint.textContent = _walkCircular ? 'Returns to start' : 'One-way route';
+  }
 }
 
-function toggleWalkLoop() {
+let _walkLoopBusy = false;       // a loop PATCH is in flight — further clicks are ignored
+
+async function toggleWalkLoop() {
   // Loaded saved walk: the server flips foragingid.circular and returns the
   // line as shown (closing leg dropped / added) — no ORS call, stored line kept.
+  // One request at a time: clicks while one is in flight used to send the same
+  // value again and their responses flipped the view back (20 Oct 2026 log).
   if (_onSavedRoute(_activeWalkRoute)) {
-    _walkMembershipCall('loop', 'PATCH', { circular: !_walkCircular });
+    if (_walkLoopBusy) return;
+    _walkLoopBusy = true;
+    const btn = document.getElementById('walk-loop-btn');
+    if (btn) { btn.disabled = true; btn.style.opacity = '0.6'; }
+    try {
+      await _walkMembershipCall('loop', 'PATCH', { circular: !_walkCircular });
+    } finally {
+      _walkLoopBusy = false;
+      if (btn) { btn.disabled = false; btn.style.opacity = ''; }
+      _syncWalkLoopUi();
+    }
     return;
   }
   _walkCircular = !_walkCircular;
@@ -6007,9 +6060,11 @@ function _drawWalkLayer(suppressFitBounds) {
                  border:2px solid white;box-shadow:0 2px 6px rgba(0,0,0,.3)">${_esc(_stopLabel(s, i))}</div>`,
       iconSize: [28, 28], iconAnchor: [14, 14],
     });
-    L.marker([s.lat, s.lng], { icon: stopIcon,
-      title: s.p.is_note ? 'Field note' : `${n} species: ${_stopSpecies(s).join(', ')}` })
-      .addTo(_walkRouteLayer);
+    const stopMk = L.marker([s.lat, s.lng], { icon: stopIcon }).addTo(_walkRouteLayer);
+    // Tap (touch) / hover (desktop): the stop's species, names rule.
+    stopMk.bindTooltip(s.p.is_note ? 'Field note'
+      : `<strong>Stop ${_esc(_stopLabel(s, i))}</strong>` + (n ? '<br>' + _stopSpecies(s).map(nm => spNameHtml(nm, _spCommonFor(nm))).join('<br>') : ''),
+      { direction: 'top', offset: [0, -14], className: 'walk-pin-label' });
     return [s.lat, s.lng];
   });
 
@@ -6367,7 +6422,7 @@ function renderWalkPanel(route, enrichMap) {
       const _edib = _ed?.species?.edibility_status || _pin.edibility_status;   // same source as the full card
       const _b    = (!_g.ok || _edib === 'caution') ? _walkEdibBadge(_g, _edib) : '';
       alsoHtml += `<div class="walk-stop-also" style="font-size:0.75rem;color:#556040;margin-top:4px">
-        Also here: ${_b} <em>${_esc(rp.name)}</em>${_walkMemberChips(_stop, rp.name)} — see stop ${_esc(rp.first_label)}
+        Also here: ${_b} ${spNameHtml(rp.name, _spCommonFor(rp.name))}${_walkMemberChips(_stop, rp.name)} — see stop ${_esc(rp.first_label)}
       </div>`;
     }
 
@@ -6381,6 +6436,7 @@ function renderWalkPanel(route, enrichMap) {
       <div>
         <span class="walk-stop-num"${_joinedStop ? ' style="background:#5f8f35"' : ''}>${_esc(_stopLabel(_stop, i))}</span>
         ${_joinedStop ? `<span style="font-size:0.72rem;color:#556040;font-weight:600">new stop · </span>` : ''}
+        ${_stop.off_route_m ? `<span style="font-size:0.72rem;color:#92400e;font-weight:600">${_stop.off_route_m} m off route · </span>` : ''}
         ${_spList.length > 1 ? `<span style="font-size:0.72rem;color:#556040;font-weight:600">${_spList.length} species here</span>` : ''}
         ${distStr2 ? `<span class="walk-stop-dist">${_esc(distStr2)}</span>` : ''}
         ${_canStartHere ? `<button data-guest-hide onclick="walkReorder('start', '${_esc(_stopLabel(_stop, i))}')"
@@ -6805,6 +6861,8 @@ async function loadSavedWalk(id) {
     if (!r.ok) throw new Error(`HTTP ${r.status}`);
     const w = await r.json();
     if (stale()) return;
+    _walkPinSelExit();              // another walk: selection and highlights belong to the old one
+    _walkHighlightClear();
     if (!w.waypoints || !w.waypoints.length) {
       alert('This saved walk has no waypoints.');
       return;
@@ -6814,7 +6872,7 @@ async function loadSavedWalk(id) {
     // The stored waypoint labels below are only a fallback for a response
     // without `stops` (older server).
     _savedWalkData = Array.isArray(w.stops)
-      ? { id: w.id, name: w.name, stops: w.stops, membership: w.membership || null }
+      ? { id: w.id, name: w.name, stops: w.stops, membership: w.membership || null, names: w.names || {} }
       : null;
     // Legacy rebuild, matching _buildWalkRoute output shape.
     // v2 walks (stop clustering): an obs waypoint is a STOP — obs_ids[] + labels[].
@@ -6978,24 +7036,31 @@ function _fitSavedWalk() {
   });
 }
 
-// "Show all pins" on a loaded saved walk — flips the hide flag _applyLayer reads.
-function walkToggleAllPins() {
-  if (!_savedWalkView) return;
-  _savedWalkView.hidePins = !_savedWalkView.hidePins;
-  _applyLayer();
-  _syncWalkPinsBtn();
-}
-
+// Loaded saved walk buttons: shown only while a saved walk is open. "✎ Edit
+// walk" (all pins shown + tap to select) replaced "Show all pins" and
+// "◎ Select pins" — off = only the walk's own markers (Melvin, 20 Oct 2026).
 function _syncWalkPinsBtn() {
-  // "← Saved walks" and "⇄ Reverse" belong to the loaded saved walk too — same rule.
-  ['walk-saved-btn', 'walk-reverse-btn'].forEach(id => {
+  ['walk-saved-btn', 'walk-reverse-btn', 'walk-edit-btn', 'walk-reroute-btn'].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.style.display = _savedWalkView ? '' : 'none';
   });
-  const b = document.getElementById('walk-pins-btn');
-  if (!b) return;
-  b.style.display = _savedWalkView ? '' : 'none';
-  if (_savedWalkView) b.textContent = _savedWalkView.hidePins ? '👁 Show all pins' : '🙈 Hide other pins';
+  const edit = document.getElementById('walk-edit-btn');
+  if (edit) {
+    edit.textContent = _walkPinSel ? '✓ Editing walk' : '✎ Edit walk';
+    edit.style.background = _walkPinSel ? '#fde7d4' : '#fff';
+  }
+}
+
+// Names rule (static/js/species-names.js formats): the common name for a species
+// on the loaded walk — the walk API's names map (display_common_name on the
+// server), else the culinary profile already fetched for the panel.
+function _spCommonFor(sci, hint) {
+  if (hint) return hint;
+  const names = _savedWalkData && _savedWalkData.names;
+  if (names && names[sci]) return names[sci];
+  const sp = _activeWalkEnrich && _activeWalkEnrich[sci] && _activeWalkEnrich[sci].species;
+  if (sp) return sp.preferred_common_name || (Array.isArray(sp.common_names) ? sp.common_names[0] : '') || '';
+  return '';
 }
 
 // Loaded saved walk: take the line AS SHOWN from a server walk response
@@ -7071,13 +7136,14 @@ function _savedWalkRoute() {
     route.push({ lat: st.lat, lng: st.lng, pins: null,
                  species: sp.map(x => x.name), spInfo: sp,
                  obs_ids: st.obs_ids, joined_obs_ids: st.joined_obs_ids || [],
-                 label: st.label, origin: st.origin,
+                 label: st.label, origin: st.origin, off_route_m: st.off_route_m || null,
                  p: { species_primary: sp.length ? sp[0].name : null, is_note: false, id: firstObs } });
   }
   return route;
 }
 
 function _renderWalkMembership() {
+  _walkHighlightClear();            // ticks start empty on every render (list closed, accepted, refreshed)
   const el = document.getElementById('walk-membership');
   if (!el) return;
   const d = _savedWalkData;
@@ -7118,8 +7184,8 @@ function _renderWalkMembership() {
       <div id="walk-older-list" style="display:${_walkOlderOpen ? 'block' : 'none'};margin-top:4px;max-height:220px;overflow-y:auto">
         ${cands.map(c => `
           <label style="display:flex;align-items:baseline;gap:5px;padding:2px 0;cursor:pointer">
-            <input type="checkbox" class="walk-older-cb" value="${c.obs_ids.map(Number).join(',')}">
-            <em style="color:#2d5016">${_esc(c.species)}</em>
+            <input type="checkbox" class="walk-older-cb" value="${c.obs_ids.map(Number).join(',')}" onchange="walkOlderHighlight()">
+            <span style="color:#2d5016">${spNameHtml(c.species, _spCommonFor(c.species))}</span>
             <span style="color:#999">${c.n} photo${c.n !== 1 ? 's' : ''} · ${Number(c.nearest_m)} m${c.human ? '' : ' · AI-agreed'}</span>
           </label>`).join('')}
         <div style="display:flex;gap:6px;margin-top:4px">
@@ -7133,7 +7199,8 @@ function _renderWalkMembership() {
 // Redraw from a server walk response (GET shape) without re-fitting the map.
 async function _refreshSavedWalk(w) {
   if (!_savedWalkView || !w || !Array.isArray(w.stops)) return;   // walk was cleared meanwhile
-  _savedWalkData = { id: w.id, name: w.name, stops: w.stops, membership: w.membership || null };
+  _savedWalkData = { id: w.id, name: w.name, stops: w.stops, membership: w.membership || null,
+                     names: w.names || (_savedWalkData && _savedWalkData.names) || {} };
   // A response that carries the line as shown (reorder: reversed / rotated;
   // loop: circular / point-to-point) replaces the drawn one, its dashed legs,
   // the view flag and the distance/time for that shape — set BEFORE the
@@ -7188,7 +7255,7 @@ function walkSetBuffer(v) {
 
 function walkToggleOlderList() {
   _walkOlderOpen = !_walkOlderOpen;
-  _renderWalkMembership();
+  _renderWalkMembership();          // re-render clears the tick highlights
 }
 
 function walkAcceptOlder(all) {
@@ -7204,6 +7271,176 @@ function walkExcludeJoined(ids) {
   if (!ids || !ids.length) return;
   if (!confirm(`Remove ${ids.length} new photo${ids.length !== 1 ? 's' : ''} of this species from the walk?`)) return;
   _walkMembershipCall('exclude', 'POST', { obs_ids: ids });
+}
+
+// ── Older-photos list: ticked species light up their pins ──────────────────
+// Rings on their own layer (above every pin, shown even while other pins are
+// hidden), positions from the server's older_candidates[].points. Cleared when
+// the list closes or re-renders, another walk loads, or walk mode exits.
+var _walkHiLayer = null;       // var: read by _exitWalkMode / loadSavedWalk, declared below them
+
+function _walkHighlightClear() {
+  if (_walkHiLayer) { map.removeLayer(_walkHiLayer); _walkHiLayer = null; }
+}
+
+function walkOlderHighlight() {
+  _walkHighlightClear();
+  const cands = (_savedWalkData && _savedWalkData.membership && _savedWalkData.membership.older_candidates) || [];
+  const ticked = new Set([...document.querySelectorAll('#walk-older-list .walk-older-cb')]
+    .filter(cb => cb.checked).map(cb => cb.value));
+  const pts = cands.filter(c => ticked.has(c.obs_ids.map(Number).join(','))).flatMap(c => c.points || []);
+  if (!pts.length) return;
+  const icon = L.divIcon({ className: '', iconSize: [26, 26], iconAnchor: [13, 13],
+    html: '<div style="width:26px;height:26px;border-radius:50%;border:3px solid #ea580c;box-shadow:0 0 0 2px #fff,0 1px 4px rgba(0,0,0,.4);box-sizing:border-box"></div>' });
+  _walkHiLayer = L.layerGroup(pts.map(([lat, lng]) =>
+    L.marker([lat, lng], { icon, interactive: false, zIndexOffset: 2000 }))).addTo(map);
+}
+
+// ── "✎ Edit walk" (loaded saved walk, curator) — was "Select pins" ──────────
+// A tap toggles a pin's selection instead of opening its card. Pins already
+// on the walk are drawn differently from the rest. The bar adds the selection
+// (accept path — any distance; it becomes a side-stop exactly as a joined
+// photo does) or removes it (exclude path; saved stops stay on the line).
+// No ORS call; the line, distance and time never change. Leaving the mode
+// clears the selection and restores the pins-hidden setting.
+var _walkPinSel = null;          // { ids: Set, msg: string } while "✎ Edit walk" is on (var: renderMarkers reads it)
+
+function _walkMemberSet() {
+  return new Set(((_savedWalkData && _savedWalkData.membership && _savedWalkData.membership.member_obs_ids) || []).map(Number));
+}
+
+// Pin icon in select mode: on the walk = solid green ring, not on it = grey
+// hollow ring; selected = thick orange ring. Same touch target as other pins.
+function _walkSelIcon(id, category, members) {
+  const vis   = _PIN_VIS;
+  const touch = isMobile() ? 44 : vis + 8;
+  const sel   = _walkPinSel && _walkPinSel.ids.has(id);
+  const mem   = members.has(id);
+  const { fill } = _pinColor(category);
+  const style = sel ? `background:${fill};border:2px solid white;box-shadow:0 0 0 5px #ea580c,0 1px 4px rgba(0,0,0,.35)`
+              : mem ? `background:${fill};border:2px solid white;box-shadow:0 0 0 3px #2d5016,0 1px 4px rgba(0,0,0,.35)`
+              :       `background:#fff;border:3px solid #9ca3af;box-shadow:0 1px 3px rgba(0,0,0,.3)`;
+  return L.divIcon({ className: '', html: _pinHtml(vis, style, touch), iconSize: [touch, touch], iconAnchor: [touch / 2, touch / 2] });
+}
+
+function _walkPinSelBar() {
+  let bar = document.getElementById('walk-pinsel-bar');
+  if (!bar) {
+    bar = document.createElement('div');
+    bar.id = 'walk-pinsel-bar';
+    bar.setAttribute('data-guest-hide', '');
+    bar.style.cssText = 'position:fixed;top:64px;left:50%;transform:translateX(-50%);z-index:1200;background:#fff;'
+      + 'border:1px solid #b8d48a;border-radius:10px;box-shadow:0 2px 10px rgba(0,0,0,.25);padding:6px 10px;'
+      + 'display:none;align-items:center;gap:8px;flex-wrap:wrap;font-size:0.8rem;color:#2d5016;max-width:calc(100vw - 24px)';
+    document.body.appendChild(bar);
+  }
+  if (!_walkPinSel) { bar.style.display = 'none'; return; }
+  const n = _walkPinSel.ids.size, btn = 'min-height:36px;padding:4px 12px;border-radius:8px;border:1px solid #b8d48a;background:#f0f4e8;color:#2d5016;font-family:inherit;cursor:pointer';
+  bar.innerHTML = `<strong>${n} selected</strong>
+    <button style="${btn}" onclick="walkPinSelApply('accept')" ${n ? '' : 'disabled'}>Add to walk</button>
+    <button style="${btn}" onclick="walkPinSelApply('exclude')" ${n ? '' : 'disabled'}>Remove from walk</button>
+    <button style="${btn};background:#2d5016;color:#fff" onclick="walkToggleEdit()">Done</button>
+    ${_walkPinSel.msg ? `<span style="color:#92400e;flex-basis:100%">${_esc(_walkPinSel.msg)}</span>` : ''}
+    <span style="color:#777;flex-basis:100%;font-size:0.72rem">Tap pins to select · green ring = on the walk · grey = not</span>`;
+  bar.style.display = 'flex';
+}
+
+function walkToggleEdit() {
+  if (_walkPinSel) { _walkPinSelExit(); return; }
+  if (!_savedWalkView || !_onSavedRoute(_activeWalkRoute)) return;
+  _walkPinSel = { ids: new Set(), msg: '' };
+  _savedWalkView.hidePins = false;           // every pin is selectable
+  _applyLayer();
+  renderMarkers();
+  _syncWalkPinsBtn();
+  _walkPinSelBar();
+}
+
+// Leave Edit walk: selection cleared, back to the walk's own markers only.
+function _walkPinSelExit() {
+  if (!_walkPinSel) return;
+  _walkPinSel = null;
+  if (_savedWalkView) _savedWalkView.hidePins = true;
+  _applyLayer();
+  renderMarkers();
+  _syncWalkPinsBtn();
+  _walkPinSelBar();
+}
+
+function _walkPinToggle(p) {
+  if (!_walkPinSel || p.id == null) return;
+  const id = Number(p.id);
+  if (_walkPinSel.ids.has(id)) _walkPinSel.ids.delete(id); else _walkPinSel.ids.add(id);
+  _walkPinSel.msg = '';
+  renderMarkers();
+  _walkPinSelBar();
+}
+
+// Add / Remove the selection. Add sends only pins not on the walk, Remove only
+// pins on it; the server checks eligibility (confirmed rule) and says why it
+// skipped any. Every write is read back by id on the server.
+async function walkPinSelApply(kind) {
+  if (!_walkPinSel || !_walkPinSel.ids.size) return;
+  const mem = _walkMemberSet();
+  const all = [..._walkPinSel.ids];
+  const ids = kind === 'accept' ? all.filter(id => !mem.has(id)) : all.filter(id => mem.has(id));
+  const notes = [];
+  const wrong = all.length - ids.length;
+  if (wrong) notes.push(`${wrong} ${kind === 'accept' ? 'already on the walk' : 'not on the walk'} — skipped`);
+  let out = null;
+  if (ids.length) out = await _walkMembershipCall(kind, 'POST', { obs_ids: ids });
+  if (!_walkPinSel) return;                  // walk cleared meanwhile
+  const skipped = (out && out.skipped) || [];
+  const done = out ? ids.length - skipped.length : 0;
+  if (done) notes.unshift(`${done} ${kind === 'accept' ? 'added' : 'removed'}`);
+  const why = {};
+  skipped.forEach(sk => { const k = sk.reason.replace(/ \(.*\)$/, ''); why[k] = (why[k] || 0) + 1; });
+  Object.entries(why).forEach(([k, n]) => notes.push(`${n} ${k} — skipped`));
+  _walkPinSel.ids.clear();
+  _walkPinSel.msg = notes.join(' · ');
+  renderMarkers();
+  _walkPinSelBar();
+}
+
+// "↻ Re-route" (walk.py reroute_walk / walk_route.plan_reroute): dry run first,
+// shown in a confirm dialog; only then the server snapshots the DB, routes the
+// CHANGED legs via ORS (kept legs and their dashes stay exactly as stored) and
+// writes. The current stops — side-stops included, empty saved stops dropped —
+// become stops 1..N; distance and time are recalculated.
+async function walkReroute() {
+  const d = _savedWalkData;
+  if (!d || !_onSavedRoute(_activeWalkRoute)) return;
+  let plan;
+  try {
+    const r = await fetch(`/api/walk/saves/${d.id}/reroute`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ confirm: false }),
+    });
+    plan = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(plan.detail || `HTTP ${r.status}`);
+  } catch (e) {
+    alert('Re-route: ' + e.message);
+    return;
+  }
+  const lines = [
+    `Re-route "${d.name}" through its current stops?`, '',
+    `Stops: ${plan.stops_before} now → ${plan.stops_after}, numbered 1–${plan.stops_after}`,
+    plan.added_stops.length   ? `New stops kept: ${plan.added_stops.join(', ')}` : '',
+    plan.dropped_stops.length ? `Dropped (no species left): ${plan.dropped_stops.join(', ')}` : '',
+    `Legs kept exactly as they are (dashed legs stay dashed): ${plan.legs_kept}`,
+    `Legs routed by ORS: ${plan.legs_to_route.join(', ') || 'none'} (${plan.ors_requests} request${plan.ors_requests === 1 ? '' : 's'})`,
+    '', 'A database snapshot is taken first. Distance and time are recalculated.',
+    'Printed sheets and published pages will no longer match until reprinted / republished.',
+  ].filter((x, k) => x || k === 1 || k === 7);
+  if (!confirm(lines.join('\n'))) return;
+  const out = await _walkMembershipCall('reroute', 'POST', { confirm: true });
+  if (!out || !out.reroute) return;
+  const rr = out.reroute;
+  const straight = (rr.legs || []).filter(l => l.kind === 'straight');
+  _fitSavedWalk();
+  alert(`Re-routed: ${Math.round(rr.distance_before_m)} m / ${rr.duration_before_min} min → ${rr.distance_m} m / ${rr.duration_min} min.`
+    + (straight.length ? `\n\nKept straight (dashed) — ORS detoured: ${straight.map(l => `${l.leg} (${l.routed_m} m routed)`).join(', ')}` : '')
+    + ((rr.newly_joined || []).length ? `\n\nJoined along the new legs (route proximity): ${rr.newly_joined.map(x => `${spNameText(x.species, _spCommonFor(x.species))} at ${x.stop}`).join(', ')} — remove with ✎ Edit walk if not wanted.` : '')
+    + `\n\nSnapshot: ${String(rr.snapshot || '').split('/').pop()}`);
 }
 
 // "Start here" (mode 'start': same direction) and "⇄ Reverse" (mode 'reverse':
@@ -7279,8 +7516,8 @@ async function exportWalkSummary() {
     const also_here = _repeatSplit[i].repeats.map(rp => {
       const ed = _activeWalkEnrich?.[rp.name];
       const gate = _culinaryGate(ed ? ed._toxicity : null);
-      return { species_scientific: rp.name, first_label: rp.first_label,
-               toxicity_warning: gate.ok ? null : gate.label };
+      return { species_scientific: rp.name, species_common: _spCommonFor(rp.name) || null,
+               first_label: rp.first_label, toxicity_warning: gate.ok ? null : gate.label };
     });
     const species = names.map(spName => {
       const ed = _activeWalkEnrich?.[spName];
@@ -9036,8 +9273,7 @@ function _noteSpeciesSearch(q) {
   ).slice(0, 6);
   if (!hits.length) { dd.style.display = 'none'; return; }
   dd.innerHTML = hits.map(sp => {
-    const label = sp.scientific_name +
-      (sp.common_names && sp.common_names.length ? ` (${sp.common_names[0]})` : '');
+    const label = spNameText(sp.scientific_name, sp.preferred_common_name || (sp.common_names && sp.common_names[0]));
     return `<div class="nsp-item" onclick="_addNoteTag('${_esc(sp.scientific_name)}')">${_esc(label)}</div>`;
   }).join('');
   dd.style.display = 'block';

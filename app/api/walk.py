@@ -7,11 +7,12 @@ Endpoints:
   GET  /api/walk/saves          — list all saved walks (summary)
   GET  /api/walk/saves/{id}     — load a saved walk (full data + computed stops/membership)
   PATCH /api/walk/saves/{id}/membership — set the route buffer (curator)
-  POST /api/walk/saves/{id}/accept      — accept older photos near the route (curator)
-  POST /api/walk/saves/{id}/exclude     — remove proximity-joined photos (curator)
+  POST /api/walk/saves/{id}/accept      — add photos to the walk, any distance (curator; older-photos list / Select pins)
+  POST /api/walk/saves/{id}/exclude     — remove photos from the walk, incl. saved-stop photos (curator)
   POST /api/walk/saves/{id}/renumber    — current stops become the saved snapshot, 1..N (curator)
   POST /api/walk/saves/{id}/reorder     — reverse direction / start at a saved stop (curator; no ORS)
   PATCH /api/walk/saves/{id}/loop       — circular / point-to-point view of the saved line (curator; no ORS)
+  POST /api/walk/saves/{id}/reroute     — rebuild the line through the current stops, changed legs only (curator; ORS)
   DELETE /api/walk/saves/{id}   — delete a saved walk (curator; 409 while published as an experience)
 """
 
@@ -28,7 +29,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
 from app.database import get_db
 from app.api.identity import Identity, get_identity
-from app.models.observation import Observation
+from app.models.observation import Observation, is_confirmed_observation
 from app.models.walk import SavedWalk
 from app.services import walk_membership as wm
 
@@ -53,12 +54,17 @@ async def ors_route(body: ORSRequest):
     Proxy to OpenRouteService foot-hiking directions.
     Returns ORS GeoJSON on success or {"fallback": true, "reason": "..."} on failure.
     """
-    if not settings.ors_api_key:
-        return {"fallback": True, "reason": "ORS key not configured"}
-
     if len(body.coordinates) < 2:
         raise HTTPException(400, detail="At least 2 coordinates required")
+    return await _ors_post(body.coordinates)
 
+
+async def _ors_post(coordinates: list) -> dict:
+    """One ORS foot-hiking directions request ([lng, lat] list, in the order
+    given — ORS does not reorder). ORS GeoJSON, or {"fallback": True, "reason"}.
+    Shared by the map's proxy above and the saved-walk re-route."""
+    if not settings.ors_api_key:
+        return {"fallback": True, "reason": "ORS key not configured"}
     try:
         async with httpx.AsyncClient(timeout=15.0) as client:
             resp = await client.post(
@@ -67,7 +73,7 @@ async def ors_route(body: ORSRequest):
                     "Authorization": settings.ors_api_key,
                     "Content-Type": "application/json",
                 },
-                json={"coordinates": body.coordinates},
+                json={"coordinates": coordinates},
             )
 
         if resp.status_code == 200:
@@ -174,6 +180,11 @@ async def walk_membership_for(db: AsyncSession, walk: SavedWalk) -> dict:
                 Observation.longitude.between(bb[2], bb[3]),
             )
         )).scalars().all()
+    # Hand-added photos can lie outside the bbox (any distance from the line).
+    extra = wm.accepted_ids(walk) - set(ids) - {o.id for o in nearby}
+    if extra:
+        nearby = list(nearby) + list((await db.execute(
+            select(Observation).where(Observation.id.in_(sorted(extra))))).scalars().all())
     return wm.compute(walk, saved, nearby)
 
 
@@ -211,10 +222,25 @@ def _walk_out(walk: SavedWalk, mem: dict) -> dict:
     }
 
 
+async def _species_names(db: AsyncSession, out: dict) -> dict:
+    """{scientific name: English common name} for every species the walk
+    response names (stops + older candidates) — names rule, display_common_name."""
+    from app.models.species import Species, display_common_name
+    want = ({sp["name"] for st in out["stops"] for sp in st["species"]}
+            | {c["species"] for c in out["membership"]["older_candidates"] if c["species"]})
+    if not want:
+        return {}
+    rows = (await db.execute(select(Species.scientific_name, Species.preferred_common_name, Species.common_names)
+                             .where(Species.scientific_name.in_(sorted(want))))).all()
+    return {r.scientific_name: n for r in rows if (n := display_common_name(r.preferred_common_name, r.common_names))}
+
+
 @router.get("/saves/{walk_id}")
 async def get_walk(walk_id: int, db: AsyncSession = Depends(get_db)):
     walk = await _load_walk(db, walk_id)
-    return _walk_out(walk, await walk_membership_for(db, walk))
+    out = _walk_out(walk, await walk_membership_for(db, walk))
+    out["names"] = await _species_names(db, out)
+    return out
 
 
 # ---------------------------------------------------------------------------
@@ -234,7 +260,9 @@ async def _commit_and_reread(db: AsyncSession, walk_id: int) -> dict:
     await db.commit()
     db.expire_all()
     walk = await _load_walk(db, walk_id)
-    return _walk_out(walk, await walk_membership_for(db, walk))
+    out = _walk_out(walk, await walk_membership_for(db, walk))
+    out["names"] = await _species_names(db, out)
+    return out
 
 
 @router.patch("/saves/{walk_id}/membership")
@@ -253,50 +281,86 @@ async def set_walk_membership(
     return out
 
 
+def _ids(raw) -> set:
+    return {int(x) for x in json.loads(raw or "[]")}
+
+
+def _dump_ids(ids: set):
+    return json.dumps(sorted(ids)) if ids else None
+
+
 @router.post("/saves/{walk_id}/accept")
-async def accept_older_obs(
+async def accept_obs(
     walk_id: int, body: ObsIdsBody,
     db: AsyncSession = Depends(get_db), identity: Identity = Depends(get_identity),
 ):
-    """Accept older photos from the review list. Only ids that are currently
-    older candidates of THIS walk are accepted; anything else is rejected."""
+    """Add photos to the walk: the older-photos list, or Select pins → Add to
+    walk. Any photo that passes the walk's confirmed rule (is_confirmed_
+    observation) and has a position may be added, whatever its distance from
+    the line (walk_membership joins accepted photos unconditionally). Others are
+    skipped with the reason, never written. A photo removed earlier is
+    un-removed first and accepted only if that alone does not bring it back —
+    so Add after Remove restores the row exactly."""
     _require_curator(identity)
     walk = await _load_walk(db, walk_id)
-    mem = await walk_membership_for(db, walk)
-    allowed = {oid for c in mem["older_candidates"] for oid in c["obs_ids"]}
-    bad = sorted(set(body.obs_ids) - allowed)
-    if bad:
-        raise HTTPException(400, f"not older candidates of this walk: {bad}")
-    current = set(json.loads(walk.accepted_obs_json or "[]"))
-    walk.accepted_obs_json = json.dumps(sorted(current | set(body.obs_ids)))
+    want = list(dict.fromkeys(int(x) for x in body.obs_ids))
+    rows = {o.id: o for o in (await db.execute(select(Observation).where(Observation.id.in_(want)))).scalars().all()}
+    members = set((await walk_membership_for(db, walk))["member_obs_ids"])
+    skipped, ok = [], []
+    for oid in want:
+        o = rows.get(oid)
+        if o is None:
+            skipped.append({"obs_id": oid, "reason": "not found"})
+        elif not is_confirmed_observation(o):
+            skipped.append({"obs_id": oid, "reason": f"not confirmed ({o.review_status}/{o.identification_status})"})
+        elif o.latitude is None or o.longitude is None:
+            skipped.append({"obs_id": oid, "reason": "no GPS position"})
+        elif oid in members:
+            skipped.append({"obs_id": oid, "reason": "already on the walk"})
+        else:
+            ok.append(oid)
+    if ok:
+        excluded = _ids(walk.excluded_obs_json)
+        walk.excluded_obs_json = _dump_ids(excluded - set(ok))
+        now = set((await walk_membership_for(db, walk))["member_obs_ids"])
+        walk.accepted_obs_json = _dump_ids(_ids(walk.accepted_obs_json) | (set(ok) - now))
     out = await _commit_and_reread(db, walk_id)
-    missing = sorted(set(body.obs_ids) - set(out["membership"]["member_obs_ids"]))
+    missing = sorted(set(ok) - set(out["membership"]["member_obs_ids"]))
     if missing:
         raise HTTPException(500, f"accepted but not members after re-read: {missing}")
+    out["skipped"] = skipped
     return out
 
 
 @router.post("/saves/{walk_id}/exclude")
-async def exclude_joined_obs(
+async def exclude_obs(
     walk_id: int, body: ObsIdsBody,
     db: AsyncSession = Depends(get_db), identity: Identity = Depends(get_identity),
 ):
-    """Remove photos that JOINED by proximity (not saved-stop photos)."""
+    """Remove photos from the walk: proximity-joined, hand-added or saved-stop
+    photos (Select pins → Remove from walk, or a stop card's ✕). A hand-added
+    photo is un-accepted first and excluded only if it is still on the walk —
+    so Remove after Add restores the row exactly. Saved stops are never
+    deleted: a stop whose photos are all removed stays on the line with no
+    species until the walk is re-routed."""
     _require_curator(identity)
     walk = await _load_walk(db, walk_id)
+    want = list(dict.fromkeys(int(x) for x in body.obs_ids))
     mem = await walk_membership_for(db, walk)
-    joined = {oid for st in mem["stops"] for oid in st["joined_obs_ids"]}
-    bad = sorted(set(body.obs_ids) - joined)
-    if bad:
-        raise HTTPException(400, f"not proximity-joined photos of this walk: {bad}")
-    current = set(json.loads(walk.excluded_obs_json or "[]"))
-    walk.excluded_obs_json = json.dumps(sorted(current | set(body.obs_ids)))
-    accepted = set(json.loads(walk.accepted_obs_json or "[]")) - set(body.obs_ids)
-    walk.accepted_obs_json = json.dumps(sorted(accepted)) if accepted else None
+    on_walk = set(mem["member_obs_ids"]) | {oid for st in mem["stops"] for oid in st["obs_ids"]}
+    skipped = [{"obs_id": oid, "reason": "not on this walk"} for oid in want if oid not in on_walk]
+    ok = [oid for oid in want if oid in on_walk]
+    if ok:
+        walk.accepted_obs_json = _dump_ids(_ids(walk.accepted_obs_json) - set(ok))
+        mem = await walk_membership_for(db, walk)
+        still = set(mem["member_obs_ids"]) | {oid for st in mem["stops"] for oid in st["obs_ids"]}
+        walk.excluded_obs_json = _dump_ids(_ids(walk.excluded_obs_json) | (set(ok) & still))
     out = await _commit_and_reread(db, walk_id)
-    still = sorted(set(body.obs_ids) & set(out["membership"]["member_obs_ids"]))
-    if still:
-        raise HTTPException(500, f"excluded but still members after re-read: {still}")
+    left = sorted(set(ok) & (set(out["membership"]["member_obs_ids"])
+                             | {oid for st in out["stops"] for oid in st["obs_ids"]}))
+    if left:
+        raise HTTPException(500, f"excluded but still on the walk after re-read: {left}")
+    out["skipped"] = skipped
     return out
 
 
@@ -349,6 +413,110 @@ async def set_walk_loop(
             or (json.dumps(out["waypoints"]), out["distance_m"], out["duration_min"], walk_route.line_coords(rg))
             != (json.dumps(json.loads(before[0] or "[]")), before[1], before[2], before[3])):
         raise HTTPException(500, "circular setting did not persist as written")
+    return out
+
+
+class RerouteBody(BaseModel):
+    confirm: bool = False              # False = dry run: what would change, no ORS call, no write
+
+
+async def _reroute_snapshot(walk_id: int) -> str:
+    """DB snapshot before a re-route writes (tests replace this hook)."""
+    from app.api.dev import create_snapshot, SnapshotRequest
+    res = await create_snapshot(SnapshotRequest(description=f"before re-route of saved walk {walk_id}"))
+    if not res.get("ok"):
+        raise HTTPException(500, f"snapshot failed — nothing re-routed: {res}")
+    return res.get("db_snapshot") or ""
+
+
+@router.post("/saves/{walk_id}/reroute")
+async def reroute_walk(
+    walk_id: int, body: RerouteBody,
+    db: AsyncSession = Depends(get_db), identity: Identity = Depends(get_identity),
+):
+    """"↻ Re-route through stops" (walk_route.plan_reroute): the current stops —
+    saved + side-stops, saved stops with no species dropped, notes kept —
+    become the saved stops, numbered 1..N (old stop 1 stays first). Legs
+    between stops that were already consecutive keep their stored geometry and
+    dashes; only changed legs go to ORS (≤ 50 points per request, ≤ 10
+    requests), and a new leg ORS detours on is kept as a straight dashed leg.
+    Distance = new line length; time at the walk's own pace. Dry run first
+    (confirm=false); confirm=true takes a DB snapshot, then writes and reads
+    the row back by id. Any ORS failure → nothing written."""
+    from app.services import walk_route
+    _require_curator(identity)
+    walk = await _load_walk(db, walk_id)
+    old_wps = [w for w in json.loads(walk.waypoints_json or "[]") if isinstance(w, dict)]
+    route = json.loads(walk.route_geojson) if walk.route_geojson else {}
+    mem = await walk_membership_for(db, walk)
+    kept = [st for st in mem["stops"] if st["is_note"] or st["species"]]
+    dropped = [st["label"] for st in mem["stops"] if not (st["is_note"] or st["species"])]
+    added = [st["label"] for st in kept if st["origin"] == "joined"]
+    # Old stop 1 stays stop 1 on a loop.
+    if walk_route.line_coords(route) and walk_route.is_closed(walk_route.line_coords(route)):
+        k0 = next((k for k, st in enumerate(kept) if st["origin"] == "saved" and st["label"] == "1"), 0)
+        kept = kept[k0:] + kept[:k0]
+    new_stops = [{"lat": st["lat"], "lng": st["lng"], "label": st["label"],
+                  "old_index": int(st["label"]) - 1 if st["origin"] == "saved" else None} for st in kept]
+    if len(new_stops) < 2:
+        raise HTTPException(409, "fewer than two stops would remain — nothing to route")
+    plan = walk_route.plan_reroute(old_wps, route, new_stops)
+    to_route = [(new_stops[l["i"]]["label"], new_stops[l["j"]]["label"]) for l in plan["legs"] if l["kind"] == "route"]
+    summary = {
+        "dry_run": not body.confirm,
+        "stops_before": len(mem["stops"]), "stops_after": len(new_stops),
+        "added_stops": added, "dropped_stops": dropped,
+        "legs_kept": sum(l["kind"] == "keep" for l in plan["legs"]),
+        "legs_to_route": [f"{a}→{b}" for a, b in to_route],
+        "ors_requests": len(plan["runs"]),
+        "distance_before_m": walk.distance_m, "duration_before_min": walk.duration_min,
+    }
+    if not to_route and not dropped and not added:
+        raise HTTPException(409, "nothing changed since the line was drawn — nothing to re-route")
+    if len(plan["runs"]) > walk_route.REROUTE_MAX_REQUESTS:
+        raise HTTPException(409, f"{len(plan['runs'])} separate ORS requests needed (max "
+                                 f"{walk_route.REROUTE_MAX_REQUESTS}) — too many changes for one re-route")
+    if not body.confirm:
+        return summary
+
+    snapshot = await _reroute_snapshot(walk_id)
+    routed = {}
+    for run in plan["runs"]:
+        res = await _ors_post([[new_stops[k]["lng"], new_stops[k]["lat"]] for k in run])
+        if res.get("fallback"):
+            raise HTTPException(502, f"ORS could not route {'→'.join(new_stops[k]['label'] for k in run)}: "
+                                     f"{res.get('reason')} — nothing written")
+        feat = (res.get("features") or [{}])[0]
+        line = (feat.get("geometry") or {}).get("coordinates") or []
+        wpts = (feat.get("properties") or {}).get("way_points") or []
+        if len(wpts) != len(run) or len(line) < 2:
+            raise HTTPException(502, "ORS returned an unusable route — nothing written")
+        for q in range(len(run) - 1):
+            routed[(run[q], run[q + 1])] = {"coords": line[wpts[q]:wpts[q + 1] + 1]}
+    new_route, length, report = walk_route.assemble_reroute(route, new_stops, plan, routed)
+    pace = (walk.duration_min / walk.distance_m) if walk.distance_m else 1 / 80
+    new_dist, new_dur = round(length), round(length * pace)
+    waypoints, obs_ids = wm.renumbered_snapshot({"stops": kept})
+    walk.waypoints_json = json.dumps(waypoints)
+    walk.obs_ids_json = json.dumps(obs_ids)
+    walk.accepted_obs_json = None              # accepted photos are now saved-stop photos
+    walk.route_geojson = json.dumps(new_route)
+    walk.distance_m, walk.duration_min = new_dist, new_dur
+    out = await _commit_and_reread(db, walk_id)
+    if (out["waypoints"] != waypoints or out["route_geojson"] != new_route
+            or out["distance_m"] != new_dist or out["duration_min"] != new_dur):
+        raise HTTPException(500, "re-route did not persist as written — restore " + snapshot)
+    label = {k: st["label"] for k, st in enumerate(new_stops)}
+    # The new legs can pass other confirmed photos, which then join by the walk's
+    # proximity rule — reported (never silently excluded) so the curator decides.
+    before = {oid for st in kept for sp in st["species"] for oid in sp["obs_ids"]}
+    newly = [{"obs_id": oid, "species": sp["name"], "stop": st["label"]}
+             for st in out["stops"] for sp in st["species"] for oid in sp["obs_ids"] if oid not in before]
+    summary.update({"dry_run": False, "snapshot": snapshot, "distance_m": new_dist, "duration_min": new_dur,
+                    "newly_joined": newly,
+                    "legs": [{"leg": f"{label[r['i']]}→{label[r['j']]}", **{k: v for k, v in r.items() if k not in ('i', 'j')}}
+                             for r in report]})
+    out["reroute"] = summary
     return out
 
 

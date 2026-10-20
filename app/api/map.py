@@ -36,7 +36,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.models.culinary import CulinaryInfo
 from app.models.observation import Observation
-from app.models.species import Species
+from app.models.species import Species, display_common_name
 from app.services.phenology import in_season_now
 
 router = APIRouter(prefix="/api/map", tags=["map"])
@@ -181,6 +181,7 @@ async def map_geojson(
                 Species.id,
                 Species.scientific_name,
                 Species.common_names,
+                Species.preferred_common_name,
                 Species.edibility_status,
                 CulinaryInfo.id.label("culinary_id"),
             ).join(CulinaryInfo, CulinaryInfo.species_id == Species.id, isouter=True)
@@ -198,7 +199,8 @@ async def map_geojson(
             except Exception:
                 pass
         entry = {
-            "common_name": names[0] if names else None,
+            # Names rule: preferred_common_name, else the first English name.
+            "common_name": display_common_name(er.preferred_common_name, er.common_names) or None,
             "common_names": names,
             "edibility_status": er.edibility_status,
             "has_enrichment": er.culinary_id is not None,

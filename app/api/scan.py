@@ -739,7 +739,11 @@ async def recheck_threshold():
                 try:
                     cands = _json.loads(obs.species_candidates_json)
                     if cands:
-                        top_score = cands[0].get("score", 0.0)
+                        if cands[0].get("source") == "curator":
+                            # A human named it and no API scored it (B1-08):
+                            # not a machine guess, never cleared here.
+                            continue
+                        top_score = cands[0].get("score") or 0.0
                 except Exception:
                     pass
 

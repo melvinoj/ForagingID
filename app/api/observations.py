@@ -304,15 +304,12 @@ async def list_observations(
                 Observation.review_status.in_(["approved", "manually_verified"])
             )
         elif review_status == "needs_review":
-            # Belt-and-suspenders: explicitly exclude approved/manually_verified so
-            # observations that have been bulk-re-queued by trust tools (kingdom audit,
-            # data trust send-to-review) but then re-approved never ghost back into
-            # the queue. The direct == filter is correct but any ORM quirk or future
-            # code path can't accidentally include them this way.
-            stmt = stmt.where(
-                Observation.review_status == "needs_review",
-                Observation.review_status.notin_(["approved", "manually_verified", "rejected"]),
-            )
+            # The review queue — shared definition (observation_counts.REVIEW_QUEUE),
+            # so the nav badge and the page's count are exactly this list. It keeps the
+            # belt-and-suspenders exclusion of approved/manually_verified/rejected, so
+            # rows re-queued by trust tools and then re-approved never ghost back.
+            from app.services.observation_counts import REVIEW_QUEUE
+            stmt = stmt.where(REVIEW_QUEUE)
         else:
             stmt = stmt.where(Observation.review_status == review_status)
     if upload_source:
@@ -376,7 +373,7 @@ async def observation_stats(db: AsyncSession = Depends(get_db)):
     # Canonical counts — single source of truth (app/services/observation_counts.py).
     # total/geotagged keep their existing meaning (active set); the full labelled
     # breakdown is exposed under "counts" so every consumer reads identical numbers.
-    from app.services.observation_counts import observation_counts
+    from app.services.observation_counts import REVIEW_QUEUE_STATUS, observation_counts, review_queue_count
     counts = await observation_counts(db)
     total     = counts["active"]
     geotagged = counts["geotagged_active"]
@@ -385,10 +382,13 @@ async def observation_stats(db: AsyncSession = Depends(get_db)):
     )
     # Per-status counts — used by the review queue for accurate pagination
     by_status: dict = {}
-    for s in ("pending", "needs_review", "approved", "manually_verified", "rejected"):
+    for s in ("pending", "approved", "manually_verified", "rejected"):
         by_status[s] = await db.scalar(
             select(func.count(Observation.id)).where(Observation.review_status == s)
         ) or 0
+    # The review queue (default filter) — the same query the list uses.
+    queue_n = await review_queue_count(db)
+    by_status[REVIEW_QUEUE_STATUS] = queue_n
     phone_uploads = await db.scalar(
         select(func.count(Observation.id)).where(Observation.upload_source == "file_upload")
     ) or 0
@@ -400,6 +400,9 @@ async def observation_stats(db: AsyncSession = Depends(get_db)):
         # Legacy flat fields kept for backwards compat
         "pending_review": by_status["pending"],
         "needs_review": by_status["needs_review"],
+        # Review page default queue (Status = Needs review) — the nav Review badge.
+        "review_queue_count": queue_n,
+        "review_queue_status": REVIEW_QUEUE_STATUS,
         "duplicates": duplicates,
         # New: per-status map for dynamic pagination
         "by_status": by_status,
@@ -476,11 +479,19 @@ async def update_review(
     confirmed_statuses = ("approved", "manually_verified")
     entering_confirmed = status in confirmed_statuses and prev_status not in confirmed_statuses
 
-    # Auto-promotion of suggestions
+    # Auto-promotion of suggestions — only a recognised scientific name (C-04:
+    # a typed common name was promoted unchecked; obs 21585 'norway spruce').
     species_to_set = None
     update_species = False
     if status in confirmed_statuses and not obs.species_primary and obs.species_suggested:
-        species_to_set = obs.species_suggested
+        from app.services.species_link import promotable_suggestion
+        species_to_set = await promotable_suggestion(db, obs)
+        if species_to_set is None:
+            raise HTTPException(
+                status_code=409,
+                detail=(f"'{obs.species_suggested}' is not a recognised scientific name. "
+                        "Pick the species from Look up or Second Opinion first, then approve."),
+            )
         update_species = True
         obs.species_suggested = None
         obs.human_corrected = True

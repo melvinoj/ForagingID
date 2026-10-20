@@ -98,6 +98,49 @@ Snapshots 20 Oct: db_20261020_053600, _062739, _063515, _072552 (re-route, Rümm
 
 ## History
 
+### 2026-10-20 22:12
+**Snapshot** — Before batch 14 part 2 data: C-03 link 5 obs (2 bare species rows), C-04 obs 21585 -> Picea abies, B1-08 confirmed species first on 667 rows
+DB: `snapshots/db_20261020_221253.sqlite`
+
+### 2026-10-20 21:43
+**Fix pass batch 14 (part, moved after batch 3): E-03 Second Opinion 500 on GBIF-only names fixed at the root (one candidate shape for every source, pure merge function); Review nav badge now equals the Review page's default queue via one shared definition.**
+
+**Built:**
+- reidentify.py: _sop_entry() — one Second Opinion candidate shape for PlantNet/iNaturalist/GBIF; merge_second_opinion_candidates() pure function used by the endpoint
+- observation_counts.REVIEW_QUEUE + review_queue_count(): one definition used by the needs_review list query, stats by_status.needs_review and new stats.review_queue_count
+- site-header.js Review badge reads review_queue_count (links /review?status=needs_review)
+- tests/test_second_opinion_merge.py (6, recorded fixture tests/fixtures/second_opinion_recorded.json), tests/test_review_queue_count.py (4)
+**Fixed:**
+- E-03: KeyError 'non_european' -> 500 when GBIF adds a name; live obs 24149 now 200 with GBIF-only Gentiana vernayi included
+- Review badge 2,056 (pending+needs_review) -> 389 = the queue's 389
+**Files:** `app/api/reidentify.py`, `app/services/observation_counts.py`, `app/api/observations.py`, `frontend/static/js/site-header.js`, `tests/test_second_opinion_merge.py`, `tests/test_review_queue_count.py`, `tests/fixtures/second_opinion_recorded.json`, `docs/audit/2026-10-20/REPORT.md`, `docs/audit/2026-10-20/STATUS.md`
+**Pending:**
+- Melvin browser checks: Second Opinion on obs 24149 renders (GBIF-only row shown); nav Review badge shows the same number as the Review page's Needs review queue
+- Decide: GBIF-only names (fixed 0.50) outrank image candidates in Second Opinion (24149: Gentiana vernayi #1) — sort them after image-backed candidates?
+- Batch 14 still open: E-04, B1-08, C-03, C-04, D1-03, D2-01
+- Next: 1b (Melvin), then 3b
+
+### 2026-10-20 21:32
+**Fix pass batch 3 (audit B2-02 + B2-05 data): saving a verdict sets toxicity_severity through one rule with a history row; 'unknown' = never assessed and fails closed; fail-open read sites closed; 155/688/745 -> toxic, drafts 2920/2921 rejected; 230 never-assessed species -> severity unknown. Decisions recorded: species merges allowed via a re-keying merge (CLAUDE.md rule updated when 11b lands); batch 14 moved to run straight after batch 3.**
+
+**Built:**
+- severity_for_verdict() in app/models/species.py — the only verdict->severity rule (toxic -> toxic/keeps deadly; edible/caution -> none, refused over a toxic/deadly severity unless explicit; inedible unchanged; unknown -> unknown if it was none; explicit severity must fit the verdict)
+- PATCH /api/edibility/status (+ optional toxicity_severity, severity in loud-fail read-back and response), /bulk-status and the bracken safety constant all use it; species_edibility_history row per severity change
+- New species default toxicity_severity='unknown' (ORM default)
+- Fail-closed: species page culinary/taste/recipe gate (severity must be 'none') + amber 'toxicity not yet assessed' box; print_pdf.html == 'none'; lists_pdf.py missing severity -> 'unknown'
+- scripts/backfill_never_assessed_severity.py (dry run default, read-back by id)
+- tests/test_verdict_severity.py — 18 tests
+**Fixed:**
+- B2-02: verdict writes now set toxicity_severity; never-assessed no longer reads as safe
+- B2-05 data: Amanita muscaria 155, Heracleum mantegazzianum 688, Hedera helix 745 -> toxic/toxic, verified human (history 144-149); drafts 2920, 2921 rejected
+- 230 species severity none -> unknown (history 150-379, changed_by system:never_assessed); snapshot db_20261020_213039 first; read-back 0 mismatches
+**Files:** `app/models/species.py`, `app/api/edibility.py`, `app/services/enrichment.py`, `frontend/species.html`, `app/templates/print_pdf.html`, `app/api/lists_pdf.py`, `scripts/backfill_never_assessed_severity.py`, `tests/test_verdict_severity.py`, `docs/audit/2026-10-20/REPORT.md`, `docs/audit/2026-10-20/STATUS.md`
+**Pending:**
+- Melvin browser checks: ☠ on 155/688/745 pins' walk badges and species pages; a never-assessed species page shows the amber box and no culinary/taste/recipe; walk cards show 'toxicity unknown' for never-assessed species; Edibility review set-verdict still works
+- Map pop-up and Lists/browser print still show edible parts for toxic/unknown species until batch 5
+- Walk 4: 8 species now badge 'Toxicity unknown' on the experience page; Heracleum sibiricum loses its Carrot-family badge to the unknown badge (gates check unknown first) — decide in 3b/1b
+- Next: batch 1b (Melvin), then batch 14 (moved), then 3b
+
 ### 2026-10-20 21:30
 **Snapshot** — Before batch 3 data: 155/688/745 -> toxic, reject drafts 2920/2921, 232 never-assessed severities -> unknown
 DB: `snapshots/db_20261020_213039.sqlite`

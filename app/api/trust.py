@@ -463,7 +463,9 @@ async def bulk_reassign(
         )
 
     # Reassign all matching observations
-    from app.services.species_link import set_observation_species, strip_candidate_from_obs
+    from app.services.species_link import (
+        confirmed_candidate_first, set_observation_species, strip_candidate_from_obs,
+    )
     reassigned = 0
     for obs in obs_rows:
         old_name = obs.species_primary
@@ -473,6 +475,8 @@ async def bulk_reassign(
         # the current name.
         if old_name and old_name != payload.target_species:
             strip_candidate_from_obs(obs, old_name)
+            # The new species goes first with its own score (audit B1-08).
+            confirmed_candidate_first(obs)
         db.add(ObservationEdit(
             observation_id=obs.id,
             field_name="species_primary",

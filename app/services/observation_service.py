@@ -66,10 +66,12 @@ async def update_observation_status(
     human_corrected: Optional[bool] = None,
     edited_by: str = "human",
     update_species: bool = False,
+    common_name: Optional[str] = None,
 ) -> None:
     """
     Canonical helper to update an observation's status, species, and metadata consistently.
     Applies constraints, logs changes to observation_edits, clears review labels, and copies files.
+    common_name: only used to label a confirmed species no API listed (B1-08).
     """
     prev_status = obs.review_status
     prev_species = obs.species_primary
@@ -84,8 +86,18 @@ async def update_observation_status(
             # current reality (no-op when prev_species is empty, i.e. a
             # promotion rather than a move-off). Audit trail is preserved in the
             # SpeciesCandidate table.
-            from app.services.species_link import strip_candidate_from_obs
+            from app.services.species_link import confirmed_candidate_first, strip_candidate_from_obs
             strip_candidate_from_obs(obs, prev_species)
+            # The chosen species goes to the front with its own score, so the
+            # card %, "Also:", map-pin confidence and top_score describe it (B1-08).
+            if species_name:
+                confirmed_candidate_first(obs, [common_name] if common_name else None)
+        # A species set by hand resolves any pending suggestion. Left in place it
+        # could be promoted over this choice by a later approve that read the row
+        # before this commit (audit C-04: obs 21585 'norway spruce').
+        if species_name and obs.species_suggested is not None:
+            _log_edit(session, obs, "species_suggested", obs.species_suggested, None, edited_by)
+            obs.species_suggested = None
 
     # 2. Update review status
     if prev_status != review_status:
@@ -116,6 +128,11 @@ async def update_observation_status(
         if obs.review_label is not None:
             _log_edit(session, obs, "review_label", obs.review_label, None, edited_by)
             obs.review_label = None
+
+        # A confirmed species name always has a species row, linked (C-03) —
+        # before the fungi rule, which reads the row's kingdom.
+        from app.services.species_link import ensure_species_row
+        await ensure_species_row(session, obs)
 
         # A confirmed fungus is filed as fungi (species' kingdom, not the AI guess).
         await apply_species_category(session, obs, edited_by)

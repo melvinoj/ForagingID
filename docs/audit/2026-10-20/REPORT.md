@@ -41,6 +41,8 @@ Sessions: 1 (Phases A–B), 2 (C–D), 3 (E–G). Sections 0–9 below were asse
 | 2 | B5-01, B5-02 | **Close both.** Guests see confirmed plant photos only; encounters and voice notes are curator-only. Scheduled, not now. | 8 |
 | 3 | A-03 | **Extend the batch-7 share-link secret to LAN access**: only localhost gets in without it. Added to batch 7's scope (batch 13 keeps B4-01, B4-02, A-04). | 7 |
 | 4 | E-08 (GPS recording) | **In-app GPS walk recording can be removed.** Walks are built from photos; GPX comes from a walking app. Scheduled before the index.html split. | 15b (before 16) |
+| 5 | Species merges (11b) | **Merges are allowed again**, but only through a merge that re-keys `species_resources` (and every other species-keyed table) to the kept species, with tests and a snapshot first. The CLAUDE.md rule ("merges orphan these; do not attempt merges") is updated **when batch 11b lands, not before**. | 11b |
+| 6 | Fix order | **Batch 14** (E-03 Second Opinion 500 + Review badge count) **moves to run straight after batch 3.** | 14 → after 3 |
 
 **D3-01 review load** (DB copy 20 Oct 17:01; PFAF text parsed offline from the stored `enrichment_sources` HTML with the app's own `pfaf._parse`, no network):
 
@@ -266,7 +268,8 @@ Rules for every batch:
 | **1** ✅ done 20 Oct | **D3-01** (decided C + B) + B3-02 + E-14. (1) Import PFAF Known Hazards for caution species as pending `preparation_warnings` drafts, from the stored PFAF HTML (36), skipping fields with any human row; also the 19 "source unknown" texts if Melvin agrees. (2) Approving a warning draft writes `culinary_info` + a history row `changed_by='human'` with the real `old_value` (B3-02). (3) `gates.py`: caution branch publishes the approved warning; caution species without one get no recipes; the plan lists "recipes withheld". (4) Melvin confirms the six E-14 texts. | `app/services/enrichment.py` (or a new small service), `app/api/culinary.py` (approve path), `frontend/review.html` (if warning drafts don't render), `scripts/experience_export/gates.py`, `export.py`, `templates/index.html` | Code: draft rows and history rows read back by id. `--plan-only --walk-id 4` on a scratch DB copy shows warning / withheld per caution species. Melvin: approve one draft and see it on the species page. |
 | **1b** | **Republish Rümmelsbühl foray (id 4)** — Melvin's step (public). Prerequisites: walk-4 reviews (7 drafts, 2 confirmations); clear the rule-2 blocker (*Rosa dumalis* 'edible' not human-verified, D3); optionally backfill the `experience_publications` row (C-05) | experience export (no app code) | `--plan-only` has no blockers. Built page: every caution species has a warning or no recipe. Melvin checks the live page. |
 | **2** ✅ done 20 Oct | **E-01 + E-02** snapshot/restore through the backup API; restore accepts only `snapshots/` files and hex hashes. S1, not S0 — placed here because every later batch writes data and relies on it. If strict S0-first is preferred, move it after batch 8 and keep the manual `.backup` step. | `app/api/dev.py` | Code: the scratch reproductions (`waltest`) re-run against the new functions on throw-away DBs. Melvin: Settings snapshot → `integrity_check` ok and row counts equal the live DB. |
-| **3** | **B2-02** (decided): `PATCH /api/edibility/status` sets `toxicity_severity` — toxic → 'toxic' unless already 'deadly'; never lowered automatically; relaxing needs an explicit curator severity in the same request. Then **B2-05 data** (decided): 155, 688, 745 → toxic (Melvin in the UI, or the endpoint after a snapshot); reject drafts 2920, 2921 | `app/api/edibility.py`, verdict controls in `frontend/species.html` / `review.html` if a severity choice is added | Code: read back species 155/688/745 (all fields), their history rows, drafts 2920/2921. Melvin: ☠ on those species' pins and walk badges. |
+| **3** ✅ done 20 Oct | **B2-02** (decided): `PATCH /api/edibility/status` sets `toxicity_severity` — toxic → 'toxic' unless already 'deadly'; never lowered automatically; relaxing needs an explicit curator severity in the same request. Then **B2-05 data** (decided): 155, 688, 745 → toxic (Melvin in the UI, or the endpoint after a snapshot); reject drafts 2920, 2921 | `app/api/edibility.py`, verdict controls in `frontend/species.html` / `review.html` if a severity choice is added | Code: read back species 155/688/745 (all fields), their history rows, drafts 2920/2921. Melvin: ☠ on those species' pins and walk badges. |
+| **14** (moved — runs straight after 3, Melvin 20 Oct evening; **E-03 + Review badge ✅ done 20 Oct** — E-04, B1-08, C-03, C-04, D1-03, D2-01 still open) | Quick S2 bugs: E-03 (Second Opinion 500 — reproduces on *Gentiana verna*, obs 24149), **Review menu badge count = the review queue's count** (shows 2,080 vs the queue's 386; new, Melvin 20 Oct evening), E-04, B1-08 candidate/score, C-03, C-04, D1-03, D2-01 | `reidentify.py`, `dev.py`, `scan.py`/review paths | Read-back + the logged repro (obs 24348). |
 | **3b** | **Verdict sweep** (new, Melvin 20 Oct evening; after 3, which couples verdict and severity): every species whose verdict is NULL/unknown, or whose verdict and severity disagree (e.g. *Atropa bella-donna*: severity deadly, verdict unknown), gets a **proposed verdict + severity from its stored sources as a review draft**. Melvin approves; nothing is set automatically. Needs an approve path for verdict drafts that writes through batch 3's coupled `PATCH /api/edibility/status` (today `edibility_status` drafts can't be approved — B3-04). Proposals are source-derived only, never a family heuristic (no-veto decision; cf. wikidata.py backlog item). | `app/api/edibility.py`, `app/api/culinary.py` (approve path), `frontend/review.html`, a dry-run-first script like batch 1's | Code: dry run lists every proposal with its source; drafts read back by id. Melvin: approve a few; species page and pins show the new verdict/severity. |
 | **4** | **A-02** (decided): `/api/settings` returns no secret values (`is_set` only) and refuses guests. **D1-01**: autoescape on, `\| safe` only for `mdlite`/`season_str`, escape the `_mdlite` heading, `url_fetcher` limited to `frontend/static/print` | `app/api/settings.py`, `app/services/settings_service.py`, `frontend/settings.html`, `app/api/lists_pdf.py`, `app/templates/print_pdf.html` | Code: scratch `generate_pdf` with a hostile payload (`<img src=file:///…>`, `<script>`, HTML in a heading) → escaped text, no embedded file (pypdf). Melvin: Settings still shows keys as set; a normal PDF looks the same. |
 | **5** | **B2-01 + B2-04** (decided) **+ "deadly" label everywhere** (batch-3 extension, Melvin 20 Oct evening: verdict stays toxic; severity deadly shows "☠ deadly", plain toxic "☠ toxic" — on the map, walk, species page/grid, review, Lists/print/PDF, Export summary and experience page) via one shared `static/js/safety-gate.js` (and its server twin for PDF / Export summary / experience page): toxic/deadly by `edibility_status` OR severity → no edible parts, ☠ badge | `frontend/index.html` (`_injectEnrichment`, `showDetail`), `frontend/lists.html`, `frontend/print.html`, new `frontend/static/js/safety-gate.js`, `frontend/static/sw.js` (APP_SHELL + version bump) | Code: read-back + the shared-element trace (CLAUDE.md point 4). Melvin: tap a toxic pin; open a list with *Conium* in Lists + browser print → no edible parts, ☠ shown. |
@@ -276,14 +279,85 @@ Rules for every batch:
 | 9 | S1 routing integrity: B1-02 (re-queue the 2 P2 rows), B1-03 (terminal guard in the kingdom audit), B1-05, B1-06 | `app/api/trust.py`, `observations.py`, `scan.py` | Read-back by id. |
 | 10 | S1 photo safety: C-02, C-01 (one-off copy of 131 photos + path update), E-05c/g (log failed copies; anchor `_is_deletable`) | `app/services/file_cleanup.py`, `observations.py`, `bulk_actions.py`, `observation_service.py` | Read-back by id; file existence checks. |
 | 11 | S1 verdict trail and locks: C-06, B2-06, B2-07, B2-08 (now 51 NULL), B3-05, B2-09 | mostly curator passes; `app/api/edibility.py` | Read-back by id. |
-| 11b | **Data/taxonomy** (new, Melvin 20 Oct evening). (1) **Merge duplicate species under old names into the accepted name** — e.g. *Epilobium angustifolium* → *Chamaenerion angustifolium*: move observations, carry curator text over, history rows. ⚠ Conflicts with the CLAUDE.md rule "species_resources is string-keyed by species_name — merges orphan these; do not attempt merges": the merge must re-key `species_resources` (and every other name-keyed table) or Melvin lifts that rule explicitly. It must also never go through the rename cascade (B3-01 clears safety text), keep the more conservative verdict/severity and any human lock, and update walk `hide_species_ids` / overrides that hold the old id. One species first, dry run, read-back of every moved row. (2) **Sweep for other synonym duplicates** via GBIF accepted names (list only; Melvin picks). (3) **Backfill missing English common names** (e.g. *Dianthus carthusianorum*, *Fraxinus angustifolia*, *Ganoderma applanatum*, *Genista tinctoria*) from iNaturalist/GBIF — iNat token expired (backlog), GBIF vernacular works without one. | `app/api/culinary.py` (existing merge code, `_merged_into:` value), new script, `scripts/gbif_vernacular_backfill.py` | Code: per-merge dry run + read-back by id of every moved/re-keyed row; names read back by id. Melvin: the merged species page shows all photos, text and recipes. |
+| 11b | **Data/taxonomy** (new, Melvin 20 Oct evening). (1) **Merge duplicate species under old names into the accepted name** — e.g. *Epilobium angustifolium* → *Chamaenerion angustifolium*: move observations, carry curator text over, history rows. **Decided 20 Oct evening:** merges allowed, but only via a merge that re-keys `species_resources` and every other species-keyed table to the kept species, with tests and a snapshot first; update the CLAUDE.md "do not attempt merges" rule when this batch lands. It must also never go through the rename cascade (B3-01 clears safety text), keep the more conservative verdict/severity and any human lock, and update walk `hide_species_ids` / overrides that hold the old id. One species first, dry run, read-back of every moved row. (2) **Sweep for other synonym duplicates** via GBIF accepted names (list only; Melvin picks). (3) **Backfill missing English common names** (e.g. *Dianthus carthusianorum*, *Fraxinus angustifolia*, *Ganoderma applanatum*, *Genista tinctoria*) from iNaturalist/GBIF — iNat token expired (backlog), GBIF vernacular works without one. | `app/api/culinary.py` (existing merge code, `_merged_into:` value), new script, `scripts/gbif_vernacular_backfill.py` | Code: per-merge dry run + read-back by id of every moved/re-keyed row; names read back by id. Melvin: the merged species page shows all photos, text and recipes. |
 | 12 | Publication bookkeeping and build: C-05 / P8, D3-05, D3-02 / P7, D3-04 / P10 | `scripts/experience_export/*`, `app/api/experience.py` | Scratch builds. |
 | 13 | Identity: B4-01 dependency on the 116, B4-02, A-04 (A-03's socket-peer check moved to batch 7) | `app/main.py`, `app/api/sharing.py`, `identity.py`, routers | Tests (P16). Melvin: phone on LAN and via the link. |
-| 14 | Quick S2 bugs: E-03 (Second Opinion 500 — reproduces on *Gentiana verna*, obs 24149), **Review menu badge count = the review queue's count** (shows 2,080 vs the queue's 386; new, Melvin 20 Oct evening), E-04, B1-08 candidate/score, C-03, C-04, D1-03, D2-01 | `reidentify.py`, `dev.py`, `scan.py`/review paths | Read-back + the logged repro (obs 24348). |
 | 15 | P4 markdown renderer + P5 names + P15 shared JS core | `static/js/core/*`, the renderers listed in E-05a | Scratch PDFs + Melvin's visual check. |
 | 15b | **Walk batch** (new items, Melvin 20 Oct evening; before the index.html split, after batch 5 so `index.html` isn't edited by two batches at once). (1) **Edit walk:** tapping a numbered stop marks the whole stop for removal; tapping a pin marks the pin; a lasso inside Edit walk marks everything inside for add/remove; all pending until Save changes. (2) **Remove the circular / point-to-point toggle**: the walk is labelled Loop when the last stop is within ~300 m of stop 1, else One-way. The stored `loop` flag (PATCH …/loop) and the exports that follow it need a migration path: derive it, don't drop it silently. (3) **Start here on every stop** of any walk; one-way from a middle stop reorders, so it goes through the Re-route preview. (4) **Bug:** route line distorts, then disappears after zooming in and dragging, until the walk is reloaded — **reproduce first** (Melvin), no fix from code reading alone. (5) **Remove in-app GPS walk recording** (decided): inventory the recording code, its IDB stores/outbox entries and endpoints first; unsynced recordings on the phone must be flushed or exported before removal. | `frontend/index.html`, `app/api/walk.py`, `frontend/static/sw.js`, recording endpoints | Read-back + shared-element trace (CLAUDE.md point 4). Melvin: each Edit-walk gesture, the Loop/One-way label on walks 1, 3, 4, Start here from a middle stop, the zoom/drag repro, phone has no recording UI and the outbox still flushes. |
 | 16 | P18 index.html split (after batch 5; after P6 if chosen; after 15b) | `frontend/index.html`, new `static/css` + `static/js/index/*`, `sw.js`, `scripts/experience_export/app_styles.py` | Byte-equal concatenation check + boundary scan; Melvin's 8-point checklist (E-08). |
 | 17 | Tidy: E-07 dead code, E-09 docs, E-12 logs, A-05…A-10, rename group 1 strings, UA contacts | various | Read-back; app starts clean (Melvin). |
+
+### Batch 14 (part) — result (20 Oct 2026, evening): E-03 + Review badge
+
+**E-03 — Second Opinion 500:**
+- **Root cause, confirmed in code:** the GBIF branch built its own candidate dict without `non_european` / `pn_rank` / `pn_raw_rank`, and the ranking key reads `x["non_european"]` → `KeyError` → 500 whenever GBIF names a species the image APIs didn't (obs 24149 *Gentiana verna*; GBIF adds *Gentiana vernayi*).
+- **Fix (`app/api/reidentify.py`):**
+  - `_sop_entry()` is the one candidate shape; PlantNet, iNaturalist and GBIF all go through it.
+  - The merge is now a pure `merge_second_opinion_candidates()` that the endpoint calls. Score semantics are unchanged: image sources set their score; GBIF only adds a 0.50 name-match score and never replaces an image score or names.
+- **Tests:** `tests/test_second_opinion_merge.py`, 6 tests on recorded inputs (`tests/fixtures/second_opinion_recorded.json`: stored scan candidates + a recorded GBIF search for obs 24149 and 24348; no API calls). They include a proof that the old GBIF dict raises the KeyError.
+- **Live check:** `POST /api/observations/24149/second-opinion` → **200**, PlantNet/iNat/GBIF all ok, 9 results incl. the GBIF-only *G. vernayi*.
+- **New observation (not changed):** GBIF-only names get a fixed 0.50 display score, so the name-match-only *G. vernayi* (Himalayan) now ranks **#1**, above the image consensus *G. verna* (0.34). Hidden until now by the crash. Suggest sorting GBIF-only names after image-backed candidates — Melvin decides.
+
+**Review badge:**
+- **What it counted:** `site-header.js` `_initReviewBadge` showed `pending_review + needs_review` from `/api/observations/stats` — 1,667 + 389 = 2,056 today (2,080 when reported).
+- **What the page shows:** the Review page opens on Status = "Needs review" (`review.html` `#filter-status` first option); its list is `review_status = 'needs_review'` (389).
+- **Fix:**
+  - `observation_counts.REVIEW_QUEUE` is the one definition. The list query (`GET /api/observations?review_status=needs_review`), the page's per-status count (`by_status.needs_review`) and the new `stats.review_queue_count` all use it.
+  - The badge reads `review_queue_count` and links to `/review?status=needs_review`. `pending` rows are no longer in the badge; they're still reachable with the Status filter.
+- **Tests:** `tests/test_review_queue_count.py`, 4 tests.
+- **Live check:** badge 389 = by_status 389 = list length 389.
+
+### Batch 3 — result (20 Oct 2026, evening)
+
+**Code:**
+- **One rule.** `app/models/species.py` has `severity_for_verdict()` — the only definition of what `toxicity_severity` becomes when a verdict is saved. `'unknown'` = never assessed, and it fails closed (culinary_allowed is `'none'` only).
+
+  | Verdict | No severity in the request | Explicit severity allowed |
+  |---|---|---|
+  | toxic | `toxic`, or `deadly` if already deadly | toxic / deadly |
+  | edible / caution | `none` — **refused (400)** if the species is toxic/deadly now (never lowered automatically) | edible: none · caution: none / toxic |
+  | inedible | unchanged (inedible ≠ toxic) | none / toxic / unknown |
+  | unknown | `unknown` if it was `none`, else unchanged | unknown / toxic / deadly |
+
+  An explicit `toxicity_severity` in the request is the curator's choice, so it may relax, but it must fit the verdict.
+- **Every verdict writer uses the rule:**
+  - `PATCH /api/edibility/status` (new optional `toxicity_severity`; the loud-fail read-back now also checks severity).
+  - `PATCH /bulk-status` (per item; refusals go to `errors[]`).
+  - The bracken safety constant (`enrichment.py`).
+  - Each severity change writes a `species_edibility_history` row (`field='toxicity_severity'`).
+  - The `_merged_into:` merge marker isn't a verdict and isn't touched.
+- **New species are born `unknown`** (ORM default; covers all 4 creation paths). The DB's server_default stays `'none'`: changing it means a SQLite rebuild of `species` with FKs on. No app code inserts species rows with raw SQL.
+- **Fail-open sites closed (R3–R5):**
+  - The species page hides culinary fields, taste notes and the recipe bank unless severity is `'none'`. A never-assessed species gets an amber "Toxicity not yet assessed" box instead of the green "no known warnings".
+  - `print_pdf.html`: the 4 `not in ('deadly','toxic')` checks become `== 'none'`.
+  - `lists_pdf.py`: a missing severity defaults to `'unknown'`.
+- **Tests:** `tests/test_verdict_severity.py`, 18 tests — every rule branch, both endpoints on a throw-away DB (incl. "a refused write changes nothing"), and the ORM default.
+
+**Data** (Settings snapshot `db_20261020_213039` first):
+- Through the endpoint: *Amanita muscaria* (155, was caution/none), *Heracleum mantegazzianum* (688, unknown/none) and *Hedera helix* (745, NULL/none) → toxic / toxic, verified, `verified_by='human'`. History 144–149 is one severity row + one verdict row each, `changed_by='human'`.
+- Drafts 2920 (taste_notes) and 2921 (recipe) → rejected.
+- `scripts/backfill_never_assessed_severity.py`: **230 species** with no verdict (176 unknown + 54 NULL) and the `'none'` default → `'unknown'`. History rows 150–379, `changed_by='system:never_assessed'`. Species with a human severity row were excluded. Read back by id: 0 mismatches.
+- Severity now: none 407 · toxic 71 · deadly 8 · unknown 230.
+
+**What behaves differently now (B2 matrix):**
+
+| Surface | 155 / 688 / 745 (now toxic) | 230 never-assessed (now `unknown`) |
+|---|---|---|
+| Map pin pop-up | **unchanged** — still shows edible parts (no gate until batch 5) | unchanged (same reason) |
+| Walk panel stop card, "Also here", proximity alerts (R2) | ☠ toxic badge; no culinary snippet | "⚠ toxicity unknown" instead of the culinary snippet — 174 of them have confirmed pins |
+| Near-me / Find (label only) | label "toxic" | unchanged (label "unknown") |
+| Export summary (client R2) | culinary notes / recipe dropped, toxic label | culinary notes dropped |
+| Species page (R3, now closed) | red NOT SAFE box; culinary, taste and recipe suppressed | culinary fields, taste notes and recipe bank held back; amber "not yet assessed" — 57 have edible-parts text that's now hidden |
+| `/api/culinary`, `/profile` recipes (R6 + culinary_allowed) | recipes blocked (none approved anyway) | recipes blocked for `'unknown'` verdicts too (0 approved today) |
+| Lists screen + browser print | **unchanged** — edible parts still shown (batch 5); recipes server-blocked | edible parts still shown (batch 5) |
+| PDF (R4/R5, now closed) | parts / foraging / recipe hidden; booklet shows the toxic safety box | parts / foraging / recipe hidden |
+| Personal list card (R1) | recipe hidden | recipe hidden |
+| Experience page (R9) | none of the 3 is on walk 4 | walk 4: 8 species "For identification" → "⚠ Toxicity unknown — do not eat". No new blockers; same 17 recipes. *Heracleum sibiricum*'s Carrot-family badge is replaced by the unknown badge (`edibility_badge` checks unknown first). |
+| Experience verify-species | refused (toxic) | refused (severity not `'none'`) |
+| AI generation (R7, keyed on verdict) | no taste/recipe drafts any more | unchanged (verdict unknown/NULL already blocked) |
+| Species chat | prompt says toxic | prompt says "classified as unknown" |
+
+**Not in batch 3:** the approve path for verdict drafts. Section 9 puts it in 3b, so it isn't built.
 
 ### Batch 2 — result (20 Oct 2026, evening)
 

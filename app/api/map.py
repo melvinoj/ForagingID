@@ -38,6 +38,7 @@ from app.models.culinary import CulinaryInfo
 from app.models.observation import Observation
 from app.models.species import Species, display_common_name
 from app.services.phenology import in_season_now
+from app.services.taxonomy import normalize_taxon_key
 
 router = APIRouter(prefix="/api/map", tags=["map"])
 
@@ -219,12 +220,18 @@ async def map_geojson(
             or {}
         )
 
-        # Parse top candidate score
+        # The pin's confidence is its OWN species' score: candidates[0] once a
+        # human species change has put the chosen species first (B1-08), and
+        # only when candidates[0] is that species — a renamed species or an
+        # older unfixed row shows none rather than another species' score.
         top_score = None
         if row.species_candidates_json:
             try:
                 candidates = _json.loads(row.species_candidates_json)
-                if candidates:
+                if candidates and (
+                    normalize_taxon_key(candidates[0].get("scientific_name") or "")
+                    == normalize_taxon_key(row.species_primary or "")
+                ):
                     top_score = candidates[0].get("score")
             except Exception:
                 pass

@@ -25,7 +25,7 @@ import json
 import logging
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Optional, Set
+from typing import Dict, List, Optional, Sequence, Set
 
 import httpx
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
@@ -385,6 +385,135 @@ _SOP_IMAGE_SOURCES = ("plantnet", "inaturalist")
 _SOP_PER_SOURCE = 5
 
 
+def _sop_entry(sci: str, common: Optional[str], common_names: List[str],
+               ref_images: Optional[List[dict]] = None) -> dict:
+    """The ONE shape of a Second Opinion candidate, whatever source adds it first
+    (PlantNet, iNaturalist or GBIF). Every key the ranking and the response read
+    is here — before 21 Oct 2026 the GBIF branch built its own dict without
+    non_european / pn_rank / pn_raw_rank, and the sort raised KeyError → 500
+    whenever GBIF named a species the image APIs didn't (audit E-03)."""
+    return {
+        "scientific_name": sci,
+        "common_name": common,
+        "common_names": list(common_names or []),
+        "scores": {},              # source -> normalised 0–1 score
+        "sources": set(),
+        "reference_images": list(ref_images or []),
+        # Regional demotion flag/ranks come from PlantNet only (the lists are
+        # plant lists — never applied to iNat or GBIF names).
+        "non_european": False,
+        "pn_rank": None,
+        "pn_raw_rank": None,
+    }
+
+
+def merge_second_opinion_candidates(pn_cands: Sequence, inat_candidates: Sequence,
+                                    gbif_results: Sequence[dict],
+                                    per_source: int = _SOP_PER_SOURCE) -> List[dict]:
+    """Merge PlantNet / iNaturalist / GBIF candidates into the ranked Second
+    Opinion list. Pure (no I/O) — the endpoint calls it; tests run it on recorded
+    responses.
+
+    Scores are stored per-source on a normalised 0–1 scale: PlantNet returns
+    0–1, and inaturalist.score_image() already divides iNat's 0–100 scores by
+    100 (its .score is min(vision, combined) on 0–1). It must NOT be divided
+    again here — before 19 Oct 2026 it was, which made every iNat candidate
+    ~100x too small so PlantNet always took the pooled top-10.
+
+    Per-source guaranteed slots: each source contributes its own top
+    per_source in its own ranking order (PlantNet in its regionally demoted
+    order, iNat by geo-weighted combined score, GBIF name matches). Dedupe by
+    name merges the source tags. PlantNet's slots also keep any candidate that
+    was in its RAW top per_source but was pushed down by demotion, so demotion
+    never hides what PlantNet itself ranked highest (e.g. a planted exotic).
+    """
+    merged: Dict[str, dict] = {}
+
+    def _add(sci: str, common: Optional[str], common_names: List[str], score: float, source: str,
+             ref_images: Optional[List[dict]] = None, pn_cand: object = None) -> None:
+        key = (sci or "").lower().strip()
+        if not key:
+            return
+        if key not in merged:
+            merged[key] = _sop_entry(sci, common, common_names, ref_images)
+        entry = merged[key]
+        if pn_cand is not None:
+            entry["non_european"] = bool(getattr(pn_cand, "non_european", False))
+            entry["pn_rank"]      = getattr(pn_cand, "rank", None)
+            entry["pn_raw_rank"]  = getattr(pn_cand, "raw_rank", None)
+        entry["sources"].add(source)
+        if source == "gbif":
+            # Name match only: GBIF searched the current name's text, it never saw
+            # the photo. It adds no score and never replaces an image source's names.
+            return
+        entry["scores"][source] = score
+        if common and not entry["common_name"]:
+            entry["common_name"] = common
+        if common_names and not entry["common_names"]:
+            entry["common_names"] = list(common_names)
+        # Keep PlantNet reference images if the existing entry has none
+        if ref_images and not entry["reference_images"]:
+            entry["reference_images"] = list(ref_images)
+
+    for c in display_slots(list(pn_cands), per_source):
+        cn = c.common_names[0] if c.common_names else None
+        _add(c.scientific_name, cn, c.common_names, c.score, "plantnet", ref_images=c.images, pn_cand=c)
+
+    for c in list(inat_candidates)[:per_source]:
+        _add(c.scientific_name, c.common_name, c.common_names, min(c.score, 1.0), "inaturalist")
+
+    # GBIF name matches — a text search on the current name, not image evidence.
+    for g in list(gbif_results)[:per_source]:
+        cn = g.get("common_name")
+        _add(g["scientific_name"], cn, [cn] if cn else [], None, "gbif")
+
+    # Resolve a single 0–1 confidence per species (display sort only):
+    #   both image sources present -> average of the two
+    #   one image source present   -> that source's score
+    #   GBIF-only                  -> None: a name match only, no score at all.
+    # Before 21 Oct 2026 GBIF-only names got a fixed 0.50, which ranked a
+    # name-match-only Gentiana vernayi (Himalayan) above the photo's own
+    # consensus Gentiana verna (0.34) on obs 24149 (Melvin's decision, batch 14).
+    for entry in merged.values():
+        pn   = entry["scores"].get("plantnet")
+        inat = entry["scores"].get("inaturalist")
+        if pn is not None and inat is not None:
+            entry["confidence"] = (pn + inat) / 2.0
+        elif pn is not None:
+            entry["confidence"] = pn
+        elif inat is not None:
+            entry["confidence"] = inat
+        else:
+            entry["confidence"] = None
+        entry["name_match_only"] = entry["confidence"] is None
+
+    # Every slotted entry is kept; sorting is for display order only.
+    # 1. Name-match-only (GBIF-only) entries sort after every photo-backed one.
+    # 2. Regional demotion: a PlantNet-flagged non-European name sorts after the
+    #    rest unless iNaturalist (which is location-aware) also named it.
+    # 3. Within each group, confidence order (name matches keep GBIF's order).
+    # Nothing is dropped; the flags are shown.
+    ranked = sorted(
+        merged.values(),
+        key=lambda x: (x["name_match_only"],
+                       x["non_european"] and "inaturalist" not in x["sources"],
+                       -(x["confidence"] or 0.0)),
+    )
+    return [{
+        "rank": i + 1,
+        "scientific_name": item["scientific_name"],
+        "common_name": item["common_name"],
+        "common_names": item["common_names"],
+        "confidence": None if item["confidence"] is None else round(item["confidence"], 4),
+        "name_match_only": item["name_match_only"],
+        "sources": sorted(item["sources"]),          # list so JSON-serialisable
+        "reference_images": item["reference_images"],
+        "non_european": item["non_european"],
+        "pn_rank": item["pn_rank"],
+        "pn_raw_rank": item["pn_raw_rank"],
+    } for i, item in enumerate(ranked)]
+
+
 class SecondOpinionRequest(BaseModel):
     # Same shape and semantics as ReidentifyRequest.sources: None/empty means
     # "category default"; an explicit list is honoured as given — including
@@ -511,123 +640,8 @@ async def second_opinion(
             except (TypeError, ValueError):
                 pass
 
-    # Merge image-based candidates keyed by lowercased scientific name.
-    # Scores are stored per-source on a normalised 0–1 scale: PlantNet returns
-    # 0–1, and inaturalist.score_image() already divides iNat's 0–100 scores by
-    # 100 (its .score is min(vision, combined) on 0–1). It must NOT be divided
-    # again here — before 19 Oct 2026 it was, which made every iNat candidate
-    # ~100x too small so PlantNet always took the pooled top-10.
-    merged: Dict[str, dict] = {}
-
-    def _add_img(sci: str, common: Optional[str], common_names: List[str],
-                 score: float, source: str,
-                 ref_images: Optional[List[dict]] = None,
-                 pn_cand: object = None) -> None:
-        key = sci.lower().strip()
-        if not key:
-            return
-        if key not in merged:
-            merged[key] = {
-                "scientific_name": sci,
-                "common_name": common,
-                "common_names": list(common_names),
-                "scores": {},          # source -> normalised 0–1 score
-                "sources": set(),
-                "reference_images": list(ref_images or []),
-                "non_european": False,
-                "pn_rank": None,
-                "pn_raw_rank": None,
-            }
-        entry = merged[key]
-        if pn_cand is not None:
-            # Regional demotion flag/ranks come from PlantNet only (the lists
-            # are plant lists — never applied to iNat or GBIF names).
-            entry["non_european"] = bool(getattr(pn_cand, "non_european", False))
-            entry["pn_rank"]      = getattr(pn_cand, "rank", None)
-            entry["pn_raw_rank"]  = getattr(pn_cand, "raw_rank", None)
-        entry["sources"].add(source)
-        entry["scores"][source] = score
-        if common and not entry["common_name"]:
-            entry["common_name"] = common
-        if common_names and not entry["common_names"]:
-            entry["common_names"] = list(common_names)
-        # Keep PlantNet reference images if the existing entry has none
-        if ref_images and not entry["reference_images"]:
-            entry["reference_images"] = list(ref_images)
-
-    # Per-source guaranteed slots: each source contributes its own top
-    # _SOP_PER_SOURCE in its own ranking order (PlantNet in its regionally
-    # demoted order, iNat by geo-weighted combined score). Dedupe by name merges
-    # the source tags. PlantNet's slots also keep any candidate that was in its
-    # RAW top _SOP_PER_SOURCE but was pushed down by demotion, so demotion never
-    # hides what PlantNet itself ranked highest (e.g. a planted exotic).
     pn_cands = list((pn_result.candidates or []) if pn_result is not None else [])
-    for c in display_slots(pn_cands, _SOP_PER_SOURCE):
-        cn = c.common_names[0] if c.common_names else None
-        _add_img(c.scientific_name, cn, c.common_names, c.score, "plantnet",
-                 ref_images=c.images, pn_cand=c)
-
-    for c in (inat_candidates or [])[:_SOP_PER_SOURCE]:
-        _add_img(c.scientific_name, c.common_name, c.common_names,
-                 min(c.score, 1.0), "inaturalist")
-
-    # GBIF name matches (fixed score 0.50 display), same per-source cap
-    for g in (gbif_results or [])[:_SOP_PER_SOURCE]:
-        key = g["scientific_name"].lower().strip()
-        if key not in merged:
-            merged[key] = {
-                "scientific_name": g["scientific_name"],
-                "common_name": g.get("common_name"),
-                "common_names": [g["common_name"]] if g.get("common_name") else [],
-                "scores": {"gbif": 0.50},   # name-match only — not image confidence
-                "sources": {"gbif"},
-                "reference_images": [],
-            }
-        else:
-            merged[key]["sources"].add("gbif")
-            merged[key]["scores"].setdefault("gbif", 0.50)
-
-    # Resolve a single 0–1 confidence per species (display sort only):
-    #   both image sources present -> average of the two
-    #   one image source present   -> that source's score
-    #   GBIF-only                  -> fixed 0.50 name-match score
-    for entry in merged.values():
-        pn   = entry["scores"].get("plantnet")
-        inat = entry["scores"].get("inaturalist")
-        if pn is not None and inat is not None:
-            entry["confidence"] = (pn + inat) / 2.0
-        elif pn is not None:
-            entry["confidence"] = pn
-        elif inat is not None:
-            entry["confidence"] = inat
-        else:
-            entry["confidence"] = entry["scores"].get("gbif", 0.50)
-
-    # Every slotted entry is kept; sorting is for display order only.
-    # Regional demotion: a PlantNet-flagged non-European name sorts after the
-    # rest unless iNaturalist (which is location-aware) also named it. Within
-    # each group, confidence order. Nothing is dropped; the flag is shown.
-    ranked = sorted(
-        merged.values(),
-        key=lambda x: (x["non_european"] and "inaturalist" not in x["sources"],
-                       -x["confidence"]),
-    )
-
-    results = []
-    for i, item in enumerate(ranked):
-        srcs: Set[str] = item["sources"]
-        results.append({
-            "rank": i + 1,
-            "scientific_name": item["scientific_name"],
-            "common_name": item["common_name"],
-            "common_names": item["common_names"],
-            "confidence": round(item["confidence"], 4),
-            "sources": sorted(srcs),          # list so JSON-serialisable
-            "reference_images": item.get("reference_images", []),
-            "non_european": item["non_european"],
-            "pn_rank": item["pn_rank"],
-            "pn_raw_rank": item["pn_raw_rank"],
-        })
+    results = merge_second_opinion_candidates(pn_cands, inat_candidates or [], gbif_results or [])
 
     # Recorded outcomes only — see _plantnet_warning / _inat_warning. A queried
     # source that produced zero candidates always gets an explicit line saying
@@ -869,6 +883,14 @@ async def retry_confirm(
     if old_species and old_species != new_species:
         from app.services.species_link import strip_candidate_from_obs
         strip_candidate_from_obs(obs, old_species)
+    if old_species != new_species:
+        # The chosen species goes first with its own score (audit B1-08).
+        from app.services.species_link import confirmed_candidate_first
+        confirmed_candidate_first(obs, [body.common_name] if body.common_name else None)
+    # A species set by hand resolves a pending suggestion (audit C-04).
+    if obs.species_suggested is not None:
+        _log_edit(db, obs, "species_suggested", obs.species_suggested, None)
+        obs.species_suggested = None
 
     if old_species != new_species:
         _log_edit(db, obs, "species_primary", old_species, new_species)
@@ -940,6 +962,7 @@ async def confirm_species(
         species_name=new_species,
         update_species=True,
         edited_by="human",
+        common_name=body.common_name,
     )
 
     db.add(ProcessingLog(

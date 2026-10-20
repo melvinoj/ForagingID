@@ -746,6 +746,11 @@
       font-size: 0.7rem; font-weight: 700; width: 34px; text-align: right;
       flex-shrink: 0;
     }
+    /* GBIF-only row: no score, wraps inside the 34px .sop-conf column */
+    .sop-name-only {
+      display: block; font-size: 0.56rem; font-weight: 500; line-height: 1.1;
+      white-space: normal; text-align: right;
+    }
     .sop-name { flex: 1; min-width: 0; }
     .sop-sci { font-style: italic; font-weight: 600; font-size: 0.77rem; }
     .sop-common { font-size: 0.69rem; color: #666; }
@@ -1868,25 +1873,37 @@ function _makeCardHtml(obs) {
     let speciesHtml = '';
     if (!isLandscape && obs.identification_status === 'identified') {
       if (candidates.length) {
+        // The block names the observation's species (species_primary) — before
+        // B1-08 it named candidates[0], which after a correction or a species
+        // rename was another species. After a human species change the server
+        // puts the chosen species first with its own score; a % is shown only
+        // when candidates[0] IS the named species, and a curator-named species
+        // no API listed (score null) shows none rather than an invented one
+        // (same rule as P7 below). "Also:" lists the other candidates.
         const top   = candidates[0];
-        const score = top.score || 0;
+        const shownName = obs.species_primary || top.scientific_name || '';
+        const _nk   = s => (s || '').trim().toLowerCase().replace(/\s+/g, ' ');
+        const topIsShown  = _nk(top.scientific_name) === _nk(shownName);
+        const hasTopScore = topIsShown && typeof top.score === 'number';
+        const score = hasTopScore ? top.score : 0;
         const pct   = (score * 100).toFixed(1);
-        const cls   = confClass(score);
-        const common = (top.common_names && top.common_names.length) ? top.common_names.join(' · ') : '';
-        const alts   = candidates.slice(1, 3).map(c => _esc(c.scientific_name)
+        const cls   = hasTopScore ? confClass(score) : '';
+        const common = (topIsShown && top.common_names && top.common_names.length) ? top.common_names.join(' · ') : '';
+        const alts   = candidates.filter(c => _nk(c.scientific_name) !== _nk(shownName)).slice(0, 2)
+          .map(c => _esc(c.scientific_name)
           + (c.non_european ? ` <span class="noneu-inline">(${NON_EUROPEAN_LABEL})</span>` : '')).join(', ');
-        const sciSafe = (top.scientific_name || '').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+        const sciSafe = shownName.replace(/"/g,'&quot;').replace(/'/g,'&#39;');
         const regionalHtml = (() => {
-          if (top.regional_obs_count == null) return '';
+          if (!topIsShown || top.regional_obs_count == null) return '';
           if (top.regional_obs_count > 0) return `<div class="sp-regional" style="color:#888;font-size:0.72rem">📍 ${top.regional_obs_count} local records</div>`;
           return `<div class="sp-regional" style="color:#b37d00;font-size:0.72rem">📍 Not recorded locally</div>`;
         })();
         speciesHtml = `
           <div class="species-block ${cls}">
-            <span class="sp-score">${pct}%</span>
-            <div class="sp-name">${top.scientific_name} <button class="sp-rename-btn" onclick="openRenameRowForm(${obs.id})" title="Rename species">✎</button></div>
+            ${hasTopScore ? `<span class="sp-score">${pct}%</span>` : ''}
+            <div class="sp-name">${_esc(shownName)} <button class="sp-rename-btn" onclick="openRenameRowForm(${obs.id})" title="Rename species">✎</button></div>
             ${common ? `<div class="sp-common">${common}</div>` : ''}
-            ${_noneuLabel(top)}
+            ${_noneuLabel(topIsShown ? top : null)}
             ${regionalHtml}
             ${alts   ? `<div class="sp-alts">Also: ${alts}</div>` : ''}
             ${score < 0.80 ? `<button class="btn-second-opinion" id="sop-btn-${obs.id}"
@@ -2399,14 +2416,17 @@ function _renderSOPResults(obsId, data, withRef = false) {
   }
 
   const rowsHtml = results.map(r => {
-    const confPct = Math.round(r.confidence * 100);
-    const confColor = r.confidence >= 0.65 ? '#2d8016' : r.confidence >= 0.35 ? '#b37d00' : '#888';
+    // GBIF-only names are a text match on the current name — they never saw the
+    // photo, so the server sends no score (confidence null, name_match_only) and
+    // sorts them after every photo-backed row. No percentage is shown for them.
+    const nameOnly = !!r.name_match_only || r.confidence == null;
+    const confPct = nameOnly ? null : Math.round(r.confidence * 100);
+    const confColor = nameOnly ? '#888' : r.confidence >= 0.65 ? '#2d8016' : r.confidence >= 0.35 ? '#b37d00' : '#888';
     const commonHtml = r.common_name
       ? `<div class="sop-common">${_esc(r.common_name)}</div>` : '';
     const badgesHtml = _sopSourceBadges(r.sources);
-    // Image-based sources get % shown; GBIF-only gets "taxonomy" label
-    const isImageBased = r.sources && (r.sources.includes('plantnet') || r.sources.includes('inaturalist'));
-    const confLabel = isImageBased ? `${confPct}%` : 'GBIF';
+    const confLabel = nameOnly ? '<span class="sop-name-only">name match only</span>' : `${confPct}%`;
+    const confArg   = nameOnly ? 'null' : r.confidence;
 
     // Reference image section — only rendered when images were returned
     const imgs = (r.reference_images || []).slice(0, 2);
@@ -2428,7 +2448,7 @@ function _renderSOPResults(obsId, data, withRef = false) {
     const comArg = _resc(r.common_name || '').replace(/'/g, "\\'");
 
     return `<div class="sop-card">
-      <div class="sop-row" onclick="_sopSelect(${obsId},'${sciArg}','${comArg}',${r.confidence})">
+      <div class="sop-row" onclick="_sopSelect(${obsId},'${sciArg}','${comArg}',${confArg})">
         <div class="sop-conf" style="color:${confColor}">${confLabel}</div>
         <div class="sop-name">
           <div class="sop-sci">${_esc(r.scientific_name)}</div>
@@ -2469,40 +2489,47 @@ function _sopSelect(obsId, sciName, commonName, confidence) {
   _sopApply(obsId, sciName, commonName, confidence);
 }
 
-async function _sopApply(obsId, sciName, commonName, confidence) {
+function _sopApply(obsId, sciName, commonName, confidence) {
   // Reflect the chosen name immediately in the field + card header (A2), then
   // persist + enrich. Card is left in place for the reviewer's ✓ Approve.
   _applyCorrectionName(obsId, sciName, commonName);
 
-  try {
-    // 1. Confirm species on the observation
-    const r = await fetch(`/api/observations/${obsId}/confirm-species`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        scientific_name: sciName,
-        common_name: commonName || null,
-        confidence: confidence,
-        source: 'second_opinion',
-      }),
-    });
-    const d = await r.json().catch(() => ({}));
-    if (!r.ok) throw new Error(d.detail || `HTTP ${r.status}`);
+  return _trackNameSave(obsId, (async () => {
+    try {
+      // 1. Confirm species on the observation. confidence is logged only; the
+      //    server scores the chosen species from its stored evidence (B1-08),
+      //    and a GBIF name-match-only pick sends null.
+      const r = await fetch(`/api/observations/${obsId}/confirm-species`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          scientific_name: sciName,
+          common_name: commonName || null,
+          confidence: confidence,
+          source: 'second_opinion',
+        }),
+      });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(d.detail || `HTTP ${r.status}`);
 
-    // 2. Fire-and-forget enrichment for the selected species (non-blocking)
-    fetch(`/api/culinary/${encodeURIComponent(sciName)}/enrich`, { method: 'POST' })
-      .catch(() => {});  // best-effort
+      // 2. Fire-and-forget enrichment for the selected species (non-blocking)
+      fetch(`/api/culinary/${encodeURIComponent(sciName)}/enrich`, { method: 'POST' })
+        .catch(() => {});  // best-effort
 
-    // 3. Update the card UI + collapse the panel
-    const badge = document.getElementById(`badge-${obsId}`);
-    if (badge) { badge.className = 'badge badge-manually_verified'; badge.textContent = 'manually verified'; }
-    const panel = document.getElementById(`sop-panel-${obsId}`);
-    if (panel) panel.style.display = 'none';
-    toast(`✓ ${sciName} set — press Approve to confirm`);
+      // 3. Re-render the card from the saved row (B1-08) — this also closes the
+      //    panel and shows the new status badge. Fallback: patch badge + panel.
+      if (!(await _rerenderCard(obsId))) {
+        const badge = document.getElementById(`badge-${obsId}`);
+        if (badge) { badge.className = 'badge badge-manually_verified'; badge.textContent = 'manually verified'; }
+        const panel = document.getElementById(`sop-panel-${obsId}`);
+        if (panel) panel.style.display = 'none';
+      }
+      toast(`✓ ${sciName} set — press Approve to confirm`);
 
-  } catch(e) {
-    toast(`❌ Could not save: ${e.message}`);
-  }
+    } catch(e) {
+      toast(`❌ Could not save: ${e.message}`);
+    }
+  })());
 }
 
 // ── Retry ID (Prompt G) ─────────────────────────────────────────────────────
@@ -2605,38 +2632,46 @@ function _renderRetryResults(obsId, data) {
     ${warningsHtml}`;
 }
 
-async function _retryApprove(obsId, sciName, commonName, confidence, sourceApi, btn) {
+function _retryApprove(obsId, sciName, commonName, confidence, sourceApi, btn) {
   if (btn) { btn.disabled = true; btn.textContent = '⏳ Saving…'; }
-  const resultsDiv = document.getElementById(`retry-results-${obsId}`);
 
   _applyCorrectionName(obsId, sciName, commonName);
 
-  try {
-    const r = await fetch(`/api/observations/${obsId}/confirm-species`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ scientific_name: sciName, common_name: commonName || null, source: 'manual_entry' }),
-    });
-    const d = await r.json().catch(() => ({}));
-    if (!r.ok) throw new Error(d.detail || `HTTP ${r.status}`);
+  return _trackNameSave(obsId, (async () => {
+    try {
+      const r = await fetch(`/api/observations/${obsId}/confirm-species`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ scientific_name: sciName, common_name: commonName || null, source: 'manual_entry' }),
+      });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(d.detail || `HTTP ${r.status}`);
 
-    // Fire-and-forget enrichment
-    fetch(`/api/culinary/${encodeURIComponent(sciName)}/enrich`, { method: 'POST' }).catch(() => {});
+      // Fire-and-forget enrichment
+      fetch(`/api/culinary/${encodeURIComponent(sciName)}/enrich`, { method: 'POST' }).catch(() => {});
 
-    // Update badge
-    const badge = document.getElementById(`badge-${obsId}`);
-    if (badge) { badge.className = 'badge badge-manually_verified'; badge.textContent = 'manually verified'; }
+      // Re-render the card from the saved row (B1-08). The named card has no
+      // Request ID panel, so the confirmation goes in its correction area.
+      const okHtml = `<div style="font-size:0.78rem;color:#2d8016;padding:4px 0">✓ <em>${_esc(sciName)}</em> set — press <strong>✓ Approve</strong> to add to the map.</div>`;
+      if (await _rerenderCard(obsId)) {
+        const area = document.getElementById(`corr-results-${obsId}`);
+        if (area) area.innerHTML = okHtml;
+      } else {
+        const badge = document.getElementById(`badge-${obsId}`);
+        if (badge) { badge.className = 'badge badge-manually_verified'; badge.textContent = 'manually verified'; }
+        const resultsDiv = document.getElementById(`retry-results-${obsId}`);
+        if (resultsDiv) resultsDiv.innerHTML = okHtml;
+      }
 
-    if (resultsDiv) resultsDiv.innerHTML =
-      `<div style="font-size:0.78rem;color:#2d8016;padding:4px 0">✓ <em>${_esc(sciName)}</em> set — press <strong>✓ Approve</strong> to add to the map.</div>`;
-
-    toast(`✓ ${sciName} set — press Approve to confirm`);
-    loadCritical();   // a re-identified critical item may now be confirmed / non-toxic
-  } catch(e) {
-    if (btn) { btn.disabled = false; btn.textContent = 'Approve'; }
-    if (resultsDiv) resultsDiv.innerHTML = `<div class="retry-empty">❌ ${_esc(e.message)}</div>`;
-    toast(`❌ ${e.message}`);
-  }
+      toast(`✓ ${sciName} set — press Approve to confirm`);
+      loadCritical();   // a re-identified critical item may now be confirmed / non-toxic
+    } catch(e) {
+      if (btn) { btn.disabled = false; btn.textContent = 'Approve'; }
+      const resultsDiv = document.getElementById(`retry-results-${obsId}`);
+      if (resultsDiv) resultsDiv.innerHTML = `<div class="retry-empty">❌ ${_esc(e.message)}</div>`;
+      toast(`❌ ${e.message}`);
+    }
+  })());
 }
 
 // ── Species look-up (GBIF + iNaturalist name search) ──────────────────────
@@ -2758,43 +2793,50 @@ function _applyCorrectionName(id, sci, common) {
   }
 }
 
-async function _corrSaveFromLookup(id, sci, common) {
+function _corrSaveFromLookup(id, sci, common) {
   // Update the name field + card header up-front (A2), then persist + enrich.
   // The card is left in place so the reviewer reviews and presses ✓ Approve.
   _applyCorrectionName(id, sci, common);
-  const area = document.getElementById(`corr-results-${id}`);
-  if (area) area.innerHTML = '<div class="corr-lookup-loading">Saving…</div>';
+  const area0 = document.getElementById(`corr-results-${id}`);
+  if (area0) area0.innerHTML = '<div class="corr-lookup-loading">Saving…</div>';
 
-  try {
-    const r = await fetch(`/api/observations/${id}/confirm-species`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ scientific_name: sci, common_name: common || null, source: 'manual_entry' }),
-    });
-    if (!r.ok) {
-      const err = await r.json().catch(() => ({}));
-      throw new Error(err.detail || `HTTP ${r.status}`);
+  return _trackNameSave(id, (async () => {
+    try {
+      const r = await fetch(`/api/observations/${id}/confirm-species`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ scientific_name: sci, common_name: common || null, source: 'manual_entry' }),
+      });
+      if (!r.ok) {
+        const err = await r.json().catch(() => ({}));
+        throw new Error(err.detail || `HTTP ${r.status}`);
+      }
+
+      // Fire-and-forget enrichment
+      fetch(`/api/culinary/${encodeURIComponent(sci)}/enrich`, { method: 'POST' }).catch(() => {});
+
+      // Re-render the card from the saved row (B1-08); fallback: patch the badge.
+      if (!(await _rerenderCard(id))) {
+        const badge = document.getElementById(`badge-${id}`);
+        if (badge) {
+          badge.className = 'badge badge-manually_verified';
+          badge.textContent = 'manually verified';
+        }
+      }
+
+      // Looked up again: the card may have been replaced above.
+      const area = document.getElementById(`corr-results-${id}`);
+      if (area) area.innerHTML = `<div style="font-size:0.78rem;color:#2d8016;padding:4px 0">✓ <em>${_esc(sci)}</em> set — press <strong>✓ Approve</strong> to add to the map.</div>`;
+      const enrichEl = document.getElementById(`corr-enrich-${id}`);
+      if (enrichEl) enrichEl.style.display = 'block';
+      toast(`✓ ${sci} set — press Approve to confirm`);
+
+    } catch (e) {
+      const area = document.getElementById(`corr-results-${id}`);
+      if (area) area.innerHTML = `<div class="corr-lookup-none">❌ ${_esc(e.message)}</div>`;
+      toast(`❌ Could not save: ${e.message}`);
     }
-
-    // Fire-and-forget enrichment
-    fetch(`/api/culinary/${encodeURIComponent(sci)}/enrich`, { method: 'POST' }).catch(() => {});
-
-    // Update badge
-    const badge = document.getElementById(`badge-${id}`);
-    if (badge) {
-      badge.className = 'badge badge-manually_verified';
-      badge.textContent = 'manually verified';
-    }
-
-    if (area) area.innerHTML = `<div style="font-size:0.78rem;color:#2d8016;padding:4px 0">✓ <em>${_esc(sci)}</em> set — press <strong>✓ Approve</strong> to add to the map.</div>`;
-    const enrichEl = document.getElementById(`corr-enrich-${id}`);
-    if (enrichEl) enrichEl.style.display = 'block';
-    toast(`✓ ${sci} set — press Approve to confirm`);
-
-  } catch (e) {
-    if (area) area.innerHTML = `<div class="corr-lookup-none">❌ ${_esc(e.message)}</div>`;
-    toast(`❌ Could not save: ${e.message}`);
-  }
+  })());
 }
 
 // ── Species correction (direct save) ──────────────────────────────────────
@@ -3039,9 +3081,58 @@ async function itisAcceptRename(speciesPrimary, context) {
   }
 }
 
+// ── Name saves: per-card lock + card refresh ───────────────────────────────
+// C-04: an Approve sent while a species pick (Look up / Second Opinion /
+// Request ID) was still saving read the row before the pick committed, and
+// promoted the typed text instead (obs 21585 'norway spruce'). setStatus now
+// waits for any name save in flight on the same card.
+const _nameSaves = new Map();   // obsId → Promise of the in-flight name save
+
+function _trackNameSave(id, promise) {
+  _nameSaves.set(id, promise);
+  const clear = () => { if (_nameSaves.get(id) === promise) _nameSaves.delete(id); };
+  promise.then(clear, clear);
+  return promise;
+}
+
+// B1-08: a species change reorders the stored candidates server-side (the
+// chosen species first, with its own score). Re-render the card from the saved
+// row so its %, "Also:" line and name describe the chosen species — before,
+// only the name text was swapped and the % / "Also:" kept the old top
+// candidate's. Keeps the card's selection; returns the new card element.
+async function _rerenderCard(id) {
+  const old = document.getElementById(`card-${id}`);
+  if (!old) return null;
+  let obs;
+  try {
+    const r = await fetch(`/api/observations/${id}`);
+    if (!r.ok) return null;
+    obs = await r.json();
+  } catch (_) { return null; }
+  const i = _reviewObs.findIndex(o => o.id === id);
+  if (i >= 0) _reviewObs[i] = obs;           // select-mode re-render uses this cache
+  const tmp = document.createElement('div');
+  tmp.innerHTML = _makeCardHtml(obs).trim();
+  const fresh = tmp.firstElementChild;
+  if (!fresh) return null;
+  old.replaceWith(fresh);
+  _confirmState.delete(id);                  // the fresh card shows the normal buttons
+  if (selectedIds.has(id)) {
+    fresh.classList.add('selected');
+    const chk = document.getElementById(`chk-${id}`);
+    if (chk) chk.checked = true;
+  }
+  return fresh;
+}
+
 // ── Single-card action ─────────────────────────────────────────────────────
 
 async function setStatus(id, status) {
+  // Never send the status while a name save on this card is still in flight
+  // (C-04). Wait first: the save re-renders the card, so look the card up after.
+  const pendingName = _nameSaves.get(id);
+  if (pendingName) { try { await pendingName; } catch (_) {} }
+
   const card = document.getElementById(`card-${id}`);
 
   // Optimistic flash
@@ -3051,11 +3142,14 @@ async function setStatus(id, status) {
 
   try {
     const r = await fetch(`/api/observations/${id}/review?status=${status}`, { method: 'PATCH' });
-    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    if (!r.ok) {
+      const err = await r.json().catch(() => ({}));
+      throw new Error(err.detail || `HTTP ${r.status}`);
+    }
   } catch (e) {
     // Revert flash on failure
     if (card) card.classList.remove('actioned-approve', 'actioned-reject');
-    toast(`❌ Failed to update #${id}: ${e.message}`);
+    toast(`❌ Failed to update #${id}: ${e.message}`, 6000);
     return;
   }
 

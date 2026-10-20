@@ -104,6 +104,24 @@ async def _bulk_review_task(obs_ids: List[int], status: str, pid: Optional[int])
 
                 prev_status = obs.review_status
 
+                # Approve promotes species_suggested only when it is a recognised
+                # scientific name (C-04 — same rule as the single approve). If it
+                # isn't, this row is left untouched for the reviewer.
+                promote_to = None
+                if (
+                    status in confirmed_statuses
+                    and not obs.species_primary
+                    and obs.species_suggested
+                ):
+                    from app.services.species_link import promotable_suggestion
+                    promote_to = await promotable_suggestion(session, obs)
+                    if promote_to is None:
+                        log.warning("[bulk_review] obs %d not approved: suggestion %r is not a "
+                                    "recognised scientific name", obs_id, obs.species_suggested)
+                        errors += 1
+                        await bp_progress(pid, i + 1, total, f"obs {obs_id}: unrecognised name")
+                        continue
+
                 if prev_status != status:
                     _log_edit(session, obs, "review_status", prev_status, status)
                     obs.review_status = status
@@ -119,16 +137,20 @@ async def _bulk_review_task(obs_ids: List[int], status: str, pid: Optional[int])
                     _copy_to_confirmed(obs)
 
                 # Promote species_suggested -> species_primary when approving
-                if (
-                    status in confirmed_statuses
-                    and not obs.species_primary
-                    and obs.species_suggested
-                ):
-                    from app.services.species_link import set_observation_species
-                    _log_edit(session, obs, "species_primary", None, obs.species_suggested)
-                    await set_observation_species(session, obs, obs.species_suggested)
+                if promote_to is not None:
+                    from app.services.species_link import (
+                        confirmed_candidate_first, set_observation_species,
+                    )
+                    _log_edit(session, obs, "species_primary", None, promote_to)
+                    await set_observation_species(session, obs, promote_to)
+                    confirmed_candidate_first(obs)   # its own score first (B1-08)
                     obs.species_suggested = None
                     obs.human_corrected = True
+
+                # A confirmed species name always has a linked species row (C-03).
+                if status in confirmed_statuses:
+                    from app.services.species_link import ensure_species_row
+                    await ensure_species_row(session, obs)
 
                 # Upgrade identification_status when approving. The rule (species
                 # assigned, OR a scene row that has none by nature) lives in

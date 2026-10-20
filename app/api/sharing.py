@@ -453,6 +453,14 @@ def _md_snippet(body: str, title: str, limit: int = 700) -> str:
     return "".join(out)
 
 
+def _toxicity_warning_colors(label: str) -> tuple:
+    """(background, text) for a toxicity warning badge — the ONE rule for the
+    full species block and the "Also here" repeat line: red for ☠ (toxic /
+    deadly), amber for the rest ("⚠ toxicity unknown"). Before 21 Oct 2026 the
+    repeat line was always red (audit D2-01)."""
+    return ("#dc2626", "#fff") if "☠" in (label or "") else ("#fef3c7", "#92400e")
+
+
 def _walk_species_html(s: WalkSpecies, first: bool) -> str:
     """One species section inside a stop card. Content arrives already gated by
     the frontend toxic guard; a toxicity_warning replaces the edibility badge."""
@@ -462,7 +470,7 @@ def _walk_species_html(s: WalkSpecies, first: bool) -> str:
         f'font-size:0.7rem;font-weight:600;background:{bg};color:{fg}">{_h(s.edibility)}</span>'
     ) if s.edibility else ""
     if s.toxicity_warning:
-        t_bg, t_fg = ("#dc2626", "#fff") if "☠" in s.toxicity_warning else ("#fef3c7", "#92400e")
+        t_bg, t_fg = _toxicity_warning_colors(s.toxicity_warning)
         edib_badge = (
             f'<span style="display:inline-block;padding:2px 8px;border-radius:4px;'
             f'font-size:0.7rem;font-weight:700;background:{t_bg};color:{t_fg}">'
@@ -539,8 +547,9 @@ def _build_walk_html(body: WalkExportRequest) -> str:
         if s.also_here:
             parts = []
             for r in s.also_here:
+                w_bg, w_fg = _toxicity_warning_colors(r.toxicity_warning)
                 warn = (f' <span style="font-size:0.66rem;font-weight:700;padding:0 5px;border-radius:4px;'
-                        f'background:#dc2626;color:#fff">{_h(r.toxicity_warning)}</span>'
+                        f'background:{w_bg};color:{w_fg}">{_h(r.toxicity_warning)}</span>'
                         if r.toxicity_warning else "")
                 name = (f'{_h(r.species_common)} (<em>{_h(r.species_scientific)}</em>)' if r.species_common
                         else f'<em>{_h(r.species_scientific)}</em>')             # names rule

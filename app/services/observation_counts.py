@@ -31,6 +31,22 @@ MAP_ELIGIBLE = Observation.review_status.in_(["approved", "manually_verified"]) 
     Observation.identification_status == "identified"
 )
 
+# Review queue — what the Review page shows by default (its Status filter opens
+# on "Needs review"). The ONLY definition: the list query
+# (GET /api/observations?review_status=needs_review), the per-status count the
+# page paginates with, and the nav Review badge (review_queue_count) all use it,
+# so the badge equals the queue (fix batch 14, 21 Oct 2026 — the badge used to
+# add every 'pending' row too: 2,080 vs the queue's 386). The second clause is
+# the list query's existing belt-and-suspenders exclusion, kept verbatim.
+REVIEW_QUEUE_STATUS = "needs_review"
+REVIEW_QUEUE = (Observation.review_status == REVIEW_QUEUE_STATUS) & (
+    Observation.review_status.notin_(["approved", "manually_verified", "rejected"])
+)
+
+
+async def review_queue_count(db: AsyncSession) -> int:
+    return await db.scalar(select(func.count(Observation.id)).where(REVIEW_QUEUE)) or 0
+
 
 async def observation_counts(db: AsyncSession) -> dict:
     """Return the canonical observation counts. See module docstring for definitions."""

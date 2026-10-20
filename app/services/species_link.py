@@ -56,15 +56,179 @@ def strip_candidate_from_obs(obs: Observation, old_name: Optional[str]) -> bool:
     return False
 
 
+def candidate_own_score(entry: dict) -> Optional[float]:
+    """The best stored image score for ONE candidate entry: its listed `score`,
+    or iNaturalist's gating score min(vision, combined) when that is higher.
+    None when no image source scored it (e.g. a curator-named species no API
+    listed). Never invents a value."""
+    scores = []
+    listed = entry.get("score")
+    if isinstance(listed, (int, float)):
+        scores.append(float(listed))
+    inat = [v for v in (entry.get("inat_vision_score"), entry.get("inat_combined_score"))
+            if isinstance(v, (int, float))]
+    if inat:
+        scores.append(float(min(inat)))
+    return max(scores) if scores else None
+
+
+def confirmed_candidate_first(obs: Observation,
+                              common_names: Optional[list] = None) -> bool:
+    """After a HUMAN species change, put the observation's species at the front
+    of species_candidates_json with its own score, and set top_score to it.
+
+    Audit B1-08 (21 Oct 2026): confirm/correct only stripped the moved-off name,
+    so candidates[0] stayed another species. The review card %, its "Also:" line,
+    the map pin's confidence and top_score all read candidates[0] / top_score,
+    so they showed another species' score (obs 24353: Lysimachia nemorum
+    confirmed, card "31.9%" = PlantNet's Micromeria douglasii).
+
+    Its own score = candidate_own_score() of its stored entry — PlantNet's or
+    iNat's, whichever scored it higher in the stored run (24353: iNat 0.4613,
+    the same 46% Second Opinion showed). When no stored entry names it, a
+    curator entry with score None goes first: no score is invented, and a
+    client-sent number (e.g. Second Opinion's) is never stored — so a GBIF
+    name-match-only pick can never acquire a score.
+
+    Matches by name_key. Sync, mutates obs only; caller commits. Call it ONLY
+    where a human sets the species (never in scan — machine order is evidence).
+    Returns True when it changed anything.
+    """
+    name = obs.species_primary
+    if not name:
+        return False
+    raw = obs.species_candidates_json
+    try:
+        cands = json.loads(raw) if raw else []
+    except (ValueError, TypeError):
+        return False
+    if cands is None:                       # stored "null"
+        cands = []
+    if not isinstance(cands, list):
+        return False
+
+    key = normalize_taxon_key(name)
+    idx = next((i for i, c in enumerate(cands)
+                if isinstance(c, dict) and normalize_taxon_key(c.get("scientific_name") or "") == key),
+               None)
+    if idx is None:
+        entry = {"scientific_name": name, "common_names": list(common_names or []),
+                 "score": None, "source": "curator"}
+    else:
+        entry = dict(cands.pop(idx))
+        own = candidate_own_score(entry)
+        if own != entry.get("score"):
+            entry["listed_score"] = entry.get("score")
+            entry["score"] = own
+            entry["score_basis"] = "inaturalist"    # only iNat's gate can be higher
+        if common_names and not entry.get("common_names"):
+            entry["common_names"] = list(common_names)
+    cands.insert(0, entry)
+
+    new_json = json.dumps(cands)
+    changed = new_json != raw or obs.top_score != entry["score"]
+    obs.species_candidates_json = new_json
+    obs.top_score = entry["score"]
+    return changed
+
+
 async def resolve_species_id(
     session: AsyncSession, scientific_name: Optional[str]
 ) -> Optional[int]:
-    """Return the Species.id whose scientific_name matches, or None."""
+    """Return the Species.id for a name, or None: exact scientific_name first,
+    then name_key (case, ×/x hybrid marker, autonym — CLAUDE.md "use name_key
+    for all species lookups"), then a registered synonym (species_synonyms), the
+    same chain trigger_ai_drafts_for_species uses to pick the card it enriches.
+
+    Before 21 Oct 2026 this was exact-name only (audit C-03/C-07), so e.g. the
+    two 'Conyza canadensis' pins stayed unlinked although their card is the
+    synonym-registered Erigeron canadensis (342)."""
     if not scientific_name:
         return None
-    return await session.scalar(
+    sid = await session.scalar(
         select(Species.id).where(Species.scientific_name == scientific_name)
     )
+    if sid is not None:
+        return sid
+    key = normalize_taxon_key(scientific_name)
+    if not key:
+        return None
+    sid = await session.scalar(select(Species.id).where(Species.name_key == key))
+    if sid is not None:
+        return sid
+    from app.services.synonyms import resolve_synonym_species_id
+    return await resolve_synonym_species_id(session, scientific_name)
+
+
+async def promotable_suggestion(session: AsyncSession, obs: Observation) -> Optional[str]:
+    """The scientific name an APPROVE may promote from species_suggested, or None
+    when the suggestion is not a recognised scientific name.
+
+    species_suggested holds either the pipeline's below-threshold top candidate
+    or whatever the reviewer typed before pressing Look up (PATCH /suggest) —
+    which can be a common name. Approve used to promote it unchecked: obs 21585
+    got species_primary 'norway spruce' (audit C-04) and enrichment then made a
+    'norway spruce' species card.
+
+    Recognised = (1) a stored candidate (the pipeline's own suggestion always
+    is one), (2) a species card in use — exact or name_key, not orphan-marked,
+    or (3) a registered synonym. Returns the stored spelling."""
+    sug = (obs.species_suggested or "").strip()
+    if not sug:
+        return None
+    key = normalize_taxon_key(sug)
+    try:
+        cands = json.loads(obs.species_candidates_json or "[]") or []
+    except (ValueError, TypeError):
+        cands = []
+    if isinstance(cands, list):
+        for c in cands:
+            if isinstance(c, dict) and normalize_taxon_key(c.get("scientific_name") or "") == key:
+                return c.get("scientific_name") or sug
+    from sqlalchemy import or_
+    sci = await session.scalar(
+        select(Species.scientific_name)
+        .where(or_(Species.scientific_name == sug, Species.name_key == key))
+        .where(Species.orphaned_at.is_(None))
+    )
+    if sci:
+        return sci
+    from app.services.synonyms import resolve_synonym_species_id
+    if await resolve_synonym_species_id(session, sug) is not None:
+        return sug
+    return None
+
+
+async def ensure_species_row(session: AsyncSession, obs: Observation) -> Optional[int]:
+    """A CONFIRMED observation with a species name always has a species row and
+    is linked to it (audit C-03, 21 Oct 2026).
+
+    Before, the confirm paths left the row to trigger_ai_drafts_for_species, a
+    background task that created it in the same session as the network
+    enrichment — any enrichment failure rolled the new row back. Five confirmed
+    pins (21382, 21453, 21454, 21950, 22074) ended up with no card, edibility or
+    enrichment, and rows created later in the background stayed unlinked until
+    the next server start (24347/24348/24356).
+
+    Creates a bare row (scientific_name + name_key only; toxicity_severity is
+    born 'unknown' by the ORM default, so it fails closed) when no species,
+    name_key or synonym match exists. Enrichment still fills it in the
+    background, finding it by name_key. Never touches an existing row.
+    Call only for confirmed rows; caller commits. Returns obs.species_id."""
+    name = obs.species_primary
+    if not name or obs.species_id is not None:
+        return obs.species_id
+    sid = await resolve_species_id(session, name)
+    if sid is None:
+        from app.services.taxonomy import collapse_autonym
+        sci = collapse_autonym(name)
+        sp = Species(scientific_name=sci, name_key=normalize_taxon_key(sci))
+        session.add(sp)
+        await session.flush()
+        sid = sp.id
+    obs.species_id = sid
+    await _clear_orphan_marker(session, name, sid)
+    return sid
 
 
 async def _name_has_backing_observation(

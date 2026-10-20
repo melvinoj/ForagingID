@@ -1,0 +1,498 @@
+{
+ "24149": {
+  "species_primary": "Gentiana verna",
+  "stored_candidates": [
+   {
+    "rank": 1,
+    "scientific_name": "Gentiana verna",
+    "common_names": [
+     "Spring gentian",
+     "Star Gentian"
+    ],
+    "score": 0.5242,
+    "family": "Gentianaceae",
+    "genus": "Gentiana",
+    "gbif_id": "8232412",
+    "source": "plantnet"
+   },
+   {
+    "rank": 2,
+    "scientific_name": "Gentiana brachyphylla",
+    "common_names": [
+     "Small leaved Gentian",
+     "Short leaved gentian",
+     "Kurzblättriger Enzian"
+    ],
+    "score": 0.2722,
+    "family": "Gentianaceae",
+    "genus": "Gentiana",
+    "gbif_id": "7270252",
+    "source": "plantnet"
+   },
+   {
+    "rank": 3,
+    "scientific_name": "Gentiana sierrae",
+    "common_names": [
+     "Short leaved Gentian"
+    ],
+    "score": 0.0767,
+    "family": "Gentianaceae",
+    "genus": "Gentiana",
+    "gbif_id": "3841442",
+    "source": "plantnet"
+   },
+   {
+    "rank": 4,
+    "scientific_name": "Gentiana pumila",
+    "common_names": [
+     "Niedriger Enzian"
+    ],
+    "score": 0.0389,
+    "family": "Gentianaceae",
+    "genus": "Gentiana",
+    "gbif_id": "7954417",
+    "source": "plantnet"
+   },
+   {
+    "rank": 5,
+    "scientific_name": "Gentiana nivalis",
+    "common_names": [
+     "Alpine gentian",
+     "Snow Gentian",
+     "Small Gentian"
+    ],
+    "score": 0.0043,
+    "family": "Gentianaceae",
+    "genus": "Gentiana",
+    "gbif_id": "3170097",
+    "source": "plantnet"
+   },
+   {
+    "rank": 6,
+    "scientific_name": "Gentiana terglouensis",
+    "common_names": [
+     "Triglav Gentian"
+    ],
+    "score": 0.0033,
+    "family": "Gentianaceae",
+    "genus": "Gentiana",
+    "gbif_id": "7269909",
+    "source": "plantnet"
+   },
+   {
+    "rank": 7,
+    "scientific_name": "Gentiana bavarica",
+    "common_names": [
+     "Bavarian gentian"
+    ],
+    "score": 0.0029,
+    "family": "Gentianaceae",
+    "genus": "Gentiana",
+    "gbif_id": "7270316",
+    "source": "plantnet"
+   },
+   {
+    "rank": 8,
+    "scientific_name": "Gentiana utriculosa",
+    "common_names": [
+     "Bladder Gentian"
+    ],
+    "score": 0.0016,
+    "family": "Gentianaceae",
+    "genus": "Gentiana",
+    "gbif_id": "8352976",
+    "source": "plantnet"
+   },
+   {
+    "rank": 9,
+    "scientific_name": "Gentiana dshimilensis",
+    "common_names": [],
+    "score": 0.0011,
+    "family": "Gentianaceae",
+    "genus": "Gentiana",
+    "gbif_id": "3839384",
+    "source": "plantnet"
+   },
+   {
+    "rank": 10,
+    "scientific_name": "Gentianopsis ciliata",
+    "common_names": [
+     "Fringe-flowered Gentian"
+    ],
+    "score": 0.0019,
+    "family": null,
+    "genus": null,
+    "gbif_id": null,
+    "source": "inaturalist"
+   },
+   {
+    "rank": 11,
+    "scientific_name": "Vinca minor",
+    "common_names": [
+     "lesser periwinkle"
+    ],
+    "score": 0.0024,
+    "family": null,
+    "genus": null,
+    "gbif_id": null,
+    "source": "inaturalist"
+   },
+   {
+    "rank": 12,
+    "scientific_name": "Aquilegia alpina",
+    "common_names": [
+     "Alpine Columbine"
+    ],
+    "score": 0.0059,
+    "family": null,
+    "genus": null,
+    "gbif_id": null,
+    "source": "inaturalist"
+   },
+   {
+    "rank": 13,
+    "scientific_name": "Gentiana acaulis",
+    "common_names": [
+     "trumpet gentian"
+    ],
+    "score": 0.0003,
+    "family": null,
+    "genus": null,
+    "gbif_id": null,
+    "source": "inaturalist"
+   },
+   {
+    "rank": 14,
+    "scientific_name": "Gentiana clusii",
+    "common_names": [
+     "Clusius' gentian"
+    ],
+    "score": 0.0003,
+    "family": null,
+    "genus": null,
+    "gbif_id": null,
+    "source": "inaturalist"
+   },
+   {
+    "rank": 15,
+    "scientific_name": "Vinca major",
+    "common_names": [
+     "greater periwinkle"
+    ],
+    "score": 0.0024,
+    "family": null,
+    "genus": null,
+    "gbif_id": null,
+    "source": "inaturalist"
+   }
+  ],
+  "gbif_results": [
+   {
+    "scientific_name": "Gentiana verna",
+    "common_name": null,
+    "rank": "species",
+    "family": null,
+    "genus": null,
+    "gbif_key": 240423135,
+    "source": "gbif"
+   },
+   {
+    "scientific_name": "Gentiana verna",
+    "common_name": null,
+    "rank": "species",
+    "family": null,
+    "genus": null,
+    "gbif_key": 312909505,
+    "source": "gbif"
+   },
+   {
+    "scientific_name": "Gentiana verna",
+    "common_name": null,
+    "rank": "species",
+    "family": "Gentianaceae",
+    "genus": "Gentiana",
+    "gbif_key": 164947439,
+    "source": "gbif"
+   },
+   {
+    "scientific_name": "Gentiana verna",
+    "common_name": null,
+    "rank": "species",
+    "family": "Gentianaceae",
+    "genus": "Gentiana",
+    "gbif_key": 103208964,
+    "source": "gbif"
+   },
+   {
+    "scientific_name": "Gentiana vernayi",
+    "common_name": null,
+    "rank": "species",
+    "family": "Gentianaceae",
+    "genus": null,
+    "gbif_key": 191952461,
+    "source": "gbif"
+   },
+   {
+    "scientific_name": "Gentiana verna",
+    "common_name": null,
+    "rank": "species",
+    "family": "Gentianaceae",
+    "genus": "Gentiana",
+    "gbif_key": 101373632,
+    "source": "gbif"
+   }
+  ],
+  "recorded": "2026-10-20: stored scan candidates (PlantNet/iNat) + live GBIF species search"
+ },
+ "24348": {
+  "species_primary": "Euphorbia corollata",
+  "stored_candidates": [
+   {
+    "rank": 2,
+    "scientific_name": "Euphorbia lucorum",
+    "common_names": [
+     "Shiny spurge"
+    ],
+    "score": 0.0466,
+    "family": "Euphorbiaceae",
+    "genus": "Euphorbia",
+    "gbif_id": "3068973",
+    "source": "plantnet"
+   },
+   {
+    "rank": 3,
+    "scientific_name": "Euphorbia platyphyllos",
+    "common_names": [
+     "Broad leaved spurge",
+     "Broadleaf spurge",
+     "Broad spurge"
+    ],
+    "score": 0.0428,
+    "family": "Euphorbiaceae",
+    "genus": "Euphorbia",
+    "gbif_id": "3068153",
+    "source": "plantnet",
+    "inat_vision_score": 0.0378,
+    "inat_combined_score": 0.0927
+   },
+   {
+    "rank": 4,
+    "scientific_name": "Galium sylvaticum",
+    "common_names": [
+     "Wood bedstraw",
+     "Scotchmist",
+     "Scotch mist"
+    ],
+    "score": 0.0283,
+    "family": "Rubiaceae",
+    "genus": "Galium",
+    "gbif_id": "2913288",
+    "source": "plantnet",
+    "inat_vision_score": 0.009,
+    "inat_combined_score": 0.0294
+   },
+   {
+    "rank": 5,
+    "scientific_name": "Euphorbia hyberna",
+    "common_names": [
+     "Irish Spurge",
+     "Bainne Caoin (GA)",
+     "Irish Euphorbia"
+    ],
+    "score": 0.0244,
+    "family": "Euphorbiaceae",
+    "genus": "Euphorbia",
+    "gbif_id": "3066567",
+    "source": "plantnet"
+   },
+   {
+    "rank": 6,
+    "scientific_name": "Euphorbia hirsuta",
+    "common_names": [
+     "Pubescent Spurge",
+     "Hairy Spurge"
+    ],
+    "score": 0.0123,
+    "family": "Euphorbiaceae",
+    "genus": "Euphorbia",
+    "gbif_id": "3065548",
+    "source": "plantnet",
+    "inat_vision_score": 0.0352,
+    "inat_combined_score": 0.0088
+   },
+   {
+    "rank": 7,
+    "scientific_name": "Amelanchier bartramiana",
+    "common_names": [
+     "Bartram's serviceberry",
+     "Mountain serviceberry",
+     "Mountain shadbush"
+    ],
+    "score": 0.0078,
+    "family": "Rosaceae",
+    "genus": "Amelanchier",
+    "gbif_id": "3024074",
+    "source": "plantnet"
+   },
+   {
+    "rank": 8,
+    "scientific_name": "Euphorbia austriaca",
+    "common_names": [],
+    "score": 0.0067,
+    "family": "Euphorbiaceae",
+    "genus": "Euphorbia",
+    "gbif_id": "3064131",
+    "source": "plantnet"
+   },
+   {
+    "rank": 9,
+    "scientific_name": "Euphorbia altaica",
+    "common_names": [],
+    "score": 0.0053,
+    "family": "Euphorbiaceae",
+    "genus": "Euphorbia",
+    "gbif_id": "3066456",
+    "source": "plantnet"
+   },
+   {
+    "rank": 10,
+    "scientific_name": "Euphorbia dulcis",
+    "common_names": [
+     "Sweet spurge"
+    ],
+    "score": 0.0046,
+    "family": "Euphorbiaceae",
+    "genus": "Euphorbia",
+    "gbif_id": "3069475",
+    "source": "plantnet",
+    "inat_vision_score": 0.0011,
+    "inat_combined_score": 0.0099
+   },
+   {
+    "rank": 11,
+    "scientific_name": "Euphorbia stricta",
+    "common_names": [
+     "Upright Spurge"
+    ],
+    "score": 0.0352,
+    "family": null,
+    "genus": null,
+    "gbif_id": null,
+    "source": "inaturalist",
+    "inat_vision_score": 0.0352,
+    "inat_combined_score": 0.2839
+   },
+   {
+    "rank": 12,
+    "scientific_name": "Euphorbia amygdaloides",
+    "common_names": [
+     "wood spurge"
+    ],
+    "score": 0.0092,
+    "family": null,
+    "genus": null,
+    "gbif_id": null,
+    "source": "inaturalist",
+    "inat_vision_score": 0.0092,
+    "inat_combined_score": 0.1377
+   },
+   {
+    "rank": 13,
+    "scientific_name": "Daphne mezereum",
+    "common_names": [
+     "Mezereon"
+    ],
+    "score": 0.0032,
+    "family": null,
+    "genus": null,
+    "gbif_id": null,
+    "source": "inaturalist",
+    "inat_vision_score": 0.0032,
+    "inat_combined_score": 0.0423
+   },
+   {
+    "rank": 14,
+    "scientific_name": "Euphorbia helioscopia",
+    "common_names": [
+     "Sun spurge"
+    ],
+    "score": 0.0012,
+    "family": null,
+    "genus": null,
+    "gbif_id": null,
+    "source": "inaturalist",
+    "inat_vision_score": 0.0012,
+    "inat_combined_score": 0.0161
+   },
+   {
+    "rank": 15,
+    "scientific_name": "Daphne kamtschatica",
+    "common_names": [],
+    "score": 0.0071,
+    "family": null,
+    "genus": null,
+    "gbif_id": null,
+    "source": "inaturalist",
+    "inat_vision_score": 0.0287,
+    "inat_combined_score": 0.0071
+   }
+  ],
+  "gbif_results": [
+   {
+    "scientific_name": "Euphorbia corollata",
+    "common_name": null,
+    "rank": "species",
+    "family": null,
+    "genus": "Euphorbia",
+    "gbif_key": 114064139,
+    "source": "gbif"
+   },
+   {
+    "scientific_name": "Euphorbia corollata",
+    "common_name": null,
+    "rank": "species",
+    "family": "Euphorbiaceae",
+    "genus": "Euphorbia",
+    "gbif_key": 103154440,
+    "source": "gbif"
+   },
+   {
+    "scientific_name": "Euphorbia corollata",
+    "common_name": null,
+    "rank": "species",
+    "family": "Euphorbiaceae",
+    "genus": "Euphorbia",
+    "gbif_key": 179052900,
+    "source": "gbif"
+   },
+   {
+    "scientific_name": "Euphorbia corollata",
+    "common_name": null,
+    "rank": "species",
+    "family": "Euphorbiaceae",
+    "genus": "Euphorbia",
+    "gbif_key": 207033547,
+    "source": "gbif"
+   },
+   {
+    "scientific_name": "Euphorbia corollata",
+    "common_name": null,
+    "rank": "species",
+    "family": "Euphorbiaceae",
+    "genus": "Euphorbia",
+    "gbif_key": 334937666,
+    "source": "gbif"
+   },
+   {
+    "scientific_name": "Euphorbia corollata",
+    "common_name": null,
+    "rank": "species",
+    "family": "Euphorbiaceae",
+    "genus": "Euphorbia",
+    "gbif_key": 102284640,
+    "source": "gbif"
+   }
+  ],
+  "recorded": "2026-10-20: stored scan candidates (PlantNet/iNat) + live GBIF species search"
+ }
+}

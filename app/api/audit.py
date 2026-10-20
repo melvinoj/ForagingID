@@ -189,7 +189,10 @@ async def run_audit(
     for r in rows:
         try:
             cands = _json.loads(r.species_candidates_json or "[]")
-            candidate_names = {c.get("scientific_name", "") for c in cands}
+            # API candidates only: since B1-08 a curator-named species no API
+            # listed is stored first as source "curator" — not an API suggestion.
+            candidate_names = {c.get("scientific_name", "") for c in cands
+                               if c.get("source") != "curator"}
             if candidate_names and r.species_primary not in candidate_names:
                 issues.append({
                     "type": "suspicious_correction",

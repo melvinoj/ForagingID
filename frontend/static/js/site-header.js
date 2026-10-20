@@ -211,22 +211,21 @@
   window.__refreshCriticalBadge = _initCriticalBadge;
 
   function _initReviewBadge() {
-    // Links to whichever bucket (pending vs needs_review) is larger, same
-    // priority rule as the old stats-bar link (Map Redesign P1).
+    // The badge is exactly the Review page's default queue: review_queue_count
+    // comes from the same server query as the list (observation_counts.REVIEW_QUEUE).
+    // Before fix batch 14 it added every 'pending' row too (2,080 vs the queue's 386).
     fetch('/api/observations/stats').then(function (r) {
       return r.ok ? r.json() : null;
     }).then(function (d) {
       if (!d) return;
-      var pending = d.pending_review || 0;
-      var flagged = d.needs_review || 0;
-      var n = pending + flagged;
+      var n = d.review_queue_count || 0;
       var badge = document.getElementById('nav-badge-review');
       if (!badge) return;
       if (n > 0) {
-        var status = flagged > 0 ? 'needs_review' : 'pending';
         badge.textContent = n;
+        badge.title = n + ' observation' + (n === 1 ? '' : 's') + ' in the review queue';
         badge.classList.add('visible');
-        badge.closest('a').href = '/review?status=' + status;
+        badge.closest('a').href = '/review?status=' + (d.review_queue_status || 'needs_review');
       } else {
         badge.classList.remove('visible');
       }

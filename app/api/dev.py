@@ -772,13 +772,12 @@ async def end_session(body: EndSessionRequest):
         since_dt: Optional[datetime] = None
         try:
             result = subprocess.run(
-                ["git", "log", "--grep=^snapshot:", "--format=%ci", "--skip=1", "-1"],
+                ["git", "log", "--grep=^snapshot:", "--format=%cI", "--skip=1", "-1"],
                 cwd=PROJECT_ROOT, capture_output=True, text=True,
             )
             ts_line = result.stdout.strip()
             if ts_line:
-                # git commit date format: "2026-06-05 21:09:29 +0100"
-                since_dt = datetime.fromisoformat(ts_line.split("+")[0].split("-0")[0].strip())
+                since_dt = git_commit_time_utc(ts_line)
         except Exception as _ts_exc:
             log.warning("end_session: could not parse last snapshot timestamp — exporting all: %s", _ts_exc)
 
@@ -965,6 +964,25 @@ def _build_encounter_note(enc, species_name: Optional[str], common_name: Optiona
 
     lines.append("")  # trailing newline
     return "\n".join(lines)
+
+
+def git_commit_time_utc(ts: str) -> datetime:
+    """A git strict-ISO commit date (`%cI`, e.g. "2026-10-20T21:30:39+02:00")
+    as a naive UTC datetime — the zone encounter_date is stored in.
+
+    Before 21 Oct 2026 (audit E-04) End Session read `%ci` ("2026-10-20 21:30:39
+    +0200") and cut it with split("+")[0].split("-0")[0]. That cut every date
+    with "-0" in it (months Jan–Sep, days 01–09) to "2026", fromisoformat
+    raised, and the export fell back to ALL encounters. The kept part was also
+    local time compared against UTC dates."""
+    from datetime import timezone
+    s = ts.strip()
+    if s.endswith("Z"):                  # Python 3.9's fromisoformat has no "Z"
+        s = s[:-1] + "+00:00"
+    dt = datetime.fromisoformat(s)
+    if dt.tzinfo is None:
+        raise ValueError(f"git commit time has no UTC offset: {ts!r}")
+    return dt.astimezone(timezone.utc).replace(tzinfo=None)
 
 
 async def _export_encounters_to_obsidian(since: Optional[datetime] = None) -> dict:

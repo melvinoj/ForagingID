@@ -2,7 +2,7 @@
 
 Read-only audit. No fixes. Evidence-labelled findings in REPORT.md.
 
-**Audit complete — all phases done (session 3).** Next: the fix pass, in REPORT.md section 9 order (batch 1 = D3-01, then 1b = republish Rümmelsbühl foray, id 4).
+**Audit complete — all phases done (session 3).** Fix pass in REPORT.md section 9 order. **Batch 1 (D3-01) done 20 Oct evening** — result in section 9 "Batch 1 — result". Next: 1b = Melvin reviews the walk-4 drafts, verifies *Rosa dumalis*, republishes Rümmelsbühl foray (id 4); then batch 2.
 
 | Phase | State | Notes |
 |---|---|---|
@@ -33,11 +33,13 @@ Read-only audit. No fixes. Evidence-labelled findings in REPORT.md.
   - Walk 4: 15 caution species; 7 PFAF drafts, 2 confirmations, 5 without text.
 - Data, after the severity fix: Amanita muscaria 155, Heracleum mantegazzianum 688, Hedera helix 745 → toxic; reject drafts 2920 and 2921 (batch 3).
 
+## Decided 20 Oct 2026 (evening) — in REPORT.md section 0
+- The 19 "source unknown" caution texts and the 6 E-14 rows go into the same review queue as the 36 PFAF ones (batch 1 — done: drafts 3178–3238).
+- B5-01, B5-02: close both — guests see confirmed plant photos only; encounters/voice notes curator-only (batch 8).
+- A-03: the batch-7 share-link secret also gates LAN access; only localhost without it (batch 7).
+- E-08: in-app GPS walk recording can be removed (batch 15b, before the index.html split).
+
 ## Open — Melvin decides
-- B5-01, B5-02 (S0 guest reads; batch 8).
-- A-03 (LAN trust; batch 13).
 - B5-03 / B5-05.
-- The 19 "source unknown" caution texts.
-- Whether in-app GPS recording can be removed before the index.html split (E-08).
 
 Scratch DB copy (session 3): `<scratchpad>/audit.db` taken 20 Oct 2026 17:01 local via `sqlite3 .backup` (integrity_check ok). Scratch is session-specific.

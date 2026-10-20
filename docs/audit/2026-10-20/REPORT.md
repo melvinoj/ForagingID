@@ -33,6 +33,15 @@ Sessions: 1 (Phases A–B), 2 (C–D), 3 (E–G). Sections 0–9 below were asse
 | D3-01 | Option C, with B as fallback. PFAF preparation warnings for caution species are imported as **drafts into review**. Melvin approves them as-is or rewrites them, and approval counts as curator-authored. Until a caution species has an approved warning, the page **withholds its recipes**. First batch, then a republish of Rümmelsbühl foray (id 4). | 1, 1b |
 | Data | After the severity fix: *Amanita muscaria* (155), *Heracleum mantegazzianum* (688) and *Hedera helix* (745) → toxic; reject drafts 2920 and 2921. | 3 |
 
+**Decided 20 Oct 2026 (evening)** — Melvin, recorded at the start of fix batch 1:
+
+| # | Item | Decision | Batch |
+|---|---|---|---|
+| 1 | D3-01 "source unknown" texts + E-14 | The **19 caution warnings of unknown origin** go into the same review queue as the 36 PFAF ones (approve as-is or rewrite; approval counts as curator-authored). The **6 E-14 marker rows** are surfaced in the same queue for Melvin to confirm. | 1 |
+| 2 | B5-01, B5-02 | **Close both.** Guests see confirmed plant photos only; encounters and voice notes are curator-only. Scheduled, not now. | 8 |
+| 3 | A-03 | **Extend the batch-7 share-link secret to LAN access**: only localhost gets in without it. Added to batch 7's scope (batch 13 keeps B4-01, B4-02, A-04). | 7 |
+| 4 | E-08 (GPS recording) | **In-app GPS walk recording can be removed.** Walks are built from photos; GPX comes from a walking app. Scheduled before the index.html split. | 15b (before 16) |
+
 **D3-01 review load** (DB copy 20 Oct 17:01; PFAF text parsed offline from the stored `enrichment_sources` HTML with the app's own `pfaf._parse`, no network):
 
 Of the **111 caution species**:
@@ -82,8 +91,8 @@ Of the **111 caution species**:
 | 6 | B2-01 | S0 | The map pin pop-up shows "🍴 Edible Parts" for toxic/deadly species, with no ☠ badge | decided fix | 5 |
 | 7 | B2-04 | S0 | The Lists screen and browser print show edible parts for toxic/deadly species | decided fix | 5 |
 | 8 | B2-03 | S0 | Printed and exported outputs drop look-alike and preparation warnings that doctrine requires | decided fix | 6 |
-| 9 | B5-01 | S0 | Any guest can read any encounter by id: transcripts, notes, exact coordinates, audio | **open — Melvin decides** | 8 |
-| 10 | B5-02 | S0 | Guests can list and download full-resolution personal photos filed as "not a plant" (381 person/animal, EXIF GPS) | **open — Melvin decides** | 8 |
+| 9 | B5-01 | S0 | Any guest can read any encounter by id: transcripts, notes, exact coordinates, audio | decided fix (close) | 8 |
+| 10 | B5-02 | S0 | Guests can list and download full-resolution personal photos filed as "not a plant" (381 person/animal, EXIF GPS) | decided fix (close) | 8 |
 
 Next in line:
 - A-01 (S0, decided to stay; refreshable link, batch 7).
@@ -103,12 +112,12 @@ Next in line:
 | B2-04 | Lists screen + browser print show edible parts for toxic | S / low | Decided fix — batch 5 |
 | B2-05 | Mis-classified hazards pass every gate (data) | S / none | Decided fix — batch 3 (after B2-02) |
 | B3-01 | A species rename erases curator-authored safety text; the lock keeps it blank | S / low | **Decided: stays** (re-add by hand after a pure Latin-name update) |
-| B5-01 | Guests read any encounter by id | S / low | Open — batch 8 if Melvin agrees |
-| B5-02 | Guests list/download personal non-plant photos | S / low | Open — batch 8 if Melvin agrees |
+| B5-01 | Guests read any encounter by id | S / low | Decided fix (close; encounters + voice notes curator-only) — batch 8 |
+| B5-02 | Guests list/download personal non-plant photos | S / low | Decided fix (close; guests see confirmed plant photos only) — batch 8 |
 | D1-01 | PDF endpoint renders request HTML and embeds local files | S / low | Decided fix — batch 4 |
-| D3-01 | Caution species published with no reason, beside recipes | S + curator writing / low | Decided fix — batch 1, then 1b republish |
+| D3-01 | Caution species published with no reason, beside recipes | S + curator writing / low | Batch 1 **done 20 Oct** (code + 61 review drafts); 1b republish is Melvin's |
 
-A-03 is graded S1 at home but **effectively S0 when the laptop runs on venue or café Wi-Fi** (Melvin decides — batch 13).
+A-03 is graded S1 at home but **effectively S0 when the laptop runs on venue or café Wi-Fi** (decided 20 Oct evening: the batch-7 share-link secret also gates LAN access — batch 7).
 
 ## 3. Matrices
 
@@ -254,24 +263,73 @@ Rules for every batch:
 
 | Batch | Items | Files | Verification |
 |---|---|---|---|
-| **1** | **D3-01** (decided C + B) + B3-02 + E-14. (1) Import PFAF Known Hazards for caution species as pending `preparation_warnings` drafts, from the stored PFAF HTML (36), skipping fields with any human row; also the 19 "source unknown" texts if Melvin agrees. (2) Approving a warning draft writes `culinary_info` + a history row `changed_by='human'` with the real `old_value` (B3-02). (3) `gates.py`: caution branch publishes the approved warning; caution species without one get no recipes; the plan lists "recipes withheld". (4) Melvin confirms the six E-14 texts. | `app/services/enrichment.py` (or a new small service), `app/api/culinary.py` (approve path), `frontend/review.html` (if warning drafts don't render), `scripts/experience_export/gates.py`, `export.py`, `templates/index.html` | Code: draft rows and history rows read back by id. `--plan-only --walk-id 4` on a scratch DB copy shows warning / withheld per caution species. Melvin: approve one draft and see it on the species page. |
+| **1** ✅ done 20 Oct | **D3-01** (decided C + B) + B3-02 + E-14. (1) Import PFAF Known Hazards for caution species as pending `preparation_warnings` drafts, from the stored PFAF HTML (36), skipping fields with any human row; also the 19 "source unknown" texts if Melvin agrees. (2) Approving a warning draft writes `culinary_info` + a history row `changed_by='human'` with the real `old_value` (B3-02). (3) `gates.py`: caution branch publishes the approved warning; caution species without one get no recipes; the plan lists "recipes withheld". (4) Melvin confirms the six E-14 texts. | `app/services/enrichment.py` (or a new small service), `app/api/culinary.py` (approve path), `frontend/review.html` (if warning drafts don't render), `scripts/experience_export/gates.py`, `export.py`, `templates/index.html` | Code: draft rows and history rows read back by id. `--plan-only --walk-id 4` on a scratch DB copy shows warning / withheld per caution species. Melvin: approve one draft and see it on the species page. |
 | **1b** | **Republish Rümmelsbühl foray (id 4)** — Melvin's step (public). Prerequisites: walk-4 reviews (7 drafts, 2 confirmations); clear the rule-2 blocker (*Rosa dumalis* 'edible' not human-verified, D3); optionally backfill the `experience_publications` row (C-05) | experience export (no app code) | `--plan-only` has no blockers. Built page: every caution species has a warning or no recipe. Melvin checks the live page. |
 | **2** | **E-01 + E-02** snapshot/restore through the backup API; restore accepts only `snapshots/` files and hex hashes. S1, not S0 — placed here because every later batch writes data and relies on it. If strict S0-first is preferred, move it after batch 8 and keep the manual `.backup` step. | `app/api/dev.py` | Code: the scratch reproductions (`waltest`) re-run against the new functions on throw-away DBs. Melvin: Settings snapshot → `integrity_check` ok and row counts equal the live DB. |
 | **3** | **B2-02** (decided): `PATCH /api/edibility/status` sets `toxicity_severity` — toxic → 'toxic' unless already 'deadly'; never lowered automatically; relaxing needs an explicit curator severity in the same request. Then **B2-05 data** (decided): 155, 688, 745 → toxic (Melvin in the UI, or the endpoint after a snapshot); reject drafts 2920, 2921 | `app/api/edibility.py`, verdict controls in `frontend/species.html` / `review.html` if a severity choice is added | Code: read back species 155/688/745 (all fields), their history rows, drafts 2920/2921. Melvin: ☠ on those species' pins and walk badges. |
 | **4** | **A-02** (decided): `/api/settings` returns no secret values (`is_set` only) and refuses guests. **D1-01**: autoescape on, `\| safe` only for `mdlite`/`season_str`, escape the `_mdlite` heading, `url_fetcher` limited to `frontend/static/print` | `app/api/settings.py`, `app/services/settings_service.py`, `frontend/settings.html`, `app/api/lists_pdf.py`, `app/templates/print_pdf.html` | Code: scratch `generate_pdf` with a hostile payload (`<img src=file:///…>`, `<script>`, HTML in a heading) → escaped text, no embedded file (pypdf). Melvin: Settings still shows keys as set; a normal PDF looks the same. |
 | **5** | **B2-01 + B2-04** (decided) via one shared `static/js/safety-gate.js`: toxic/deadly by `edibility_status` OR severity → no edible parts, ☠ badge | `frontend/index.html` (`_injectEnrichment`, `showDetail`), `frontend/lists.html`, `frontend/print.html`, new `frontend/static/js/safety-gate.js`, `frontend/static/sw.js` (APP_SHELL + version bump) | Code: read-back + the shared-element trace (CLAUDE.md point 4). Melvin: tap a toxic pin; open a list with *Conium* in Lists + browser print → no edible parts, ☠ shown. |
 | **6** | **B2-03** (decided): prep warnings always in printed outputs incl. caution; look-alike uncut for hazardous species; Export summary gains warning fields | `frontend/print.html`, `app/templates/print_pdf.html`, `app/api/lists_pdf.py`, `app/api/sharing.py`, `frontend/index.html` (export payload) | Code: the 9 scratch PDFs re-run with the D1 fixture → `pdftotext` shows *Sambucus* and *Coprinus* warnings in all 3 layouts and *Conium*'s look-alike uncut. Melvin: browser print + Export summary for walk 4. |
-| **7** | **Refreshable share link** (decided; section 0) | `app/main.py`, `app/api/sharing.py`, `app/services/settings_service.py`, `frontend/settings.html`, `frontend/static/sw.js`, `app/api/identity.py` (`/api/me` tokens) | Code: middleware tests (P16) with fake Host/cookie. Melvin: new QR works on the phone; the old link shows "replaced" at once; the outbox flushes after re-opening. |
-| **8** | **B5-01, B5-02** (open — Melvin decides), with B5-03 and B5-05 if agreed | `app/api/encounters.py`, `observations.py`, `scan.py`, `map.py`, `dev.py` | Code: guest-identity tests. Melvin: a guest-mode phone gets 403 on `/api/encounters/1` and on a non-plant photo. |
+| **7** | **Refreshable share link** (decided; section 0) **+ A-03** (decided 20 Oct evening): the same secret also gates LAN access — only localhost (socket peer, not `Host`) gets in without it | `app/main.py`, `app/api/sharing.py`, `app/services/settings_service.py`, `frontend/settings.html`, `frontend/static/sw.js`, `app/api/identity.py` (`/api/me` tokens) | Code: middleware tests (P16) with fake Host/cookie/peer. Melvin: new QR works on the phone; the old link shows "replaced" at once; the outbox flushes after re-opening; a LAN device without the cookie gets the "replaced" page. |
+| **8** | **B5-01, B5-02** (decided 20 Oct evening: close both — guests see confirmed plant photos only; encounters and voice notes curator-only), with B5-03 and B5-05 if agreed | `app/api/encounters.py`, `observations.py`, `scan.py`, `map.py`, `dev.py` | Code: guest-identity tests. Melvin: a guest-mode phone gets 403 on `/api/encounters/1` and on a non-plant photo. |
 | 9 | S1 routing integrity: B1-02 (re-queue the 2 P2 rows), B1-03 (terminal guard in the kingdom audit), B1-05, B1-06 | `app/api/trust.py`, `observations.py`, `scan.py` | Read-back by id. |
 | 10 | S1 photo safety: C-02, C-01 (one-off copy of 131 photos + path update), E-05c/g (log failed copies; anchor `_is_deletable`) | `app/services/file_cleanup.py`, `observations.py`, `bulk_actions.py`, `observation_service.py` | Read-back by id; file existence checks. |
 | 11 | S1 verdict trail and locks: C-06, B2-06, B2-07, B2-08 (now 51 NULL), B3-05, B2-09 | mostly curator passes; `app/api/edibility.py` | Read-back by id. |
 | 12 | Publication bookkeeping and build: C-05 / P8, D3-05, D3-02 / P7, D3-04 / P10 | `scripts/experience_export/*`, `app/api/experience.py` | Scratch builds. |
-| 13 | Identity (Melvin decides A-03): socket-peer check, B4-01 dependency on the 116, B4-02, A-04 | `app/main.py`, `app/api/sharing.py`, `identity.py`, routers | Tests (P16). Melvin: phone on LAN and via the link. |
+| 13 | Identity: B4-01 dependency on the 116, B4-02, A-04 (A-03's socket-peer check moved to batch 7) | `app/main.py`, `app/api/sharing.py`, `identity.py`, routers | Tests (P16). Melvin: phone on LAN and via the link. |
 | 14 | Quick S2 bugs: E-03, E-04, B1-08 candidate/score, C-03, C-04, D1-03, D2-01 | `reidentify.py`, `dev.py`, `scan.py`/review paths | Read-back + the logged repro (obs 24348). |
 | 15 | P4 markdown renderer + P5 names + P15 shared JS core | `static/js/core/*`, the renderers listed in E-05a | Scratch PDFs + Melvin's visual check. |
-| 16 | P18 index.html split (after batch 5; after P6 if chosen; recording removal decided first) | `frontend/index.html`, new `static/css` + `static/js/index/*`, `sw.js`, `scripts/experience_export/app_styles.py` | Byte-equal concatenation check + boundary scan; Melvin's 8-point checklist (E-08). |
+| 15b | **Remove in-app GPS walk recording** (decided 20 Oct evening: walks are built from photos; GPX comes from a walking app). Inventory the recording code, its IDB stores/outbox entries and endpoints first; unsynced recordings on the phone must be flushed or exported before removal | `frontend/index.html`, `frontend/static/sw.js`, recording endpoints | Read-back + Melvin's phone check (no recording UI; outbox still flushes) |
+| 16 | P18 index.html split (after batch 5; after P6 if chosen; after 15b) | `frontend/index.html`, new `static/css` + `static/js/index/*`, `sw.js`, `scripts/experience_export/app_styles.py` | Byte-equal concatenation check + boundary scan; Melvin's 8-point checklist (E-08). |
 | 17 | Tidy: E-07 dead code, E-09 docs, E-12 logs, A-05…A-10, rename group 1 strings, UA contacts | various | Read-back; app starts clean (Melvin). |
+
+### Batch 1 — result (20 Oct 2026, evening)
+
+**Code** (static read-back + scratch runs; browser-unverified):
+- `app/models/species.py`: `is_curator_authored()` is now the only definition of "current text is curator-authored" (latest history row `human` and equal to the field). `gates.human_authored` and the approve path both use it. `CURATOR_DRAFT_FIELDS = {preparation_warnings}`.
+- `app/api/culinary.py` approve path:
+  - `preparation_warnings` drafts can be approved. Approval writes the field plus a history row `changed_by='human'` with the real `old_value`, and is not added to `ai_approved_fields_json`.
+  - Approval is refused (409) if the field was hand-edited after the draft was queued, and (422) for empty text.
+  - **B3-02:** AI-draft approvals now record the real `old_value`.
+  - The queue endpoint returns `current_text` for warning drafts.
+  - AI regenerate (here and in `enrichment.py`) never invalidates warning drafts.
+- `frontend/review.html`:
+  - Each warning draft has an origin note (PFAF / origin unknown / confirm your text) and, when different, an "in the field now — replaced" box.
+  - Warning drafts are excluded from "Approve all" and "Approve selected".
+- `frontend/species.html`: label for the inline draft.
+- `scripts/experience_export`:
+  - `gates.py` rule 8.
+  - The plan gets a "Caution species" section (and `caution` in `--plan-json`).
+  - Pre-write cross-check: no recipe for a caution species without an approved warning.
+  - The page shows a "⚠ Caution" box.
+- `scripts/import_caution_warning_drafts.py`: dry run by default; idempotent.
+- `tests/test_experience_gates.py`: 21 tests (the gates had no tests before).
+
+**Data:**
+- Before the write: Settings snapshot `db_20261020_210754` (commit db9b955e) + `snapshots/manual_20261020_210754.db` (`.backup`, integrity ok).
+- **61 pending drafts, ids 3178–3238:** 36 `pfaf`, 19 `unknown_origin`, 6 `marker_confirm`.
+- Read back by id: 0 mismatches against the pre-write backup. No `culinary_info` or history row changed.
+
+**New facts found during the batch:**
+- **Most "source unknown" texts aren't warnings.**
+  - 16 of the 19 read as edible-use descriptions ("The leaves are used in pastries and salads."), 2 are mixed (*Armillaria mellea*, *Cynodon dactylon*), and 1 is a warning (*Amanita citrina*).
+  - 10 are cut off at exactly 100 characters.
+  - Approving one as-is publishes it as the caution reason. Rewrite or reject. A rejected draft leaves the species' recipes withheld.
+- Several of the 12 "PFAF differs" fields also held edible-use text. The PFAF draft replaces it, and approval keeps the old text in `old_value`.
+- **E-14:** the six marker rows also have six text-less "approved" drafts (2296–2301, `model='human'`, same 24 Jun 19:26:42 timestamp) from the same one-off. Left as they are; their ids are in the new drafts' context.
+- **Walk-4 correction:** *Geranium pyrenaicum* has text (unknown origin), so walk 4 = 1 publishable + 7 PFAF + 2 confirmations + **1 unknown-origin** + **4** with no text.
+
+**Walk 4 plan after the write** (`--plan-only` on a scratch copy; collecting harness for the rule-2 stop):
+
+| Caution species (15) | Approved warning | Recipes |
+|---|---|---|
+| *Sambucus nigra* | yes | kept (176) |
+| *Artemisia vulgaris*, *Hypericum perforatum* | no | **withheld** (12, 76) |
+| the other 12 | no | none eligible |
+
+- Blocks: none among the caution species (all 15 are human-verified). The build still stops on *Rosa dumalis* (edible, not human-verified, rule 2) — Melvin's 1b prerequisite.
+- Recipes: 17 included (was 19).
+- **Scratch simulation:** with the 7 PFAF + 2 confirmation drafts approved as-is, 10 of the 15 have a warning and recipes 12 and 76 come back (19 included).
 
 ---
 

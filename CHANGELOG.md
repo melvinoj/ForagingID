@@ -98,6 +98,33 @@ Snapshots 20 Oct: db_20261020_053600, _062739, _063515, _072552 (re-route, Rümm
 
 ## History
 
+### 2026-10-20 21:14
+**Snapshot** — Before batch 2 (E-01/E-02 WAL-safe snapshot + restore)
+DB: `snapshots/db_20261020_211459.sqlite`
+
+### 2026-10-20 21:11
+**Fix pass batch 1 (audit D3-01, caution species on the experience page): caution preparation warnings queued as curator-review drafts (approval = curator-authored); experience gate withholds a caution species' recipes until it has an approved warning; B3-02 old_value fix. Decisions from Melvin (20 Oct evening) recorded in REPORT.md section 0: (1) the 19 unknown-origin caution warnings join the 36 PFAF ones in the review queue, the 6 E-14 marker rows are surfaced there for confirmation; (2) B5-01/B5-02 close both (guests: confirmed plant photos only; encounters/voice notes curator-only) — batch 8; (3) A-03: the batch-7 share-link secret also gates LAN access, only localhost without it — batch 7; (4) in-app GPS walk recording can be removed — batch 15b, before the index.html split.**
+
+**Built:**
+- Curator-review warning drafts: preparation_warnings is approvable (CURATOR_DRAFT_FIELDS); approve as-is or rewrite writes culinary_info + history changed_by='human' with the real old_value; 409 if the field was hand-edited since queueing, 422 on empty text
+- Shared predicate is_curator_authored() in app/models/species.py, used by gates.human_authored and the approve path
+- Review queue: origin note per warning draft (PFAF / origin unknown / confirm your text), 'in the field now — replaced' box, warning drafts excluded from Approve all / Approve selected; queue API returns current_text
+- Experience gates rule 8: caution species show the approved warning (⚠ Caution box); without one the badge stays but all recipes are withheld; plan prints a 'Caution species' section (kept / withheld) and --plan-json gains 'caution'; pre-write cross-check
+- scripts/import_caution_warning_drafts.py (dry run default, idempotent)
+- tests/test_experience_gates.py — 21 tests for rule 8, the predicate and the import classifier
+**Fixed:**
+- B3-02: AI-draft approval history now records the real old_value instead of NULL
+- AI regenerate (culinary.py + enrichment.py) no longer invalidates pending warning drafts
+- Data: 61 pending preparation_warnings drafts, ids 3178-3238 (36 pfaf, 19 unknown_origin, 6 marker_confirm), after Settings snapshot db_20261020_210754 (commit db9b955e) + snapshots/manual_20261020_210754.db; read back by id, 0 mismatches; no culinary_info or history rows changed
+**Files:** `app/models/species.py`, `app/api/culinary.py`, `app/services/enrichment.py`, `frontend/review.html`, `frontend/species.html`, `scripts/experience_export/gates.py`, `scripts/experience_export/export.py`, `scripts/experience_export/templates/index.html`, `scripts/import_caution_warning_drafts.py`, `tests/test_experience_gates.py`, `docs/audit/2026-10-20/REPORT.md`, `docs/audit/2026-10-20/STATUS.md`
+**Pending:**
+- Batch 1b (Melvin): review the walk-4 warning drafts (7 PFAF, 2 marker confirmations, 1 unknown-origin: Geranium pyrenaicum), verify Rosa dumalis, then republish Rümmelsbühl foray (id 4)
+- Melvin browser checks: review queue shows the 61 warning drafts with origin notes; Approve all skips them; approve one and see it on the species page
+- Unknown-origin texts: 16 of 19 read as edible-use text, not warnings (10 cut at 100 chars) — rewrite or reject rather than approve as-is
+- Walk 4 plan now: Sambucus nigra keeps recipe 176; recipes 12 (Artemisia vulgaris) and 76 (Hypericum perforatum) withheld until their warnings are approved; build still stops on Rosa dumalis (rule 2)
+- New caution species later need a re-run of scripts/import_caution_warning_drafts.py (not automatic)
+- Next: batch 2 (E-01/E-02 WAL-safe snapshot/restore)
+
 ### 2026-10-20 21:07
 **Snapshot** — Before D3-01 batch 1: queue 61 caution preparation_warnings drafts (36 PFAF, 19 unknown origin, 6 E-14 confirmations)
 DB: `snapshots/db_20261020_210754.sqlite`

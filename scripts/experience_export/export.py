@@ -769,6 +769,18 @@ def main(argv=None):
     straight_ranges, sf_warn = saved_straight_ranges(route, line)
     if sf_warn:
         warnings.append(sf_warn)
+    # The line AS SHOWN in the app (walk_route.shown_line): the circular /
+    # point-to-point view of the stored line, with the distance/time for that
+    # shape. Same function the app's walk API uses, so the page matches the panel.
+    walk_dist, walk_dur, loop_view = walk["distance_m"], walk["duration_min"], None
+    if line:
+        sh = walk_route.shown_line([w for w in json.loads(walk["waypoints_json"] or "[]") if isinstance(w, dict)],
+                                   route, walk["distance_m"], walk["duration_min"])
+        line, straight_ranges = sh["coordinates"], sh["straight_ranges"]
+        walk_dist, walk_dur = sh["distance_m"], sh["duration_min"]
+        loop_view = ("circular" if sh["circular"] else "point-to-point") + (
+            "" if sh["line_closed"] == sh["circular"] else
+            (" (saved line cut at the last stop)" if sh["line_closed"] else " (dashed straight leg back to stop 1 added)"))
 
     # Taxonomy (mirrors app/api/taxonomy.py placement rule)
     raw = defaultdict(lambda: defaultdict(lambda: defaultdict(lambda: defaultdict(list))))
@@ -812,7 +824,7 @@ def main(argv=None):
         "impressum_url": None if impressum_placeholder else impressum,
         "datenschutz_url": None if datenschutz_placeholder else datenschutz,
         # distance/duration: the saved walk's own figures (the walk panel's), never a stop sum.
-        "walk": {"name": walk["name"], "distance_m": walk["distance_m"], "duration_min": walk["duration_min"],
+        "walk": {"name": walk["name"], "distance_m": walk_dist, "duration_min": walk_dur,
                  "line": line, "straight_ranges": straight_ranges, "stops": stops},
         # Walk order: the order plants are first met along the route (Melvin, 15 Oct 2026).
         # Toxicity is shown on each plant (badge/☠), never by list position.
@@ -906,7 +918,7 @@ def main(argv=None):
             "walk": {"id": walk["id"], "name": walk["name"], "title_en": ov["title_en"], "title_de": ov["title_de"],
                      "slug": ov["slug"], "is_default": args.is_default, "canonical": canonical,
                      "writes": str(page_dir), "mirror": str(mirror_dir) if mirror_dir else None},
-            "distance": {"distance_m": walk["distance_m"], "duration_min": walk["duration_min"],
+            "distance": {"distance_m": walk_dist, "duration_min": walk_dur, "loop_view": loop_view,
                          "route_vertices": len(line or []), "straight_ranges": straight_ranges},
             "observations": {"member": len(obs_order), "pass": len(passing), "fail": len(failing)},
             "stops": [{"label": st["n"], "species_ids": st["species"], "toxic": st["toxic"],
@@ -945,7 +957,8 @@ def main(argv=None):
     print(f"Title: {ov['title_en']}" + (f"  |  DE: {ov['title_de']}" if ov["title_de"] else "  |  DE: (none)"))
     print(f"Slug: {ov['slug']}  default(root): {args.is_default}")
     print(f"Writes: {page_dir}/" + (f"  + copy {mirror_dir}/" if mirror_dir else "") + f"  canonical → {canonical}")
-    print(f"Route: {len(line or [])} vertices; distance {walk['distance_m']} m / {walk['duration_min']} min (saved walk); "
+    print(f"Route: {len(line or [])} vertices; {loop_view or 'no line'}; distance {walk_dist} m / {walk_dur} min "
+          f"(saved walk {walk['distance_m']} m / {walk['duration_min']} min); "
           + (f"dashed vertex ranges {straight_ranges} (straight legs)" if straight_ranges else "all solid"))
     print(f"Observations: {len(obs_order)} member, {len(passing)} pass gate, {len(failing)} fail")
     print(f"Species: {len(pub)} shown, {len(hidden_species)} hidden, {len(ai_agreed)} AI-agreed only")

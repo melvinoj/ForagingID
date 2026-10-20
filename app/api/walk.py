@@ -11,6 +11,7 @@ Endpoints:
   POST /api/walk/saves/{id}/exclude     — remove proximity-joined photos (curator)
   POST /api/walk/saves/{id}/renumber    — current stops become the saved snapshot, 1..N (curator)
   POST /api/walk/saves/{id}/reorder     — reverse direction / start at a saved stop (curator; no ORS)
+  PATCH /api/walk/saves/{id}/loop       — circular / point-to-point view of the saved line (curator; no ORS)
   DELETE /api/walk/saves/{id}   — delete a saved walk (curator; 409 while published as an experience)
 """
 
@@ -182,6 +183,9 @@ def _require_curator(identity: Identity) -> None:
 
 
 def _walk_out(walk: SavedWalk, mem: dict) -> dict:
+    from app.services import walk_route
+    route = json.loads(walk.route_geojson) if walk.route_geojson else None
+    waypoints = [w for w in json.loads(walk.waypoints_json or "[]") if isinstance(w, dict)]
     return {
         "id":           walk.id,
         "name":         walk.name,
@@ -191,6 +195,9 @@ def _walk_out(walk: SavedWalk, mem: dict) -> dict:
         "route_geojson": json.loads(walk.route_geojson) if walk.route_geojson else None,
         "distance_m":   walk.distance_m,
         "duration_min": walk.duration_min,
+        # The line as shown (circular / point-to-point VIEW of the stored line,
+        # walk_route.shown_line): what the map draws, measures and exports.
+        "shown":        walk_route.shown_line(waypoints, route, walk.distance_m, walk.duration_min) if route else None,
         # Stops resolved from CURRENT observations + route-proximity members
         # (walk_membership.py). The frontend draws these, not waypoints' labels.
         "stops":        wm.public_stops(mem),
@@ -310,6 +317,38 @@ async def renumber_walk(
     labels = [s["label"] for s in out["stops"]]
     if labels != [str(i + 1) for i in range(len(waypoints))] or out["obs_ids"] != obs_ids:
         raise HTTPException(500, f"renumber did not persist as written (labels {labels})")
+    return out
+
+
+class LoopBody(BaseModel):
+    circular: bool
+
+
+@router.patch("/saves/{walk_id}/loop")
+async def set_walk_loop(
+    walk_id: int, body: LoopBody,
+    db: AsyncSession = Depends(get_db), identity: Identity = Depends(get_identity),
+):
+    """Circular / point-to-point for a saved walk: only foragingid.circular is
+    written. The stored line, distance_m and duration_min stay as they are — the
+    view (walk_route.shown_line) cuts or closes the line, so toggling back is
+    lossless. No ORS call."""
+    from app.services import walk_route
+    _require_curator(identity)
+    walk = await _load_walk(db, walk_id)
+    route = json.loads(walk.route_geojson) if walk.route_geojson else {}
+    if not walk_route.line_coords(route):
+        raise HTTPException(409, "this walk has no saved line")
+    before = (walk.waypoints_json, walk.distance_m, walk.duration_min, walk_route.line_coords(route))
+    new_route = walk_route.set_circular(route, body.circular)
+    walk.route_geojson = json.dumps(new_route)
+    out = await _commit_and_reread(db, walk_id)
+    # Read-back by id: flag written, everything else untouched.
+    rg = out["route_geojson"] or {}
+    if (bool((rg.get("foragingid") or {}).get("circular")) != body.circular
+            or (json.dumps(out["waypoints"]), out["distance_m"], out["duration_min"], walk_route.line_coords(rg))
+            != (json.dumps(json.loads(before[0] or "[]")), before[1], before[2], before[3])):
+        raise HTTPException(500, "circular setting did not persist as written")
     return out
 
 

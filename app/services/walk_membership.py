@@ -381,7 +381,9 @@ def compute(walk, saved_obs: dict, nearby_obs: Iterable) -> dict:
     # A new stop on a path the walk passes more than once takes the pass whose
     # two neighbouring saved stops are physically closest to it — the same pair
     # whichever way round the walk goes, so "7a" stays between the same stops.
-    circular = bool((_route_dict(walk).get("foragingid") or {}).get("circular"))
+    # The stored line's shape, not the circular/point-to-point VIEW flag
+    # (walk_route.shown_line) — toggling the view never moves a "7a" label.
+    circular = line.closed
 
     def _prev_at(ch):
         prev = None

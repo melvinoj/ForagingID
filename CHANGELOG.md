@@ -46,6 +46,10 @@ Alembic head: 0054 (experience_publications). Snapshots this session: db_2026101
 
 ## History
 
+### 2026-10-20 06:35
+**Snapshot** — before repairing little foray (id 3) seam shift via reorder
+DB: `snapshots/db_20261020_063515.sqlite`
+
 ### 2026-10-20 06:27
 **Snapshot** — before circular toggle persistence + load-sequence guard
 DB: `snapshots/db_20261020_062739.sqlite`

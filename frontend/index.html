@@ -5152,6 +5152,8 @@ let _walkBuildSeq     = 0;       // guards against stale ORS responses after a r
 let _walkRadiusTimer  = null;    // debounce for the radius slider
 let _walkSaved        = null;    // {id, name, sig} — walk last saved or loaded; header shows its name while the route still matches sig
 let _walkSaving       = false;   // a save is in progress (prompt or request) — blocks a second save
+let _walkLineClosed   = false;   // loaded saved walk: the STORED line is a closed loop (Start here / Reverse
+                                 // work in either view) — from the server's shown.line_closed
 let _lastWalkBounds   = null;    // last drawn rect bounds (for re-route)
 let _lastWalkCircle   = null;    // last drawn circle spec (for re-route)
 
@@ -5192,6 +5194,7 @@ function _exitWalkMode() {
   _walkLastPins = null;
   _walkRouteStatus = null;
   _walkSaved = null;
+  _walkLineClosed = false;
   _walkStraightLine = false;
   _walkBuildSeq++;              // any ORS response still in flight is now stale
   clearTimeout(_walkRadiusTimer);
@@ -5636,6 +5639,12 @@ function _syncWalkLoopUi() {
 }
 
 function toggleWalkLoop() {
+  // Loaded saved walk: the server flips foragingid.circular and returns the
+  // line as shown (closing leg dropped / added) — no ORS call, stored line kept.
+  if (_onSavedRoute(_activeWalkRoute)) {
+    _walkMembershipCall('loop', 'PATCH', { circular: !_walkCircular });
+    return;
+  }
   _walkCircular = !_walkCircular;
   _syncWalkLoopUi();
   // Re-route without repositioning the map
@@ -5985,6 +5994,7 @@ function _drawWalkLayer(suppressFitBounds) {
   const route = _activeWalkRoute || [];
   if (_walkRouteLayer) map.removeLayer(_walkRouteLayer);
   _walkRouteLayer = L.layerGroup().addTo(map);
+  _walkRouteLayer._walkBuildSeq = _walkBuildSeq;   // which route build drew it (loadSavedWalk's stale check)
   const latLngs = route.map((s, i) => {
     // Stops that joined a saved walk by route proximity ("7a") are a lighter green.
     const bg = s.p.is_note ? '#f59e0b' : (s.origin === 'joined' ? '#5f8f35' : '#2d5016');
@@ -6247,8 +6257,7 @@ function renderWalkPanel(route, enrichMap) {
   const _repeatSplit = _walkRepeatSplit(route);
   // The panel shows the loaded saved walk itself (not a route rebuilt from a
   // drawn area meanwhile) — reorder actions act on that saved row.
-  const _isSavedRoute = !!(_savedWalkData && _walkSaved && _walkSaved.id === _savedWalkData.id
-                           && _walkSavedNameFor(route) !== null);
+  const _isSavedRoute = _onSavedRoute(route);
   for (let i = 0; i < route.length; i++) {
     const { p, lat, lng } = route[i];
 
@@ -6363,9 +6372,10 @@ function renderWalkPanel(route, enrichMap) {
     }
 
     const _joinedStop = _stop.origin === 'joined';
-    // "Start here": saved circular walks, saved stops only (a 7a stop is not a
-    // waypoint until Renumber stops), not the current stop 1.
-    const _canStartHere = !!(_savedWalkData && _walkCircular && !_joinedStop && _isSavedRoute
+    // "Start here": saved walks whose STORED line is a closed loop (shown circular
+    // or point-to-point), saved stops only (a 7a stop is not a waypoint until
+    // Renumber stops), not the current stop 1.
+    const _canStartHere = !!(_savedWalkData && _walkLineClosed && !_joinedStop && _isSavedRoute
                              && /^\d+$/.test(_stopLabel(_stop, i)) && _stopLabel(_stop, i) !== '1');
     html += `<div class="walk-stop-card"${_joinedStop ? ' style="border-style:dashed"' : ''}>
       <div>
@@ -6772,11 +6782,29 @@ function toggleSavedWalksList() {
   _wbsToggleSavedWalks();
 }
 
+// Load-sequence token: a load is "current" only while no newer loadSavedWalk has
+// started. Every step after an await checks it, so two loads clicked back to
+// back (id 3 then id 4) end with the map AND panel on the later one.
+let _walkLoadSeq = 0;
+
 async function loadSavedWalk(id) {
+  const mySeq = ++_walkLoadSeq;
+  const stale = () => mySeq !== _walkLoadSeq;
+  let myBuild = null;                       // _walkBuildSeq of the route build this load started
+  // A stale load leaves nothing of its own on the map: the route layer goes only
+  // if THIS load's build drew it (tagged in _drawWalkLayer) — never a newer one's.
+  const dropStale = () => {
+    if (myBuild !== null && _walkRouteLayer && _walkRouteLayer._walkBuildSeq === myBuild) {
+      map.removeLayer(_walkRouteLayer);
+      _walkRouteLayer = null;
+    }
+  };
   try {
     const r = await fetch(`/api/walk/saves/${id}`);
+    if (stale()) return;
     if (!r.ok) throw new Error(`HTTP ${r.status}`);
     const w = await r.json();
+    if (stale()) return;
     if (!w.waypoints || !w.waypoints.length) {
       alert('This saved walk has no waypoints.');
       return;
@@ -6813,10 +6841,19 @@ async function loadSavedWalk(id) {
     });
     // Saved shape + options (new walks); old walks have neither → one-way, re-route.
     const _meta      = (w.route_geojson && w.route_geojson.foragingid) || null;
-    const _savedGeom = w.route_geojson && w.route_geojson.features
-                       && w.route_geojson.features[0] && w.route_geojson.features[0].geometry;
-    _walkCircular     = _meta ? !!_meta.circular : false;
+    // The line AS SHOWN (circular / point-to-point view of the stored line) when
+    // the server sends it; else the stored geometry (older server).
+    const _shown     = w.shown && Array.isArray(w.shown.coordinates) && w.shown.coordinates.length > 1 ? w.shown : null;
+    const _savedGeom = _shown ? { type: 'LineString', coordinates: _shown.coordinates }
+                     : (w.route_geojson && w.route_geojson.features
+                        && w.route_geojson.features[0] && w.route_geojson.features[0].geometry);
+    _walkCircular     = _shown ? !!_shown.circular : (_meta ? !!_meta.circular : false);
+    _walkLineClosed   = _shown ? !!_shown.line_closed : false;
     _syncWalkLoopUi();
+    // A loaded walk is not a drawn area: forget any earlier rectangle/circle so
+    // the circular toggle can never rebuild an old area over this walk.
+    _lastWalkBounds   = null;
+    _lastWalkCircle   = null;
     // A loaded walk's stops are fixed (no raw pins to regroup): show the radius
     // it was saved with, slider disabled.
     _walkLastPins     = null;
@@ -6828,9 +6865,11 @@ async function loadSavedWalk(id) {
     _activeWalkEnrich = {};
     // Header shows the walk's name (after _walkCircular is set — it is part of the signature).
     _walkSaved        = { id: w.id, name: w.name, sig: _walkRouteSig(route) };
-    // Saved distance/duration are what was saved — never overwritten on load.
-    _walkOrsDistM     = w.distance_m || 0;
-    _walkOrsDurMin    = w.duration_min || 0;
+    // Distance/duration for the shape shown (shown_line scales the saved figures
+    // by line length; equal to them when nothing is cut or added). The saved
+    // figures themselves are never overwritten.
+    _walkOrsDistM     = (_shown ? _shown.distance_m : w.distance_m) || 0;
+    _walkOrsDurMin    = (_shown ? _shown.duration_min : w.duration_min) || 0;
     // Remember the layer + view to return to on clear (first load only — a
     // second saved walk opened on top keeps the original), and hide every
     // other pin by default.
@@ -6862,8 +6901,11 @@ async function loadSavedWalk(id) {
     // shape ask ORS to DRAW only. Failures show the reason; the straight line is
     // only drawn if the user chooses it. Saved distance/duration kept.
     // fitBounds is done below by _fitSavedWalk, once the panel layout is known.
-    if (!(await _routeWalk({ savedGeom: _savedGeom || null, keepSaved: true, suppressFitBounds: true,
-                             routeMeta: _meta }))) return;
+    myBuild = _walkBuildSeq + 1;            // _routeWalk takes ++_walkBuildSeq synchronously
+    const _routed = await _routeWalk({ savedGeom: _savedGeom || null, keepSaved: true, suppressFitBounds: true,
+                                      routeMeta: _shown ? { straight_ranges: _shown.straight_ranges } : _meta });
+    if (stale()) { dropStale(); return; }
+    if (!_routed) return;
 
     // Panel layout first (laptop: right-hand panel; phone: peek bar), then fit
     // the whole walk into the map area the panel leaves free.
@@ -6873,7 +6915,9 @@ async function loadSavedWalk(id) {
 
     // Enrich species (+ toxicity, for the walk panel's toxic guard)
     const uniqueSpecies = [...new Set(route.flatMap(_stopSpecies))];
-    _activeWalkEnrich = await _fetchWalkEnrich(uniqueSpecies);
+    const _enrich = await _fetchWalkEnrich(uniqueSpecies);
+    if (stale()) { dropStale(); return; }
+    _activeWalkEnrich = _enrich;
 
     // Show walk panel — sheet is opened by _buildWalkRoute and renderWalkPanel
     _closeTabPanels();
@@ -6887,6 +6931,7 @@ async function loadSavedWalk(id) {
     const _wbsBodyEl = document.getElementById('wbs-body');
     if (_wbsBodyEl) _wbsBodyEl.scrollTop = 0;   // header + Export summary, not the saved-walks list the click came from
   } catch (e) {
+    if (stale()) { dropStale(); return; }     // a newer load is in charge — no alert for this one
     alert('Failed to load walk: ' + e.message);
   }
 }
@@ -6951,6 +6996,30 @@ function _syncWalkPinsBtn() {
   if (!b) return;
   b.style.display = _savedWalkView ? '' : 'none';
   if (_savedWalkView) b.textContent = _savedWalkView.hidePins ? '👁 Show all pins' : '🙈 Hide other pins';
+}
+
+// Loaded saved walk: take the line AS SHOWN from a server walk response
+// (walk_route.shown_line — the circular / point-to-point view of the stored
+// line): geometry, dashed legs, view flag and the distance/time for that shape.
+// The stored line and its saved figures are never changed by the view.
+function _applyShownLine(w) {
+  const sh = w && w.shown;
+  if (!sh || !Array.isArray(sh.coordinates) || sh.coordinates.length < 2) return false;
+  _walkRouteGeom      = { type: 'LineString', coordinates: sh.coordinates };
+  _walkStraightRanges = _walkStraightRangesOf({ straight_ranges: sh.straight_ranges }, sh.coordinates.length);
+  _walkCircular       = !!sh.circular;
+  _walkLineClosed     = !!sh.line_closed;
+  _walkOrsDistM       = sh.distance_m || 0;
+  _walkOrsDurMin      = sh.duration_min || 0;
+  _syncWalkLoopUi();
+  return true;
+}
+
+// The walk panel is showing the loaded saved walk itself (not a route rebuilt
+// from a drawn area meanwhile) — saved-walk actions act on that row.
+function _onSavedRoute(route) {
+  return !!(_savedWalkView && _savedWalkData && _walkSaved && _walkSaved.id === _savedWalkData.id
+            && _walkSavedNameFor(route) !== null);
 }
 
 // "← Saved walks" on a loaded walk: the panel's saved-walks list (the same view
@@ -7065,14 +7134,11 @@ function _renderWalkMembership() {
 async function _refreshSavedWalk(w) {
   if (!_savedWalkView || !w || !Array.isArray(w.stops)) return;   // walk was cleared meanwhile
   _savedWalkData = { id: w.id, name: w.name, stops: w.stops, membership: w.membership || null };
-  // A response that carries the saved line (reorder: reversed / rotated) replaces
-  // the drawn one and its dashed legs; distance/duration are never touched here.
-  const _rg   = w.route_geojson;
-  const _geom = _rg && _rg.features && _rg.features[0] && _rg.features[0].geometry;
-  if (_geom && Array.isArray(_geom.coordinates)) {
-    _walkRouteGeom      = _geom;
-    _walkStraightRanges = _walkStraightRangesOf(_rg.foragingid, _geom.coordinates.length);
-  }
+  // A response that carries the line as shown (reorder: reversed / rotated;
+  // loop: circular / point-to-point) replaces the drawn one, its dashed legs,
+  // the view flag and the distance/time for that shape — set BEFORE the
+  // signature below, so the title keeps the walk's name.
+  _applyShownLine(w);
   const route = _savedWalkRoute();
   _activeWalkRoute = route;
   _walkSelected    = route;

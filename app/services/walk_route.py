@@ -21,6 +21,12 @@ Reordering never calls ORS and never changes distance_m / duration_min: the
 same closed loop walked from another stop, or the other way round, is the same
 length. Saved stop numbers are positions in waypoints_json, so they change;
 "7a" labels are recomputed on read (walk_membership) against the new order.
+
+Circular vs point-to-point (foragingid.circular) is a VIEW of the stored line,
+never a change to it (shown_line): point-to-point on a closed line stops at the
+last stop; circular on an open line adds a straight, dashed leg back to stop 1.
+Distance / time shown scale the saved figures by line length — distance_m and
+duration_min themselves are never rewritten, so toggling back is lossless.
 """
 from __future__ import annotations
 
@@ -29,7 +35,6 @@ import math
 from typing import Optional
 
 CLOSED_LOOP_TOLERANCE_M = 30.0     # first/last vertex this close = closed loop
-PASS_TOLERANCE_M        = 15.0     # stop_vertex_indices: earliest pass this close to the best
 
 
 class RouteError(ValueError):
@@ -123,51 +128,72 @@ def _set_meta(route: dict, coords: list, flags: list) -> dict:
 # ── stops on the line ────────────────────────────────────────────────────────
 
 def stop_vertex_indices(coords: list, waypoints: list, circular: bool) -> list:
-    """For each waypoint (in saved order) the vertex the line passes it at:
-    the nearest vertex at or after the previous stop's vertex (the line visits
-    the stops in this order). A line that retraces a path passes a stop more
-    than once, so the FIRST pass within PASS_TOLERANCE_M of the best is taken,
-    never a later, marginally closer one. Circular walks also get the closing
-    vertex."""
-    idx, start = [], 0
-    for wp in waypoints:
-        p = [wp["lng"], wp["lat"]]
-        d = [_hav(coords[k], p) for k in range(start, len(coords))]
-        best = min(d)
-        j = start + next(i for i, x in enumerate(d) if x <= best + PASS_TOLERANCE_M)
-        idx.append(j)
-        start = j
+    """For each waypoint (in saved order) the vertex the line passes it at.
+    The line visits the stops in saved order, so the vertices must not go
+    backwards; among all such assignments the one with the smallest total
+    stop-to-vertex distance is taken (exact, by dynamic programming — ties
+    keep the earliest vertex). A greedy stop-by-stop choice could take the
+    wrong pass of a retraced path and push later stops onto far vertices,
+    which moved a rotated loop's seam on every Start here round trip.
+    Circular walks also get the closing vertex."""
+    n, m = len(coords), len(waypoints)
+    if m == 0:
+        return [n - 1] if circular else []
+    d = [[_hav(coords[v], [wp["lng"], wp["lat"]]) for v in range(n)] for wp in waypoints]
+    best = d[0][:]                                   # best[v]: stops 0..s with stop s at vertex v
+    back = []
+    for s_ in range(1, m):
+        pm, pv, row, arg = math.inf, 0, [], []
+        for v in range(n):                           # prefix minimum of the previous row
+            if best[v] < pm:
+                pm, pv = best[v], v
+            row.append(pm + d[s_][v])
+            arg.append(pv)
+        best, back = row, back + [arg]
+    v = min(range(n), key=lambda q: (best[q], q))
+    idx = [v]
+    for arg in reversed(back):
+        v = arg[v]
+        idx.append(v)
+    idx.reverse()
     if circular:
-        idx.append(len(coords) - 1)
+        idx.append(n - 1)
     return idx
 
 
 # ── reorder ──────────────────────────────────────────────────────────────────
 
 def reverse(waypoints: list, route: dict, circular: bool) -> tuple:
-    """Walk the other way. Circular: stop 1 stays stop 1, the rest reverse
-    (1, N, N-1 … 2). Point-to-point: the whole order reverses."""
+    """Walk the other way.
+    Stored line a closed loop:
+      shown circular       → stop 1 stays stop 1, the rest reverse (1, N … 2)
+      shown point-to-point → the last stop becomes stop 1 (N, N-1 … 1) — the
+                             loop is first started at N, then reversed
+    Stored line open (saved point-to-point): the whole order reverses."""
     coords = line_coords(route)
     if not coords:
         raise RouteError("this walk has no saved line to reverse")
-    if circular and not is_closed(coords):
-        raise RouteError("the saved line is not a closed loop — reverse needs a new route")
+    if is_closed(coords):
+        if not circular and len(waypoints) > 1:
+            waypoints, route = start_at(waypoints, route, circular, len(waypoints) - 1)
+            coords = line_coords(route)
+        flags = _ranges_to_flags(straight_ranges(route.get("foragingid"), len(coords)), len(coords))
+        return [waypoints[0]] + waypoints[:0:-1], _set_meta(route, coords[::-1], flags[::-1])
     flags = _ranges_to_flags(straight_ranges(route.get("foragingid"), len(coords)), len(coords))
-    new_wps = [waypoints[0]] + waypoints[:0:-1] if circular else waypoints[::-1]
-    return new_wps, _set_meta(route, coords[::-1], flags[::-1])
+    return waypoints[::-1], _set_meta(route, coords[::-1], flags[::-1])
 
 
 def start_at(waypoints: list, route: dict, circular: bool, k: int) -> tuple:
-    """Circular walk only: waypoint k (0-based) becomes stop 1, same direction."""
-    if not circular:
-        raise RouteError("a point-to-point walk can only be reversed")
+    """Waypoint k (0-based) becomes stop 1, same direction. Needs a stored
+    closed loop (shown circular or point-to-point — point-to-point then ends at
+    the stop before k)."""
     if not 0 < k < len(waypoints):
         raise RouteError(f"stop {k + 1} is not a saved stop of this walk")
     coords = line_coords(route)
     if not coords:
         raise RouteError("this walk has no saved line")
     if not is_closed(coords):
-        raise RouteError("the saved line is not a closed loop — a new start needs a new route")
+        raise RouteError("this walk's saved line has no leg back to stop 1 — a new start needs a new route")
     n = len(coords)
     flags = _ranges_to_flags(straight_ranges(route.get("foragingid"), n), n)
     v = stop_vertex_indices(coords, waypoints, circular=True)[k]
@@ -175,6 +201,45 @@ def start_at(waypoints: list, route: dict, circular: bool, k: int) -> tuple:
     new_coords = coords[v:m] + coords[:v] + [coords[v]]
     new_flags = flags[v:] + flags[:v]           # segment k joins k, k+1 — rotates with vertices
     return waypoints[k:] + waypoints[:k], _set_meta(route, new_coords, new_flags)
+
+
+# ── circular / point-to-point view ───────────────────────────────────────────
+
+def shown_line(waypoints: list, route: dict, distance_m, duration_min) -> Optional[dict]:
+    """The line as the walk is shown, drawn, measured and exported. The stored
+    line is never modified; see the module docstring."""
+    coords = line_coords(route)
+    if not coords:
+        return None
+    meta = route.get("foragingid") or {}
+    circular = bool(meta.get("circular"))
+    n = len(coords)
+    flags = _ranges_to_flags(straight_ranges(meta, n), n)
+    closed = is_closed(coords)
+    shown, sflags = coords, flags
+    if circular and not closed:
+        shown, sflags = coords + [coords[0]], flags + [True]          # dashed leg back to stop 1
+    elif not circular and closed and waypoints:
+        cut = stop_vertex_indices(coords, waypoints, circular=False)[-1]
+        if cut >= 1:
+            shown, sflags = coords[:cut + 1], flags[:cut]               # ends at the last stop
+    stored_len = line_length_m(coords)
+    ratio = line_length_m(shown) / stored_len if shown is not coords and stored_len else 1.0
+    return {
+        "coordinates":     shown,
+        "straight_ranges": _flags_to_ranges(sflags),
+        "circular":        circular,
+        "line_closed":     closed,
+        "distance_m":      distance_m if ratio == 1.0 else round((distance_m or 0) * ratio),
+        "duration_min":    duration_min if ratio == 1.0 else round((duration_min or 0) * ratio),
+    }
+
+
+def set_circular(route: dict, circular: bool) -> dict:
+    """route_geojson with foragingid.circular set — nothing else changes."""
+    out = copy.deepcopy(route)
+    out.setdefault("foragingid", {})["circular"] = bool(circular)
+    return out
 
 
 # ── straighten detour legs (curator data fix) ────────────────────────────────

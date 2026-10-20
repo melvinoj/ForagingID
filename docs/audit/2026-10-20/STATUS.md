@@ -2,7 +2,16 @@
 
 Read-only audit. No fixes. Evidence-labelled findings in REPORT.md.
 
-**Audit complete — all phases done (session 3).** Fix pass in REPORT.md section 9 order. **Batch 1 (D3-01) done 20 Oct evening** — result in section 9 "Batch 1 — result". Next: 1b = Melvin reviews the walk-4 drafts, verifies *Rosa dumalis*, republishes Rümmelsbühl foray (id 4); then batch 2.
+**Audit complete — all phases done (session 3).** Fix pass in REPORT.md section 9 order. **Batch 1 (D3-01) and batch 2 (E-01/E-02) done 20 Oct evening** — results in section 9. Next: 1b (Melvin: walk-4 drafts, verify *Rosa dumalis*, republish Rümmelsbühl foray, id 4) and batch 3.
+
+**Snapshots (since batch 2):** the Settings snapshot goes through the SQLite backup API and is WAL-consistent. **Later batches no longer need the manual `sqlite3 .backup` copy** — the Settings snapshot alone is the Write Protocol's pre-write snapshot. Restore is WAL-safe and takes a `db_<ts>_prerestore.sqlite` first.
+
+**Fix order additions (Melvin, 20 Oct evening — placed in section 9, not implemented):**
+- 3b verdict sweep (review drafts for NULL/unknown or out-of-sync verdict/severity, e.g. *Atropa bella-donna*).
+- 5 + "☠ deadly" / "☠ toxic" label on every surface (rides on batch 5's shared safety gate).
+- 11b data/taxonomy: duplicate-species merges (⚠ clashes with the CLAUDE.md "do not attempt merges" rule — needs re-keying of `species_resources` or Melvin lifting the rule), GBIF synonym sweep, English common-name backfill.
+- 14 + E-03 repro on obs 24149 and the Review badge count (2,080 vs 386).
+- 15b walk batch: Edit-walk tap/lasso, Loop/One-way label instead of the toggle, Start here on every stop, route-line zoom/drag bug (reproduce first), GPS recording removal — before the index.html split.
 
 | Phase | State | Notes |
 |---|---|---|

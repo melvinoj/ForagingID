@@ -1724,6 +1724,12 @@ function renderProfile(data, observations) {
   const ci = data.culinary;
   const aiFields = new Set(data.ai_generated_fields || []);
   const isToxic = (sp.toxicity_severity === 'deadly' || sp.toxicity_severity === 'toxic');
+  // Culinary content only when severity is exactly 'none' — same rule as the
+  // server's culinary_allowed(). 'unknown' (never assessed) fails closed (B2-02).
+  const culinaryBlocked = sp.toxicity_severity !== 'none';
+  const _CULINARY_HELD_MSG = isToxic
+    ? '⚠ Culinary information is suppressed for toxic species.'
+    : '⚠ Culinary information is held back — toxicity not yet assessed. Set the verdict first.';
 
   // Store full profile data for edit-mode use
   window._lastProfileData = data;
@@ -1925,6 +1931,12 @@ function renderProfile(data, observations) {
         `<div style="background:#2a2010;border:1px solid #4a3a10;border-radius:6px;padding:10px 14px;color:#d4a840;font-size:0.9em">
           ⚠ Marked caution — specific reason not yet documented. Exercise care and verify before consuming.
         </div>`;
+    } else if (severity !== 'none') {
+      // Never assessed ('unknown'): green "no known warnings" would read as safe.
+      safetyEl.innerHTML =
+        `<div style="background:#2a2010;border:1px solid #4a3a10;border-radius:6px;padding:10px 14px;color:#d4a840;font-size:0.9em">
+          ⚠ Toxicity not yet assessed — do not eat until a verdict is set.
+        </div>`;
     }
     // edible with no warning fields: leave the default green
     // "✓ No known warnings" placeholder (section stays visible).
@@ -1965,9 +1977,9 @@ function renderProfile(data, observations) {
     { key: 'recipe_ideas',         label: 'Recipe Ideas' },
     { key: 'workshop_value_score', label: 'Workshop Suitability' },
   ];
-  if (isToxic) {
+  if (culinaryBlocked) {
     document.getElementById('culinary-content').innerHTML =
-      `<div class="ai-field-empty" style="color:#991b1b">⚠ Culinary information is suppressed for toxic species.</div>`;
+      `<div class="ai-field-empty" style="color:#991b1b">${_CULINARY_HELD_MSG}</div>`;
   } else {
     const culHtml = ci
       ? _renderFields(ci, culFields, aiFields, sp.scientific_name) + _renderConfidence(ci.data_confidence)
@@ -1989,8 +2001,8 @@ function renderProfile(data, observations) {
   {
     const secEl = document.getElementById('sec-taste-notes');
     const el    = document.getElementById('taste-notes-content');
-    if (isToxic) {
-      // Never show taste notes for toxic species
+    if (culinaryBlocked) {
+      // Never show taste notes for toxic or never-assessed species
       if (secEl) secEl.style.display = 'none';
     } else {
       if (secEl) secEl.style.display = '';
@@ -2018,11 +2030,11 @@ function renderProfile(data, observations) {
     const recipes  = data.recipes || [];
     const edibBlocked = data.edibility_blocked_recipes;
 
-    if (isToxic || edibBlocked) {
-      // Toxic/unknown-edibility: blank by default
+    if (culinaryBlocked || edibBlocked) {
+      // Toxic / never-assessed / unknown-edibility: blank by default
       if (secEl) secEl.style.display = '';
-      el.innerHTML = isToxic
-        ? `<div class="ai-field-empty" style="color:#991b1b">⚠ Recipe bank is blank for toxic species. Manual notes can be added via the review queue.</div>`
+      el.innerHTML = culinaryBlocked
+        ? `<div class="ai-field-empty" style="color:#991b1b">${isToxic ? '⚠ Recipe bank is blank for toxic species. Manual notes can be added via the review queue.' : '⚠ Recipe bank is blank until toxicity is assessed.'}</div>`
         : `<div class="ai-field-empty">Recipe bank is blank until edibility is confirmed. <a href="/review#ai-draft-review" style="color:#5b21b6" data-guest-hide>Review queue →</a></div>`;
       if (tabsEl) tabsEl.style.display = 'none';
     } else if (!recipes.length) {

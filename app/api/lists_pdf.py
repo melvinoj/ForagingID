@@ -102,7 +102,8 @@ def _flatten_species(name: str, profile: Optional[Dict], base_by_name: Dict) -> 
         'scientific_name': name,
         'common_name':    common_names[0] if common_names else '',
         'edibility_status': sp.get('edibility_status') or '',
-        'toxicity_severity': sp.get('toxicity_severity') or 'none',
+        # Missing = never assessed: fails closed in print_pdf.html (== 'none' only), B2-02.
+        'toxicity_severity': sp.get('toxicity_severity') or 'unknown',
         'id_notes':        id_notes,
         'look_alike':      (cul.get('look_alike_warnings') or '').strip(),
         'preparation_warnings': (cul.get('preparation_warnings') or '').strip(),

@@ -303,7 +303,7 @@ body {
   </div>
   {% if ct.id_notes and sp.id_notes %}<div class="entry-id">{{ sp.id_notes[:220] }}{% if sp.id_notes|length > 220 %}…{% endif %}</div>{% endif %}
   {% if ct.id_notes and sp.look_alike %}<div class="entry-look">⚠ {{ sp.look_alike[:140] }}{% if sp.look_alike|length > 140 %}…{% endif %}</div>{% endif %}
-  {% if sp.parts_text and sp.toxicity_severity not in ('deadly', 'toxic') %}<div class="entry-note">{{ sp.parts_text }}</div>{% endif %}
+  {% if sp.parts_text and sp.toxicity_severity == 'none' %}<div class="entry-note">{{ sp.parts_text }}</div>{% endif %}
 </div>
 
 {% elif layout == 'recipe_booklet' %}
@@ -326,7 +326,7 @@ body {
     {% if sp.look_alike %}<p>Look-alikes: {{ sp.look_alike }}</p>{% endif %}
   </div>
   {% endif %}
-  {% if sp.recipe_title and sp.toxicity_severity not in ('deadly', 'toxic') %}
+  {% if sp.recipe_title and sp.toxicity_severity == 'none' %}
   <div class="entry-recipe-h">{{ sp.recipe_title }}</div>
   <div class="entry-recipe">{{ sp.recipe_body | mdlite | safe }}</div>
   {% endif %}
@@ -352,7 +352,7 @@ body {
   <div class="entry-section-h">Field ID notes</div>
   <div class="entry-body"><p>{{ sp.id_notes }}</p></div>
   {% endif %}
-  {% if ct.foraging and (sp.edible_parts or sp.harvest_stage) and sp.toxicity_severity not in ('deadly', 'toxic') %}
+  {% if ct.foraging and (sp.edible_parts or sp.harvest_stage) and sp.toxicity_severity == 'none' %}
   <div class="entry-section-h">Foraging notes</div>
   <div class="entry-body">
     {% if sp.edible_parts %}<p><strong>Edible parts —</strong> {{ sp.edible_parts }}</p>{% endif %}
@@ -377,7 +377,7 @@ body {
     <p class="entry-note">Traditional and historical material, presented for interest. Not a recommendation for use or a claim of medicinal benefit.</p>
   </div>
   {% endif %}
-  {% if ct.recipes and sp.recipe_title and sp.toxicity_severity not in ('deadly', 'toxic') %}
+  {% if ct.recipes and sp.recipe_title and sp.toxicity_severity == 'none' %}
   <div class="entry-section-h">Recipe</div>
   <div class="entry-body">{{ sp.recipe_body | mdlite | safe }}</div>
   {% endif %}

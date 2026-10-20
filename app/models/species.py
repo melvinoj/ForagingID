@@ -191,12 +191,18 @@ class Species(Base):
     edibility_verified_by: Mapped[Optional[str]] = mapped_column(String(30), nullable=True)
 
     # Structured toxicity severity (migration 0039). Drives the safety-render
-    # rebuild: 'deadly' → red + skull, 'toxic' → amber, 'none' → normal.
+    # rebuild: 'deadly' → red + skull, 'toxic' → amber, 'none' → normal,
+    # 'unknown' → never assessed (fails closed — culinary_allowed is False).
     # Distinct from edibility_status — a 'toxic' edibility can be either
-    # severity. Backfilled; never auto-written by enrichment.
+    # severity. Written ONLY with the verdict, through severity_for_verdict()
+    # (fix batch 3, audit B2-02); never by enrichment.
+    # default='unknown' (ORM inserts — every app path that creates a species):
+    # a new species is never born "known safe". The DB's server_default stays
+    # 'none' (changing it means a SQLite table rebuild); no app code inserts
+    # species rows with raw SQL.
     toxicity_severity: Mapped[str] = mapped_column(
-        String(20), nullable=False, server_default="none"
-    )  # none | toxic | deadly
+        String(20), nullable=False, default="unknown", server_default="none"
+    )  # none | toxic | deadly | unknown
 
     gbif_usage_key: Mapped[Optional[int]] = mapped_column(Integer, index=True)
 
@@ -537,3 +543,66 @@ def is_curator_authored(latest_changed_by: Optional[str], latest_new_value: Opti
 # review queue's "Approve all" never includes them.
 # ---------------------------------------------------------------------------
 CURATOR_DRAFT_FIELDS = frozenset({"preparation_warnings"})
+
+
+# ---------------------------------------------------------------------------
+# Verdict → severity (fix batch 3, audit B2-02 / P2) — the ONLY definition of
+# what toxicity_severity becomes when a species' verdict (edibility_status) is
+# written. Every verdict writer calls it (PATCH /api/edibility/status,
+# /bulk-status, the bracken safety constant) and logs a
+# species_edibility_history row when the severity changes.
+#
+#   'unknown' = never assessed: fails closed everywhere culinary_allowed() is
+#   asked. 'deadly' is a severity of a toxic verdict, never a verdict.
+#
+# Without an explicit severity in the request:
+#   toxic     → 'deadly' if already deadly, else 'toxic'
+#   edible / caution → 'none' (the verdict is the assessment) — but REFUSED if
+#               the species is toxic/deadly now: never lowered automatically
+#   inedible  → unchanged ("inedible" ≠ "toxic"; the curator chooses)
+#   unknown   → 'unknown' if it was 'none' (a cleared verdict must not read as
+#               safe), else unchanged
+# With an explicit severity (a curator choice — may relax): it must fit the
+# verdict (ALLOWED_SEVERITIES).
+# ---------------------------------------------------------------------------
+SEVERITY_VALUES = ("none", "toxic", "deadly", "unknown")
+UNASSESSED_SEVERITY = "unknown"
+ALLOWED_SEVERITIES = {
+    "edible":   ("none",),
+    "caution":  ("none", "toxic"),
+    "inedible": ("none", "toxic", "unknown"),
+    "toxic":    ("toxic", "deadly"),
+    "unknown":  ("unknown", "toxic", "deadly"),
+}
+
+
+class SeverityRuleError(ValueError):
+    """The verdict/severity combination is refused — nothing may be written."""
+
+
+def severity_for_verdict(verdict: str, current: Optional[str], requested: Optional[str] = None) -> str:
+    v = (verdict or "").strip().lower()
+    cur = (current or "").strip().lower() or UNASSESSED_SEVERITY
+    if cur not in SEVERITY_VALUES:
+        cur = UNASSESSED_SEVERITY
+    if v not in ALLOWED_SEVERITIES:
+        raise SeverityRuleError(f"no severity rule for verdict {verdict!r}")
+    if requested is not None and str(requested).strip() != "":
+        req = str(requested).strip().lower()
+        if req not in SEVERITY_VALUES:
+            raise SeverityRuleError(f"toxicity_severity must be one of {list(SEVERITY_VALUES)}")
+        if req not in ALLOWED_SEVERITIES[v]:
+            raise SeverityRuleError(
+                f"verdict {v!r} cannot have severity {req!r} (allowed: {', '.join(ALLOWED_SEVERITIES[v])})")
+        return req
+    if v == "toxic":
+        return "deadly" if cur == "deadly" else "toxic"
+    if v in ("edible", "caution"):
+        if is_toxic_severity(cur):
+            raise SeverityRuleError(
+                f"severity is {cur!r} — a {v!r} verdict would lower it; send toxicity_severity "
+                f"explicitly ({', '.join(ALLOWED_SEVERITIES[v])}) to relax it")
+        return "none"
+    if v == "unknown":
+        return UNASSESSED_SEVERITY if cur == "none" else cur
+    return cur                                                   # inedible: unchanged

@@ -99,6 +99,15 @@ async def enrich_species(
 
     # Fix 24a: Bracken Safety Flagging
     if species.scientific_name == "Pteridium aquilinum":
+        from app.models.species import SpeciesEdibilityHistory, severity_for_verdict
+        _sev = severity_for_verdict("toxic", species.toxicity_severity)   # B2-02: severity with the verdict
+        if _sev != species.toxicity_severity:
+            session.add(SpeciesEdibilityHistory(
+                species_id=species.id, field="toxicity_severity",
+                old_value=species.toxicity_severity, new_value=_sev,
+                changed_by="safety_constant", note="bracken safety constant",
+            ))
+            species.toxicity_severity = _sev
         species.edibility_status = "toxic"
         species.edibility_verified = True
         if not existing_ci:

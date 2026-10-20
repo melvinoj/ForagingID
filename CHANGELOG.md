@@ -98,6 +98,28 @@ Snapshots 20 Oct: db_20261020_053600, _062739, _063515, _072552 (re-route, Rümm
 
 ## History
 
+### 2026-10-20 21:30
+**Snapshot** — Before batch 3 data: 155/688/745 -> toxic, reject drafts 2920/2921, 232 never-assessed severities -> unknown
+DB: `snapshots/db_20261020_213039.sqlite`
+
+### 2026-10-20 21:21
+**Fix pass batch 2 (audit E-01/E-02): WAL-safe DB snapshot and restore through the SQLite backup API; new fix-order items from Melvin (20 Oct evening) placed in REPORT.md section 9.**
+
+**Built:**
+- app/services/db_snapshot.py: backup_to_file (backup API -> .partial -> journal_mode=DELETE -> quick_check -> rename; side files cleaned), restore_from_file (integrity_check, backup API into the live connection, WAL kept, checkpoint, quick_check), path/hash validators
+- POST /api/dev/snapshot uses the backup API in a thread; failure raises before CHANGELOG/commit; response has db_quick_check
+- POST /api/dev/restore: only snapshots/db_*.sqlite + hex hashes; integrity check; 409 while a job is running; pre-restore snapshot db_<ts>_prerestore.sqlite; backup-API restore; settings cache reload
+- tests/test_db_snapshot.py: 13 tests on throw-away WAL DBs (old bugs reproduced; snapshot holds WAL rows; restore sticks for open connections and after reopen; corrupt/non-DB refused; validators)
+**Fixed:**
+- E-01: snapshots no longer miss rows still in the WAL
+- E-02: restore can no longer be undone by WAL replay; db_path/commit_hash no longer free strings
+- CLAUDE.md snapshot/restore and mtime notes updated; manual .backup copy no longer needed (STATUS.md, REPORT section 9 rules)
+**Files:** `app/services/db_snapshot.py`, `app/api/dev.py`, `tests/test_db_snapshot.py`, `CLAUDE.md`, `docs/audit/2026-10-20/REPORT.md`, `docs/audit/2026-10-20/STATUS.md`
+**Pending:**
+- Live verification: snapshots db_20261020_211829 + _211916 taken through the new path (integrity ok, counts equal live); restore NOT run live — Melvin may test it on purpose later (it takes a pre-restore snapshot first)
+- New in section 9 (not implemented): 3b verdict sweep; batch 5 + deadly/toxic label everywhere; 11b duplicate-species merge (clashes with the 'do not attempt merges' rule — Melvin decides) + GBIF synonym sweep + common-name backfill; 14 + E-03 (obs 24149) + Review badge count 2,080 vs 386; 15b walk batch (Edit-walk tap/lasso, Loop/One-way label, Start here on every stop, route-line zoom/drag bug repro, GPS recording removal)
+- Batch 1b (Melvin) still open; next code batch: 3
+
 ### 2026-10-20 21:19
 **Snapshot** — Batch 2: backup-API snapshot re-check (no side files)
 DB: `snapshots/db_20261020_211916.sqlite`

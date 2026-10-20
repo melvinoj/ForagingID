@@ -27,7 +27,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.models.culinary import CulinaryInfo
 from app.models.observation import Observation
-from app.models.species import Species, SpeciesEdibilityCondition, SpeciesLookalike, SpeciesEdibilityHistory
+from app.models.species import (Species, SpeciesEdibilityCondition, SpeciesLookalike, SpeciesEdibilityHistory,
+                                SeverityRuleError, severity_for_verdict)
 from app.api.identity import Identity, get_identity
 
 log = logging.getLogger(__name__)
@@ -95,6 +96,28 @@ def _enforce_edibility_write_rules(old_status: Optional[str], new_status: str,
                     "must be done by a human curator (changed_by='human')"
                 ),
             )
+
+def _apply_verdict_severity(db: AsyncSession, sp: Species, status: str,
+                            requested: Optional[str], changed_by: str, note: Optional[str]) -> None:
+    """Set sp.toxicity_severity for a new verdict (severity_for_verdict — the
+    only rule) and log a species_edibility_history row when it changes.
+    Raises HTTPException(400) when the rule refuses; call it BEFORE the verdict
+    is written so a refused write changes nothing."""
+    try:
+        new_sev = severity_for_verdict(status, sp.toxicity_severity, requested)
+    except SeverityRuleError as e:
+        raise HTTPException(400, detail=str(e))
+    if new_sev != sp.toxicity_severity:
+        db.add(SpeciesEdibilityHistory(
+            species_id=sp.id,
+            field="toxicity_severity",
+            old_value=sp.toxicity_severity,
+            new_value=new_sev,
+            changed_by=changed_by,
+            note=note if note else f"set with verdict {status!r}",
+        ))
+        sp.toxicity_severity = new_sev
+
 
 # Guards against overlapping background rescans.
 _rescan_state: dict = {"running": False, "queued": 0, "done": 0, "resolved": 0}
@@ -323,6 +346,7 @@ async def list_edibility_species(db: AsyncSession = Depends(get_db)):
 class EdibilityStatusIn(BaseModel):
     edibility_status: str           # edible|caution|toxic|inedible|unknown
     verified: Optional[bool] = None  # None = leave edibility_verified/verified_by untouched (status-only write)
+    toxicity_severity: Optional[str] = None  # None = the verdict's default (severity_for_verdict); explicit = curator choice
     note: Optional[str] = None       # optional curator note, logged to species_edibility_history
     changed_by: Optional[str] = None  # ACCEPTED-BUT-IGNORED. Provenance is now server-derived
                                      # ('human', gated by the is_guest 403 guard on the handler) —
@@ -442,6 +466,8 @@ async def bulk_set_edibility_status(
         # /bulk-status is not a coupling/relax bypass.
         try:
             _enforce_edibility_write_rules(old_status, status, status != "unknown", changed_by)
+            # Severity with the verdict (B2-02) — same rule as the PATCH path.
+            _apply_verdict_severity(db, sp, status, item.get("toxicity_severity"), changed_by, None)
         except HTTPException as e:
             errors.append(f"species_id {sid}: {e.detail}")
             continue
@@ -510,6 +536,9 @@ async def set_edibility_status(
     # Provenance is server-derived ('human') — the is_guest guard above means any
     # caller reaching here is the curator; payload.changed_by is ignored.
     _enforce_edibility_write_rules(old_status, status, payload.verified, "human")
+    # Severity with the verdict (B2-02) — refused combinations raise 400 here, before any write.
+    _apply_verdict_severity(db, sp, status, payload.toxicity_severity, "human", payload.note)
+    severity = sp.toxicity_severity
 
     sp.edibility_status = status
     # verified is None -> status-only write; leave edibility_verified/_by untouched.
@@ -531,10 +560,11 @@ async def set_edibility_status(
 
     # Loud-fail on an unconfirmed write.
     await db.refresh(sp)
-    if sp.edibility_status != status:
+    if sp.edibility_status != status or sp.toxicity_severity != severity:
         raise HTTPException(
             status_code=500,
-            detail=f"Write did not persist: expected edibility_status={status!r}, found {sp.edibility_status!r}",
+            detail=f"Write did not persist: expected edibility_status={status!r} / toxicity_severity={severity!r}, "
+                   f"found {sp.edibility_status!r} / {sp.toxicity_severity!r}",
         )
 
     # Fire-and-forget: generate AI drafts when edibility is confirmed as non-toxic
@@ -547,6 +577,7 @@ async def set_edibility_status(
         "species_id": species_id,
         "scientific_name": scientific_name,
         "edibility_status": sp.edibility_status,
+        "toxicity_severity": sp.toxicity_severity,
         "edibility_verified": sp.edibility_verified,
         # Tells the UI to drop the card from the unknown queue.
         "still_unknown": status in _UNKNOWN_STATES,

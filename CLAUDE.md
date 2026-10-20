@@ -196,10 +196,12 @@ Key settings: `upload_auto_approve_threshold`, `min_identification_confidence`, 
 Snapshots are created via Settings → "Save snapshot" or `POST /api/dev/snapshot`.
 
 Each snapshot:
-- Copies `data/foragingid.db` → `/Users/melvinjarman/ForagingID/snapshots/db_TIMESTAMP.sqlite`
-- Creates a `git commit` with message `snapshot: TIMESTAMP`
+- Backs up `data/foragingid.db` → `/Users/melvinjarman/ForagingID/snapshots/db_TIMESTAMP.sqlite` through the SQLite backup API (WAL-consistent, quick_check'd, plain rollback-journal file — `app/services/db_snapshot.py`, since 20 Oct 2026 fix batch 2). If the backup fails, nothing is recorded or committed.
+- Creates a `git commit` with message `snapshot: TIMESTAMP` (`git add -A` — it commits the whole working tree)
 
-To restore: Settings → Snapshots → Restore (confirms before acting).
+To restore: Settings → Snapshots → Restore (confirms before acting). Only `snapshots/db_*.sqlite` files and hex commit hashes are accepted. The DB restore checks the snapshot's integrity, refuses while a background job runs, takes a `db_<ts>_prerestore.sqlite` snapshot first, then restores through the backup API (it sticks under WAL). Restart the server afterwards.
+
+A manual `sqlite3 .backup` copy alongside the Settings snapshot is no longer needed (it was, until batch 2).
 
 **Always take a snapshot before any bulk data write.**
 
@@ -220,11 +222,10 @@ clock was correct to 13 ms.
 
 This is a **documented convention, not a bug**. Snapshot filenames are
 load-bearing for retention — `dev.py` keys snapshot age off the *filename*,
-never `st_mtime` — so the filename format must not change. Relatedly, snapshot
-files are written with `shutil.copy2`, which preserves the SOURCE database's
-mtime: a snapshot's mtime records when the DB was last written, not when the
-snapshot was taken. A large filename-vs-mtime gap means the DB was idle, not
-that anything is wrong.
+never `st_mtime` — so the filename format must not change. Snapshots before
+20 Oct 2026 were written with `shutil.copy2`, which preserved the source's mtime
+(under WAL: the last checkpoint, not the last write); newer ones are written by
+the backup API, so their mtime is when they were taken. Use the filename.
 
 Relative ordering *within* one system is always safe (both audit tables use
 UTC, so `processing_logs.created_at` vs `observation_edits.edited_at` compare

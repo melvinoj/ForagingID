@@ -1,7 +1,8 @@
 /**
  * job-status-widget.js — global floating widget for background jobs.
  *
- * Pinned top-right card listing every live background process / queue job,
+ * Floating card (top-right by default, draggable by its header, last spot
+ * remembered) listing every live background process / queue job,
  * minimizable to a pill, fully hidden when nothing is active. Rows are visually
  * identical to a row in the scan page's Job Queue panel — that row look is
  * ported here (see "Ported row styles" below); the floating shell, the
@@ -182,6 +183,10 @@
       '  padding:8px 12px;background:#2f3d3a;border-bottom:1px solid #4a5e5a;',
       '}',
       '#job-status-widget.jsw-collapsed .jsw-head{border-bottom:none;}',
+      /* Drag handle. touch-action:none so a touch drag moves the widget instead
+         of scrolling the page; the toggle keeps its own touch-action. */
+      '#job-status-widget .jsw-head{cursor:grab;touch-action:none;user-select:none;-webkit-user-select:none;}',
+      '#job-status-widget.jsw-dragging .jsw-head{cursor:grabbing;}',
       '#job-status-widget .jsw-title{',
       '  display:flex;align-items:center;gap:7px;',
       '  font-size:0.78rem;font-weight:700;color:#9aaa88;',
@@ -272,12 +277,129 @@
     var mount = document.getElementById('job-status-mount');
     if (mount) mount.appendChild(w);
     else document.body.insertBefore(w, document.body.firstChild);
+    _bindDrag(w);
+    needsRestore = true;   // render() restores the saved position once filled
     return w;
   }
 
   function _hideWidget() {
+    drag = null;
     var w = document.getElementById(WIDGET_ID);
     if (w && w.parentNode) w.parentNode.removeChild(w);
+  }
+
+  // ── Drag to move ─────────────────────────────────────────────────────────
+  // The header bar is the drag handle; its button (and anything else that is a
+  // button) still clicks normally — a drag only starts on header background.
+  //
+  // Position is kept as {right, top} px, i.e. the same anchor the CSS default
+  // uses, so collapse/expand behave exactly as before at the dragged spot: the
+  // pill keeps its right edge, and expanding grows leftward and downward.
+  //
+  // `pos` is the intended position (null = CSS default top-right). What is
+  // displayed is `pos` clamped to the viewport at the widget's CURRENT size, and
+  // that clamp is never written back — so expanding near the bottom edge lifts
+  // the panel into view, and collapsing again returns it to where it was put.
+  //
+  // Listeners sit on the outer #job-status-widget node with pointer capture,
+  // not on .jsw-head: render() replaces the head via innerHTML on every data
+  // change, and a poll landing mid-drag must not drop the drag.
+  var POS_KEY = 'jsw-pos-v1';
+  var DRAG_THRESHOLD_PX = 3;   // below this a press is a click, not a move
+  var pos = null;
+  var drag = null;             // {id, x, y, right, top, moved} while pressed
+  var needsRestore = false;
+
+  function _vw() { return document.documentElement.clientWidth || window.innerWidth; }
+  function _vh() { return document.documentElement.clientHeight || window.innerHeight; }
+
+  function _loadPos() {
+    try {
+      var p = JSON.parse(window.localStorage.getItem(POS_KEY));
+      if (p && isFinite(p.right) && isFinite(p.top)) return { right: +p.right, top: +p.top };
+    } catch (e) { /* storage blocked or bad JSON → default position */ }
+    return null;
+  }
+
+  function _savePos(p) {
+    try { window.localStorage.setItem(POS_KEY, JSON.stringify(p)); }
+    catch (e) { /* storage blocked: position just isn't remembered */ }
+  }
+
+  function _clamp(p, w) {
+    var maxRight = Math.max(0, _vw() - w.offsetWidth);
+    var maxTop   = Math.max(0, _vh() - w.offsetHeight);
+    return {
+      right: Math.min(Math.max(p.right, 0), maxRight),
+      top:   Math.min(Math.max(p.top, 0), maxTop),
+    };
+  }
+
+  // A saved spot is usable only if the whole header bar — the drag handle —
+  // lands on-screen at the widget's current width. Otherwise (smaller window
+  // than when it was saved) fall back to the default. The saved value is left
+  // in storage, so a larger window later restores it again.
+  function _headerFits(p, w) {
+    var head = w.querySelector('.jsw-head');
+    var headH = head ? head.offsetHeight : 0;
+    return p.right >= 0 && p.top >= 0 &&
+           p.right + w.offsetWidth <= _vw() &&
+           p.top + headH <= _vh();
+  }
+
+  // Applies `pos` to the widget. Called after every render (size may have
+  // changed) and on window resize. With pos null the inline styles are cleared,
+  // so the default is the untouched CSS rule.
+  function _placeWidget() {
+    var w = document.getElementById(WIDGET_ID);
+    if (!w) return;
+    if (needsRestore) {
+      needsRestore = false;
+      var saved = _loadPos();
+      pos = (saved && _headerFits(saved, w)) ? saved : null;
+    }
+    if (!pos) { w.style.right = ''; w.style.top = ''; return; }
+    var c = _clamp(pos, w);
+    w.style.right = c.right + 'px';
+    w.style.top   = c.top + 'px';
+  }
+
+  function _bindDrag(w) {
+    w.addEventListener('pointerdown', function (e) {
+      if (e.button !== 0) return;
+      var t = e.target;
+      if (!t.closest || !t.closest('.jsw-head') || t.closest('button')) return;
+      var r = w.getBoundingClientRect();
+      drag = { id: e.pointerId, x: e.clientX, y: e.clientY,
+               right: _vw() - r.right, top: r.top, moved: false };
+      try { w.setPointerCapture(e.pointerId); } catch (err) { /* ignore */ }
+      e.preventDefault();   // no text selection / native drag from the press
+    });
+
+    w.addEventListener('pointermove', function (e) {
+      if (!drag || e.pointerId !== drag.id) return;
+      var dx = e.clientX - drag.x, dy = e.clientY - drag.y;
+      if (!drag.moved) {
+        if (Math.abs(dx) < DRAG_THRESHOLD_PX && Math.abs(dy) < DRAG_THRESHOLD_PX) return;
+        drag.moved = true;
+        w.classList.add('jsw-dragging');
+      }
+      // Store the clamped value while dragging, so the dropped spot is exactly
+      // what the user saw.
+      pos = _clamp({ right: drag.right - dx, top: drag.top + dy }, w);
+      _placeWidget();
+    });
+
+    function endDrag(e) {
+      if (!drag || e.pointerId !== drag.id) return;
+      var moved = drag.moved;
+      drag = null;
+      w.classList.remove('jsw-dragging');
+      if (moved && pos) _savePos(pos);
+    }
+    w.addEventListener('pointerup', endDrag);
+    w.addEventListener('pointercancel', endDrag);
+    w.addEventListener('lostpointercapture', endDrag);
   }
 
   // Exposed so the header button's onclick can reach it from the global scope.
@@ -557,7 +679,8 @@
                       document.activeElement.classList &&
                       document.activeElement.classList.contains('jsw-toggle'));
 
-    w.className = collapsed ? 'jsw-collapsed' : '';
+    w.className = (collapsed ? 'jsw-collapsed' : '') +
+                  (drag && drag.moved ? ' jsw-dragging' : '');
     w.innerHTML =
       '<div class="jsw-head">' +
         '<span class="jsw-title">' + title + '</span>' +
@@ -573,6 +696,11 @@
       '<div class="jsw-body" id="jsw-body">' +
         items.map(renderRow).join('') +
       '</div>';
+
+    // Size may have changed (collapse/expand, rows added/removed): re-apply the
+    // position, clamped to the new size. Also restores the saved spot on the
+    // first render after the widget (re)appears.
+    _placeWidget();
 
     if (hadFocus) {
       var btn = w.querySelector('.jsw-toggle');
@@ -619,6 +747,7 @@
   window.addEventListener('resize', function () {
     if (_isDesktop()) {
       startPolling();
+      _placeWidget();   // keep a dragged widget inside the resized viewport
     } else {
       stopPolling();
       _hideWidget();

@@ -1638,6 +1638,7 @@ async def get_culinary_profile(
             "edibility_status": sp.edibility_status,
             "edibility_verified": sp.edibility_verified,
             "toxicity_severity": sp.toxicity_severity,  # none | toxic | deadly — walk panel toxic guard
+            "foraging_notes": sp.foraging_notes,        # walk stop cards (curator's own notes)
         },
         "culinary": _culinary_to_dict(ci, sp.scientific_name) if ci else None,
         "ai_generated_fields": ai_fields,

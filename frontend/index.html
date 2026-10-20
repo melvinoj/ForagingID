@@ -6373,7 +6373,6 @@ function renderWalkPanel(route, enrichMap) {
       const _enrichData = enrichMap[spName];
       const ci       = _enrichData?.culinary || null;
       const spData   = _enrichData?.species  || null;
-      const recipes  = _enrichData?.recipes  || [];
       // Pin properties for this species (common name / edibility on the map
       // pin); loaded walks have no pins, so fall back to the culinary profile.
       const pinP = (_stop.pins || []).map(x => x.p).find(pp => pp.species_primary === spName)
@@ -6382,31 +6381,19 @@ function renderWalkPanel(route, enrichMap) {
                          || (spData?.common_names && spData.common_names[0]) || '';
       const edib = spData?.edibility_status || pinP.edibility_status;
 
-      // Toxic guard (_culinaryGate): recipe, culinary hint and edibility badge
-      // only when toxicity is 'none'; fails closed when it could not be read.
+      // Toxic guard (_culinaryGate): culinary hint and edibility badge only
+      // when toxicity is 'none'; fails closed when it could not be read.
       const _gate      = _culinaryGate(_enrichData ? _enrichData._toxicity : null);
-      const _recipesOk = _gate.ok;
 
-      // Recipe: prefer recipe bank (current season), fall back to legacy culinary fields
-      let recipeHtml = '';
-      const picked = _recipesOk ? _pickSeasonalRecipe(recipes, _season) : null;
-      if (!_recipesOk) {
-        // no recipe snippet for toxic/deadly or unknown-toxicity species
-      } else if (picked) {
-        const rtitle = picked.title || (picked.is_medicinal_prep ? '🌿 Preparation' : '💡 Recipe');
-        const rbody  = picked.body || '';
-        const rsnip  = rbody.length > 160 ? rbody.slice(0, 157) + '…' : rbody;
-        const sicon  = _seasonIcon[picked.season] || '';
-        recipeHtml = `<div class="walk-stop-recipe">
-          <strong>${sicon} ${_esc(rtitle)}</strong>
-          ${rsnip ? `<div style="font-size:0.78rem;color:#555;margin-top:3px;line-height:1.4">${_esc(rsnip)}</div>` : ''}
-        </div>`;
-      } else if (ci) {
-        const recipeText = ci.recipe_ideas || ci.cooking_techniques || ci.preparation_methods;
-        if (recipeText) {
-          const snippet = recipeText.length > 140 ? recipeText.slice(0, 137) + '…' : recipeText;
-          recipeHtml = `<div class="walk-stop-recipe"><strong>💡 Recipe idea:</strong> ${_esc(snippet)}</div>`;
-        }
+      // No recipe snippets on stop cards (recipes live in the Export summary and
+      // the experience page). In their place: the curator's own foraging notes
+      // from the species card, first ~160 chars as plain text, or nothing.
+      // Melvin-authored, so not behind the culinary gate.
+      let forNotesHtml = '';
+      const fnotes = (spData?.foraging_notes || '').trim();
+      if (fnotes) {
+        const fsnip = fnotes.length > 160 ? fnotes.slice(0, 157) + '…' : fnotes;
+        forNotesHtml = `<div style="font-size:0.75rem;color:#555;margin:3px 0 4px;line-height:1.4">📝 ${_esc(fsnip)}</div>`;
       }
 
       // Blocked species (toxic/deadly/unknown): the badge is the toxicity
@@ -6416,7 +6403,7 @@ function renderWalkPanel(route, enrichMap) {
       // Culinary notes: brief hint from edible_parts / taste_notes / preparation_methods
       let culinaryNotesHtml = '';
       if (ci && _gate.ok) {
-        const note = ci.edible_parts || ci.taste_notes || ci.preparation_methods;
+        const note = _walkCleanPfafText(ci.edible_parts || ci.taste_notes || ci.preparation_methods);
         if (note) {
           const ns = note.length > 100 ? note.slice(0, 97) + '…' : note;
           culinaryNotesHtml = `<div style="font-size:0.75rem;color:#666;margin:3px 0 4px">${_esc(ns)}</div>`;
@@ -6433,7 +6420,7 @@ function renderWalkPanel(route, enrichMap) {
              style="font-size:0.68rem;color:#2d5016;margin-left:8px">Species profile →</a>
         </div>
         ${culinaryNotesHtml}
-        ${recipeHtml}
+        ${forNotesHtml}
       </div>`;
     }
 
@@ -6477,6 +6464,23 @@ function renderWalkPanel(route, enrichMap) {
 
   // Bottom sheet summary (phone only — mirrors walk-title / walk-sub for the sheet)
   _wbsUpdateSummary(route);
+}
+
+// Walk stop cards only — display-time tidy of PFAF-scraped edible-parts text;
+// the stored value is never changed. PFAF's two table labels arrive run
+// together ("Edible Parts: Leaves Root Edible Uses: Young shoots…", or
+// "Edible Parts: Edible Uses: Tea …" when no parts are listed) and its numeric
+// reference brackets ("[2, 5, 8, 13]", "[183,…]") are noise on a short card.
+// Labels become "Leaves Root — Young shoots…"; brackets are dropped.
+// Letter refs like PFAF's own "[K]" are left as-is.
+function _walkCleanPfafText(s) {
+  if (!s) return s;
+  return String(s)
+    .replace(/\s*\[\d+(?:\s*,\s*(?:\d+|…|\.\.\.))*\s*,?\s*(?:…|\.\.\.)?\]/g, '')
+    .replace(/Edible Parts:\s*Edible Uses:\s*/g, '')
+    .replace(/Edible Parts:\s*(.*?)\s*Edible Uses:\s*/g, '$1 — ')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
 }
 
 // Loaded saved walk: per-species membership chips (walk_membership.py).

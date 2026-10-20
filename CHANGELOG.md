@@ -66,6 +66,37 @@ Snapshots this session: db_20261020_053600, db_20261020_062739, db_20261020_0635
 
 ## History
 
+### 2026-10-20 11:25
+**Snapshot** — before placeholder/None-known clear + Urtica foraging_notes test clear
+DB: `snapshots/db_20261020_112509.sqlite`
+
+### 2026-10-20 11:12
+**Walk panel display fixes: diagnosed AI placeholder taste_notes (Achillea nobilis) and Verbascum densiflorum None known (read-only); walk stop cards: PFAF label/citation display cleanup, recipe snippets removed and replaced by curator foraging_notes**
+
+**Built:**
+- _walkCleanPfafText display helper (walk stop cards)
+- Walk stop cards show species foraging_notes (first ~160 chars) instead of recipe snippets
+- /api/culinary/{name} species payload includes foraging_notes (read-only)
+**Fixed:**
+- Doubled PFAF Edible Parts/Edible Uses labels and numeric citation brackets hidden on walk stop cards
+- Raw markdown recipe snippets no longer shown on walk stop cards
+**Files:** `frontend/index.html`, `app/api/culinary.py`
+**Pending:**
+- Melvin: decide placeholder clear (10 taste_notes + 6 medicinal_notes) and changed_by marker
+- Close placeholder gap: shared is_ai_placeholder predicate at all draft sites + approve endpoint
+- Verbascum densiflorum + 11 other None known edible/caution species: curator-authored edible_parts
+- Browser-test walk 3/4 stop cards
+
+### 2026-10-20 10:44
+**Jobs queue pop-up made draggable by its header (pointer events), position remembered in localStorage, clamped to viewport; frontend only**
+
+**Built:**
+- Draggable job-status widget header
+- Remembered widget position with off-screen fallback to default
+**Files:** `frontend/static/js/job-status-widget.js`
+**Pending:**
+- Melvin browser test of drag / retract / restore
+
 ### 2026-10-20 10:40
 **Snapshot** — End of session — Session ended from Settings page
 DB: `snapshots/db_20261020_104015.sqlite`

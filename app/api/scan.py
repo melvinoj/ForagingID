@@ -62,6 +62,7 @@ from app.services.file_cleanup import delete_observation_file
 from app.services.ingest_guard import blacklisted_skip
 from app.services.prefilter import classify_plant_likelihood
 from app.services.agreement import decide_agreement
+from app.utils.caffeinate import server_watch_pid
 from app.services.species_link import set_observation_species
 from app.services.taxonomy import collapse_autonym, normalize_taxon_key
 from app.utils.exif import extract_exif
@@ -133,13 +134,19 @@ async def caffeinate_start():
     global _caffeinate_proc
     if _caffeinate_proc is not None and _caffeinate_proc.returncode is None:
         return {"active": True, "pid": _caffeinate_proc.pid, "started": False}
+    # One started by an earlier worker survives reloads (see below) but is not
+    # in this worker's memory — adopt it rather than starting a second one.
+    strays = _stray_caffeinate_pids()
+    if strays:
+        return {"active": True, "pid": strays[0], "started": False}
     try:
-        # -w <this server's pid>: caffeinate exits on its own when this server
-        # process exits — shutdown, crash, or a --reload worker restart. The
-        # handle below lives only in memory; before this, a restart lost it and
-        # left caffeinate running forever (orphaned to launchd, 15 Oct 2026).
+        # -w <server pid>: caffeinate exits on its own when the server exits
+        # (shutdown, crash) — no orphan. server_watch_pid() is the uvicorn
+        # reloader, not this worker: watching the worker switched caffeinate
+        # off at every --reload (20 Oct 2026). Stop/status find it by pgrep,
+        # so a later worker can still act on it.
         _caffeinate_proc = await asyncio.create_subprocess_exec(
-            "caffeinate", "-dimsu", "-w", str(os.getpid()),
+            "caffeinate", "-dimsu", "-w", str(server_watch_pid()),
             stdout=asyncio.subprocess.DEVNULL,
             stderr=asyncio.subprocess.DEVNULL,
         )

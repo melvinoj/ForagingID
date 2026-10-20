@@ -26,6 +26,7 @@ import logging
 log = logging.getLogger(__name__)
 from app.database import get_db, AsyncSessionLocal
 from app.services.write_lock import db_write_lock
+from app.services.ai_placeholder import is_ai_placeholder
 from app.models.culinary import CulinaryInfo
 from app.models.notes import MapNote
 from app.models.observation import Observation
@@ -2380,6 +2381,15 @@ async def approve_ai_draft(
     approved_text = body.edited_text.strip() if body.edited_text else draft.draft_text
     is_edited = bool(body.edited_text and body.edited_text.strip() != (draft.draft_text or "").strip())
 
+    # An unedited refusal/placeholder never becomes content (20 Oct 2026: 24
+    # such approvals had to be cleared). Curator-edited text is the curator's.
+    if not is_edited and is_ai_placeholder(field, approved_text):
+        raise HTTPException(
+            status_code=422,
+            detail=f"This '{field}' draft is an AI placeholder/refusal, not content — "
+                   "reject it, or edit the text before approving.",
+        )
+
     draft.status = "edited_approved" if is_edited else "approved"
     draft.final_text = body.edited_text if is_edited else None
     draft.approved_at = datetime.utcnow()
@@ -2640,13 +2650,7 @@ async def _generate_drafts_for_species(
         )
 
         if draft_result:
-            # Placeholder filter — same as enrichment.py (culinary fields only)
-            _NON_ANSWERS = (
-                "not enough information", "not enough sourced", "i don't have",
-                "i cannot", "i'm unable", "unable to provide", "cannot provide",
-                "insufficient", "not able to", "no sourced information",
-            )
-            _CULINARY_FIELDS = {"taste_notes", "recipe"}
+            # Placeholder filter — shared predicate (app/services/ai_placeholder.py)
             field_map = {
                 "taste_notes":    draft_result.taste_notes,
                 "medicinal_notes": draft_result.medicinal_notes,
@@ -2656,7 +2660,7 @@ async def _generate_drafts_for_species(
             for field_name, text in field_map.items():
                 if not text:
                     continue
-                if field_name in _CULINARY_FIELDS and any(p in text.lower() for p in _NON_ANSWERS):
+                if is_ai_placeholder(field_name, text):
                     continue
                 db.add(SpeciesAIDraft(
                     species_id=sp.id,

@@ -23,6 +23,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.models.species import Species, SpeciesRecipe, SpeciesAIDraft, culinary_allowed
 from app.models.culinary import CulinaryInfo
+from app.services.ai_placeholder import is_ai_placeholder
 
 log = logging.getLogger(__name__)
 router = APIRouter()
@@ -375,6 +376,8 @@ async def regenerate_recipe(
 
     if not new_text:
         raise HTTPException(500, "Claude returned empty response.")
+    if is_ai_placeholder("recipe", new_text):
+        raise HTTPException(422, "Claude returned a placeholder/refusal, not a recipe — nothing saved.")
 
     # Save as pending AI draft
     draft = SpeciesAIDraft(

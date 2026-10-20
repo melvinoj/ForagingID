@@ -5,9 +5,9 @@ _Last updated: 20 Oct 2026_
 ### Build status
 Server: START_ForagingID.command — uvicorn foreground + tee to logs/server_<ts>.log; port check; cleanup trap. Claude Code never starts the server.
 Launcher: --reload-dir app + absolute --reload-exclude scripts/, migrations/, tests/; --timeout-graceful-shutdown 5 (any app/ edit reloads and cancels background tasks — check background_processes first).
-WAL; busy_timeout 30000; synchronous=NORMAL. Snapshot endpoint takes `description` (not `label`).
+WAL; busy_timeout 30000; synchronous=NORMAL. Snapshot endpoint takes `description` (not `label`) and also makes a git commit.
 Alembic head: 0054 (experience_publications).
-Snapshots this session: db_20261020_053600, db_20261020_062739, db_20261020_063515, db_20261020_072552 (re-route, Rümmelsbühl foray id 4), db_20261020_103750 (fungi backfill).
+Snapshots this session: db_20261020_053600, db_20261020_062739, db_20261020_063515, db_20261020_072552 (re-route, Rümmelsbühl foray id 4), db_20261020_103750 (fungi backfill), db_20261020_112509 (placeholder clean-up; commit a336e152).
 
 ### Completed 20 Oct
 - Saved walks — route line:
@@ -20,36 +20,52 @@ Snapshots this session: db_20261020_053600, db_20261020_062739, db_20261020_0635
   - Start here (no dialog) + ⇄ Reverse added; dashed legs stay on the same physical legs; reversing twice restores exactly.
 - Circular / point-to-point toggle on loaded walks: drops/restores the closing leg; persists via PATCH …/loop; exports follow it; button disabled while in flight; stale drawn-area rebuild fixed.
 - Repeat species: first stop gets the full card, later stops a compact "Also here … see stop N" line with badge — app panel, Export summary, experience page.
-- Walk panel: "← Saved walks" button. Show all pins + Select pins merged into "✎ Edit walk". No species cards on pin tap while a saved walk is loaded (rest of app unchanged). Name labels on selected/hovered pins.
-- Older-photos tick → its pins light up.
-- Edit walk staged edits + "Save changes" (Save walk on a loaded walk no longer makes copies): working per Melvin's browser test.
+- Walk panel:
+  - "← Saved walks" button.
+  - Show all pins + Select pins merged into "✎ Edit walk"; staged edits + "Save changes" (Save walk on a loaded walk no longer makes copies) — working per Melvin.
+  - No species cards on pin tap while a saved walk is loaded (rest of app unchanged); name labels on selected/hovered pins.
+  - Older-photos tick → its pins light up.
+  - Stop cards trimmed: name, common name, badge, member chips, Species profile link, foraging_notes snippet (plain, ~160 chars) only. Recipe snippets and edible-parts/taste hint removed (walk panel only; recipes stay in Export summary + experience page).
 - ↻ Re-route: dry-run preview, snapshot, ORS only on changed legs, kept legs keep exact geometry, detours >3× + 150 m kept dashed; side-stops promoted to real stops, empty stops dropped. Used live on Rümmelsbühl foray (id 4): 2,895 → 2,952 m, now 28 stops 1–28.
 - Joined-stop labels kept after line fix: 2a→5a (id 3), 12a→11a (id 4). Labels are derived from geometry.
 - Names rule: short species references show "Common (Latin)" everywhere (display_common_name server-side, species-names.js frontend); badges kept.
-- Create-from-map sheet retracts while drawing. Map freeze after save/build fixed (browser-unverified).
-- Fungi category rule: confirming an observation as a kingdom-Fungi species sets obs_category=fungi (plant→fungi only, audit row) on all approve/correct paths. 84 misfiled confirmed rows backfilled (snapshot db_20261020_103750); 118 confirmed fungi now filed as Fungi.
+- Create-from-map sheet retracts while drawing. Map freeze after save/build fixed.
+- Fungi category rule: confirming an observation as a kingdom-Fungi species sets obs_category=fungi (plant→fungi only, audit row) on all approve/correct paths. 84 misfiled confirmed rows backfilled; 118 confirmed fungi now filed as Fungi.
+- Jobs queue pop-up: draggable by header, remembers position (jsw-pos-v1), falls back to top-right if off-screen — browser-checked by Melvin.
+- Caffeinate: now watches the uvicorn reloader (survives --reload); start reuses an existing process; keep_awake() for jobs still follows the worker.
+- AI placeholder clean-up (changed_by='human:placeholder_clear', non-locking, full old text in history #2793–2828):
+  - 10 taste_notes refusals → NULL.
+  - 14 medicinal_notes refusals/milder → standard "No known traditional medicinal uses".
+  - 11 edible_parts "None known" → NULL.
+  - Urtica dioica foraging_notes "test" → NULL.
+  - Shared is_ai_placeholder() (ai_placeholder.py) replaces both marker lists; runs at all AI draft-creation points and at approve (unedited placeholder refused).
+  - PFAF parser treats "None known" in Edible Uses as no data.
 - Review Critical section, ☠ badge and nav chip red dot: confirmed by Melvin.
 
 ### Pending / next
-1. Jobs queue pop-up: make it movable so it can't hide controls (first item next session; agree behaviour with Melvin before prompting).
-2. Walk panel display fixes:
-   - Achillea nobilis edible parts shows AI placeholder text ("There is not enough information…").
-   - Verbascum densiflorum edible parts "None known" (status edible is correct; the text is wrong).
-   - Raw markdown in panel recipes; PFAF "Edible Parts: Edible Uses:" doubling + citation brackets.
-3. Melvin: confirm walk 3 hazards in review — Atropa obs 22224 + 22225, Senecio 22231. little foray (id 3) build blocked until then.
-4. Stage C publish panel:
+1. Melvin checks:
+   - Stop server (Ctrl+C) → `pgrep -fl "^caffeinate"` prints nothing; restart.
+   - Rümmelsbühl foray (id 4) trimmed stop cards; caffeinate button state after a reload.
+2. Melvin decides: clear Alchemilla mollis (cid 129) edible_parts "None Known" — skipped because human-locked by a no-op 1 June save.
+3. Bulk reject ~100 pending medicinal_notes drafts with refusal text ("Based solely on the provided source data, there are no traditional…") — approve now blocks them.
+4. Melvin: confirm walk 3 hazards in review — Atropa obs 22224 + 22225, Senecio 22231. little foray (id 3) build blocked until then.
+5. Stage C publish panel:
    - Confirm warns: exact route public; unpublish hides the page but past versions stay in public repo history / archives.
    - Freeze stop labels at publish time.
    - AI-agreed review list; verify buttons. Then republish Rümmelsbühl foray (id 4).
-5. Invalidate approved wrong-species drafts 94–105 (26 May batch).
-6. Caffeinate off-check; Walk Stage 4/5; PWA on Pixel 8 via ngrok.
+6. Invalidate approved wrong-species drafts 94–105 (26 May batch).
+7. Walk Stage 4/5; PWA on Pixel 8 via ngrok.
 
 ### Known issues / backlog
+- Raw PFAF text (doubled "Edible Parts:/Edible Uses:" labels, citation brackets) still shows in: map species pop-up (index.html ~4912), Export summary culinary note, species page Culinary section, print.html and lists.html handouts — deal with separately.
+- Frontend has 3 page-local markdown renderers (species.html _renderMd, print.html + lists.html _mdLite) plus server _md_snippet — consolidation candidate.
+- Guests no longer see medicinal_notes on the 14 reset rows (new marker not in guest trusted-source list) — acceptable for now.
+- Jobs widget never shows below 640 px wide (running jobs invisible on phone).
 - Root cause of little foray's original line not drawing never found (old 462-vertex geometry valid); fixed by data change + load guard. Repro only if it recurs.
 - Ewden brook circular (id 1) has no saved line (predates geometry saving) — re-save to fix.
 - Walk panel has too many buttons — revisit layout. Pop-ups (Re-route result, Renumber) — Melvin to revisit if needed.
 - Stop ordering is greedy nearest-next from the southernmost pin → long jumps at the end. Better ordering for new walks: on the simmer.
-- Dashed legs: idea on the simmer — fix missing paths in OSM, or drag points on dashed legs in Edit walk; GPX track as line. Recording walks in-app no longer needed.
+- Dashed legs: on the simmer — fix missing paths in OSM, or drag points on dashed legs in Edit walk; GPX track as line. Recording walks in-app no longer needed.
 - Implausible regional IDs parked (e.g. Pyxine albovirens, Carpinus orientalis near Gresgen).
 - Unreviewed fungi (6) stay plant until approved; auto-approved photos not covered by the fungi rule.
 - SAFETY: Aruncus dioicus 'edible' unverified — Melvin to decide; other unverified edible/toxic species app-wide (Chaerophyllum hirsutum, Sambucus ebulus, Hypholoma fasciculare, Iris pseudacorus …). Daucus carota settled — do not re-raise.
@@ -65,6 +81,35 @@ Snapshots this session: db_20261020_053600, db_20261020_062739, db_20261020_0635
 - Docs drift: CLAUDE.md Alembic head (0054), PhoneForaging path. Add to CLAUDE.md: report walks by name + ID; "design/diagnose only / wait for OK" = no code edits.
 
 ## History
+
+### 2026-10-20 11:43
+**Snapshot** — End of session — Session ended from Settings page
+DB: `snapshots/db_20261020_114350.sqlite`
+
+### 2026-10-20 11:43
+**Session ended** — Session ended from Settings page
+
+### 2026-10-20 11:30
+**Caffeinate survives reloads (watches uvicorn reloader); AI placeholder clear (10 taste_notes NULL, 14 medicinal_notes -> A5 default) + shared is_ai_placeholder predicate at all AI draft creation points and approve; 11 None known edible_parts cleared + PFAF parser fix; walk stop cards trimmed to name/badge/link/foraging notes; Urtica foraging_notes test cleared**
+
+**Built:**
+- app/services/ai_placeholder.py is_ai_placeholder (single source of truth)
+- approve rejects unedited placeholder drafts (422)
+- server_watch_pid() for caffeinate -w
+- caffeinate start adopts an existing caffeinate instead of duplicating
+**Fixed:**
+- Caffeinate switched off on every uvicorn reload
+- 24 AI refusal texts cleared/replaced (history #2793-2816)
+- 11 PFAF None known edible_parts cleared (history #2817-2827)
+- PFAF parser: Edible Uses None known = no data
+- Urtica dioica foraging_notes test cleared (history #2828)
+- Walk stop cards: edible-parts hint removed, no emoji prefix
+**Files:** `app/utils/caffeinate.py`, `app/api/scan.py`, `app/services/ai_placeholder.py`, `app/services/enrichment.py`, `app/api/culinary.py`, `app/api/recipes.py`, `app/integrations/pfaf.py`, `frontend/index.html`
+**Pending:**
+- Melvin: stop server and confirm caffeinate exits (pgrep)
+- Alchemilla mollis edible_parts None Known skipped: human-locked (no-op save 1 Jun)
+- ~100 pending medicinal_notes drafts are refusals: reject in review (can no longer be approved unedited)
+- Browser-test walk 4 stop cards
 
 ### 2026-10-20 11:25
 **Snapshot** — before placeholder/None-known clear + Urtica foraging_notes test clear

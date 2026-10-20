@@ -37,6 +37,7 @@ from app.integrations.claude_draft import AIDraftResult, generate_ai_drafts
 from app.models.culinary import CulinaryInfo
 from app.models.observation import Observation
 from app.models.species import CulinaryInfoHistory, EnrichmentSource, Species, SpeciesAIDraft
+from app.services.ai_placeholder import is_ai_placeholder
 
 log = logging.getLogger(__name__)
 
@@ -1607,30 +1608,13 @@ async def _maybe_generate_ai_drafts(
         "medicinal_folklore": getattr(draft_result, "medicinal_folklore", None),
     }
 
-    # Phrases that indicate the model couldn't write real content — discard silently.
-    # Applied to taste_notes and recipe only (never medicinal_notes — "No traditional
-    # medicinal uses recorded" is the intended _ensure_medicinal_default() fallback).
-    _PLACEHOLDER_MARKERS = (
-        "not enough information",
-        "not enough sourced",
-        "i don't have", "i don't have specific",
-        "i cannot", "i'm unable",
-        "unable to provide", "cannot provide",
-        "insufficient", "not able to",
-        "no sourced information",
-        "cannot determine",
-    )
-    _PLACEHOLDER_CULINARY_ONLY = {"taste_notes", "recipe"}  # fields where filter applies
-
     for field_name in fields_needed:
         text = field_map.get(field_name)
         if not text:
             continue
-        # Reject placeholder / refusal responses — culinary fields only.
-        # medicinal_notes is excluded: "No traditional medicinal uses recorded" is
-        # the intended _ensure_medicinal_default() fallback, not a failure.
-        text_lower = text.lower()
-        if field_name in _PLACEHOLDER_CULINARY_ONLY and any(m in text_lower for m in _PLACEHOLDER_MARKERS):
+        # Reject placeholder / refusal responses (shared predicate — medicinal
+        # fields check only the opening, so the standard default still passes).
+        if is_ai_placeholder(field_name, text):
             log.warning(
                 "  Discarding placeholder draft for %r → %s (starts: %r)",
                 species.scientific_name, field_name, text[:60],
@@ -1869,6 +1853,10 @@ async def _section_ai_draft(
     text = getattr(draft_result, field_name, None)
     if not text:
         log.info("[_section_ai_draft] backend returned no text for field %r species %r", field_name, species.scientific_name)
+        return False
+    if is_ai_placeholder(field_name, text):
+        log.warning("[_section_ai_draft] discarding placeholder draft for %r → %s (starts: %r)",
+                    species.scientific_name, field_name, text[:60])
         return False
 
     # Invalidate any existing pending draft for this field

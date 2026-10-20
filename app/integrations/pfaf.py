@@ -284,6 +284,12 @@ def _parse(scientific_name: str, url: str, raw_html: str) -> PFAFResult:
     soup = BeautifulSoup(raw_html, "html.parser")
 
     edible_text = _section_text(soup, "Edible Uses")
+    # PFAF's "checked, nothing found" body ("None known" / "None Known") means
+    # no data — same convention _strip_medicinal_disclaimer applies to Medicinal
+    # Uses. Stored as text it read as a statement under an edible badge
+    # (Verbascum densiflorum, 20 Oct 2026).
+    if edible_text and _clean(edible_text) and _clean(edible_text).strip().lower() == "none known":
+        edible_text = None
     # Known Hazards lives in the ratings summary table (<td><b>Known Hazards</b></td>
     # adjacent to the value <td>) — _section_text() cannot reach it because the <b>
     # tag has no siblings. The old "Caution"/"Hazard" selectors never matched anything.

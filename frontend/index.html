@@ -6371,7 +6371,6 @@ function renderWalkPanel(route, enrichMap) {
     let speciesHtml = '';
     for (const spName of _repeatSplit[i].full) {
       const _enrichData = enrichMap[spName];
-      const ci       = _enrichData?.culinary || null;
       const spData   = _enrichData?.species  || null;
       // Pin properties for this species (common name / edibility on the map
       // pin); loaded walks have no pins, so fall back to the culinary profile.
@@ -6381,34 +6380,25 @@ function renderWalkPanel(route, enrichMap) {
                          || (spData?.common_names && spData.common_names[0]) || '';
       const edib = spData?.edibility_status || pinP.edibility_status;
 
-      // Toxic guard (_culinaryGate): culinary hint and edibility badge only
-      // when toxicity is 'none'; fails closed when it could not be read.
+      // Toxic guard (_culinaryGate): the edibility badge only when toxicity is
+      // 'none'; fails closed when it could not be read.
       const _gate      = _culinaryGate(_enrichData ? _enrichData._toxicity : null);
 
-      // No recipe snippets on stop cards (recipes live in the Export summary and
-      // the experience page). In their place: the curator's own foraging notes
-      // from the species card, first ~160 chars as plain text, or nothing.
+      // Stop card = name, common name, badge, profile link, and the curator's
+      // own foraging notes (species card) — first ~160 chars, plain text, or
+      // nothing. No recipe and no edible-parts/taste hint: those live in the
+      // Export summary, the experience page and the species page. The notes are
       // Melvin-authored, so not behind the culinary gate.
       let forNotesHtml = '';
       const fnotes = (spData?.foraging_notes || '').trim();
       if (fnotes) {
         const fsnip = fnotes.length > 160 ? fnotes.slice(0, 157) + '…' : fnotes;
-        forNotesHtml = `<div style="font-size:0.75rem;color:#555;margin:3px 0 4px;line-height:1.4">📝 ${_esc(fsnip)}</div>`;
+        forNotesHtml = `<div style="font-size:0.75rem;color:#555;margin:3px 0 4px;line-height:1.4">${_esc(fsnip)}</div>`;
       }
 
       // Blocked species (toxic/deadly/unknown): the badge is the toxicity
       // warning, never an edibility label (whatever edibility_status says).
       const edibBadge = _walkEdibBadge(_gate, edib);
-
-      // Culinary notes: brief hint from edible_parts / taste_notes / preparation_methods
-      let culinaryNotesHtml = '';
-      if (ci && _gate.ok) {
-        const note = _walkCleanPfafText(ci.edible_parts || ci.taste_notes || ci.preparation_methods);
-        if (note) {
-          const ns = note.length > 100 ? note.slice(0, 97) + '…' : note;
-          culinaryNotesHtml = `<div style="font-size:0.75rem;color:#666;margin:3px 0 4px">${_esc(ns)}</div>`;
-        }
-      }
 
       speciesHtml += `<div class="walk-stop-sp"${speciesHtml ? ' style="border-top:1px dashed #e3ead7;margin-top:6px;padding-top:6px"' : ''}>
         <span class="walk-stop-species">${_esc(spName)}</span>
@@ -6419,7 +6409,6 @@ function renderWalkPanel(route, enrichMap) {
           <a href="/species?s=${encodeURIComponent(spName)}"
              style="font-size:0.68rem;color:#2d5016;margin-left:8px">Species profile →</a>
         </div>
-        ${culinaryNotesHtml}
         ${forNotesHtml}
       </div>`;
     }
@@ -6464,23 +6453,6 @@ function renderWalkPanel(route, enrichMap) {
 
   // Bottom sheet summary (phone only — mirrors walk-title / walk-sub for the sheet)
   _wbsUpdateSummary(route);
-}
-
-// Walk stop cards only — display-time tidy of PFAF-scraped edible-parts text;
-// the stored value is never changed. PFAF's two table labels arrive run
-// together ("Edible Parts: Leaves Root Edible Uses: Young shoots…", or
-// "Edible Parts: Edible Uses: Tea …" when no parts are listed) and its numeric
-// reference brackets ("[2, 5, 8, 13]", "[183,…]") are noise on a short card.
-// Labels become "Leaves Root — Young shoots…"; brackets are dropped.
-// Letter refs like PFAF's own "[K]" are left as-is.
-function _walkCleanPfafText(s) {
-  if (!s) return s;
-  return String(s)
-    .replace(/\s*\[\d+(?:\s*,\s*(?:\d+|…|\.\.\.))*\s*,?\s*(?:…|\.\.\.)?\]/g, '')
-    .replace(/Edible Parts:\s*Edible Uses:\s*/g, '')
-    .replace(/Edible Parts:\s*(.*?)\s*Edible Uses:\s*/g, '$1 — ')
-    .replace(/\s{2,}/g, ' ')
-    .trim();
 }
 
 // Loaded saved walk: per-species membership chips (walk_membership.py).

@@ -119,6 +119,35 @@ def _apply_verdict_severity(db: AsyncSession, sp: Species, status: str,
         sp.toxicity_severity = new_sev
 
 
+def _write_verdict(db: AsyncSession, sp: Species, status: str, verified: Optional[bool],
+                   requested_severity: Optional[str], note: Optional[str]) -> None:
+    """The curator's verdict write — the ONE implementation behind
+    PATCH /api/edibility/status and the verdict-draft approve (batch 3b), so
+    neither is a bypass. Order matters: both safety gates raise HTTPException(400)
+    BEFORE anything is mutated, so a refused write changes nothing.
+
+      1. RULE 1 coupling + RULE 2 human-only relax (_enforce_edibility_write_rules)
+      2. severity with the verdict (severity_for_verdict) + its history row
+      3. edibility_status (+ verified / verified_by when verified is not None)
+         + a species_edibility_history row, changed_by 'human'
+    verified None = status-only write: edibility_verified/_by left untouched."""
+    old_status = sp.edibility_status
+    _enforce_edibility_write_rules(old_status, status, verified, "human")
+    _apply_verdict_severity(db, sp, status, requested_severity, "human", note)
+    sp.edibility_status = status
+    if verified is not None:
+        sp.edibility_verified = bool(verified) and status != "unknown"
+        sp.edibility_verified_by = "human" if sp.edibility_verified else None
+    db.add(SpeciesEdibilityHistory(
+        species_id=sp.id,
+        field="edibility_status",
+        old_value=old_status,
+        new_value=status,
+        changed_by="human",
+        note=note,
+    ))
+
+
 # Guards against overlapping background rescans.
 _rescan_state: dict = {"running": False, "queued": 0, "done": 0, "resolved": 0}
 
@@ -529,31 +558,10 @@ async def set_edibility_status(
     if not sp:
         raise HTTPException(404, detail="Species not found")
 
-    old_status = sp.edibility_status
-
-    # Server-side safety gate (RULE 1 coupling + RULE 2 human-only relax) — same
-    # helper as /bulk-status, so neither path is a bypass. Raises 400 on violation.
     # Provenance is server-derived ('human') — the is_guest guard above means any
     # caller reaching here is the curator; payload.changed_by is ignored.
-    _enforce_edibility_write_rules(old_status, status, payload.verified, "human")
-    # Severity with the verdict (B2-02) — refused combinations raise 400 here, before any write.
-    _apply_verdict_severity(db, sp, status, payload.toxicity_severity, "human", payload.note)
+    _write_verdict(db, sp, status, payload.verified, payload.toxicity_severity, payload.note)
     severity = sp.toxicity_severity
-
-    sp.edibility_status = status
-    # verified is None -> status-only write; leave edibility_verified/_by untouched.
-    if payload.verified is not None:
-        sp.edibility_verified = bool(payload.verified) and status != "unknown"
-        sp.edibility_verified_by = "human" if sp.edibility_verified else None
-
-    db.add(SpeciesEdibilityHistory(
-        species_id=species_id,
-        field="edibility_status",
-        old_value=old_status,
-        new_value=status,
-        changed_by="human",
-        note=payload.note,
-    ))
 
     scientific_name = sp.scientific_name
     await db.commit()
@@ -582,6 +590,216 @@ async def set_edibility_status(
         # Tells the UI to drop the card from the unknown queue.
         "still_unknown": status in _UNKNOWN_STATES,
     }
+
+
+# ---------------------------------------------------------------------------
+# Verdict drafts (fix batch 3b) — one decision per species, proposed from
+# stored sources by scripts/verdict_sweep_drafts.py (rules:
+# app/services/verdict_drafts.py). Approval writes through _write_verdict —
+# the same writer as PATCH /status — and is refused when the species changed
+# after the draft was made. Never in "Approve all": verdict drafts are not
+# listed in AI Draft Review, and the generic draft approve refuses the field.
+# ---------------------------------------------------------------------------
+
+async def _verdict_state_now(db: AsyncSession, sp: Species) -> dict:
+    from app.models.species import CulinaryInfoHistory
+    from app.services.verdict_drafts import verdict_state
+    last_seh = await db.scalar(
+        select(func.max(SpeciesEdibilityHistory.id)).where(SpeciesEdibilityHistory.species_id == sp.id))
+    last_cih = await db.scalar(
+        select(func.max(CulinaryInfoHistory.id))
+        .join(CulinaryInfo, CulinaryInfo.id == CulinaryInfoHistory.culinary_info_id)
+        .where(CulinaryInfo.species_id == sp.id)
+        .where(CulinaryInfoHistory.field_name == "edibility_status"))
+    return verdict_state(sp, last_seh, last_cih)
+
+
+async def _confirmed_pin_counts(db: AsyncSession) -> dict:
+    """{species_id: confirmed map pins} — the map's rule (approved/manually
+    verified, identified, geotagged)."""
+    rows = (await db.execute(
+        select(Observation.species_id, func.count(Observation.id))
+        .where(Observation.species_id.is_not(None))
+        .where(Observation.review_status.in_(["approved", "manually_verified"]))
+        .where(Observation.identification_status == "identified")
+        .where(Observation.latitude.is_not(None))
+        .group_by(Observation.species_id)
+    )).all()
+    return {sid: n for sid, n in rows}
+
+
+async def species_on_saved_walks(db: AsyncSession) -> dict:
+    """{species_id: [walk names]} from the saved walks' CURRENT membership
+    (walk_membership — the rule the walk panel and the experience export use)."""
+    from app.api.walk import walk_membership_for
+    from app.models.walk import SavedWalk
+    out: dict = {}
+    for walk in (await db.execute(select(SavedWalk).order_by(SavedWalk.id))).scalars().all():
+        try:
+            mem = await walk_membership_for(db, walk)
+        except Exception as e:                       # one bad walk must not hide the queue
+            log.warning("[verdict-drafts] walk %s membership failed: %s", walk.id, e)
+            continue
+        for stop in mem.get("stops", []):
+            for sp in stop.get("species", []):
+                sid = sp.get("species_id")
+                if sid is not None and walk.name not in out.setdefault(sid, []):
+                    out[sid].append(walk.name)
+    return out
+
+
+@router.get("/api/edibility/verdict-drafts")
+async def list_verdict_drafts(db: AsyncSession = Depends(get_db),
+                              identity: Identity = Depends(get_identity)):
+    """Pending verdict drafts, species on saved walks first, then by confirmed
+    map pins, then name. Each item carries the proposal, its sources with their
+    exact quoted text, the current values, and whether the species changed
+    after drafting (approval would then be refused)."""
+    if identity.is_guest:
+        raise HTTPException(403, "Curator only")
+    import json as _json
+    from app.models.species import ALLOWED_SEVERITIES, SpeciesAIDraft, display_common_name
+    from app.services.verdict_drafts import EVIDENCE_LABELS, FIELD, MODEL, VERDICTS, changes_since
+
+    rows = (await db.execute(
+        select(SpeciesAIDraft, Species)
+        .join(Species, Species.id == SpeciesAIDraft.species_id)
+        .where(SpeciesAIDraft.field_name == FIELD, SpeciesAIDraft.model == MODEL,
+               SpeciesAIDraft.status == "pending")
+    )).all()
+    pins = await _confirmed_pin_counts(db)
+    walks = await species_on_saved_walks(db)
+
+    items = []
+    for d, sp in rows:
+        ctx = _json.loads(d.generation_context_json or "{}")
+        now = await _verdict_state_now(db, sp)
+        defaults = {}
+        for v in VERDICTS:
+            try:
+                defaults[v] = severity_for_verdict(v, sp.toxicity_severity)
+            except SeverityRuleError:
+                defaults[v] = None              # needs an explicit severity (would lower it)
+        items.append({
+            "draft_id": d.id,
+            "species_id": sp.id,
+            "scientific_name": sp.scientific_name,
+            "common_name": display_common_name(sp.preferred_common_name, sp.common_names) or None,
+            "kingdom": sp.kingdom,
+            "confirmed_pins": pins.get(sp.id, 0),
+            "walks": walks.get(sp.id, []),
+            "current": {"edibility_status": sp.edibility_status, "toxicity_severity": sp.toxicity_severity,
+                        "edibility_verified": bool(sp.edibility_verified),
+                        "edibility_verified_by": sp.edibility_verified_by},
+            "proposed": ctx.get("proposed"),
+            "evidence": ctx.get("evidence"),
+            "evidence_label": EVIDENCE_LABELS.get(ctx.get("evidence"), ctx.get("evidence")),
+            "reason": ctx.get("reason"),
+            "sources": ctx.get("sources", []),
+            "context": ctx.get("context", []),
+            "excluded": ctx.get("excluded", []),
+            "severity_defaults": defaults,
+            "changed_since_draft": changes_since(ctx.get("at_draft"), now),
+            "generated_at": d.generated_at.isoformat() if d.generated_at else None,
+        })
+    items.sort(key=lambda i: (not i["walks"], -i["confirmed_pins"], i["scientific_name"].lower()))
+    return {"items": items, "count": len(items),
+            "allowed_severities": {k: list(v) for k, v in ALLOWED_SEVERITIES.items()}}
+
+
+class VerdictDraftApproveIn(BaseModel):
+    edibility_status: str             # the curator's verdict (prefilled with the proposal)
+    toxicity_severity: str            # the curator's severity (prefilled; must fit the verdict)
+    note: Optional[str] = None
+
+
+async def _pending_verdict_draft(db: AsyncSession, draft_id: int):
+    from app.models.species import SpeciesAIDraft
+    from app.services.verdict_drafts import FIELD, MODEL
+    d = await db.get(SpeciesAIDraft, draft_id)
+    if d is None:
+        raise HTTPException(404, "Draft not found")
+    if d.field_name != FIELD or d.model != MODEL:
+        raise HTTPException(400, f"Draft {draft_id} is not a verdict draft")
+    if d.status != "pending":
+        raise HTTPException(409, f"Draft {draft_id} is already {d.status}")
+    return d
+
+
+@router.post("/api/edibility/verdict-drafts/{draft_id}/approve")
+async def approve_verdict_draft(
+    draft_id: int,
+    payload: VerdictDraftApproveIn,
+    background_tasks: BackgroundTasks,
+    db: AsyncSession = Depends(get_db),
+    identity: Identity = Depends(get_identity),
+):
+    """The curator's decision on one species. Writes edibility_status +
+    toxicity_severity through _write_verdict (severity_for_verdict, history
+    rows changed_by 'human'). Refused (409, nothing written) when the species'
+    verdict state or verdict history changed after the draft was made."""
+    if identity.is_guest:
+        raise HTTPException(403, "Curator only")
+    import json as _json
+    from app.services.verdict_drafts import changes_since
+
+    d = await _pending_verdict_draft(db, draft_id)
+    sp = await db.get(Species, d.species_id)
+    if sp is None:
+        raise HTTPException(404, "Species not found")
+    ctx = _json.loads(d.generation_context_json or "{}")
+    changed = changes_since(ctx.get("at_draft"), await _verdict_state_now(db, sp))
+    if changed:
+        raise HTTPException(409, detail=(
+            f"{sp.scientific_name} changed after this draft was made ({'; '.join(changed)}). "
+            "Nothing was written — reject this draft; the next sweep drafts it again from the current state."))
+
+    status = (payload.edibility_status or "").strip().lower()
+    if status not in _VALID_EDIBILITY:
+        raise HTTPException(422, detail=f"edibility_status must be one of {sorted(_VALID_EDIBILITY)}")
+    severity_req = (payload.toxicity_severity or "").strip().lower()
+    note = f"verdict draft #{d.id} (batch 3b sweep)" + (f": {payload.note.strip()}" if (payload.note or "").strip() else "")
+
+    _write_verdict(db, sp, status, status != "unknown", severity_req, note)   # 400 before any write
+    severity = sp.toxicity_severity
+    proposed = ctx.get("proposed") or {}
+    d.status = ("approved" if (proposed.get("edibility_status"), proposed.get("toxicity_severity")) == (status, severity)
+                else "edited_approved")
+    d.final_text = f"{status} / {severity}"
+    d.approved_at = datetime.utcnow()
+    d.approved_by = "human"
+    scientific_name = sp.scientific_name
+    await db.commit()
+
+    # Loud-fail on an unconfirmed write (same rule as PATCH /status).
+    await db.refresh(sp)
+    await db.refresh(d)
+    if sp.edibility_status != status or sp.toxicity_severity != severity or d.status not in ("approved", "edited_approved"):
+        raise HTTPException(500, detail=(
+            f"Write did not persist: expected {status!r}/{severity!r}, found "
+            f"{sp.edibility_status!r}/{sp.toxicity_severity!r}, draft {d.status!r}"))
+
+    _NO_DRAFT = ("toxic", "inedible", "not_edible")
+    if status not in _NO_DRAFT and status not in _UNKNOWN_STATES:
+        from app.services.enrichment import trigger_ai_drafts_for_species
+        background_tasks.add_task(trigger_ai_drafts_for_species, scientific_name)
+    return {"ok": True, "draft_id": d.id, "draft_status": d.status, "species_id": sp.id,
+            "scientific_name": scientific_name, "edibility_status": sp.edibility_status,
+            "toxicity_severity": sp.toxicity_severity, "edibility_verified": sp.edibility_verified}
+
+
+@router.post("/api/edibility/verdict-drafts/{draft_id}/reject")
+async def reject_verdict_draft(draft_id: int, db: AsyncSession = Depends(get_db),
+                               identity: Identity = Depends(get_identity)):
+    """Reject one verdict draft. The species is not touched; a rejected draft
+    is a decision, so the sweep does not draft that species again."""
+    if identity.is_guest:
+        raise HTTPException(403, "Curator only")
+    d = await _pending_verdict_draft(db, draft_id)
+    d.status = "rejected"
+    await db.commit()
+    await db.refresh(d)
+    return {"ok": d.status == "rejected", "draft_id": d.id, "draft_status": d.status}
 
 
 async def _rescan_unknown_worker(species_ids: list[int]) -> None:

@@ -1142,6 +1142,47 @@
       align-items: start;
     }
 
+    /* ── Verdict drafts (batch 3b) — one decision per species ───────────── */
+    #vd-section { padding: 12px 14px 4px; border-bottom: 2px solid #fde68a; }
+    .vd-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px; margin-bottom: 10px; }
+    .vd-title { font-weight: 700; color: #7c2d12; font-size: 0.95rem; }
+    .vd-count { font-size: 0.8rem; color: #92400e; }
+    .vd-sub { font-size: 0.75rem; color: #777; flex-basis: 100%; }
+    #vd-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(420px, 1fr)); gap: 12px; }
+    @media (max-width: 520px) { #vd-list { grid-template-columns: 1fr; } }
+    .vd-card { background: #fff; border: 1px solid #fde68a; border-radius: 8px; padding: 10px 12px;
+               font-size: 0.8rem; color: #333; }
+    .vd-card.vd-stale { border-color: #f59e0b; background: #fffbeb; }
+    .vd-name { font-size: 0.92rem; font-weight: 700; color: #3f2d0f; }
+    .vd-tags { display: flex; flex-wrap: wrap; gap: 4px; margin: 4px 0 6px; }
+    .vd-tag { font-size: 0.68rem; padding: 1px 6px; border-radius: 8px; background: #f3f4f6; color: #444; }
+    .vd-tag.walk { background: #dcfce7; color: #14532d; }
+    .vd-row { margin: 3px 0; }
+    .vd-k { color: #777; display: inline-block; min-width: 72px; }
+    .vd-ev { font-size: 0.7rem; font-weight: 700; padding: 1px 6px; border-radius: 8px; }
+    .vd-ev-thin, .vd-ev-conflict { background: #fef3c7; color: #92400e; }
+    .vd-ev-single_source, .vd-ev-multiple_sources { background: #e0f2fe; color: #075985; }
+    .vd-reason { margin: 4px 0 6px; color: #444; }
+    .vd-src { border-left: 3px solid #e5e7eb; padding: 3px 0 3px 8px; margin: 6px 0; }
+    .vd-src-h { font-weight: 600; }
+    .vd-src-says { font-size: 0.7rem; color: #555; }
+    .vd-quote { margin: 3px 0 0; padding: 4px 6px; background: #f9fafb; border-radius: 4px;
+                white-space: pre-wrap; font-size: 0.76rem; color: #222; max-height: 9em; overflow: auto; }
+    .vd-quote-f { font-size: 0.66rem; color: #888; display: block; }
+    .vd-ctx { font-size: 0.72rem; color: #777; margin-top: 4px; }
+    .vd-warn { background: #fef3c7; border: 1px solid #f59e0b; color: #78350f; border-radius: 5px;
+               padding: 5px 7px; margin: 6px 0; font-size: 0.76rem; }
+    .vd-decide { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 8px;
+                 padding-top: 8px; border-top: 1px dashed #fde68a; }
+    .vd-decide select, .vd-decide input { padding: 3px 6px; border: 1px solid #d6d3d1; border-radius: 5px;
+                                          font-size: 0.78rem; font-family: inherit; }
+    .vd-decide input { flex: 1; min-width: 120px; }
+    .vd-approve { padding: 4px 10px; border: 1px solid #15803d; background: #f0fdf4; color: #14532d;
+                  border-radius: 5px; font-weight: 700; cursor: pointer; font-size: 0.78rem; }
+    .vd-reject { padding: 4px 10px; border: 1px solid #b91c1c; background: #fff; color: #991b1b;
+                 border-radius: 5px; cursor: pointer; font-size: 0.78rem; }
+    .vd-msg { flex-basis: 100%; font-size: 0.76rem; }
+
     #edib-toolbar {
       padding: 10px 14px; background: #fefce8; border-bottom: 1px solid #fde68a;
       font-size: 0.85rem; color: #555; display: flex; align-items: center; gap: 10px;
@@ -1655,6 +1696,16 @@
 
 <!-- ── Tab 3: Edibility Review ───────────────────────────────────────────── -->
 <div id="tab-pane-edibility" class="tab-pane">
+  <!-- Verdict drafts (batch 3b): one decision per species, never in bulk -->
+  <section id="vd-section" style="display:none">
+    <div class="vd-head">
+      <span class="vd-title">⚖ Verdict drafts</span>
+      <span id="vd-count" class="vd-count"></span>
+      <span class="vd-sub">Proposed from stored sources only (no new lookups). One decision per species —
+        there is no bulk approve. Species on saved walks first, then by confirmed map pins.</span>
+    </div>
+    <div id="vd-list"></div>
+  </section>
   <div id="edib-toolbar">
     <div class="filter-group" style="border-color:#fde68a">
       <span class="filter-group-label" style="color:#b45309">Sort</span>
@@ -5383,6 +5434,176 @@ function switchReviewTab(tabName, btn) {
   }
 }
 
+// ── Verdict drafts (fix batch 3b) ─────────────────────────────────────────
+// One decision per species. "Approve verdict" sends the verdict + severity
+// chosen on the card (prefilled with the proposal) to
+// POST /api/edibility/verdict-drafts/{id}/approve — the same verdict writer as
+// the species page (severity_for_verdict, history rows changed_by 'human'). The
+// server refuses (409, nothing written) when the species changed after the
+// draft was made. There is deliberately no bulk path.
+const _VD_VERDICTS = ['edible', 'caution', 'inedible', 'toxic', 'unknown'];
+let _vdAllowed = {};            // verdict → allowed severities (server's ALLOWED_SEVERITIES)
+let _vdItems   = new Map();     // draft_id → item
+
+async function loadVerdictDrafts() {
+  const sec  = document.getElementById('vd-section');
+  const list = document.getElementById('vd-list');
+  const cnt  = document.getElementById('vd-count');
+  if (!sec || !list) return;
+  let d;
+  try {
+    const r = await fetch('/api/edibility/verdict-drafts');
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    d = await r.json();
+  } catch (e) {
+    sec.style.display = '';
+    list.innerHTML = `<div style="color:#c0392b">❌ Could not load verdict drafts: ${_esc(e.message)}</div>`;
+    return;
+  }
+  _vdAllowed = d.allowed_severities || {};
+  _vdItems   = new Map((d.items || []).map(i => [i.draft_id, i]));
+  sec.style.display = d.count ? '' : 'none';
+  if (cnt) cnt.textContent = d.count ? `${d.count} species` : '';
+  list.innerHTML = (d.items || []).map(_vdCardHtml).join('');
+}
+
+function _vdSevOptions(verdict, selected) {
+  return (_vdAllowed[verdict] || []).map(s =>
+    `<option value="${_esc(s)}"${s === selected ? ' selected' : ''}>${_esc(s)}</option>`).join('');
+}
+
+function _vdSourceHtml(s) {
+  const quotes = (s.quotes || []).map(q =>
+    `<div class="vd-quote"><span class="vd-quote-f">${_esc(q.field)}</span>${_esc(q.text)}</div>`).join('');
+  const link = s.url
+    ? ` <a href="${_esc(s.url)}" target="_blank" rel="noopener" style="font-weight:400;font-size:0.7rem">source ↗</a>` : '';
+  return `<div class="vd-src">
+      <div class="vd-src-h">${_esc(s.label || s.source)}${link}</div>
+      <div class="vd-src-says">${s.says ? `says <strong>${_esc(s.says)}</strong> — ` : ''}${_esc(s.why || '')}</div>
+      ${quotes}
+    </div>`;
+}
+
+function _vdCardHtml(it) {
+  const id   = it.draft_id;
+  const cur  = it.current || {};
+  const prop = it.proposed || {};
+  const pins = it.confirmed_pins || 0;
+  const tags = [
+    ...(it.walks || []).map(w => `<span class="vd-tag walk">🚶 ${_esc(w)}</span>`),
+    `<span class="vd-tag">📍 ${pins} pin${pins === 1 ? '' : 's'}</span>`,
+    it.kingdom ? `<span class="vd-tag">${_esc(it.kingdom)}</span>` : '',
+  ].join('');
+  const nSrc     = (it.sources || []).length;
+  const sources  = nSrc ? it.sources.map(_vdSourceHtml).join('')
+                        : '<div class="vd-ctx">No stored source gives a verdict for this species.</div>';
+  const context  = (it.context || []).map(_vdSourceHtml).join('');
+  const excluded = (it.excluded || []).length
+    ? `<div class="vd-ctx">Not used: ${it.excluded.map(x => `${_esc(x.source)} — ${_esc(x.why)}`).join('; ')}</div>` : '';
+  const changed  = it.changed_since_draft || [];
+  const stale    = changed.length
+    ? `<div class="vd-warn">⚠ Changed after this draft was made: ${changed.map(_esc).join('; ')}.
+        Approving will be refused — reject this draft; the next sweep drafts it again.</div>` : '';
+  const verdictOpts = _VD_VERDICTS.map(v =>
+    `<option value="${v}"${v === prop.edibility_status ? ' selected' : ''}>${v}</option>`).join('');
+  const nowTxt = `${_esc(cur.edibility_status || 'not set')} · severity ${_esc(cur.toxicity_severity || '—')}`
+    + (cur.edibility_verified ? ` · verified (${_esc(cur.edibility_verified_by || '?')})` : ' · not verified');
+  return `<div class="vd-card${changed.length ? ' vd-stale' : ''}" id="vd-card-${id}">
+    <div class="vd-name">${spNameHtml(it.scientific_name, it.common_name)}</div>
+    <div class="vd-tags">${tags}</div>
+    <div class="vd-row"><span class="vd-k">Now</span>${nowTxt}</div>
+    <div class="vd-row"><span class="vd-k">Proposed</span><strong>${_esc(prop.edibility_status || '?')}</strong>
+      · severity <strong>${_esc(prop.toxicity_severity || '?')}</strong>
+      <span class="vd-ev vd-ev-${_esc(it.evidence || '')}">${_esc(it.evidence_label || it.evidence || '')}</span></div>
+    <div class="vd-reason">${_esc(it.reason || '')}</div>
+    ${stale}
+    <details${nSrc ? ' open' : ''}>
+      <summary style="cursor:pointer;font-size:0.76rem;color:#555">Sources (${nSrc})${context ? ' + context' : ''}</summary>
+      ${sources}${context}${excluded}
+    </details>
+    <div class="vd-decide">
+      <label>Verdict <select id="vd-v-${id}" onchange="_vdOnVerdict(${id})">${verdictOpts}</select></label>
+      <label>Severity <select id="vd-s-${id}">${_vdSevOptions(prop.edibility_status, prop.toxicity_severity)}</select></label>
+      <input type="text" id="vd-n-${id}" placeholder="Note (optional)">
+      <button class="vd-approve" onclick="vdApprove(${id}, this)">✓ Approve verdict</button>
+      <button class="vd-reject" onclick="vdReject(${id}, this)">✗ Reject</button>
+      <div class="vd-msg" id="vd-m-${id}"></div>
+    </div>
+  </div>`;
+}
+
+// Verdict changed on the card: offer that verdict's allowed severities, with
+// the rule's default selected (severity_defaults from the server). When the
+// default would lower a recorded toxic/deadly severity there is none — say so,
+// so the severity is a visible, deliberate choice.
+function _vdOnVerdict(id) {
+  const it  = _vdItems.get(id);
+  const v   = document.getElementById(`vd-v-${id}`).value;
+  const def = (it && it.severity_defaults) ? it.severity_defaults[v] : null;
+  document.getElementById(`vd-s-${id}`).innerHTML = _vdSevOptions(v, def || (_vdAllowed[v] || [])[0]);
+  const msg = document.getElementById(`vd-m-${id}`);
+  if (msg) {
+    msg.style.color = '#92400e';
+    msg.textContent = def ? '' : `No default severity for “${v}” here — it would lower the recorded severity. Choose one deliberately.`;
+  }
+}
+
+function _vdRemove(id, speciesId) {
+  const card = document.getElementById(`vd-card-${id}`);
+  if (card) card.remove();
+  _vdItems.delete(id);
+  const n = _vdItems.size;
+  const cnt = document.getElementById('vd-count');
+  if (cnt) cnt.textContent = n ? `${n} species` : '';
+  if (!n) { const sec = document.getElementById('vd-section'); if (sec) sec.style.display = 'none'; }
+  // The species has a decision now — drop it from the grid below as well.
+  if (speciesId != null) {
+    _edibQueue = _edibQueue.filter(s => s.id !== speciesId);
+    const old = document.getElementById('edib-card-' + speciesId);
+    if (old) old.remove();
+  }
+}
+
+async function vdApprove(id, btn) {
+  const it   = _vdItems.get(id);
+  const v    = document.getElementById(`vd-v-${id}`).value;
+  const s    = document.getElementById(`vd-s-${id}`).value;
+  const note = document.getElementById(`vd-n-${id}`).value.trim();
+  const msg  = document.getElementById(`vd-m-${id}`);
+  const name = it ? spNameText(it.scientific_name, it.common_name) : `draft ${id}`;
+  if (!confirm(`Set ${name} to “${v}”, severity “${s}”?`)) return;
+  btn.disabled = true;
+  try {
+    const r = await fetch(`/api/edibility/verdict-drafts/${id}/approve`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ edibility_status: v, toxicity_severity: s, note: note || null }),
+    });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(d.detail || `HTTP ${r.status}`);
+    toast(`✓ ${name}: ${d.edibility_status} / ${d.toxicity_severity}`);
+    _vdRemove(id, it ? it.species_id : null);
+  } catch (e) {
+    btn.disabled = false;
+    if (msg) { msg.style.color = '#b91c1c'; msg.textContent = `❌ ${e.message}`; }
+  }
+}
+
+async function vdReject(id, btn) {
+  const msg = document.getElementById(`vd-m-${id}`);
+  btn.disabled = true;
+  try {
+    const r = await fetch(`/api/edibility/verdict-drafts/${id}/reject`, { method: 'POST' });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(d.detail || `HTTP ${r.status}`);
+    _vdRemove(id, null);           // rejecting decides nothing about the species
+    toast('Verdict draft rejected');
+  } catch (e) {
+    btn.disabled = false;
+    if (msg) { msg.style.color = '#b91c1c'; msg.textContent = `❌ ${e.message}`; }
+  }
+}
+
 // ── Edibility Review ──────────────────────────────────────────────────────
 
 let _edibLoaded    = false;
@@ -5395,6 +5616,8 @@ async function loadEdibilityReview() {
   const badge = document.getElementById('edib-tab-badge');
   const countEl = document.getElementById('edib-count-display');
   if (!grid) return;
+
+  loadVerdictDrafts();     // batch 3b section above the grid (independent request)
 
   grid.innerHTML = '<div style="text-align:center;color:#999;padding:40px">Loading…</div>';
   if (empty) empty.style.display = 'none';

@@ -387,6 +387,10 @@ async def ai_draft_review_queue(
         select(SpeciesAIDraft, Species)
         .join(Species, Species.id == SpeciesAIDraft.species_id)
         .where(SpeciesAIDraft.status == "pending")
+        # Verdict drafts (edibility_status) are decided one species at a time in
+        # Edibility Review → Verdict drafts (batch 3b) — never listed here, so
+        # never in "Approve all"; approve_ai_draft refuses the field as well.
+        .where(SpeciesAIDraft.field_name != "edibility_status")
         .order_by(Species.scientific_name, SpeciesAIDraft.field_name)
     )
     rows = (await db.execute(stmt)).all()
@@ -1905,6 +1909,8 @@ async def species_profile(
             select(SpeciesAIDraft)
             .where(SpeciesAIDraft.species_id == sp.id)
             .where(SpeciesAIDraft.status == "pending")
+            # Verdict drafts are decided in Edibility Review (batch 3b), not here.
+            .where(SpeciesAIDraft.field_name != "edibility_status")
         )
         pending_drafts = (await db.execute(pending_drafts_stmt)).scalars().all()
 

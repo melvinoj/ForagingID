@@ -53,6 +53,10 @@ Tests: 122 passing across 11 files (pytest not installed — run as the audit di
 
 ## History
 
+### 2026-10-21 04:42
+**Snapshot** — Before batch 3b verdict sweep: 212 verdict drafts (verdict_sweep), 18 superseded fungi lookup drafts invalidated
+DB: `snapshots/db_20261021_044236.sqlite`
+
 ### 2026-10-21 04:27
 **Snapshot** — Before batch 3b decisions: obs 15957 -> card 530, reject draft 2335, enrich 848/849 (+ 21453/21454 fungi), reject 31 P1 person_animal pre-filter rows
 DB: `snapshots/db_20261021_042731.sqlite`

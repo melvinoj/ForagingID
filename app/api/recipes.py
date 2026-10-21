@@ -271,22 +271,21 @@ async def regenerate_recipe(
     db: AsyncSession = Depends(get_db),
 ):
     """
-    Regenerate (or edit) a recipe using Claude with Melvin's cooking style prompt.
+    Regenerate (or edit) a recipe on the AI backend (DeepSeek) with Melvin's cooking style prompt.
     Creates a new species_ai_drafts entry with status='pending' — shows in review queue.
     Returns the new draft immediately (not yet approved).
     """
-    from app.config import settings as _settings
-    from app.services.settings_service import get_setting
+    from app.integrations.deepseek_draft import ai_backend, ai_complete
     sp = await _get_species(db, species_name)
 
-    api_key = _settings.anthropic_api_key or ""
-    model_id = get_setting("anthropic_model")
-    if not api_key:
-        raise HTTPException(503, "ANTHROPIC_API_KEY not configured.")
+    backend = ai_backend()
+    if not backend.api_key:
+        raise HTTPException(503, "DeepSeek API key not configured.")
 
     # Enforce edibility: don't regenerate for toxic species
+    from app.models.species import AI_NO_CONTENT_VERDICTS
     edib = (sp.edibility_status or "").lower()
-    if edib in ("toxic", "inedible", "not_edible"):
+    if edib in AI_NO_CONTENT_VERDICTS:
         raise HTTPException(400, f"Recipe generation is blocked for {edib} species.")
 
     # Get source recipe (from existing recipe or culinary_info)
@@ -357,27 +356,14 @@ async def regenerate_recipe(
         if season_label:
             user_prompt += f"\n\nTailor for {season_label}."
 
-    # Call Claude
-    try:
-        import anthropic
-        client = anthropic.AsyncAnthropic(api_key=api_key)
-        msg = await client.messages.create(
-            model=model_id,
-            max_tokens=900,
-            system=_RECIPE_SYSTEM_PROMPT,
-            messages=[{"role": "user", "content": user_prompt}],
-        )
-        new_text = msg.content[0].text.strip() if msg.content else None
-    except ImportError:
-        raise HTTPException(503, "anthropic library not installed.")
-    except Exception as exc:
-        log.error("[recipes] regenerate failed for %r: %s", species_name, exc)
-        raise HTTPException(500, f"Generation failed: {exc}")
+    # The one AI backend (DeepSeek — Melvin D1, 21 Oct 2026)
+    new_text = await ai_complete(species_name, _RECIPE_SYSTEM_PROMPT, user_prompt,
+                                 max_tokens=900, label="recipe_regenerate")
 
     if not new_text:
-        raise HTTPException(500, "Claude returned empty response.")
+        raise HTTPException(502, "The AI backend (DeepSeek) returned no recipe — nothing saved.")
     if is_ai_placeholder("recipe", new_text):
-        raise HTTPException(422, "Claude returned a placeholder/refusal, not a recipe — nothing saved.")
+        raise HTTPException(422, "The AI returned a placeholder/refusal, not a recipe — nothing saved.")
 
     # Save as pending AI draft
     draft = SpeciesAIDraft(
@@ -385,7 +371,7 @@ async def regenerate_recipe(
         field_name="recipe",
         draft_text=new_text,
         status="pending",
-        model="claude-haiku-4-5-20251001",
+        model=backend.label,
         generation_context_json=json.dumps({
             "edit_command": body.edit_command,
             "season":       body.season,

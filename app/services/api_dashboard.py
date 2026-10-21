@@ -1,7 +1,7 @@
 """
 API Dashboard service — standardised status + key management for every external
 API integration (iNaturalist, PlantNet, Mushroom Observer, PFAF, OpenRouteService,
-DeepSeek, Anthropic).
+DeepSeek).
 
 Provides:
   - API_REGISTRY: metadata + step-by-step "how to get a token" instructions
@@ -69,20 +69,8 @@ API_REGISTRY = [
         ],
     },
     {
-        "id": "anthropic",
-        "name": "Anthropic (Claude)",
-        "env_key": "ANTHROPIC_API_KEY",
-        "needs_key": True,
-        "token_url": "https://console.anthropic.com/settings/keys",
-        "how_to": [
-            "Open https://console.anthropic.com/settings/keys (log in).",
-            "Click 'Create Key', name it, and copy the value (starts with 'sk-ant-').",
-            "Paste it above and click Save. Used for AI-drafted species fields.",
-        ],
-    },
-    {
         "id": "deepseek",
-        "name": "DeepSeek (Recipes)",
+        "name": "DeepSeek (AI)",
         "env_key": None,
         "db_key": "deepseek_api_key",
         "needs_key": True,
@@ -92,7 +80,7 @@ API_REGISTRY = [
             "Go to API Keys and create a new key.",
             "Top up a small amount ($5 covers hundreds of recipe generations).",
             "Paste the key above and click Save.",
-            "Used for recipe generation in hybrid backend mode.",
+            "The AI backend for every AI feature (drafts, recipes, chat, summaries, encounter extraction).",
         ],
     },
     {
@@ -244,21 +232,6 @@ async def _probe_plantnet(client: httpx.AsyncClient) -> dict:
     return {"state": "unreachable", "error": f"Unexpected HTTP {r.status_code}"}
 
 
-async def _probe_anthropic(client: httpx.AsyncClient) -> dict:
-    key = settings.anthropic_api_key
-    if not key:
-        return {"state": "not_configured", "error": "No API key configured"}
-    r = await client.get(
-        "https://api.anthropic.com/v1/models",
-        headers={"x-api-key": key, "anthropic-version": "2023-06-01"},
-    )
-    if r.status_code == 200:
-        return {"state": "live", "error": None}
-    if r.status_code in (401, 403):
-        return {"state": "invalid", "error": f"{r.status_code} — API key rejected"}
-    return {"state": "unreachable", "error": f"Unexpected HTTP {r.status_code}"}
-
-
 async def _probe_openai(client: httpx.AsyncClient) -> dict:
     key = settings.openai_api_key
     if not key:
@@ -356,7 +329,6 @@ _PROBES = {
     "inaturalist": _probe_inaturalist,
     "deepseek": _probe_deepseek,
     "plantnet": _probe_plantnet,
-    "anthropic": _probe_anthropic,
     "openai": _probe_openai,
     "ors": _probe_ors,
     "thunderforest": _probe_thunderforest,

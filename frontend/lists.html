@@ -1222,9 +1222,18 @@ const SECTION_DEFS = [
 
 let _sectionPrefs = {};  // scientific_name → { recipes: bool, medicinal: bool, … }
 
+// Print rule = D5 (Melvin, 21 Oct 2026): a field holding PFAF fallback text never
+// prints, as on the public experience page. The profile's pfaf_fallback_fields is
+// the server's shared is_pfaf_fallback() predicate — no rule of its own here.
+function _printCulinary(prof) {
+  const cul = Object.assign({}, (prof && prof.culinary) || {});
+  ((prof && prof.pfaf_fallback_fields) || []).forEach(f => { delete cul[f]; });
+  return cul;
+}
+
 function _isFilled(prof, key) {
   const sp  = (prof && prof.species)  || {};
-  const cul = (prof && prof.culinary) || {};
+  const cul = _printCulinary(prof);
   switch (key) {
     case 'recipes':    return (prof.recipe_count || 0) > 0 || ((prof.recipes || []).length > 0);
     case 'medicinal':  return !!(cul.medicinal_notes || cul.medicinal_folklore || cul.traditional_uses);
@@ -1923,7 +1932,7 @@ function _fieldEntry(name) {
   const prof = _profileCache[name];
   const base = _baseByName[name] || {};
   const sp   = (prof && prof.species)  || base;
-  const cul  = (prof && prof.culinary) || {};
+  const cul  = _printCulinary(prof);
   const common = (sp.common_names && sp.common_names[0]) || (base.common_names && base.common_names[0]) || '';
   const edib   = sp.edibility_status;
   const recipes = (prof && prof.recipes) || [];
@@ -1974,7 +1983,7 @@ function _workshopPage(name, withFieldBlock = false, isWorkshopHandout = false) 
   const prof = _profileCache[name];
   const base = _baseByName[name] || {};
   const sp   = (prof && prof.species)  || base;
-  const cul  = (prof && prof.culinary) || {};
+  const cul  = _printCulinary(prof);
   const common = (sp.common_names && sp.common_names[0]) || (base.common_names && base.common_names[0]) || '';
   const edib   = sp.edibility_status;
   const recipes = (prof && prof.recipes) || [];

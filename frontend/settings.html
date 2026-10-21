@@ -956,12 +956,6 @@ function _renderSettings(settings) {
       // Right: control + actions
       html += '<div class="setting-control">';
       html += _buildControl(s);
-      if (s.key === 'anthropic_model') {
-        html += '<div class="haiku-warning" id="haiku-warning" style="display:none;margin-top:6px;padding:6px 10px;'
-             +  'background:#fff3cd;border:1px solid #e0c200;border-radius:6px;color:#856404;font-size:12px;line-height:1.4">'
-             +  'Haiku recommended for classification only — recipe and medicinal drafts will be lower quality. '
-             +  'Use Sonnet or Opus for voice-matched content.</div>';
-      }
       html += '<div class="setting-actions">';
       html += "<button class=\"btn-save\" id=\"save-" + _esc(s.key) + "\" onclick='saveSetting(" + JSON.stringify(s.key) + ", " + JSON.stringify(s.type) + ")'>Save</button>";
       html += "<button class=\"btn-reset\" id=\"reset-" + _esc(s.key) + "\" onclick='resetSetting(" + JSON.stringify(s.key) + ")'" + (!s.overridden ? ' disabled' : '') + " title=\"Reset to default\">↩</button>";
@@ -1015,15 +1009,6 @@ function _renderSettings(settings) {
     }
     inp.addEventListener('input', _markDirty);
     inp.addEventListener('change', _markDirty);
-
-    if (s.key === 'anthropic_model') {
-      const warn = document.getElementById('haiku-warning');
-      function _toggleHaikuWarning() {
-        if (warn) warn.style.display = /haiku/i.test(inp.value) ? 'block' : 'none';
-      }
-      inp.addEventListener('change', _toggleHaikuWarning);
-      _toggleHaikuWarning();
-    }
   });
 }
 

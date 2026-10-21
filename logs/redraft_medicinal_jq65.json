@@ -1,0 +1,13 @@
+{
+ "job_queue_id": 65,
+ "status": "complete",
+ "total": 1,
+ "results": [
+  {
+   "species_id": 737,
+   "name": "Verbena officinalis",
+   "outcome": "failed",
+   "reason": "WARNING: [_section_ai_draft] discarding placeholder draft for 'Verbena officinalis' → medicinal_notes — refusal marker 'insufficient' in the opening sentence; opening: 'common vervain is used internally as a tonic and restorative for headaches, fevers, nervous exhaustion, depression, gallbladder com"
+  }
+ ]
+}

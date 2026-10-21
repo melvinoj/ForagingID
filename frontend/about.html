@@ -89,7 +89,7 @@
     <textarea id="snappy" spellcheck="true" placeholder="Guest summary…"></textarea>
     <div class="btn-row">
       <button class="btn-primary" id="save-snappy">Save</button>
-      <button class="btn-secondary" id="regen-snappy">Regenerate with Claude</button>
+      <button class="btn-secondary" id="regen-snappy">Regenerate with AI</button>
       <span class="save-status" id="snappy-status"></span>
     </div>
     <div class="section-note">Changes here update the guest landing page immediately.</div>
@@ -176,7 +176,7 @@ document.getElementById('save-snappy').addEventListener('click', async (ev) => {
   }
 });
 
-// ── Regenerate with Claude ────────────────────────────────────────────
+// ── Regenerate with AI (DeepSeek) ─────────────────────────────────────
 document.getElementById('regen-snappy').addEventListener('click', async (ev) => {
   const btn = ev.currentTarget;
   const orig = btn.textContent;

@@ -129,26 +129,17 @@ def _build_registry() -> List[Dict]:
             "description": "Absolute path to the folder Syncthing watches for new photos.",
             "group": "Scanning",
         },
-        # ── AI / Anthropic ────────────────────────────────────────────────
-        {
-            "key": "enrichment_backend",
-            "default": "anthropic",
-            "type": "str",
-            "label": "Enrichment backend",
-            "description": (
-                "AI backend used to generate taste notes, medicinal notes, and recipes. "
-                "'ollama' uses local Mistral 7B (free, private, requires Ollama running). "
-                "'anthropic' uses Claude via the Anthropic API (billed)."
-            ),
-            "group": "AI",
-            "choices": ["anthropic", "ollama", "hybrid"],
-        },
+        # ── AI ────────────────────────────────────────────────────────────
+        # DeepSeek is the one AI backend (Melvin D1, 21 Oct 2026 — every AI call
+        # site; no Anthropic, no Ollama, no fallback). The retired
+        # enrichment_backend / anthropic_model / ollama_model keys may still sit
+        # in app_settings; nothing reads them and the cache loader skips them.
         {
             "key": "deepseek_api_key",
             "default": "",
             "type": "str",
             "label": "DeepSeek API key",
-            "description": "API key for DeepSeek (hybrid backend — used for recipe generation only).",
+            "description": "API key for DeepSeek — the AI backend for every AI feature (drafts, recipes, chat, summaries, encounter extraction).",
             "group": "AI",
             "hidden": True,
         },
@@ -157,30 +148,9 @@ def _build_registry() -> List[Dict]:
             "default": "deepseek-chat",
             "type": "str",
             "label": "DeepSeek model",
-            "description": "DeepSeek model for recipe generation in hybrid mode.",
+            "description": "DeepSeek model used by every AI feature.",
             "group": "AI",
             "choices": ["deepseek-chat", "deepseek-reasoner"],
-        },
-        {
-            "key": "anthropic_model",
-            "default": cfg.anthropic_model,
-            "type": "str",
-            "label": "Anthropic model",
-            "description": "Claude model used for AI-drafted species fields (Anthropic backend only).",
-            "group": "AI",
-            "choices": [
-                "claude-haiku-4-5-20251001",
-                "claude-sonnet-4-6",
-                "claude-opus-4-7",
-            ],
-        },
-        {
-            "key": "ollama_model",
-            "default": "mistral",
-            "type": "str",
-            "label": "Ollama model",
-            "description": "Ollama model name for local draft generation. Must be pulled via 'ollama pull <name>'.",
-            "group": "AI",
         },
         {
             "key": "prompt_taste",

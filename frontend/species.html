@@ -329,6 +329,14 @@
       padding: 1px 6px; margin-left: 5px; font-style: normal;
       letter-spacing: 0.02em; font-weight: 600;
     }
+    /* PFAF text filled in because no AI text was available (D4, 21 Oct 2026) —
+       provenance from the pfaf_fallback history row, never part of the text */
+    .pfaf-fallback-chip {
+      display: inline-block; font-size: 0.65rem; vertical-align: middle;
+      background: #fef3c7; color: #92400e; border: 1px solid #fcd34d; border-radius: 4px;
+      padding: 0 6px; margin-left: 5px; font-style: normal;
+      letter-spacing: 0.02em; font-weight: 600;
+    }
 
     /* ID notes section */
     .id-notes-block {
@@ -1709,14 +1717,12 @@ async function loadProfile(name) {
   }
 }
 
-// Mirrors review.html's _MEDICINAL_SUPPRESS filter in loadAIDraftReview() — a
-// medicinal_notes draft matching this is a confirmed-null state (AI found
-// nothing), not a real review item, so the review-queue chip must not link to
-// it here either (it wouldn't exist in the queue when the user got there).
-const _MEDICINAL_SUPPRESS = /no\s+(known\s+)?traditional\s+medicinal\s+uses/i;
+// A medicinal_notes draft that is only a "no medicinal uses" answer (server flag
+// no_uses_only — the shared predicate) is a null state, not a review item, so the
+// review-queue chip must not link to it (Review hides it too).
 function _medicinalNotesSuppressed(data) {
   const draft = (data.pending_drafts || []).find(d => d.field_name === 'medicinal_notes');
-  return !!draft && _MEDICINAL_SUPPRESS.test(draft.draft_text || '');
+  return !!draft && !!draft.no_uses_only;
 }
 
 function renderProfile(data, observations) {
@@ -1944,6 +1950,8 @@ function renderProfile(data, observations) {
 
   const approvedAiFields = new Set(ci ? (ci.ai_approved_fields || []) : []);
   const pendingDraftFields = new Set(data.pending_draft_fields || []);
+  // Fields holding PFAF text because no AI text was available (D4 chip)
+  const pfafFallbackFields = new Set(data.pfaf_fallback_fields || []);
 
   // ── 2. ID notes (iNaturalist + Trompenburg) ──────────────────────────────
   if (ci && ci.id_notes) {
@@ -2149,15 +2157,25 @@ function renderProfile(data, observations) {
       folkloreShown = true;
     }
 
-    // AI-approved medicinal notes (folklore/narrative field)
-    if (ci && ci.medicinal_notes && approvedAiFields.has('medicinal_notes')) {
+    // AI-approved medicinal notes (folklore/narrative field) — or PFAF text
+    // filled in because no AI text was available (D4: chip, never a text prefix)
+    const medPendingHtml = (pendingDraftFields.has('medicinal_notes') && !_medicinalNotesSuppressed(data))
+      ? `<div class="draft-pending-note">✦ AI draft pending review — <a href="/review?sid=${encodeURIComponent(sp.scientific_name)}&field=medicinal_notes#ai-draft-review" style="color:#5b21b6" data-guest-hide>check the review queue</a></div>`
+      : '';
+    if (ci && ci.medicinal_notes && pfafFallbackFields.has('medicinal_notes')) {
+      medHtml += `<div class="field-row">
+        <div class="label">Folklore &amp; Historical Uses <span class="pfaf-fallback-chip" title="Filled from PFAF because no AI text was available. Not your text — edit it, or approve an AI draft, to replace it.">PFAF text — replace with your own</span></div>
+        <div class="value" data-field-key="medicinal_notes" data-field-orig="${_esc(ci.medicinal_notes)}"><div class="ai-field-block" style="border-left-color:#d97706">${_esc(ci.medicinal_notes)}</div></div>
+      </div>` + medPendingHtml;
+      folkloreShown = true;
+    } else if (ci && ci.medicinal_notes && approvedAiFields.has('medicinal_notes')) {
       medHtml += `<div class="field-row">
         <div class="label">Folklore &amp; Historical Uses <span class="ai-approved-badge">AI · Approved</span></div>
         <div class="value" data-field-key="medicinal_notes" data-field-orig="${_esc(ci.medicinal_notes)}"><div class="ai-field-block" style="border-left-color:#16a34a">${_esc(ci.medicinal_notes)}</div></div>
       </div>`;
       folkloreShown = true;
-    } else if (pendingDraftFields.has('medicinal_notes') && !_medicinalNotesSuppressed(data)) {
-      medHtml += `<div class="draft-pending-note">✦ AI draft pending review — <a href="/review?sid=${encodeURIComponent(sp.scientific_name)}&field=medicinal_notes#ai-draft-review" style="color:#5b21b6" data-guest-hide>check the review queue</a></div>`;
+    } else {
+      medHtml += medPendingHtml;
     }
     // Plain-language standing disclaimer — not formally legal-reviewed.
     if (folkloreShown) {

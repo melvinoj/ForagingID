@@ -1,0 +1,13 @@
+{
+ "job_queue_id": 66,
+ "status": "complete",
+ "total": 1,
+ "results": [
+  {
+   "species_id": 737,
+   "name": "Verbena officinalis",
+   "outcome": "created",
+   "draft_id": 3544
+  }
+ ]
+}

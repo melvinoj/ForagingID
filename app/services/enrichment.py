@@ -7,7 +7,8 @@ Design rules:
   - PFAF wins on culinary/safety fields; Wikidata fills taxonomy gaps
   - Phase 8 adds: iNaturalist taxon description, TrompenburgPlants,
     culinary link scrapers (Eatweeds, Galloway Wild Foods, Wildman Steve Brill,
-    Botanical.com, Wildfoods UK), and Claude AI draft generation
+    Botanical.com, Wildfoods UK), and AI draft generation (DeepSeek since
+    21 Oct 2026 — the only AI backend)
   - AI-generated drafts go into species_ai_drafts (pending) — never shown
     until user approves in the review queue
   - Enrichment is best-effort — failures log a warning, never abort the batch
@@ -26,18 +27,19 @@ from sqlalchemy import select
 from sqlalchemy.exc import OperationalError as _SAOperationalError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.config import settings
 from app.services.taxonomy import collapse_autonym, normalize_taxon_key
 from app.integrations.pfaf import PFAFResult, fetch_pfaf
 from app.integrations.wikidata import WikidataResult, fetch_wikidata, fetch_wikidata_batch
 from app.integrations.trompenburg import TrompenburgResult, fetch_trompenburg
 from app.integrations.inaturalist import INatTaxonDescription, fetch_taxon_description
 from app.integrations.culinary_links import CulinaryLink, fetch_culinary_links
-from app.integrations.claude_draft import AIDraftResult, generate_ai_drafts
+from app.integrations.deepseek_draft import generate_deepseek_drafts
 from app.models.culinary import CulinaryInfo
 from app.models.observation import Observation
-from app.models.species import CulinaryInfoHistory, EnrichmentSource, Species, SpeciesAIDraft, CURATOR_DRAFT_FIELDS
+from app.models.species import (CulinaryInfoHistory, EnrichmentSource, Species, SpeciesAIDraft,
+                                CURATOR_DRAFT_FIELDS, AI_NO_CONTENT_VERDICTS)
 from app.services.ai_placeholder import is_ai_placeholder
+from app.services.pfaf_fallback import apply_pfaf_fallback, stored_pfaf_medicinal_text
 
 log = logging.getLogger(__name__)
 
@@ -309,9 +311,10 @@ async def enrich_species(
             common_names=common_names_raw,
         )
 
-    # A5 — if no medicinal data exists from any source, record the standard
-    # "no known uses" note and mark it reviewed so it never enters a review queue.
-    await _ensure_medicinal_default(session, species, ci)
+    # PFAF fallback (Melvin D2–D5, 21 Oct 2026; replaces A5's false "No known
+    # traditional medicinal uses" default): a field the AI left without text
+    # gets PFAF's own text, labelled pfaf_fallback; PFAF has nothing → empty.
+    await apply_pfaf_fallback(session, species, ci)
 
     await session.flush()
 
@@ -1172,75 +1175,6 @@ async def _maybe_enrich_fungi_edibility(
     )
 
 
-# A5 — standard note for species with no medicinal information from any source.
-MEDICINAL_NONE_DEFAULT = "No known traditional medicinal uses"
-
-
-async def _ensure_medicinal_default(
-    session: AsyncSession,
-    species: Species,
-    ci: CulinaryInfo,
-) -> None:
-    """
-    A5 — when medicinal_notes is null/empty *and* there is no medicinal source
-    data (no folklore) *and* no pending/approved medicinal draft, auto-fill the
-    standard "No known traditional medicinal uses" note and mark it approved so
-    it never surfaces in a review queue.
-
-    If medicinal_notes has a human-edit history row, the field is considered
-    manually curated — create a pending SpeciesAIDraft for human review instead
-    of writing directly.
-    """
-    if ci.medicinal_notes and ci.medicinal_notes.strip():
-        return
-    if ci.medicinal_folklore and ci.medicinal_folklore.strip():
-        return  # genuine medicinal data exists — leave for normal drafting/review
-
-    draft = await session.scalar(
-        select(SpeciesAIDraft.id)
-        .where(SpeciesAIDraft.species_id == species.id)
-        .where(SpeciesAIDraft.field_name == "medicinal_notes")
-        .where(SpeciesAIDraft.status.in_(["pending", "approved", "edited_approved"]))
-    )
-    if draft:
-        return  # a real medicinal draft is in flight — don't override it
-
-    # Check whether a human has previously edited medicinal_notes directly.
-    # If so, do not overwrite — route to the draft review queue instead.
-    human_edited = ci.id and await session.scalar(
-        select(CulinaryInfoHistory.id)
-        .where(CulinaryInfoHistory.culinary_info_id == ci.id)
-        .where(CulinaryInfoHistory.field_name == "medicinal_notes")
-        .where(CulinaryInfoHistory.changed_by == "human")
-    )
-    if human_edited:
-        session.add(SpeciesAIDraft(
-            species_id=species.id,
-            field_name="medicinal_notes",
-            draft_text=MEDICINAL_NONE_DEFAULT,
-            status="pending",
-            generated_at=datetime.utcnow(),
-            model="system",
-        ))
-        log.info(
-            "[A5] medicinal_notes has human history — queued as pending draft for %r",
-            species.scientific_name,
-        )
-        return
-
-    ci.medicinal_notes = MEDICINAL_NONE_DEFAULT
-    try:
-        approved = json.loads(ci.ai_approved_fields_json) if ci.ai_approved_fields_json else []
-        if not isinstance(approved, list):
-            approved = []
-    except (ValueError, TypeError):
-        approved = []
-    if "medicinal_notes" not in approved:
-        approved.append("medicinal_notes")
-        ci.ai_approved_fields_json = json.dumps(approved)
-    log.info("[A5] medicinal_notes default applied + approved for %r", species.scientific_name)
-
-
 async def _maybe_generate_ai_drafts(
     session: AsyncSession,
     species: Species,
@@ -1257,8 +1191,7 @@ async def _maybe_generate_ai_drafts(
     Generate AI drafts for taste_notes, medicinal_notes, recipe — if conditions met.
 
     Conditions:
-      - For Anthropic backend: settings.anthropic_api_key must be set.
-      - For Ollama backend: Ollama must be running (falls back to Anthropic on error).
+      - Drafts come from the one AI backend (DeepSeek — generate_deepseek_drafts).
       - Sufficient source context must exist (at least edible_parts or traditional_uses)
       - No existing pending drafts, unless re_enrich=True (which invalidates them first)
 
@@ -1270,14 +1203,11 @@ async def _maybe_generate_ai_drafts(
         backfill path so rejected drafts are re-processable; the enrichment path
         keeps the default (rejected stays covered).
     """
-    from app.services.settings_service import get_setting as _gs_early
-    _backend = _gs_early("enrichment_backend")
-    if _backend == "anthropic" and not settings.anthropic_api_key:
-        log.warning(
-            "[AI drafts] ANTHROPIC_API_KEY not set — skipping drafts for %r",
-            species.scientific_name,
-        )
-        return
+    # PFAF's Medicinal Uses text for the medicinal_notes context (Melvin A,
+    # 21 Oct 2026) — from the stored enrichment_sources page, no new scraping.
+    # Before, no caller passed pfaf_result, so the medicinal draft never saw it
+    # and the model wrote "no traditional medicinal uses" where PFAF lists them.
+    pfaf_medicinal_uses = await stored_pfaf_medicinal_text(session, species)
 
     # Check we have enough context to generate meaningful drafts
     has_context = any([
@@ -1287,6 +1217,7 @@ async def _maybe_generate_ai_drafts(
         inat_result and inat_result.description,
         trompenburg_result and trompenburg_result.description,
         pfaf_result and pfaf_result.medicinal_folklore,
+        pfaf_medicinal_uses,
     ])
     if not has_context:
         log.info(
@@ -1299,8 +1230,7 @@ async def _maybe_generate_ai_drafts(
         return
 
     # Edibility gate — mirrors _section_ai_draft
-    _NO_CONTENT = ("toxic", "inedible", "not_edible")
-    if species.edibility_status in _NO_CONTENT:
+    if species.edibility_status in AI_NO_CONTENT_VERDICTS:
         log.info("[AI drafts] suppressing drafts for toxic/inedible species %r", species.scientific_name)
         return
 
@@ -1383,8 +1313,6 @@ async def _maybe_generate_ai_drafts(
 
     log.info("Generating AI drafts for %r: %s", species.scientific_name, fields_needed)
 
-    _gs = _gs_early  # already imported above as _gs_early
-
     # For conditionally edible (caution) species, fetch any curator-set edibility
     # conditions to embed in the recipe caveat. Read conditions lazily here so the
     # main enrichment path does not need a new import at the top of the file.
@@ -1420,6 +1348,7 @@ async def _maybe_generate_ai_drafts(
         edibility_conditions=edibility_conditions,
         preparation_warnings=ci.preparation_warnings,
         pfaf_medicinal_text=pfaf_result.medicinal_folklore if pfaf_result else None,
+        pfaf_medicinal_uses=pfaf_medicinal_uses,
     )
 
     # ── Synthesis context fetch (medicinal_notes only, thin source data) ─────────
@@ -1470,138 +1399,19 @@ async def _maybe_generate_ai_drafts(
                 species.scientific_name, _syn_err,
             )
 
-    backend = _gs("enrichment_backend")
-    draft_result = None
-
+    # The one AI backend (DeepSeek — Melvin D1, 21 Oct 2026): no other backend,
+    # no fallback. None = nothing generated; the caller's PFAF fallback (D2)
+    # then decides the field.
     try:
-        from app.integrations.ollama_draft import OllamaConnectionError as _OllamaConnErr1
-    except ImportError:
-        class _OllamaConnErr1(Exception): pass
-
-    if backend == "ollama":
-        try:
-            from app.integrations.ollama_draft import generate_ollama_drafts
-            ollama_model = _gs("ollama_model") if _gs("ollama_model") else "mistral"
-            draft_result = await generate_ollama_drafts(
-                model=ollama_model,
-                **_draft_kwargs,
-            )
-            if draft_result:
-                log.info("[AI drafts] Ollama draft OK for %r", species.scientific_name)
-        except _OllamaConnErr1 as _oe:
-            log.warning(
-                "[AI drafts] Ollama unreachable for %r — falling back to Anthropic. Error: %s",
-                species.scientific_name, _oe,
-            )
-            backend = "anthropic"  # fall through to Anthropic block below
-        except Exception as _oe:
-            log.error(
-                "[AI drafts] Ollama error for %r (%s: %s) — falling back to Anthropic",
-                species.scientific_name, type(_oe).__name__, _oe,
-            )
-            backend = "anthropic"
-
-    if backend == "hybrid":
-
-        try:
-            from app.integrations.deepseek_draft import (
-                generate_deepseek_recipe,
-                generate_deepseek_taste_notes,
-                generate_deepseek_medicinal_notes,
-                generate_deepseek_medicinal_folklore,
-            )
-            from app.services.settings_service import get_setting as _gs_hybrid
-
-            deepseek_key   = _gs_hybrid("deepseek_api_key")
-            deepseek_model = _gs_hybrid("deepseek_model") or "deepseek-chat"
-
-            # Build context text shared by all DeepSeek calls
-            from app.integrations.claude_draft import _build_context, _context_to_text, _build_safety_caveat
-            _gen_culinary = species.edibility_status in ("edible", "caution")
-            ctx = _build_context(
-                scientific_name=_draft_kwargs["scientific_name"],
-                common_names=_draft_kwargs.get("common_names") or [],
-                edible_parts=_draft_kwargs.get("edible_parts"),
-                preparation_methods=_draft_kwargs.get("preparation_methods"),
-                traditional_uses=_draft_kwargs.get("traditional_uses"),
-                medicinal_folklore=_draft_kwargs.get("medicinal_folklore"),
-                inat_description=_draft_kwargs.get("inat_description"),
-                trompenburg_description=_draft_kwargs.get("trompenburg_description"),
-                synthesis_reference=synthesis_context,
-                preparation_warnings=_draft_kwargs.get("preparation_warnings"),
-            )
-            ctx_text = _context_to_text(_draft_kwargs["scientific_name"], ctx)
-            recipe_ctx = ctx_text + _build_safety_caveat(
-                generate_culinary=_gen_culinary,
-                is_conditional=(species.edibility_status == "caution"),
-                preparation_warnings=_draft_kwargs.get("preparation_warnings"),
-                edibility_conditions=_draft_kwargs.get("edibility_conditions"),
-            )
-
-            async def _ds_noop():
-                return None
-
-            pfaf_medicinal_text = _draft_kwargs.get("pfaf_medicinal_text")
-
-            import asyncio as _asyncio
-            ds_taste, ds_medicinal, ds_recipe, ds_folklore = await _asyncio.gather(
-                generate_deepseek_taste_notes(
-                    scientific_name=_draft_kwargs["scientific_name"],
-                    ctx_text=ctx_text,
-                    api_key=deepseek_key,
-                    model=deepseek_model,
-                ) if _gen_culinary and "taste_notes" in fields_needed else _ds_noop(),
-                generate_deepseek_medicinal_notes(
-                    scientific_name=_draft_kwargs["scientific_name"],
-                    ctx_text=ctx_text,
-                    api_key=deepseek_key,
-                    model=deepseek_model,
-                ) if "medicinal_notes" in fields_needed else _ds_noop(),
-                generate_deepseek_recipe(
-                    scientific_name=_draft_kwargs["scientific_name"],
-                    ctx_text=recipe_ctx,
-                    api_key=deepseek_key,
-                    model=deepseek_model,
-                ) if _gen_culinary and "recipe" in fields_needed else _ds_noop(),
-                generate_deepseek_medicinal_folklore(
-                    scientific_name=_draft_kwargs["scientific_name"],
-                    pfaf_text=pfaf_medicinal_text,
-                    api_key=deepseek_key,
-                    model=deepseek_model,
-                ) if pfaf_medicinal_text and "medicinal_folklore" in fields_needed else _ds_noop(),
-            )
-
-            if ds_taste or ds_medicinal or ds_recipe or ds_folklore:
-                from app.integrations.ollama_draft import OllamaDraftResult
-                draft_result = OllamaDraftResult(
-                    taste_notes=ds_taste,
-                    medicinal_notes=ds_medicinal,
-                    recipe=ds_recipe,
-                    medicinal_folklore=ds_folklore,
-                    model="hybrid/deepseek",
-                    context_used=ctx,
-                )
-                log.info("[AI drafts] Hybrid draft OK for %r", species.scientific_name)
-
-        except _OllamaConnErr1 as _oe:
-            log.warning("[AI drafts] Hybrid: Ollama unreachable for %r — %s", species.scientific_name, _oe)
-        except Exception as _oe:
-            log.error("[AI drafts] Hybrid error for %r: %s: %s", species.scientific_name, type(_oe).__name__, _oe)
-
-    if backend == "anthropic" and draft_result is None:
-        if not settings.anthropic_api_key:
-            log.warning(
-                "[AI drafts] ANTHROPIC_API_KEY not set and Ollama unavailable — skipping drafts for %r",
-                species.scientific_name,
-            )
-            await _apply_invalidation()
-            return
-        draft_result = await generate_ai_drafts(
-            api_key=settings.anthropic_api_key,
-            model=_gs("anthropic_model"),
+        draft_result = await generate_deepseek_drafts(
             synthesis_context=synthesis_context,
+            fields=fields_needed,
             **_draft_kwargs,
         )
+    except Exception as _de:
+        log.error("[AI drafts] DeepSeek error for %r: %s: %s",
+                  species.scientific_name, type(_de).__name__, _de)
+        draft_result = None
 
     if not draft_result:
         log.warning("AI draft generation returned no result for %r", species.scientific_name)
@@ -1657,14 +1467,13 @@ async def _section_ai_draft(
     Generate (or regenerate) a single AI draft field for a species.
 
     - Invalidates any existing pending draft for that field.
-    - Calls the active backend (ollama or anthropic) for just the one field.
+    - Calls the AI backend (DeepSeek) for just the one field.
     - Saves the result as a new pending SpeciesAIDraft.
     - Returns True if a draft was queued, False if generation failed or was
       suppressed by the edibility gate.
 
     Does NOT fetch PFAF / Wikidata — uses whatever is already in culinary_info.
     """
-    from app.services.settings_service import get_setting as _gs
     from sqlalchemy import update as _upd
 
     if field_name not in ("taste_notes", "recipe", "medicinal_notes"):
@@ -1672,8 +1481,7 @@ async def _section_ai_draft(
         return False
 
     # Edibility gate — mirrors _maybe_generate_ai_drafts
-    _NO_CONTENT = ("toxic", "inedible", "not_edible")
-    if species.edibility_status in _NO_CONTENT:
+    if species.edibility_status in AI_NO_CONTENT_VERDICTS:
         log.info("[_section_ai_draft] suppressing %r for toxic species %r", field_name, species.scientific_name)
         return False
     # Culinary fields blocked for unconfirmed edibility
@@ -1753,110 +1561,17 @@ async def _section_ai_draft(
         edibility_conditions=edibility_conditions,
         preparation_warnings=ci.preparation_warnings if ci else None,
         voice_context=_voice,
+        pfaf_medicinal_uses=(await stored_pfaf_medicinal_text(session, species)
+                             if field_name == "medicinal_notes" else None),
     )
 
-    # Call active backend
-    backend = _gs("enrichment_backend")
-    draft_result = None
-
-    if backend == "ollama":
-        try:
-            from app.integrations.ollama_draft import OllamaConnectionError, generate_ollama_drafts
-            draft_result = await generate_ollama_drafts(
-                model=_gs("ollama_model") or "mistral",
-                **_draft_kwargs,
-            )
-        except Exception as _oe:
-            log.warning("[_section_ai_draft] Ollama failed for %r — fallback to Anthropic: %s", species.scientific_name, _oe)
-            backend = "anthropic"
-
-    if backend == "hybrid":
-        try:
-            from app.integrations.ollama_draft import OllamaConnectionError as _OllamaConnErr2
-        except ImportError:
-            class _OllamaConnErr2(Exception): pass
-
-        try:
-            from app.integrations.deepseek_draft import (
-                generate_deepseek_recipe,
-                generate_deepseek_taste_notes,
-                generate_deepseek_medicinal_notes,
-            )
-            from app.services.settings_service import get_setting as _gs_hybrid
-
-            deepseek_key   = _gs_hybrid("deepseek_api_key")
-            deepseek_model = _gs_hybrid("deepseek_model") or "deepseek-chat"
-
-            # Build context text shared by all DeepSeek calls
-            from app.integrations.claude_draft import _build_context, _context_to_text, _build_safety_caveat
-            _gen_culinary = species.edibility_status in ("edible", "caution")
-            ctx = _build_context(
-                scientific_name=_draft_kwargs["scientific_name"],
-                common_names=_draft_kwargs.get("common_names") or [],
-                edible_parts=_draft_kwargs.get("edible_parts"),
-                preparation_methods=_draft_kwargs.get("preparation_methods"),
-                traditional_uses=_draft_kwargs.get("traditional_uses"),
-                medicinal_folklore=_draft_kwargs.get("medicinal_folklore"),
-                inat_description=_draft_kwargs.get("inat_description"),
-                trompenburg_description=_draft_kwargs.get("trompenburg_description"),
-                preparation_warnings=_draft_kwargs.get("preparation_warnings"),
-            )
-            ctx_text = _context_to_text(_draft_kwargs["scientific_name"], ctx)
-            recipe_ctx = ctx_text + _build_safety_caveat(
-                generate_culinary=_gen_culinary,
-                is_conditional=(species.edibility_status == "caution"),
-                preparation_warnings=_draft_kwargs.get("preparation_warnings"),
-                edibility_conditions=_draft_kwargs.get("edibility_conditions"),
-            )
-
-            import asyncio as _asyncio
-            ds_taste, ds_medicinal, ds_recipe = await _asyncio.gather(
-                generate_deepseek_taste_notes(
-                    scientific_name=_draft_kwargs["scientific_name"],
-                    ctx_text=ctx_text,
-                    api_key=deepseek_key,
-                    model=deepseek_model,
-                ),
-                generate_deepseek_medicinal_notes(
-                    scientific_name=_draft_kwargs["scientific_name"],
-                    ctx_text=ctx_text,
-                    api_key=deepseek_key,
-                    model=deepseek_model,
-                ),
-                generate_deepseek_recipe(
-                    scientific_name=_draft_kwargs["scientific_name"],
-                    ctx_text=recipe_ctx,
-                    api_key=deepseek_key,
-                    model=deepseek_model,
-                ),
-            )
-
-            if ds_taste or ds_medicinal or ds_recipe:
-                from app.integrations.ollama_draft import OllamaDraftResult
-                draft_result = OllamaDraftResult(
-                    taste_notes=ds_taste,
-                    medicinal_notes=ds_medicinal,
-                    recipe=ds_recipe,
-                    model="hybrid/deepseek",
-                    context_used=ctx,
-                )
-                log.info("[AI drafts] Hybrid draft OK for %r", species.scientific_name)
-
-        except _OllamaConnErr2 as _oe:
-            log.warning("[AI drafts] Hybrid: Ollama unreachable for %r — %s", species.scientific_name, _oe)
-        except Exception as _oe:
-            log.error("[AI drafts] Hybrid error for %r: %s: %s", species.scientific_name, type(_oe).__name__, _oe)
-
-    if backend == "anthropic" and draft_result is None:
-        from app.config import settings as _cfg
-        if not _cfg.anthropic_api_key:
-            log.warning("[_section_ai_draft] no API key for Anthropic — skipping %r", species.scientific_name)
-            return False
-        draft_result = await generate_ai_drafts(
-            api_key=_cfg.anthropic_api_key,
-            model=_gs("anthropic_model"),
-            **_draft_kwargs,
-        )
+    # The one AI backend (DeepSeek — Melvin D1, 21 Oct 2026), this field only.
+    try:
+        draft_result = await generate_deepseek_drafts(fields=[field_name], **_draft_kwargs)
+    except Exception as _de:
+        log.error("[_section_ai_draft] DeepSeek error for %r: %s: %s",
+                  species.scientific_name, type(_de).__name__, _de)
+        draft_result = None
 
     if not draft_result:
         log.warning("[_section_ai_draft] generation returned no result for %r field=%r", species.scientific_name, field_name)
@@ -1867,8 +1582,9 @@ async def _section_ai_draft(
         log.info("[_section_ai_draft] backend returned no text for field %r species %r", field_name, species.scientific_name)
         return False
     if is_ai_placeholder(field_name, text):
-        log.warning("[_section_ai_draft] discarding placeholder draft for %r → %s (starts: %r)",
-                    species.scientific_name, field_name, text[:60])
+        from app.services.ai_placeholder import _opening, ai_placeholder_reason
+        log.warning("[_section_ai_draft] discarding placeholder draft for %r → %s — %s; opening: %r",
+                    species.scientific_name, field_name, ai_placeholder_reason(field_name, text), _opening(text))
         return False
 
     # Invalidate any existing pending draft for this field
@@ -1912,8 +1628,10 @@ async def trigger_ai_drafts_for_species(scientific_name: str) -> None:
         Wikidata + AI drafts in one pass).
       - Species already has culinary_info → skips PFAF/Wikidata and calls
         _maybe_generate_ai_drafts() directly for minimal latency.
-      - Respects edibility suppression rules via generate_ai_drafts() logic
+      - Respects edibility suppression rules via generate_deepseek_drafts()
         (toxic / inedible → nothing; unknown → medicinal only; edible → all).
+      - Either way, the PFAF fallback (D2) then fills a field the AI left
+        without text, or leaves it empty.
       - All failures are caught and logged — never propagates to caller.
     """
     if not scientific_name:
@@ -1977,6 +1695,8 @@ async def trigger_ai_drafts_for_species(scientific_name: str) -> None:
                         trompenburg_result=None,
                         common_names=common_names,
                     )
+                    # PFAF fallback (D2) — enrich_species above runs it itself.
+                    await apply_pfaf_fallback(session, sp, ci)
 
                 async with db_write_lock():
                     await session.commit()

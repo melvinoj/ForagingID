@@ -2,7 +2,7 @@
 POST /api/species/{name}/chat — single-turn species chat.
 
 Loads the species context (same source data as enrichment drafts) and
-passes it + the user's message to the active AI backend.  No history
+passes it + the user's message to the AI backend (DeepSeek).  No history
 persistence — each call is fully stateless.
 """
 
@@ -46,7 +46,6 @@ async def species_chat(
     Context is built from culinary_info + raw iNat/Trompenburg descriptions
     — the same inputs used by enrichment draft generation.
     """
-    from app.services.settings_service import get_setting as _gs
 
     sp = await _get_species_or_404(db, species_name)
     ci = await db.scalar(select(CulinaryInfo).where(CulinaryInfo.species_id == sp.id))
@@ -127,52 +126,12 @@ async def species_chat(
     )
     system_prompt = (_voice + "\n\n" + _base_prompt) if _voice else _base_prompt
 
-    backend = _gs("enrichment_backend")
-    response_text: Optional[str] = None
-
-    # ── Ollama path ────────────────────────────────────────────────────────────
-    if backend == "ollama":
-        try:
-            from app.integrations.ollama_draft import OllamaConnectionError, _ollama_generate
-            model = _gs("ollama_model") or "mistral"
-            response_text = await _ollama_generate(system_prompt, body.message, model)
-            log.info("[chat] ollama OK  species=%r  model=%r  len=%d",
-                     species_name, model, len(response_text or ""))
-        except Exception as _e:
-            _is_conn_err = False
-            try:
-                from app.integrations.ollama_draft import OllamaConnectionError
-                _is_conn_err = isinstance(_e, OllamaConnectionError)
-            except ImportError:
-                pass
-            if _is_conn_err:
-                log.warning("[chat] Ollama unreachable for %r — falling back to Anthropic: %s",
-                            species_name, _e)
-            else:
-                log.error("[chat] Ollama error for %r (%s: %s) — falling back to Anthropic",
-                          species_name, type(_e).__name__, _e)
-            backend = "anthropic"
-
-    # ── Anthropic path (primary or fallback) ──────────────────────────────────
-    if backend == "anthropic" and response_text is None:
-        from app.config import settings as _cfg
-        if not _cfg.anthropic_api_key:
-            raise HTTPException(503, "No AI backend available — Anthropic API key not set")
-        try:
-            import anthropic
-            client = anthropic.AsyncAnthropic(api_key=_cfg.anthropic_api_key)
-            model = _gs("anthropic_model")
-            msg = await client.messages.create(
-                model=model,
-                max_tokens=400,
-                system=system_prompt,
-                messages=[{"role": "user", "content": body.message}],
-            )
-            response_text = msg.content[0].text.strip() if msg.content else ""
-            log.info("[chat] anthropic OK  species=%r  model=%r  len=%d",
-                     species_name, model, len(response_text or ""))
-        except Exception as e:
-            log.error("[chat] Anthropic failed for %r: %s: %s", species_name, type(e).__name__, e)
-            raise HTTPException(502, f"AI backend error: {e}")
+    # The one AI backend (DeepSeek — Melvin D1, 21 Oct 2026); no fallback.
+    from app.integrations.deepseek_draft import ai_complete
+    response_text: Optional[str] = await ai_complete(
+        species_name, system_prompt, body.message, max_tokens=400, label="chat",
+    )
+    if response_text is None:
+        raise HTTPException(502, "AI backend (DeepSeek) returned no answer — check the DeepSeek API key")
 
     return {"response": response_text or ""}

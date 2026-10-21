@@ -1,14 +1,201 @@
 ## Current State
 
-Correction to Current State, Pending item 1 (Melvin, 21 Oct) — replace it with:
-1. NEXT FIX (before batch 4):
-   a. AI drafting must use DeepSeek (Anthropic is not used — too expensive). Find every path that still calls Anthropic (the failing calls since the credit ran out), quote them, and route them to DeepSeek. Remove the "top up Anthropic" note.
-   b. When AI text isn't available, fill the field with PFAF's own text, clearly labelled as PFAF-sourced (visible label + changed_by/provenance marker), for Melvin to replace as he goes. If PFAF has nothing for that field, leave it empty. Never write "No known traditional medicinal uses" unless PFAF actually says none.
-   c. Count the species that got that default text since the credit ran out and refill them by rule b (snapshot first, read back by ID).
-   The public experience page still publishes only curator-approved text (D3-01 unchanged).
-Record in REPORT.md section 0.
+21 Oct 2026, end of session
+
+### Done this session (all read back by id; snapshots taken; no commits until this End Session)
+- Batch 3b verdict-draft approve path + 212 verdict drafts; obs 15957 → card 530; 848/849 enriched; 31 P1 person_animal rows rejected.
+- AI drafting is DeepSeek-only: one ai_backend(); Anthropic and Ollama paths removed (anthropic_api_key kept in config only because .env still has it). scripts/enrich.py now loads DB settings.
+- PFAF fallback (D1–D5 in REPORT.md section 0): pfaf_fallback.py is the only writer; medicinal_notes only; empty + unlocked + non-toxic fields only; history changed_by='pfaf_fallback'; "PFAF text — replace with your own" chip on species page and Review; PFAF "None known" = no data; is_curator_authored() False for pfaf_fallback; print/PDF withhold pfaf_fallback text (keyed on is_pfaf_fallback).
+- Root cause fixed: PFAF Medicinal Uses text now reaches the medicinal drafter; approve refuses an unedited false "no uses" draft where PFAF lists uses (422 + reason).
+- Shared "no uses" predicate (ai_placeholder.py) finds the claim anywhere in the text; the JS copies were removed (server flag instead).
+- Refill live: 443 rows (history 2830–3272; snapshot db_20261021_074733) + 68 field edits (history 3273–3340; snapshot db_20261021_092222). 0 "No known traditional medicinal uses" left; 0 "no uses" claims in medicinal_notes.
+- 106 false drafts invalidated; 93 DeepSeek re-drafts: 92 + Verbena (3544) pending. Only 1 still flagged (Oxalis grandis 3493, needs an edit).
+- Placeholder marker "insufficient" narrowed to refusal phrases (only collision across 1,827 source texts); 0 stored decisions changed. Discard log now names the matched rule.
+- Blusher (Amanita rubescens, 467): curator-authored preparation + look-alike warnings (history 3341/3342), caution verified by human (edibility history 380); snapshot db_20261021_095529.
+- Tests: 155 pass.
+
+### Next
+- Batch 4 (A-02 secrets out of /api/settings + guests refused; D1-01 PDF autoescape + restricted file fetching), then 5, 6, 7, 8, 9, 10, 11, 11b, 12, 13, 15, 15b, 16, 17 per REPORT.md section 9.
+- 1b (Melvin): walk 4 (Rümmelsbühl foray) warning drafts (10 of the 61), verify Rosa dumalis, Heracleum sibiricum badge, then republish.
+
+### Melvin's review queue
+- 212 verdict drafts (13 walk species first; reject junk-card ones: Betacoronavirus, Maniola, Arachnocampa, Noctiluca).
+- 61 caution-warning drafts (3178–3238): 16 "unknown origin" read as edible-use text, so rewrite or reject.
+- 93 medicinal drafts (edit Oxalis grandis 3493); blusher drafts 2939/2940; 64 refusal/placeholder drafts to reject.
+- 347 Takeout person_animal rejects (mount DIGIERA first); keep-rows 21509/21949/22043.
+- Edible parts: Verbascum densiflorum + 11 others with PFAF "None known".
+
+### Open decisions
+- Second verdict sweep for 393 verdicts not confirmed by Melvin (edible 239, caution 84, inedible 43, toxic 27)?
+- 141 hidden pending "no uses" drafts where PFAF has nothing: leave or invalidate?
+- 14 fields with hedged "does not record specific … medicinal" sentences (left in place).
+- Fungi category rule gaps (phone auto-approvals, unapproved rows; lichens file as fungi).
+
+### Known issues / backlog
+- Stage C publish panel UI not built (API exists).
+- Species rename doesn't update stored ID candidates (no % shown); orphan GC misses a card when species name and link disagree.
+- Walk 4 side-stops 21a/26a/26b may need ↻ Re-route; walks 3/4 route-line load guard unconfirmed.
+- scripts/import_caution_warning_drafts.py must be re-run by hand for new caution species.
+- STATUS.md line 13 ("Step 2 waiting for Melvin…") is stale — step is done.
+- Backlog: 1,169 no-plant-signal rows; ~650 unprocessed 2013 Takeout files; junk species cards.
+
+### Live checks owed (Melvin, browser)
+- PFAF chip (Wood Avens, Great Mullein); blusher warnings on species page.
+- Review: verdict drafts section, warning drafts, red flag + refusal on false "no uses" drafts.
+- Print/PDF: no Folklore section for PFAF-filled species.
+- DeepSeek: species chat, About "Regenerate with AI", Settings AI group DeepSeek-only.
+- Walk panel (repeat lines, Reverse / Start here / ← Saved walks, Edit walk → Save → Re-route, Create-from-map), Jobs pop-up drag, ☠ on 155/688/745 pins, Second Opinion obs 24149, caffeinate exits with server.
+
+- Known issue: second-opinion candidate ranking ignores geography — out-of-range species surface despite GPS (e.g. #24149 Männlichen: G. sierrae [Spain], G. pumila [E Alps]; #24442 Gresgen: V. boerhavii [Mediterranean] ranked top). Range-plausibility down-weighting to be scoped; ID-safety relevant (affects review suggestions, not auto-approve).
 
 ## History
+
+### 2026-10-21 10:13
+**Snapshot** — End of session — Session ended from Settings page
+DB: `snapshots/db_20261021_101327.sqlite`
+
+### 2026-10-21 10:13
+**Session ended** — Session ended from Settings page
+
+### 2026-10-21 09:56
+**Amanita rubescens (Blusher, 467): Melvin's preparation + look-alike warnings written verbatim as curator text; caution verdict confirmed by human**
+
+**Fixed:**
+- Snapshot db_20261021_095529 (no commit)
+- preparation_warnings + look_alike_warnings via PATCH /api/culinary/{name}/field (history 3341, 3342, changed_by human, old_value NULL); byte-identical read-back; is_curator_authored True
+- Verdict via edibility._write_verdict: caution, edibility_verified=1, verified_by human, history 380 with Melvin's note; severity none unchanged (severity_for_verdict); no AI-draft trigger
+- Experience gates: badge 'Edible with caution', rule 8 caution reason shown, look-alike shown, recipe_allowed True - no recipes stored for 467
+**Files:** `docs/audit/2026-10-20/REPORT.md`, `docs/audit/2026-10-20/STATUS.md`
+**Pending:**
+- Drafts 2939 (taste) / 2940 (medicinal) left pending as asked
+- Melvin browser check: Blusher species page shows both warnings; Edibility Review no longer lists it as unverified
+- Do not start batch 4; End Session commits
+
+### 2026-10-21 09:55
+**Snapshot** — Before curator-authored safety text + verdict confirmation for Amanita rubescens (467); Settings snapshot routine without the git commit — Melvin: End Session commits
+DB: `snapshots/db_20261021_095529.sqlite`
+
+### 2026-10-21 09:45
+**Placeholder refusal markers - class fixed: only 'insufficient' collides with real uses (PFAF Verbena 'insufficient lactation', Vinca 'insufficient blood supply'); replaced with refusal phrases; Verbena re-draft stored (draft 3544)**
+
+**Built:**
+- test_placeholder_markers_do_not_collide_with_real_uses
+**Fixed:**
+- ai_placeholder: bare 'insufficient' -> 'insufficient information/data/source/detail/context'; other markers unchanged (no collisions in 384 PFAF pages + 1,827 other source texts); 0 decisions changed over 3,472 stored drafts
+- Verbena officinalis medicinal re-draft (job 66, 1 DeepSeek call): draft 3544 pending, opening contains 'insufficient lactation'
+**Files:** `app/services/ai_placeholder.py`, `tests/test_pfaf_fallback_deepseek.py`, `docs/audit/2026-10-20/REPORT.md`, `docs/audit/2026-10-20/STATUS.md`
+**Pending:**
+- Amanita rubescens recipe draft was discarded as a placeholder earlier (marker unknown, text not kept) - retry only with Melvin's OK
+- Melvin: review the 93 pending medicinal drafts (incl. Verbena 3544); Oxalis grandis 3493 refused as-is
+- Do not start batch 4; End Session commits
+
+### 2026-10-21 09:39
+**Verbena officinalis medicinal re-draft retried (job 65, 1 DeepSeek call) - discarded again; cause: placeholder rule's bare 'insufficient' marker matches PFAF's 'insufficient lactation'**
+
+**Built:**
+- ai_placeholder_reason() - names the placeholder rule + marker; _section_ai_draft logs it with the opening sentence on discard (decisions unchanged on 3,472 stored drafts)
+**Files:** `app/services/ai_placeholder.py`, `app/services/enrichment.py`, `docs/audit/2026-10-20/REPORT.md`, `docs/audit/2026-10-20/STATUS.md`
+**Pending:**
+- Melvin: narrow the 'insufficient' refusal marker to 'insufficient information/data/source/detail/context' (0 stored decisions change; exposes Verbena officinalis + Vinca minor), then retry Verbena (1 DeepSeek call)
+- Do not start batch 4; End Session commits
+
+### 2026-10-21 09:28
+**Live 'no uses' cleanup + 93 DeepSeek medicinal re-drafts (Melvin: go live exactly as rehearsed)**
+
+**Built:**
+- POST /api/drafts/redraft-medicinal - curator-only job (job_queue + progress, enrich_gate: refused during ingest/scan, waits for ingest + holds the enrichment slot per species), normal _section_ai_draft path, toxic excluded, results file logs/redraft_medicinal_jq<id>.json
+**Fixed:**
+- Live: snapshot db_20261021_092222 (no commit); 68 medicinal_notes edits (31 PFAF fill, 9 cleared, 8 toxic cleared, 20 claim sentence removed), history 3273-3340, read-back 0 mismatches; 106 false 'no uses' drafts invalidated; 0 claims left; second run no-op
+- Re-draft job 64: 92 pending DeepSeek drafts (PFAF context), 1 failed (Verbena officinalis discarded as placeholder); 1 of 92 still flagged false (Oxalis grandis 3493, borderline); none approved, no field written
+**Files:** `app/api/culinary.py`, `docs/audit/2026-10-20/REPORT.md`, `docs/audit/2026-10-20/STATUS.md`, `docs/audit/2026-10-20/redraft_plan_2026-10-21.json`
+**Pending:**
+- Melvin: review the 92 new medicinal drafts in Review (each replaces PFAF text on approval); Oxalis grandis 3493 is refused as-is (422) - edit or reject
+- Verbena officinalis: re-draft discarded by the placeholder rule - retry with Repopulate (1 DeepSeek call) or check is_ai_placeholder
+- Borderline 'does not record specific ... medicinal' sentences in 14 fields - Melvin decides
+- Do not start batch 4; End Session commits
+
+### 2026-10-21 09:22
+**Snapshot** — Before the live 'no uses' cleanup (68 medicinal_notes edits, 106 draft invalidations, 93 DeepSeek re-drafts); Settings snapshot routine without the git commit — Melvin: End Session commits
+DB: `snapshots/db_20261021_092222.sqlite`
+
+### 2026-10-21 09:18
+**'No uses' check fixed at the root (shared predicate, anywhere in the text) + combined dry run: 68 fields, 106 drafts, 93 DeepSeek re-drafts counted - rehearsed 0 mismatches, stopped before live write / DeepSeek**
+
+**Built:**
+- ai_placeholder: no_medicinal_uses_claim_spans / has_no_medicinal_uses_claim / is_only_no_medicinal_uses_claim / strip_no_medicinal_uses_claims - claim anywhere, narrow negations excluded (part-scoped, further/additional, concessive hedge)
+- pfaf_fallback: 'strip' outcome (claim sentence removed, rest verbatim, system:clear_false_default, ai-approved flag kept); false-claim check reads the claim anywhere
+- Review / species page: server flag no_uses_only replaces the two JS _MEDICINAL_SUPPRESS regex copies
+- scripts/pfaf_fallback_refill.py: combined fields + drafts run; --redraft gated (DeepSeek only with it)
+**Fixed:**
+- Root cause: is_no_medicinal_uses_statement read the first sentence only - claims after the disclaimer/heading/culinary text were invisible
+- PFAF parser: Medicinal Uses opening with 'None known.' + commentary = no data (D3) - only Alchemilla mollis; never written live
+**Files:** `app/services/ai_placeholder.py`, `app/services/pfaf_fallback.py`, `app/integrations/pfaf.py`, `app/api/culinary.py`, `frontend/review.html`, `frontend/species.html`, `scripts/pfaf_fallback_refill.py`, `tests/test_pfaf_fallback_deepseek.py`, `docs/audit/2026-10-20/REPORT.md`, `docs/audit/2026-10-20/STATUS.md`, `docs/audit/2026-10-20/cleanup_dryrun_2026-10-21.md`
+**Pending:**
+- Melvin OK for live: 68 fields (31 PFAF fill, 9 cleared, 8 toxic cleared, 20 claim removed) + 106 drafts invalidated, then 93 DeepSeek re-drafts (--apply --redraft); snapshot first, no commit
+- Melvin decides: hedged meta 'does not record/contain specific ... medicinal' sentences left in 14 fields (borderline list in REPORT)
+- Melvin browser checks: Review red flag + 422 on a false draft; true no-uses drafts still hidden; species page PFAF chip
+- Do not start batch 4
+
+### 2026-10-21 07:51
+**4b live PFAF refill (Melvin 'Go on 4b'): 443 medicinal_notes rows written, read-back 0 mismatches; step 2 false no-uses drafts listed - stopped before any DeepSeek call**
+
+**Fixed:**
+- Live refill: 200 PFAF fill (pfaf_fallback), 184 cleared + 59 toxic cleared (system:clear_false_default); history ids 2830-3272; snapshot db_20261021_074733 (backup function, no git commit)
+- Read-back: script 443/443 0 mismatches; SQL read-back 2830-3272 0 mismatches; second run writes nothing; 'No known traditional medicinal uses' 346 -> 0
+**Files:** `docs/audit/2026-10-20/REPORT.md`, `docs/audit/2026-10-20/STATUS.md`
+**Pending:**
+- NOT MET: 55 AI-approved medicinal_notes still contain 'no traditional medicinal uses' after a disclaimer/heading (43) or after content (12) - opening-only predicate; same rule would give 40 PFAF fill / 8 clear / 7 toxic clear - Melvin decides
+- Step 2 awaiting OK: invalidate 45 false no-uses pending drafts (8 toxic) + re-draft 37 non-toxic species via _section_ai_draft = 37 DeepSeek calls
+- 41 more pending drafts carry the claim later in the text (not refused by the approve guard, hidden in Review) - extend is_no_medicinal_uses_statement past the disclaimer? Melvin decides
+- Melvin browser checks: species page PFAF chip (e.g. Wood Avens, Great Mullein); Review false-draft warning + 422; print/PDF without the PFAF Folklore section
+- Do not start batch 4; End Session commits (snapshot taken without commit)
+
+### 2026-10-21 07:47
+**Snapshot** — Before 4b live PFAF refill (443 medicinal_notes rows; Settings snapshot routine without the git commit — Melvin: End Session commits)
+DB: `snapshots/db_20261021_074733.sqlite`
+
+### 2026-10-21 05:36
+**Melvin's answers A-C (21 Oct): PFAF Medicinal Uses into the medicinal draft context + false no-uses approve guard; print/PDF withhold PFAF fallback text; refill rule changes - new dry run 443 rows, rehearsed 0 mismatches, stopped before writing live**
+
+**Built:**
+- A: stored_pfaf_medicinal_text() -> pfaf_medicinal_uses in the medicinal_notes context (enrichment, Repopulate, Regenerate); None known passes nothing
+- A: is_false_no_uses_claim() - unedited 'no traditional medicinal uses' draft refused on approve (422 + reason) when PFAF lists uses; Review shows such drafts with the reason
+- B: print.html / lists.html (_printCulinary) and lists_pdf._flatten_species drop fields in profile.pfaf_fallback_fields (shared is_pfaf_fallback) - print_pdf.html never receives them
+- C: pending AI draft no longer blocks the PFAF fill; toxic/inedible default -> cleared, no PFAF text; clears write changed_by='system:clear_false_default'
+- refill script: outcome counts + the 13 human-approved AI no-uses texts listed by name
+**Fixed:**
+- Root cause: enrich_species never passed PFAF Medicinal Uses to the drafter (45 pending + 8 approved false 'no uses' drafts where PFAF lists uses)
+**Files:** `app/services/pfaf_fallback.py`, `app/integrations/deepseek_draft.py`, `app/integrations/claude_draft.py`, `app/services/enrichment.py`, `app/api/culinary.py`, `app/api/lists_pdf.py`, `frontend/review.html`, `frontend/print.html`, `frontend/lists.html`, `scripts/pfaf_fallback_refill.py`, `tests/test_pfaf_fallback_deepseek.py`, `docs/audit/2026-10-20/REPORT.md`, `docs/audit/2026-10-20/STATUS.md`, `docs/audit/2026-10-20/refill_dryrun_2026-10-21.md`
+**Pending:**
+- Melvin: OK for live 4b - dry run 443 rows: 200 PFAF fill, 184 cleared, 59 toxic cleared, 0 untouched; Settings snapshot first, then apply + read-back by id
+- Melvin: print gate uses is_pfaf_fallback, not is_curator_authored (that would withhold all AI-approved medicinal text and historyless PFAF fields from handouts) - confirm
+- The '13 approved on 2 June' were approved 27 May (6), 1 Jun (6), 2 Jun (1)
+- Melvin browser checks: Review shows false no-uses drafts in red and Approve gives the 422 reason; print/PDF of a PFAF-filled species has no Folklore section; species chip after 4b
+- Do not start batch 4
+
+### 2026-10-21 05:21
+**Fix before batch 4 (Melvin D1-D5, 21 Oct): every AI call site on DeepSeek + labelled PFAF fallback replacing A5 - steps 1-3 done, step 4 stopped at the dry run (no DB writes)**
+
+**Built:**
+- deepseek_draft.ai_backend() - the one AI backend choice; ai_complete() + generate_deepseek_drafts() used by enrichment, Repopulate, Regenerate, chat, About summary, recipe regenerate, encounter extraction
+- app/services/pfaf_fallback.py - only writer of PFAF text into an AI field: medicinal_notes <- PFAF Medicinal Uses (changed_by='pfaf_fallback'), retired no-uses default counts as empty (filled or cleared, 'system:undo_A5'); guards: empty, not human-locked, not toxic/inedible, no pending AI text
+- PFAF chip 'PFAF text - replace with your own' on species page (Folklore & Historical Uses) and Review AI-draft cards, from pfaf_fallback_fields in profile/queue payloads
+- scripts/pfaf_fallback_refill.py - dry run (read-only) / --apply with read-back by id
+- tests/test_pfaf_fallback_deepseek.py (12); suite 148/148
+**Fixed:**
+- D1: Anthropic removed from claude_draft (generator), chat, about, recipes, encounter_extract, culinary Regenerate, enrichment fallbacks, api_dashboard probe; Ollama paths + ollama_draft.py removed; settings enrichment_backend/anthropic_model/ollama_model removed; Anthropic UI text removed (review, settings, about)
+- A5: _ensure_medicinal_default + scripts/backfill_medicinal_default.py removed - no path writes 'No known traditional medicinal uses'
+- scripts/enrich.py loads DB settings (batch-3b script failure read the old 'anthropic' default)
+- CHANGELOG: two 'Anthropic credit empty / top up' pending notes removed
+**Files:** `app/integrations/deepseek_draft.py`, `app/integrations/claude_draft.py`, `app/integrations/ollama_draft.py (deleted)`, `app/integrations/encounter_extract.py`, `app/services/pfaf_fallback.py`, `app/services/enrichment.py`, `app/services/ai_placeholder.py`, `app/services/settings_service.py`, `app/services/api_dashboard.py`, `app/models/species.py`, `app/models/encounter.py`, `app/api/culinary.py`, `app/api/chat.py`, `app/api/about.py`, `app/api/recipes.py`, `app/api/encounters.py`, `app/config.py`, `frontend/species.html`, `frontend/review.html`, `frontend/settings.html`, `frontend/scan.html`, `frontend/about.html`, `scripts/enrich.py`, `scripts/pfaf_fallback_refill.py`, `scripts/backfill_medicinal_default.py (deleted)`, `tests/test_pfaf_fallback_deepseek.py`, `docs/audit/2026-10-20/REPORT.md`, `docs/audit/2026-10-20/STATUS.md`, `docs/audit/2026-10-20/refill_dryrun_2026-10-21.md`
+**Pending:**
+- Melvin: OK for step 4b refill (dry run 399 rows: 67 -> PFAF text, 273 defaults cleared, 59 toxic untouched; rehearsed on a scratch copy, 0 mismatches) - Settings snapshot first
+- Melvin decides: does a pending AI draft count as 'AI text available'? (as built yes - 215 species stay empty, 133 of them have PFAF text)
+- Melvin decides: clear the default on the 59 toxic/inedible species? (as built untouched)
+- Melvin browser checks: species page chip on a filled species (e.g. Filipendula vulgaris after 4b); Review draft card over PFAF text; species chat answers; About 'Regenerate with AI'; Settings AI group shows DeepSeek only
+- Finding: enrich_species never passes pfaf_result to the AI drafter - PFAF Medicinal Uses text never reaches DeepSeek (medicinal_folklore drafts never generated; medicinal drafts say 'no uses' where PFAF lists them)
+- Finding: print.html / lists.html print medicinal_notes without the chip
+- Do not start batch 4
 
 ### 2026-10-21 04:50
 **Snapshot** — End of session — Session ended from Settings page
@@ -47,7 +234,6 @@ DB: `snapshots/db_20261021_044736.sqlite`
 - Melvin: reject the 347 Takeout person_animal rows in Review (Status Pending, Pre-filter person_animal, 96 per page, Select all, Reject; deletes the uploads/ copies) — mount DIGIERA first to be sure the originals are there; decide the 3 'keep' rows 21509/21949/22043
 - Melvin browser checks: Verdict drafts section (order, quotes, approve/reject, severity select, stale warning + 409); AI Draft Review no longer lists verdict drafts
 - Melvin: work the 212 verdict drafts (13 walk species first); reject the junk-card drafts (Betacoronavirus, Maniola jurtina, Arachnocampa, Noctiluca)
-- Anthropic API credit balance empty - all AI drafting fails
 - A5 bug: _ensure_medicinal_default ignores PFAF medicinal text -> false 'No known traditional medicinal uses' when AI drafting fails; other affected species not counted
 - Not in 3b scope: 394 species with a verdict not verified by a human (edible 239, caution 85, inedible 43, toxic 27) - second sweep if wanted
 - Backlog (Melvin 21 Oct): 1,169 'no plant signal' pre-filter rows; ~650 unprocessed 2013 Takeout files
@@ -335,7 +521,6 @@ DB: `snapshots/db_20261020_103750.sqlite`
 **Files:** `frontend/index.html`
 **Pending:**
 - DECISION Melvin: fungi filed as plant — scan.py:1609-1613 only sets category_suggested='fungi' (by design 'only suggest, never overwrite'); 84 confirmed observations of fungal species (81 approved, 3 manually_verified) have obs_category='plant' vs 34 correct; 198 plant rows carry the fungi suggestion. Options: category follows the confirmed species' kingdom on approve/correct + snapshot-and-backfill the 84; or accept the suggestion at ingest. Fungi were NOT auto-approved (force_review re-checked at scan.py:1737; the 3 approved rows were Melvin's 08:28 bulk approve)
-- Note: Anthropic API credits exhausted (Melvin screenshot) — AI enrichment drafts will fail until topped up
 - Parked by Melvin: implausible regional IDs
 - Melvin: browser check — Create from map sheet retract; map pans after building/saving a new walk
 - Stage C publish panel; republish walk 4

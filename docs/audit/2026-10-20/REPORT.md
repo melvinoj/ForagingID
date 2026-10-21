@@ -53,6 +53,333 @@ Sessions: 1 (Phases A–B), 2 (C–D), 3 (E–G). Sections 0–9 below were asse
 | 3 | Draft 2335 (medicinal notes on junk card 685 'norway spruce') | Reject. | ✅ |
 | 4 | The 381 `person_animal` pre-filter observations | Reject (originals stay on DIGIERA). Leave 'no plant signal' (1,169) and the ~650 unprocessed 2013 files for later — backlog. | Partly: 31 P1 rows done (no file deleted); 347 Takeout rows are Melvin's step; 3 "keep" rows left |
 
+**Decided 21 Oct 2026** — Melvin, recorded before the fix "AI drafting on DeepSeek + labelled PFAF fallback + refill" (runs before batch 4). Context: the Anthropic credit is empty and Anthropic is **not used** (too expensive). Since the credit ran out, AI drafting has failed, and `_ensure_medicinal_default` (A5) has written the false "No known traditional medicinal uses" where AI text wasn't available.
+
+| # | Decision |
+|---|---|
+| D1 | **Every AI call site uses DeepSeek.** No Anthropic fallback anywhere. Remove every "top up Anthropic" note or message in code, UI and the CHANGELOG pending lists. |
+| D2 | When AI text isn't available for a field, **fill the field with PFAF's own text for that field**. If PFAF has nothing, **leave the field empty**. |
+| D3 | PFAF **"None known" = no data** (same as the 20 Oct edible-uses parser rule), for medicinal too. **No automated path may ever write "No known traditional medicinal uses".** |
+| D4 | The PFAF label is **provenance, not text**: the history row is `changed_by='pfaf_fallback'`, and a visible chip ("PFAF text — replace with your own") shows on the species card and in Review wherever that field shows. **Never a prefix inside the stored text.** |
+| D5 | `pfaf_fallback` is **not curator-authored**: `is_curator_authored()` returns False for it, so the public experience page (D3-01) still publishes only curator-approved text. |
+
+**Guards (every fill):** only fields that are empty **and** not human-locked (no `changed_by='human'` history on that field); never for toxic/deadly species (same exclusion as AI generation); a later DeepSeek draft, once approved, replaces the PFAF text through the normal approve path (history `old_value` = the PFAF text).
+
+**Result, 21 Oct 2026 — steps 1–3 done; step 4 stopped at the dry run (nothing written to the DB).**
+
+*Why "AI drafting failed".* In the server, enrichment drafting has been on DeepSeek since June: the last Anthropic draft is from 3 Jun, and there are 844 `hybrid/deepseek` drafts, the latest on 20 Oct. The batch-3b failures came from a script that never loaded DB settings, so `enrichment_backend` read its registry default, `anthropic`. Five paths called Anthropic whatever the setting said (Regenerate, recipe regenerate, About summary, encounter extraction, and chat, which returned an empty answer under `hybrid`).
+
+*Call sites (step 1) and what changed (step 2).* DeepSeek handles every site; none needed a feature DeepSeek lacks, and encounter extraction already parsed `{…}` out of plain text.
+
+| Site | Before | Now |
+|---|---|---|
+| `enrichment._maybe_generate_ai_drafts` | `hybrid` → DeepSeek; `anthropic`/Ollama-failure → `claude_draft.generate_ai_drafts` | `deepseek_draft.generate_deepseek_drafts` only |
+| `enrichment._section_ai_draft` (↻ Repopulate) | same three-way switch; `hybrid` drafted all 3 fields | DeepSeek, the one requested field |
+| `culinary._generate_drafts_for_species` (Regenerate, `re_enrich=True`) | always Anthropic | DeepSeek |
+| `chat.py` species chat | Ollama or Anthropic; `hybrid` → empty reply | DeepSeek (`ai_complete`), 502 if no answer |
+| `about.py` regenerate-summary | always Anthropic (`claude-sonnet-4-6`) | DeepSeek |
+| `recipes.py` recipe regenerate | always Anthropic (draft mislabelled `claude-haiku…`) | DeepSeek, labelled `deepseek/<model>` |
+| `encounters.py` → `encounter_extract.py` | always Anthropic (Haiku) | DeepSeek |
+| `api_dashboard.py` | Anthropic key card + probe of `api.anthropic.com` | removed; DeepSeek card says it serves every AI feature |
+| Settings registry | `enrichment_backend` (default `anthropic`), `anthropic_model`, `ollama_model` | removed — DeepSeek key + model only (stale DB rows are ignored) |
+
+- **One backend choice:** `deepseek_draft.ai_backend()`; every AI path calls it, via `ai_complete()` or `generate_deepseek_drafts()`.
+- **Deleted:** `claude_draft.py`'s Anthropic generator (its prompts and context builders stay), `ollama_draft.py`, and `scripts/backfill_medicinal_default.py` (it wrote the default).
+- **Kept, unread:** `config.anthropic_api_key`. Pydantic-settings rejects unknown `.env` keys, and `.env` still has the line.
+- **Settings in scripts:** `scripts/enrich.py` now loads DB settings.
+- **UI:** the "run enrich.py with an Anthropic API key" message (Review ×2), the Haiku warning (Settings) and "Regenerate with Claude" (About) are gone. CHANGELOG: the two "credit empty / top up" pending notes removed.
+
+*PFAF fallback (step 2).*
+- `app/services/pfaf_fallback.py` is the only writer and replaces `_ensure_medicinal_default`. All four AI paths call it: `enrich_species`, the backfill/Regenerate path, the confirm trigger, and ↻ Repopulate.
+- Mapping: **`medicinal_notes` ← PFAF "Medicinal Uses"**. That is the only AI field with a PFAF counterpart. `medicinal_folklore` is left out on purpose: the same PFAF paragraph would show twice on the card.
+- A field holding the retired no-uses sentence counts as empty (D3), so the rule replaces it with PFAF text or clears it.
+- Each write: field + one history row (`pfaf_fallback`, or `system:undo_A5` for a clear), and the field's entry is removed from `ai_approved_fields_json`. Never a text prefix.
+- Shared definitions: `species.is_pfaf_fallback()`, `PFAF_FALLBACK_CHANGED_BY`, `AI_NO_CONTENT_VERDICTS`, `ai_placeholder.is_no_medicinal_uses_statement()`.
+- D5 needed no logic change: `is_curator_authored()` was already True only for `'human'` (a comment now says so, and a test pins it). The guest mask also omits `pfaf_fallback` fields (unrecognised `changed_by` → omit).
+- Chip: species page ("Folklore & Historical Uses", amber chip, inline edit kept) and Review AI-draft cards ("In the field now — replaced when you approve" + chip), from `pfaf_fallback_fields` in the profile and queue payloads.
+
+*Tests (step 3).* `tests/test_pfaf_fallback_deepseek.py`, 12 tests: the D1 grep, the default-writer AST check, the parser's "None known", every guard, idempotence, end to end through `enrich_species` and Regenerate with AI failing, D5 + experience gates, the Review marker, and approve-over-PFAF (`old_value` = PFAF text). Guard tests confirmed to fail when the toxic or the lock guard is removed. Whole suite: 13 files, 148 tests, all pass.
+
+*Dry run (step 4a)* — `scripts/pfaf_fallback_refill.py`, read-only DB. Full table: [refill_dryrun_2026-10-21.md](refill_dryrun_2026-10-21.md) (399 rows: Common name (Latin), field, current value, PFAF text yes/no, locked, toxic, provenance, drafts, rule outcome).
+- **Date range:** none could be applied. A5 wrote no history row and there is no per-field timestamp, so every row is listed whenever it was written. Provenance of the 358 default rows: 331 no history (A5 / its backfill), 14 `human:placeholder_clear` (20 Oct 09:25), 13 `ai_approved:human` (AI "nothing found" text approved on 2 Jun — incl. *Verbascum thapsus*, where PFAF lists many uses).
+- **A — holds the default (358):** 26 → PFAF text · 139 cleared (no PFAF page) · 14 cleared (PFAF "None known") · 120 cleared (a real AI draft is pending) · 59 untouched (toxic / inedible).
+- **B — empty, PFAF text available, no AI text (41):** → PFAF text. Includes 848 *Filipendula vulgaris* (undone 21 Oct).
+- 209 more empty rows stay empty (95 pending AI draft, 74 no PFAF page, 17 None known, 22 toxic/inedible, 1 locked).
+- **Rehearsal on a scratch copy:** 340 rows written (67 fills, 273 clears), read-back by id 399 rows / 0 mismatches, second run a no-op. The live DB is untouched (history still ends at 2829). Columns written: `medicinal_notes`, `ai_approved_fields_json`; `updated_at` moves with them.
+
+**Melvin's answers, 21 Oct 2026 (05:2x)** — order: A, B, C, then stop before writing live. Batch 4 not started; Ollama stays removed.
+
+| # | Decision |
+|---|---|
+| A | **Root cause first.** Pass the stored PFAF Medicinal Uses text (enrichment_sources, no new scraping) into the medicinal draft context; PFAF "None known" = no data, pass nothing. Approve guard: a draft claiming "no known / no traditional medicinal uses" is refused (422 with the reason, shown in Review) when PFAF has Medicinal Uses text for that species. Tests for both. |
+| B | **Print rule = D5.** print.html, lists.html, lists_pdf.py, print_pdf.html withhold a field whose latest history is `changed_by='pfaf_fallback'`, the same as the public experience page. No new rule. Test: PFAF-filled `medicinal_notes` absent from the PDF payload; human text prints. |
+| C1 | **A pending AI draft no longer blocks the PFAF fill** (answer to open question 1). The draft stays in the queue and replaces the text on approval (`old_value` = PFAF text). |
+| C2 | **Toxic / inedible (59): clear the false sentence to empty**, no PFAF text, history `changed_by='system:clear_false_default'` (answer to open question 2). |
+| C3 | **The 13 approved on 2 June are included** (PFAF text if available, else cleared), each listed by name. |
+| C4 | New 4a dry run (counts by outcome: PFAF fill / cleared / toxic cleared / untouched) + scratch rehearsal (0 mismatches, second run no-op). **Stop before writing live.** |
+
+**Result of A–C, 21 Oct 2026 — done; stopped before writing live (DB untouched, history still ends at 2829).**
+
+*A — root cause.*
+- `enrich_species` (`enrichment.py:304`) called `_maybe_generate_ai_drafts` without `pfaf_result`, so `pfaf_medicinal_text` was None. That kwarg only ever fed the medicinal_folklore draft anyway.
+- The medicinal_notes context got only `medicinal_folklore=ci.medicinal_folklore`: the approved AI folklore field, not PFAF's Medicinal Uses. `_apply_pfaf_to_culinary` never stores that section ("AI-draft source material only").
+- So DeepSeek's prompt ("If source data mentions no medicinal uses, say so plainly") answered "no uses". Data: 45 pending and 8 approved medicinal drafts say so where the stored PFAF page lists uses.
+
+*A — fix.*
+- `pfaf_fallback.stored_pfaf_medicinal_text()` reads the stored page; "None known" → None.
+- Every draft path passes it as `pfaf_medicinal_uses`: enrichment, ↻ Repopulate, Regenerate. DeepSeek adds it as "Medicinal Uses (PFAF): …" to the **medicinal_notes context only**, not taste or recipe.
+- `medicinal_folklore` drafting is unchanged and still dormant: no caller passes `pfaf_result`.
+- Approve guard: `is_false_no_uses_claim()` is the one definition. An unedited "no (known) traditional medicinal uses" draft where PFAF lists uses → 422 with the reason; curator-edited text stays the curator's.
+- Review: false drafts are no longer hidden by the "no uses" filter. They show with the reason in red, and Approve shows the 422; true "no uses" drafts stay hidden. Parsed text is cached per stored PFAF row: the first Review load after a restart costs ~3 s once, then 0.08 s. The queue itself already took ~3.8 s.
+
+*B — print rule.* `print.html` and `lists.html` read `culinary` through `_printCulinary(prof)` (2 + 3 sites), and `lists_pdf._flatten_species` does the same, so `print_pdf.html` never receives the field (no template change). A field listed in the profile's `pfaf_fallback_fields` is dropped from print and PDF.
+- **Deliberate deviation:** the gate is the shared `is_pfaf_fallback()` (D4's definition, served by `/api/species/{name}/profile`), not `is_curator_authored()`. `is_curator_authored()` as a print gate would also withhold every AI-approved medicinal text (`ai_approved:human`, ~110 species) and every historyless PFAF-sourced field (edible parts, warnings…) from all handouts. Your rule names only `pfaf_fallback`, so this matches it with no new rule.
+
+*C — refill rule.*
+- A pending AI draft no longer blocks the fill.
+- Toxic/inedible species holding the default → cleared, no PFAF text.
+- Every clear now writes `changed_by='system:clear_false_default'` (one marker for one meaning; the earlier non-toxic clears said `system:undo_A5`).
+
+*Tests:* 15 in `test_pfaf_fallback_deepseek.py`, including medicinal context with PFAF text / omitted on "None known", the approve guard refusing / allowing, print withholding PFAF text while human text prints (rendered `print_pdf.html`), and the new refill rules. Whole suite: 13 files, 151 tests pass. Guard mutation check still fails when the toxic or the lock guard is removed.
+
+*New dry run (C4)* — [table](refill_dryrun_2026-10-21.md), 443 rows:
+
+| Outcome | Rows | Detail |
+|---|---|---|
+| PFAF fill | **200** | 115 holding the default + 85 empty fields with PFAF text |
+| cleared | **184** | 159 no PFAF page, 25 PFAF "None known" |
+| toxic cleared | **59** | toxic/inedible, default → empty, no PFAF text |
+| untouched | **0** | of the listed rows. 165 more empty fields stay empty: no write needed (no PFAF text 142, toxic 22, locked 1). |
+
+**The 13 human-approved AI "no uses" texts** — dates 27 May (6), 1 Jun (6), 2 Jun (1), not all 2 June:
+- SARSr-CoV (*Betacoronavirus pandemicum*) — "No traditional medicinal uses recorded in available sources. The source materia…" → cleared (no PFAF page)
+- *Bossiella* — "No traditional medicinal uses recorded in available sources. Please note: The s…" → cleared (no PFAF page)
+- Jelly-antler (*Calocera viscosa*) — "No traditional medicinal uses recorded in available sources. The source materia…" → toxic cleared
+- Turkey hornbeam (*Carpinus orientalis*) — "No traditional medicinal uses recorded in available sources. The source materia…" → cleared (no PFAF page)
+- marsh thistle (*Cirsium palustre*) — "No traditional medicinal uses recorded in available sources. The source materia…" → cleared (PFAF None known)
+- Western Marsh-orchid (*Dactylorhiza majalis*) — "No traditional medicinal uses recorded in available sources." → toxic cleared
+- Wood Avens (*Geum urbanum*) — "No traditional medicinal uses recorded in available sources. The source materia…" → PFAF fill
+- Perennial Honesty (*Lunaria rediviva*) — "No traditional medicinal uses recorded in available sources." → cleared (no PFAF page)
+- Giant Polypore (*Meripilus giganteus*) — "No traditional medicinal uses recorded in available sources. The source materia…" → cleared (no PFAF page)
+- apetalous sandwort (*Moehringia trinervia*) — "No traditional medicinal uses recorded in available sources." → cleared (no PFAF page)
+- Plymouth pear (*Pyrus cordata*) — "No traditional medicinal uses recorded in available sources. The source materia…" → cleared (PFAF None known)
+- great yellowcress (*Rorippa amphibia*) — "No traditional medicinal uses recorded in available sources. The source materia…" → cleared (PFAF None known)
+- Great Mullein (*Verbascum thapsus*) — "No known traditional medicinal uses" → PFAF fill
+
+*Rehearsal on a fresh scratch copy:* 443 rows written (200 `pfaf_fallback`, 243 `system:clear_false_default`); read back by id, 443 rows, **0 mismatches**; second run writes nothing; 0 "no uses" texts left. Live 4b waits for Melvin's OK (Settings snapshot first).
+
+**4b live refill — done 21 Oct 2026** (Melvin: "Go on 4b").
+- **Snapshot:** `snapshots/db_20261021_074733.sqlite`, quick_check ok, 276 MB. Taken by the Settings snapshot's own backup function (`db_snapshot.backup_to_file`) with its CHANGELOG History entry, **without the git commit**: the Settings endpoint always commits, and Melvin said End Session commits.
+- **Applied:** a live re-run of the dry run first gave identical counts. Then 443 rows: 200 PFAF fill, 184 cleared, 59 toxic cleared.
+- **History ids 2830–3272:** 443 rows, one per culinary_info row, all `medicinal_notes`. 200 `pfaf_fallback`; 243 `system:clear_false_default`, every one with the old text as `old_value`. 115 fills replaced a default, 85 filled an empty field.
+- **Read-back by id:** the script checked 443 rows, every column against the plan: **0 mismatches**. A separate SQL read-back of 2830–3272 also found 0: each field equals its history `new_value`, and no row still lists `medicinal_notes` in `ai_approved_fields_json`. Columns written: `medicinal_notes`, `ai_approved_fields_json` (`updated_at` moves with them).
+- **Second run:** 0 rows, writes nothing. "No known traditional medicinal uses": 0 rows left (was 346).
+- **Not met — "no 'no traditional medicinal uses' text remains":** **55 `medicinal_notes` values still contain the claim.**
+  - All are AI text Melvin approved (`ai_approved:human`). The shared predicate checks only the opening sentence, and these open differently. 43 open with the disclaimer "Traditional and folk use only — not medical advice." or a heading, then "No traditional medicinal uses recorded…". 12 have culinary text first and the claim at the end.
+  - Examples: *Plantago major/lanceolata*, *Sambucus nigra*, *Taraxacum officinale*, *Matricaria chamomilla*, *Crataegus monogyna*, *Artemisia vulgaris*, *Glechoma hederacea*.
+  - Not touched: outside the approved dry run.
+  - Under the same rule: 40 → PFAF fill (28 disclaimer-opener, 12 content-then-claim), 8 cleared, 7 toxic cleared. The 12 content-then-claim rows would lose their culinary text, which sits in a medicinal field.
+- **The 8 approved false "no uses" drafts:** step 1 changed all 8 fields; the drafts themselves are untouched.
+  - Keck (*Anthriscus sylvestris*): history 2857 → PFAF fill
+  - Whitebeam (*Aria edulis*): 2863 → PFAF fill
+  - garden cucumber (*Cucumis sativus*): 2934, empty → PFAF fill
+  - Wood Avens (*Geum urbanum*): 2985 → PFAF fill
+  - Garden Lupin (*Lupinus polyphyllus*): 3039 → toxic cleared
+  - Hop Clover (*Medicago lupulina*): 3053 → PFAF fill
+  - Bicolor oak (*Quercus bicolor*): 3149 → PFAF fill
+  - common chickweed (*Stellaria media*): 3216, empty → PFAF fill
+- **Cosmetic, PFAF's own text:** the Medicinal Uses section starts with PFAF's property keywords, so fills read e.g. "Antidiarrhoeal Antiinflammatory Antiseptic … The whole plant …". Not changed; it's PFAF's text as parsed.
+
+**Step 2 — false "no uses" pending drafts (stopped before any DeepSeek call).**
+- **45 pending `medicinal_notes` drafts**, one per species, claim no uses where the stored PFAF page lists them. 8 species are toxic/inedible (marked ☠). After step 1, all 45 fields already hold PFAF text or are empty (toxic).
+
+| Species | Draft | Created |
+|---|---|---|
+| Acer ser. Acer (*Acer pseudoplatanus*) | 2160 | 2026-06-14 |
+| ☠ Wolfsbane (*Aconitum lycoctonum*) | 2292 | 2026-06-24 |
+| Lady's Mantle (*Alchemilla xanthochlora*) | 2154 | 2026-06-14 |
+| Onion (*Allium cepa*) | 2166 | 2026-06-14 |
+| ☠ *Anthemis tinctoria* | 2202 | 2026-06-16 |
+| Goatsbeard (*Aruncus dioicus*) | 2189 | 2026-06-15 |
+| Narrowleaf Bittercress (*Cardamine impatiens*) | 2242 | 2026-06-17 |
+| Silver Thistle (*Carlina acaulis*) | 2209 | 2026-06-16 |
+| Hornbeam (*Carpinus betulus*) | 2325 | 2026-06-27 |
+| ☠ Mountain Bluet (*Centaurea montana*) | 2206 | 2026-06-16 |
+| Centaury (*Centaurium erythraea*) | 2352 | 2026-06-28 |
+| Endive (*Cichorium endivia*) | 2801 | 2026-07-17 |
+| broadleaf enchanter's nightshade (*Circaea lutetiana*) | 2811 | 2026-07-19 |
+| Dogwood (*Cornus sanguinea*) | 2235 | 2026-06-17 |
+| Broom (*Cytisus scoparius*) | 2250 | 2026-06-22 |
+| ☠ crested woodfern (*Dryopteris cristata*) | 2327 | 2026-06-27 |
+| ☠ Blue devil (*Echium vulgare*) | 2346 | 2026-06-28 |
+| Gogovine (*Entada phaseoloides*) | 642 | 2026-05-28 |
+| Eyebright (*Euphrasia officinalis*) | 2274 | 2026-06-24 |
+| ☠ Hemp-nettle (*Galeopsis tetrahit*) | 2310 | 2026-06-25 |
+| Dames rocket (*Hesperis matronalis*) | 2234 | 2026-06-17 |
+| Yellow archangel (*Lamium galeobdolon*) | 2322 | 2026-06-27 |
+| Turk's cap (*Lilium martagon*) | 2233 | 2026-06-17 |
+| Gypsywort (*Lycopus europaeus*) | 3124 | 2026-10-19 |
+| ☠ Wood pimpernel (*Lysimachia nemorum*) | 2175 | 2026-06-14 |
+| Loosestrife (*Lysimachia vulgaris*) | 2115 | 2026-06-14 |
+| *Nymphaea alba* | 2334 | 2026-06-27 |
+| *Nymphoides peltata* | 2809 | 2026-07-19 |
+| *Oxalis grandis* | 2350 | 2026-06-28 |
+| Wall pellitory (*Parietaria judaica*) | 2896 | 2026-07-23 |
+| Grass of Parnassus (*Parnassia palustris*) | 3059 | 2026-08-01 |
+| Bog spruce (*Picea mariana*) | 2142 | 2026-06-14 |
+| *Polygonatum odoratum* | 2280 | 2026-06-24 |
+| *Populus nigra* | 2230 | 2026-06-17 |
+| Carolina poplar (*Populus × canadensis*) | 2806 | 2026-07-19 |
+| Tormentil (*Potentilla erecta*) | 2215 | 2026-06-16 |
+| Nepalese cinquefoil (*Potentilla nepalensis*) | 2836 | 2026-07-23 |
+| Eared willow (*Salix aurita*) | 3171 | 2026-10-20 |
+| Alpine Snowbell (*Soldanella alpina*) | 3078 | 2026-10-15 |
+| Bridewort (*Spiraea salicifolia*) | 2345 | 2026-06-28 |
+| Lilac (*Syringa vulgaris*) | 2886 | 2026-07-23 |
+| Wood Sage (*Teucrium scorodonia*) | 2276 | 2026-06-24 |
+| ☠ Meadow rue (*Thalictrum aquilegiifolium*) | 2213 | 2026-06-16 |
+| *Thymus vulgaris* | 2130 | 2026-06-14 |
+| Wood Vetch (*Vicia sylvatica*) | 2241 | 2026-06-17 |
+
+- **Proposal (awaiting OK):**
+  - Invalidate all 45: `status='invalidated'`. The reason "false no-uses, PFAF lists uses" goes into the draft's `generation_context_json` (the table has no reason column; no schema change).
+  - Queue one fresh medicinal draft per **non-toxic** species through the normal path (`_section_ai_draft`, field `medicinal_notes`, now with PFAF context): **37 species → 37 DeepSeek calls** (one each, max 400 tokens out). The 8 toxic ones are invalidated only.
+  - Each new draft sits pending over the PFAF text; approving it replaces the text (`old_value` = PFAF text).
+- **Seen, not in the 45:** **41 more pending drafts** carry the same claim later in the text, after the disclaimer or after content, where PFAF lists uses (e.g. lemon balm, oregano, feverfew, *Verbena officinalis*, *Sanguisorba officinalis*, *Taxus baccata*). Review hides them (its filter matches anywhere in the text), and the approve guard doesn't refuse them (opening-only predicate). The same predicate gap explains the 55 fields above. Extending `is_no_medicinal_uses_statement()` to look past the standard disclaimer/heading would catch them. Melvin decides.
+
+**"No uses" check fixed at the root + combined dry run — 21 Oct 2026 (Melvin: "Fix the 'no uses' check at its root"). Stopped before any live write or DeepSeek call.**
+
+*A — root cause.*
+- `ai_placeholder.is_no_medicinal_uses_statement()` searched only `_opening(text)`: the first sentence, cut at `(?<=[.!?])\s|\n`. So a claim after the disclaimer "Traditional and folk use only — not medical advice.", a heading, or culinary text was invisible to the refill, the approve guard and the Review flag.
+- The two JS copies (`_MEDICINAL_SUPPRESS` in review.html / species.html) searched the whole text with a narrower wording, so server and pages already disagreed.
+
+*A — fix.*
+- One shared predicate in `ai_placeholder.py`, matching anywhere: `no_medicinal_uses_claim_spans` / `has_no_medicinal_uses_claim` / `is_only_no_medicinal_uses_claim` (only a disclaimer/heading before it) / `strip_no_medicinal_uses_claims` (only those sentences removed, the rest verbatim).
+- The refill, the approve guard (422) and the Review red flag read it through `pfaf_fallback`. Review and the species page now get it as a server flag (`no_uses_only`); both JS regex copies are gone.
+- A claim is "no" + optional hedge (known / recorded / documented / specific / explicit / detailed) or source meta-talk (information about, mention(s) of, references to, documentation of, record of) + optional traditional / folk / ethnobotanical (any order, "or"/"and" lists) + "medicinal uses / use / applications / folklore". It also covers "does not record / document / mention … **any** … medicinal uses".
+- **Not a claim** (tested):
+  - part-scoped: "no traditional (medicinal) uses of the root; the leaves were…";
+  - relative: "no further / additional / other / more …";
+  - a hedge inside a though/although/but/while clause after a stated use (*Aegopodium*: "…the treatment of gout, though no explicit medicinal use is described");
+  - "does not record **specific** …";
+  - PFAF's own negations ("other forms do not possess medicinal virtues", "not employed in herbal medicine").
+- Found and fixed on the way:
+  - The predicate first also matched "no medicinal properties". That wording only occurs in PFAF's own text (*Alchemilla mollis*), so it was removed.
+  - That PFAF section opens "None Known. Although widely planted … no medicinal properties …". The parser treated only an exact "None known" as no data, so D3 now also covers a body that *opens* with "None known" (`pfaf._strip_medicinal_disclaimer`). It's the only such stored page, and 4b never wrote it.
+- **Strip seams:** a removed sentence takes its own separator. Its **bold**/*italic* markers go only when they wrap exactly that sentence (an italic opened earlier stays closed), and blank lines collapse only at a cut.
+- **Tests:** `test_pfaf_fallback_deepseek.py` now has 17 (claim after the disclaimer, after culinary text, at the end, hedged/meta forms; narrow negations and PFAF negations not matched; exact strip results; strip outcome in the refill). Whole suite: 13 files, 154 tests pass.
+
+*B — combined dry run* (live DB, read-only). Report with every embedded before → after in full: [cleanup_dryrun_2026-10-21.md](cleanup_dryrun_2026-10-21.md).
+
+| Fields (`medicinal_notes`) | Rows |
+|---|---|
+| A — only the "no uses" answer (disclaimer/heading first) → PFAF fill | 31 |
+| A → cleared (no PFAF page 5, PFAF None known 4) | 9 |
+| A → toxic cleared | 8 |
+| E — claim inside real text → only the claim sentence(s) removed, no PFAF text, `system:clear_false_default`, AI-approved flag kept | 20 |
+| **Total** | **68** |
+
+- **Of your 55:** 45 are A and 10 are E. My earlier "~43 / ~12" split used a rougher test.
+- **Newly caught (13):**
+  - A: Wild Carrot (*Daucus carota*) → PFAF fill; Fireweed (*Epilobium angustifolium*) → PFAF fill; bird's-foot trefoil (*Lotus corniculatus*) → toxic cleared.
+  - E: *Aegopodium podagraria*, *Capsella bursa-pastoris*, *Mentha spicata*, *Picea rubens*, *Quercus petraea*, *Rosa rubiginosa*, *Rumex crispus*, *Thymus praecox*, *Valeriana officinalis*, *Veronica chamaedrys*.
+- **E rows** (claim removed, rest verbatim): *Aegopodium podagraria*, *Arctium lappa*, *Caltha palustris*, *Capsella bursa-pastoris*, *Matricaria chamomilla*, *Melilotus albus*, *Mentha aquatica*, *M. longifolia*, *M. spicata*, *Picea rubens*, *Quercus petraea*, *Rosa rubiginosa*, *Rumex acetosella*, *R. crispus*, *Stachys sylvatica*, *Stellaria apetala*, *Taraxacum officinale*, *Thymus praecox*, *Valeriana officinalis*, *Veronica chamaedrys*. Full before → after in the report.
+
+| Drafts (pending, claim where PFAF lists uses) | |
+|---|---|
+| Invalidate (reason "false no-uses, PFAF lists uses" in `generation_context_json`) | **106**: the 45 + the 41 + 20 newly caught; all `medicinal_notes`, one per species |
+| Toxic species — invalidate only | 13 |
+| **Re-draft via `_section_ai_draft` (PFAF context), one DeepSeek call per species** | **93 calls** (≤ 400 output tokens each) |
+| Pending claim drafts where PFAF has no uses — left (the claim may be true) | 140 |
+
+*Rehearsal on a fresh scratch copy* (`--apply`, no `--redraft`, **no DeepSeek call**):
+- 68 fields written (31 `pfaf_fallback`, 37 `system:clear_false_default`) and 106 drafts invalidated.
+- Read-back by id, 68 + 106 rows: **0 mismatches**.
+- Second run: 0 fields, 0 drafts. **0 claims left** in `medicinal_notes` by the shared predicate.
+- Live DB untouched (history ends at 3272, no draft invalidated).
+
+*Borderline — matched:*
+- *Sambucus racemosa* draft 2009 ("no specific medicinal uses associated with these parts", scoped to parts just named): invalidation + re-draft only, no text edit.
+- *Stellaria apetala* field: "…for *Stellaria apetala* specifically" (scoped to the species, still a claim) → sentence removed.
+
+*Borderline — not matched; left in place after the run* (23 sentences):
+- **Narrow "no further / additional … beyond X":** *Galium odoratum*, *Malus domestica*, *Nasturtium officinale*, *Origanum onites*, *Sambucus ebulus*, *Vaccinium myrtillus*, *Verbascum phlomoides*, *Veronica beccabunga*.
+- **Concessive narrow:** *Aegopodium* (gout).
+- **Hedged source meta-talk "does not record / contain / include / attribute specific …":** *Caltha palustris*, *Matricaria chamomilla*, *Mentha aquatica*, *Stachys sylvatica* (these 4 also lose their main claim sentence), *Larix decidua*, *Origanum onites*, *Rubus occidentalis*, *Symphytum officinale*, *Viola riviniana*, *Galium odoratum*. Widening to "does not … specific …" would catch them, but also narrower statements; Melvin decides.
+- **Caution, not a claim:** *Castanea sativa*.
+- **PFAF's own text** (never touched): *Chenopodium album*, *Euphrasia officinalis*, *Gentiana lutea*.
+
+Live write + 93 DeepSeek re-drafts wait for Melvin's OK (Settings-routine snapshot first, no commit).
+
+**Live cleanup + DeepSeek re-drafts — done 21 Oct 2026** (Melvin: "Go live — exactly as rehearsed").
+1. **Snapshot:** `snapshots/db_20261021_092222.sqlite` (quick_check ok). Same backup function as Settings, CHANGELOG History entry, **no git commit**.
+2. **Applied:** a live re-run of the dry run first gave identical counts. Then 68 field edits (31 PFAF fill, 9 cleared, 8 toxic cleared, 20 claim sentence removed) and 106 draft invalidations.
+   - **History ids 3273–3340:** 68 rows (31 `pfaf_fallback`, 37 `system:clear_false_default`), one per field.
+   - **Read-back by id:** the script's every-column check found **0 mismatches**, and so did a separate SQL check (each field = its history `new_value`). All 106 drafts are `invalidated` with the reason in `generation_context_json`.
+   - **0 "no uses" claims** left in `medicinal_notes` by the shared predicate. Second run: 0 fields, 0 drafts.
+   - The species and draft ids were saved first in [redraft_plan_2026-10-21.json](redraft_plan_2026-10-21.json).
+3. **Re-drafts — job 64, `POST /api/drafts/redraft-medicinal` (new, curator-only):**
+   - Job queue + progress, with `enrich_gate`: refused while an ingest batch/scan is live; per species it waits for ingest to be idle and holds the single enrichment slot. Pause/cancel honoured.
+   - Normal draft path: `_section_ai_draft(…, "medicinal_notes")`, DeepSeek with the stored PFAF Medicinal Uses in context.
+   - No scan or ingest was running. Started 07:25:09 UTC, ended 07:27:46 UTC.
+   - Results file: `logs/redraft_medicinal_jq64.json`.
+4. **Result:**
+   - **92 drafts created, 1 failed:** *Verbena officinalis*. The normal path's placeholder rule (`is_ai_placeholder`) discarded it, though its opening reads like content ("Verbena officinalis is used internally as a tonic and restor…"). The text wasn't kept, so the exact trigger can't be seen; likely a refusal word in a long first sentence. One ↻ Repopulate retries it (1 DeepSeek call). Not retried without OK.
+   - **The shared predicate flags 1 of 92 new drafts as a false "no uses" claim:** *Oxalis grandis*, draft 3493 ("…has no documented traditional medicinal uses of its own; medicinal properties are recorded only for related Oxalis species such as *Oxalis acetosella*…"). It's borderline: species-scoped, and it gives the related-species uses PFAF lists. The approve guard refuses it as-is (422); edit or reject. **The other 91 make no claim**, against 93 of 93 before, so the PFAF context fixed the drafter.
+   - **All 92 are `pending`:** model `deepseek/deepseek-chat`, no `approved_at`, no `final_text`. **No field written:** 0 `culinary_info_history` rows since 3340.
+   - Compared with the snapshot, the run invalidated nothing beyond the 106, and each species has exactly one pending medicinal draft.
+   - Toxic species (13): invalidated only, no call.
+
+**Verbena officinalis re-draft — retried 21 Oct 2026 (job 65, 1 DeepSeek call): discarded again, cause found.**
+- **Cause:** `is_ai_placeholder` refuses a medicinal draft when its **opening sentence** contains any refusal marker, and one marker is the bare word **"insufficient"**.
+  - PFAF's Medicinal Uses for vervain (now in the drafter's context) lists "…nervous exhaustion, depression, gall bladder problems, **insufficient lactation** etc".
+  - DeepSeek's first sentence repeats that list, so a real use reads as a refusal.
+- **Evidence:**
+  - Job 64's draft wasn't kept (the normal path discards placeholders; the log held 60 characters), so its exact trigger can't be shown.
+  - For job 65, the discard log now names the rule and keeps the opening sentence: "refusal marker 'insufficient' in the opening sentence; opening: 'common vervain is used internally as a tonic and restorative for headaches, fevers, nervous exhaustion, depression, gallbladder com…'" (`logs/redraft_medicinal_jq65.json`; cut at the log limit).
+  - A probe of the same sentence ending "…and insufficient lactation." → same reason. No draft stored, nothing written.
+- **Change made (observability only):** `ai_placeholder_reason()` gives the rule and marker; `is_ai_placeholder()` now returns `reason is not None`. Old and new decisions are identical on all 3,472 stored draft texts. `_section_ai_draft` logs the reason and the opening sentence on discard.
+- **Exposure:** of the stored PFAF pages, 2 have "insufficient" in Medicinal Uses: *Verbena officinalis* and *Vinca minor* ("dementia due to insufficient blood supply to the brain").
+- **Proposed fix (not applied):** replace the bare marker with refusal phrases: "insufficient information / data / source / detail / context". It changes 0 decisions on stored drafts. Then retry Verbena (1 more DeepSeek call).
+
+**Placeholder refusal markers — class fixed, 21 Oct 2026** (Melvin: "fix the class, not just one word").
+1. **Markers** (`ai_placeholder._REFUSAL_MARKERS`):
+   - "not enough information", "not enough sourced", "i don't have", "i cannot", "i'm unable", "unable to provide", "cannot provide", **"insufficient"**, "not able to", "no sourced information", "cannot determine", "i must inform you", "i appreciate your request".
+   - Opening-only, with a negation: "provided source", "source material provided".
+   - "insufficient" is the only single bare word.
+   - **Collisions with real uses:**
+     - 384 stored PFAF pages, Medicinal Uses + Edible Uses: only **"insufficient"**, twice — Common vervain (*Verbena officinalis*): "…gall bladder problems, insufficient lactation etc"; Myrtle (*Vinca minor*): "…dementia due to insufficient blood supply to the brain".
+     - The other draft-context texts (culinary_info source fields, stored recipes, iNat descriptions; 1,827 texts): **no collision** for any marker.
+2. **Change:** the bare "insufficient" is replaced with refusal phrases: "insufficient information / data / source / detail / context". Every other marker is unchanged (none collides).
+3. **Old vs new** over every stored draft text (3,472 drafts, 3,465 texts incl. edited final text): **0 decisions changed**. The two PFAF sentences now pass; "insufficient information …" is still refused. New test `test_placeholder_markers_do_not_collide_with_real_uses`. Suite: 13 files, 155 tests pass.
+4. **Verbena retried (job 66, 1 DeepSeek call):** stored as **draft 3544**, pending, `deepseek/deepseek-chat`, not approved, no field written (history still ends at 3340).
+   - Opening sentence: "Verbena officinalis has been used internally as a tonic and restorative remedy for headaches, fevers, nervous exhaustion, depression, gallbladder complaints and insufficient lactation, while the leaves and flowering stems are taken as an analgesic, antibacterial, anticoagulant, antispasmodic, astringent, depurative, diaphoretic, mildly diuretic, emmenagogue, galactogogue, stimulant and vulnerary."
+   - That confirms the cause. No "no uses" claim.
+5. **Other species discarded as a placeholder** (server logs since 15 Oct; earlier discards were never recorded): **Amanita rubescens, recipe draft** ("# Amanita rubescens, Grilled with Wild Garlic Butter and Smo…"). For recipes a marker counts anywhere in the text, and that text wasn't kept, so the marker can't be confirmed; "insufficiently cooked" would have matched the old bare word. **Not retried — needs OK.** *Vinca minor* (caution) has no discard on record.
+
+**Amanita rubescens (Blusher, 467) — curator safety text + verdict confirmed, 21 Oct 2026** (Melvin's text, verbatim).
+- **Snapshot:** `snapshots/db_20261021_095529.sqlite` (quick_check ok, no commit).
+- **Fields** via the species-page save path (`PATCH /api/culinary/{name}/field`; `changed_by='human'` set server-side):
+  - `preparation_warnings` → history **3341**, old_value NULL.
+  - `look_alike_warnings` → history **3342**, old_value NULL.
+  - Read back by id: both byte-identical to Melvin's text (79 / 346 bytes); `is_curator_authored()` and `gates.human_authored()` True for both.
+  - The save path also adds both fields to `ai_approved_fields_json`, as any species-page save does.
+- **Verdict** via `edibility._write_verdict` (caution, verified=True, Melvin's note):
+  - Run in its own transaction with the endpoint's re-read check. It was not called through `PATCH /api/edibility/status`, because that endpoint then fires `trigger_ai_drafts_for_species` (unrequested DeepSeek drafts).
+  - species_edibility_history **380** (caution → caution, human, note identical).
+  - `edibility_verified=1`, `edibility_verified_by='human'`.
+  - Severity by `severity_for_verdict`: `none` → `none`, unchanged, so no severity row.
+- **Experience gates:**
+  - `may_claim_edible` True; badge "Edible with caution".
+  - Rule 8 caution reason = the new preparation warning; the look-alike warning is shown.
+  - `recipe_allowed` → True for an approved human or AI recipe. **But 467 has no recipes**, so nothing publishes yet.
+- **Untouched:** drafts 2939 (taste) and 2940 (medicinal) still pending; no new drafts; no `species_lookalikes` link (no panther cap card).
+
+*Open — Melvin decides before 4b (answered above: 1 → C1, 2 → C2, 3 → B):*
+1. **Pending AI draft = "AI text available"?** As built, yes: the field is left for the draft (or the default cleared). That leaves 215 species empty, with drafts pending since 28 May. 133 of them have PFAF text: 89 in A, 44 in B. Alternative: fill PFAF now, and an approved draft replaces it later.
+2. **The 59 toxic/inedible species holding the default.** As built, untouched (D2 says never *fill* them). Clearing writes no text and removes a false sentence.
+3. Printed outputs (`print.html`, `lists.html`) print `medicinal_notes` as-is and would print PFAF text without the chip, as they printed the default before.
+
 **D3-01 review load** (DB copy 20 Oct 17:01; PFAF text parsed offline from the stored `enrichment_sources` HTML with the app's own `pfaf._parse`, no network):
 
 Of the **111 caution species**:

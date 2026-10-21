@@ -26,11 +26,11 @@ import logging
 log = logging.getLogger(__name__)
 from app.database import get_db, AsyncSessionLocal
 from app.services.write_lock import db_write_lock
-from app.services.ai_placeholder import is_ai_placeholder
+from app.services.ai_placeholder import is_ai_placeholder, is_only_no_medicinal_uses_claim
 from app.models.culinary import CulinaryInfo
 from app.models.notes import MapNote
 from app.models.observation import Observation
-from app.models.species import CulinaryInfoHistory, EnrichmentSource, Species, SpeciesAIDraft, SpeciesCandidate, SpeciesRecipe, SpeciesEdibilityCondition, SpeciesLookalike, culinary_allowed, CURATOR_DRAFT_FIELDS, is_curator_authored
+from app.models.species import CulinaryInfoHistory, EnrichmentSource, Species, SpeciesAIDraft, SpeciesCandidate, SpeciesRecipe, SpeciesEdibilityCondition, SpeciesLookalike, culinary_allowed, CURATOR_DRAFT_FIELDS, AI_NO_CONTENT_VERDICTS, is_curator_authored
 from app.models.encounter import Encounter
 from app.models.foray_session import SessionSpecies
 from app.models.notification import NotificationDismissal
@@ -395,11 +395,16 @@ async def ai_draft_review_queue(
     )
     rows = (await db.execute(stmt)).all()
 
-    # Curator-review drafts show what is in the field now (replaced on approval).
-    _cur_ids = {d.species_id for d, _ in rows if d.field_name in CURATOR_DRAFT_FIELDS}
+    # Curator-review drafts show what is in the field now (replaced on approval);
+    # so does a draft whose field holds PFAF fallback text (D4 chip).
+    from app.services.pfaf_fallback import (PFAF_FALLBACK_SOURCES, FALSE_NO_USES_REASON,
+                                            is_false_no_uses_claim, pfaf_fallback_fields)
+    _cur_ids = {d.species_id for d, _ in rows
+                if d.field_name in CURATOR_DRAFT_FIELDS or d.field_name in PFAF_FALLBACK_SOURCES}
     ci_by_sp = {c.species_id: c for c in (await db.execute(
         select(CulinaryInfo).where(CulinaryInfo.species_id.in_(_cur_ids))
     )).scalars().all()} if _cur_ids else {}
+    _pfaf_fb = await pfaf_fallback_fields(db, [c.id for c in ci_by_sp.values()])
 
     species_map: dict = OrderedDict()
     for draft, sp in rows:
@@ -421,6 +426,18 @@ async def ai_draft_review_queue(
         if draft.field_name in CURATOR_DRAFT_FIELDS:
             _ci = ci_by_sp.get(draft.species_id)
             item["current_text"] = getattr(_ci, draft.field_name, None) if _ci else None
+        elif draft.field_name in PFAF_FALLBACK_SOURCES:
+            _ci = ci_by_sp.get(draft.species_id)
+            if _ci and draft.field_name in _pfaf_fb.get(_ci.id, ()):
+                item["current_text"] = getattr(_ci, draft.field_name, None)
+                item["current_pfaf_fallback"] = True
+        # "No medicinal uses" claim (shared predicate): Review hides a draft that
+        # is only that answer, unless it is false (PFAF lists uses) — then it is
+        # shown with the reason and its approve is refused (422).
+        if draft.field_name in ("medicinal_notes", "medicinal_folklore"):
+            item["no_uses_only"] = is_only_no_medicinal_uses_claim(draft.draft_text)
+        if await is_false_no_uses_claim(db, sp, draft.field_name, draft.draft_text):
+            item["false_no_uses"] = FALSE_NO_USES_REASON
         species_map[key]["drafts"].append(item)
 
     result = []
@@ -1914,6 +1931,13 @@ async def species_profile(
         )
         pending_drafts = (await db.execute(pending_drafts_stmt)).scalars().all()
 
+    # Fields whose current text is PFAF fallback text (D4 chip) — curator only;
+    # a guest never sees such a field (the guest mask omits 'pfaf_fallback').
+    _pfaf_fallback_fields: list = []
+    if ci and not identity.is_guest:
+        from app.services.pfaf_fallback import pfaf_fallback_fields
+        _pfaf_fallback_fields = sorted((await pfaf_fallback_fields(db, [ci.id])).get(ci.id, set()))
+
     # Mushroom Observer link for fungi species
     mo_url = None
     if (sp.kingdom or "").lower() == "fungi":
@@ -2031,6 +2055,8 @@ async def species_profile(
         # via ai_generated_fields/ai_approved_fields + the drafts below instead.
         "field_source_tags": field_source_tags,
         **({} if identity.is_guest else {
+            # D4: show "PFAF text — replace with your own" on these fields.
+            "pfaf_fallback_fields": _pfaf_fallback_fields,
             "pending_draft_count": len(pending_drafts),
             "pending_draft_fields": [d.field_name for d in pending_drafts],
             "pending_drafts": [
@@ -2040,6 +2066,9 @@ async def species_profile(
                     "draft_text": d.draft_text,
                     "model": d.model,
                     "generated_at": d.generated_at.isoformat() if d.generated_at else None,
+                    # only a "no medicinal uses" answer (shared predicate) — not a review item
+                    "no_uses_only": d.field_name in ("medicinal_notes", "medicinal_folklore")
+                                    and is_only_no_medicinal_uses_claim(d.draft_text),
                 }
                 for d in pending_drafts
             ],
@@ -2133,8 +2162,9 @@ _GUEST_CLEAN_CHANGED_BY = {"human", "ai_approved:human"}
 # scrape" (safe-ish, toggle-gated), NOT "unapproved AI draft content".
 # The AI-draft-approval-gated fields (medicinal_folklore, taste_notes,
 # medicinal_notes, medicinal_clinical, recipe) are deliberately excluded —
-# for those, a historyless row is the _ensure_medicinal_default() placeholder
-# class or an anomaly, and must stay Tier-1-omitted regardless of the toggle.
+# for those, a historyless row is the retired A5 placeholder class (removed
+# 21 Oct 2026) or an anomaly, and must stay Tier-1-omitted regardless of the
+# toggle. PFAF fallback text ('pfaf_fallback') is unrecognised here → omitted.
 _GUEST_TIER3_ELIGIBLE_FIELDS = {
     "edible_parts", "flavour_profile", "preparation_methods", "cooking_techniques",
     "preservation_methods", "seasonal_peak", "harvest_stage", "pairing_ideas",
@@ -2273,6 +2303,11 @@ async def enrich_species_now(
 
         from app.services.enrichment import _section_ai_draft
         queued = await _section_ai_draft(db, sp, field_name)
+        if not queued:
+            # No AI text → PFAF fallback (D2) for this field, or it stays empty.
+            from app.services.pfaf_fallback import apply_pfaf_fallback
+            _ci = await db.scalar(select(CulinaryInfo).where(CulinaryInfo.species_id == sp.id))
+            await apply_pfaf_fallback(db, sp, _ci, fields=[field_name])
         await db.commit()
         return {"ok": True, "section": section, "section_queued": field_name, "queued": queued}
 
@@ -2406,6 +2441,11 @@ async def approve_ai_draft(
             detail=f"This '{field}' draft is an AI placeholder/refusal, not content — "
                    "reject it, or edit the text before approving.",
         )
+    # A "no traditional medicinal uses" draft where PFAF lists uses is false
+    # (Melvin A, 21 Oct 2026). Curator-edited text is the curator's.
+    from app.services.pfaf_fallback import FALSE_NO_USES_REASON, is_false_no_uses_claim
+    if not is_edited and await is_false_no_uses_claim(db, sp, field, approved_text):
+        raise HTTPException(status_code=422, detail=FALSE_NO_USES_REASON)
 
     draft.status = "edited_approved" if is_edited else "approved"
     draft.final_text = body.edited_text if is_edited else None
@@ -2620,31 +2660,25 @@ async def _generate_drafts_for_species(
     re_enrich=False: delegates to _maybe_generate_ai_drafts, which skips fields
         that already have a pending/approved/edited_approved draft (and, unless
         reprocess_rejected, a rejected one too).
-    re_enrich=True: calls generate_ai_drafts directly, bypassing the "already
-        has drafts" guard so a fresh pending draft is always created.
+    re_enrich=True: calls generate_deepseek_drafts directly, bypassing the
+        "already has drafts" guard so a fresh pending draft is always created.
         Existing pending drafts are invalidated first; approved drafts are
         left in place (the new pending draft enters the review queue alongside
         them — the curator chooses whether to replace or discard).
 
     Returns {"created": N, "blocked": reason|None, "scientific_name": name}
     """
-    from app.config import settings as _settings
-    from app.integrations.claude_draft import generate_ai_drafts
+    from app.integrations.deepseek_draft import generate_deepseek_drafts
     from app.services.enrichment import _maybe_generate_ai_drafts
     from sqlalchemy import func as _func, update as _upd
-
-    from app.services.settings_service import get_setting as _gs_draft
-    _draft_backend = _gs_draft("enrichment_backend") or "anthropic"
-    if _draft_backend == "anthropic" and not _settings.anthropic_api_key:
-        return {"scientific_name": scientific_name, "created": 0, "blocked": "ANTHROPIC_API_KEY not set"}
 
     sp = await db.scalar(select(Species).where(Species.scientific_name == scientific_name))
     if not sp:
         return {"scientific_name": scientific_name, "created": 0, "blocked": "Species not found"}
 
-    # Edibility gate — hard block, mirrors generate_ai_drafts() internal check
+    # Edibility gate — hard block, mirrors generate_deepseek_drafts() internal check
     edib = (sp.edibility_status or "").lower()
-    if edib in ("toxic", "inedible", "not_edible"):
+    if edib in AI_NO_CONTENT_VERDICTS:
         return {"scientific_name": scientific_name, "created": 0, "blocked": f"Edibility gate: {edib}"}
 
     ci = await db.scalar(select(CulinaryInfo).where(CulinaryInfo.species_id == sp.id))
@@ -2699,12 +2733,12 @@ async def _generate_drafts_for_species(
             except Exception:
                 pass
 
-        # 3. Call generate_ai_drafts directly — bypasses "already has drafts" guard
-        from app.services.settings_service import get_setting as _gs
-        draft_result = await generate_ai_drafts(
+        # 3. Call the AI backend directly — bypasses "already has drafts" guard
+        from app.services.pfaf_fallback import stored_pfaf_medicinal_text
+        draft_result = await generate_deepseek_drafts(
+            pfaf_medicinal_uses=await stored_pfaf_medicinal_text(db, sp),
             scientific_name=scientific_name,
-            api_key=_settings.anthropic_api_key,
-            model=_gs("anthropic_model"),
+            fields=("taste_notes", "medicinal_notes", "recipe"),
             common_names=common_names,
             edible_parts=ci.edible_parts if ci else None,
             preparation_methods=ci.preparation_methods if ci else None,
@@ -2741,13 +2775,13 @@ async def _generate_drafts_for_species(
                 ))
         await db.flush()
 
-    # Mirror enrich_species() A5: if no medicinal_notes and no source folklore,
-    # apply the standard "No traditional medicinal uses recorded" default.
-    # The backfill runner calls _generate_drafts_for_species without going through
-    # enrich_species(), so _ensure_medicinal_default was never reached on that path.
+    # Mirror enrich_species(): the PFAF fallback (Melvin D2–D5, 21 Oct 2026)
+    # fills a field the AI left without text with PFAF's own text, labelled
+    # pfaf_fallback, or leaves it empty. The backfill runner calls this function
+    # without going through enrich_species(), so it runs here too.
     if ci is not None:
-        from app.services.enrichment import _ensure_medicinal_default
-        await _ensure_medicinal_default(db, sp, ci)
+        from app.services.pfaf_fallback import apply_pfaf_fallback
+        await apply_pfaf_fallback(db, sp, ci)
 
     count_after = (await db.scalar(
         select(_func.count(SpeciesAIDraft.id))
@@ -3719,3 +3753,151 @@ async def start_draft_backfill(
         return {"ok": True, "status": "started", "field": field, "count": total, "job_queue_id": jq_id}
 
     raise HTTPException(400, detail=f"Unknown backfill field: {field!r}")
+
+
+# ---------------------------------------------------------------------------
+# POST /api/drafts/redraft-medicinal — one fresh medicinal_notes draft per given
+# species (Melvin, 21 Oct 2026: re-draft the species whose false "no uses"
+# drafts were invalidated, now with PFAF context). Normal draft path
+# (_section_ai_draft), job queue + progress, ingest priority (enrich_gate):
+# refused while an ingest batch / scan is live; waits for ingest to finish and
+# holds the single enrichment slot for each species. Toxic species excluded.
+# ---------------------------------------------------------------------------
+
+class RedraftMedicinalRequest(BaseModel):
+    species_ids: list[int] = Field(..., min_length=1)
+
+
+async def _run_redraft_medicinal_task(jq_id: int, pid: Optional[int], species_ids: list) -> None:
+    global _draft_backfill_job
+    import logging as _logging
+    from sqlalchemy import text as _t
+    from app.api.queue_api import _broadcast
+    from app.services.background_processes import bp_finish, bp_progress
+    from app.services.enrich_gate import enrichment_slot, wait_for_ingest_idle
+    from app.services.enrichment import _section_ai_draft
+    from app.services.pfaf_fallback import ai_content_excluded
+
+    total = len(species_ids)
+    results: list = []
+
+    class _Capture(_logging.Handler):
+        """The draft path's own log lines for one species — the failure reason."""
+        def __init__(self, name: str):
+            super().__init__(_logging.INFO)
+            self.name_, self.lines = name, []
+
+        def emit(self, record):
+            msg = record.getMessage()
+            if self.name_ in msg:
+                self.lines.append(f"{record.levelname}: {msg}"[:300])
+
+    async def _jq(sql: str, **kw) -> None:
+        try:
+            async with AsyncSessionLocal() as _db:
+                await _db.execute(_t(sql), {"id": jq_id, **kw})
+                async with db_write_lock():
+                    await _db.commit()
+            await _broadcast()
+        except Exception:
+            pass
+
+    async def _jq_status() -> str:
+        try:
+            async with AsyncSessionLocal() as _db:
+                row = (await _db.execute(_t("SELECT status FROM job_queue WHERE id = :id"), {"id": jq_id})).fetchone()
+                return row[0] if row else "running"
+        except Exception:
+            return "running"
+
+    loggers = [_logging.getLogger("app.services.enrichment"), _logging.getLogger("app.integrations.deepseek_draft")]
+    status, error = "complete", ""
+    try:
+        for i, sid in enumerate(species_ids):
+            sig = await _jq_status()
+            if sig in ("paused", "cancelled"):
+                status = sig
+                break
+            await wait_for_ingest_idle("medicinal re-draft")
+            async with enrichment_slot():
+                await wait_for_ingest_idle("medicinal re-draft")          # re-check under the slot
+                async with AsyncSessionLocal() as sess:
+                    sp = await sess.get(Species, sid)
+                    name = sp.scientific_name if sp else f"species {sid}"
+                    await _jq("UPDATE job_queue SET progress_current=:c, progress_total=:t, last_heartbeat=:hb WHERE id=:id",
+                              c=i, t=total, hb=datetime.utcnow())
+                    if pid:
+                        await bp_progress(pid, i, total, detail=name)
+                    if sp is None:
+                        results.append({"species_id": sid, "name": name, "outcome": "failed", "reason": "species not found"})
+                        continue
+                    if ai_content_excluded(sp):
+                        results.append({"species_id": sid, "name": name, "outcome": "excluded_toxic"})
+                        continue
+                    cap = _Capture(name)
+                    for lg in loggers:
+                        lg.addHandler(cap)
+                    try:
+                        queued = await _section_ai_draft(sess, sp, "medicinal_notes")
+                        async with db_write_lock():
+                            await sess.commit()
+                        if queued:
+                            draft_id = await sess.scalar(
+                                select(SpeciesAIDraft.id).where(SpeciesAIDraft.species_id == sid)
+                                .where(SpeciesAIDraft.field_name == "medicinal_notes")
+                                .where(SpeciesAIDraft.status == "pending")
+                                .order_by(SpeciesAIDraft.id.desc()))
+                            results.append({"species_id": sid, "name": name, "outcome": "created", "draft_id": draft_id})
+                        else:
+                            results.append({"species_id": sid, "name": name, "outcome": "failed",
+                                            "reason": " | ".join(cap.lines) or "no draft returned"})
+                    except Exception as exc:
+                        await sess.rollback()
+                        results.append({"species_id": sid, "name": name, "outcome": "failed",
+                                        "reason": f"{type(exc).__name__}: {exc}"})
+                    finally:
+                        for lg in loggers:
+                            lg.removeHandler(cap)
+    except Exception as exc:
+        status, error = "failed", str(exc)
+        log.error("[redraft-medicinal] fatal: %s", exc)
+    finally:
+        done = len(results)
+        out = Path(__file__).resolve().parents[2] / "logs" / f"redraft_medicinal_jq{jq_id}.json"
+        try:
+            out.write_text(json.dumps({"job_queue_id": jq_id, "status": status, "total": total,
+                                       "results": results}, indent=1, ensure_ascii=False))
+        except Exception as exc:
+            log.warning("[redraft-medicinal] could not write %s: %s", out, exc)
+        summary = ", ".join(f"{k} {v}" for k, v in sorted(
+            __import__("collections").Counter(r["outcome"] for r in results).items()))
+        log.warning("[redraft-medicinal] %s after %d/%d species: %s — %s", status, done, total, summary, out.name)
+        await _jq("UPDATE job_queue SET status=:s, progress_current=:c, progress_total=:t, ended_at=:now, "
+                  "error_message=:e WHERE id=:id", s=status, c=done, t=total, now=datetime.utcnow(), e=error or None)
+        if pid:
+            await bp_finish(pid, status=status, error=error, current=done, total=total)
+        _draft_backfill_job = None
+
+
+@router.post("/api/drafts/redraft-medicinal")
+async def start_redraft_medicinal(
+    body: RedraftMedicinalRequest,
+    background_tasks: BackgroundTasks,
+    identity: Identity = Depends(get_identity),
+):
+    if identity.is_guest:
+        raise HTTPException(403, "Curator only")
+    global _draft_backfill_job
+    from app.services.enrich_gate import ingest_busy
+    if _draft_backfill_job and _draft_backfill_job.get("status") == "running":
+        raise HTTPException(409, detail="A draft job is already running")
+    if ingest_busy():
+        raise HTTPException(409, detail="An ingest batch / scan is running — start the re-draft when it has finished")
+    ids = list(dict.fromkeys(body.species_ids))
+    total = len(ids)
+    jq_id, pid = await _create_backfill_job(
+        "ai_draft_redraft_medicinal", f"Re-draft medicinal notes ({total} species)", total)
+    _draft_backfill_job = {"status": "running", "jq_id": jq_id, "pid": pid}
+    background_tasks.add_task(_run_redraft_medicinal_task, jq_id, pid, ids)
+    log.info("[redraft-medicinal] started: %d species, jq_id=%d", total, jq_id)
+    return {"ok": True, "status": "started", "count": total, "job_queue_id": jq_id}

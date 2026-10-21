@@ -275,7 +275,10 @@ def _strip_medicinal_disclaimer(text: Optional[str]) -> Optional[str]:
     if stripped.startswith(_MEDICINAL_DISCLAIMER):
         stripped = stripped[len(_MEDICINAL_DISCLAIMER):].strip()
     cleaned = _clean(stripped)
-    if cleaned and cleaned.strip().lower() == "none known":
+    # Also a body that OPENS with "None known." and then explains (Alchemilla
+    # mollis: "None Known. Although widely planted … no medicinal properties …")
+    # — still PFAF's "nothing found" (Melvin D3, 21 Oct 2026).
+    if cleaned and re.match(r"none known\b", cleaned.strip().lower()):
         return None
     return cleaned
 

@@ -53,7 +53,7 @@ class Encounter(Base):
     # Whisper transcript of audio_path — nullable; populated only on the
     # deliberate laptop-side Transcribe step, never automatically on capture (11a.4).
     transcript:          Mapped[Optional[str]]   = mapped_column(Text, nullable=True)
-    # Claude-extracted suggestions (JSON string) — species/phenology/recipe/location
+    # AI-extracted suggestions (JSON string) — species/phenology/recipe/location
     # cues surfaced for the user to confirm or dismiss. Never auto-written elsewhere (11a.4).
     encounter_suggestions: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     # Field Recipe artefact (JSON string) — one structured recipe per encounter

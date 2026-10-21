@@ -4825,7 +4825,7 @@ function switchTab(name) {
 let _draftsInitialized = false;
 
 async function draftsInit() {
-  // Load current prompt values and backend label
+  // Load current prompt values
   try {
     const [sr, dr] = await Promise.all([
       fetch('/api/settings'),
@@ -4839,9 +4839,6 @@ async function draftsInit() {
     document.getElementById('prompt-taste').value     = find('prompt_taste')     || defaults.prompt_taste     || '';
     document.getElementById('prompt-medicinal').value = find('prompt_medicinal') || defaults.prompt_medicinal || '';
     document.getElementById('prompt-recipe').value    = find('prompt_recipe')    || defaults.prompt_recipe    || '';
-    const backend = find('enrichment_backend') || 'hybrid';
-    const label = document.getElementById('drafts-backend-label');
-    if (label) label.textContent = backend;
   } catch(e) { console.warn('draftsInit failed:', e); }
 }
 

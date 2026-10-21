@@ -1,7 +1,7 @@
 """
 Encounter extraction — Phase 11a.4 + 12.
 
-A lightweight Claude API call that reads an encounter transcript and surfaces
+A lightweight AI call (DeepSeek — the one AI backend since 21 Oct 2026) that reads an encounter transcript and surfaces
 SUGGESTIONS for the user to confirm or dismiss. It never writes anything itself
 and never touches species cards.
 
@@ -14,8 +14,7 @@ Suggestion types:
   - location      : a location cue ('by the top gate', 'north-facing slope')
 
 Rules:
-  - Requires ANTHROPIC_API_KEY (returns [] silently if absent)
-  - Uses Haiku (classification-grade, cheap) by default
+  - Requires the DeepSeek API key (returns [] silently if absent)
   - Best-effort: any failure returns [] so the encounter view never breaks
   - Species in suggestions are reconciled against the known confirmed-species index
   - "false dandelion", "not the X" → foraging_note, not safety
@@ -27,8 +26,6 @@ import logging
 from typing import List, Optional
 
 log = logging.getLogger(__name__)
-
-_EXTRACT_MODEL_DEFAULT = "claude-haiku-4-5-20251001"
 
 _SYSTEM_PROMPT = """\
 You read short voice-note transcripts from a forager walking in the field and \
@@ -119,9 +116,7 @@ def _has_recipe_cue(transcript: str) -> bool:
 
 async def extract_suggestions(
     transcript: str,
-    api_key: str,
     species_index: Optional[List[dict]] = None,
-    model: str = _EXTRACT_MODEL_DEFAULT,
 ) -> List[dict]:
     """
     Run the extraction call. Returns a list of suggestion dicts (possibly empty).
@@ -138,33 +133,17 @@ async def extract_suggestions(
     transcript = (transcript or "").strip()
     if not transcript:
         return []
-    if not api_key:
-        log.info("[encounter_extract] no ANTHROPIC_API_KEY — skipping extraction")
+    from app.integrations.deepseek_draft import ai_backend, ai_complete
+    if not ai_backend().api_key:
+        log.info("[encounter_extract] no DeepSeek API key — skipping extraction")
         return []
 
     species_index = species_index or []
 
-    try:
-        import anthropic
-        client = anthropic.AsyncAnthropic(api_key=api_key)
-    except ImportError:
-        log.error("[encounter_extract] anthropic library not installed")
-        return []
-    except Exception as e:
-        log.error("[encounter_extract] client init failed: %s: %s", type(e).__name__, e)
-        return []
-
     prompt = _INSTRUCTION % transcript[:4000]
-    try:
-        msg = await client.messages.create(
-            model=model,
-            max_tokens=1200,
-            system=_SYSTEM_PROMPT,
-            messages=[{"role": "user", "content": prompt}],
-        )
-        raw = msg.content[0].text.strip() if msg.content else ""
-    except Exception as e:
-        log.error("[encounter_extract] API call failed: %s: %s", type(e).__name__, e)
+    raw = (await ai_complete("encounter", _SYSTEM_PROMPT, prompt, max_tokens=1200,
+                             label="encounter_extract")) or ""
+    if not raw:
         return []
 
     parsed = None
@@ -237,5 +216,5 @@ async def extract_suggestions(
 
         out.append(sug)
 
-    log.info("[encounter_extract] extracted %d suggestions (model=%r)", len(out), model)
+    log.info("[encounter_extract] extracted %d suggestions", len(out))
     return out

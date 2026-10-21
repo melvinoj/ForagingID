@@ -41,12 +41,17 @@ def main(dry_run: bool, re_enrich: bool, species: str, verbose: bool):
         # Quieten noisy transport-layer loggers
         logging.getLogger("httpx").setLevel(logging.WARNING)
         logging.getLogger("httpcore").setLevel(logging.WARNING)
-        logging.getLogger("anthropic._base_client").setLevel(logging.WARNING)
     asyncio.run(_run(dry_run, re_enrich, species))
 
 
 async def _run(dry_run: bool, re_enrich: bool, species_filter: str):
     await init_db()
+    # DB settings (deepseek_api_key, delays …). Without them the AI backend has
+    # no key and every draft is skipped — the 21 Oct batch-3b failure, when a
+    # script fell back to the old 'anthropic' registry default.
+    from app.services.settings_service import load_settings_from_db
+    async with AsyncSessionLocal() as _settings_session:
+        await load_settings_from_db(_settings_session)
 
     bar = None
 

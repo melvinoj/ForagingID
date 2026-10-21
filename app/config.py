@@ -13,13 +13,11 @@ class Settings(BaseSettings):
     # Taxa autocomplete works without a token.
     inaturalist_api_token: str = ""
 
-    # Anthropic Claude API key — used for AI-drafted species fields (taste notes,
-    # medicinal notes, recipe). Leave empty to skip AI draft generation.
-    # Get a key at: https://console.anthropic.com/
+    # Retired 21 Oct 2026 (Melvin D1): Anthropic is not used — every AI call
+    # site uses DeepSeek (key in Settings, app_settings.deepseek_api_key).
+    # Nothing reads this; it stays only so an existing ANTHROPIC_API_KEY line
+    # in .env doesn't fail startup (extra .env keys are rejected).
     anthropic_api_key: str = ""
-    # Model to use for AI drafts. Default is Sonnet for voice-matched recipe /
-    # medicinal content; Haiku is classification-only and lower quality here.
-    anthropic_model: str = "claude-sonnet-4-6"
 
     # OpenAI key — used ONLY for server-side Whisper transcription of encounter
     # audio (POST /v1/audio/transcriptions). Leave empty to disable the

@@ -1,0 +1,565 @@
+{
+ "job_queue_id": 64,
+ "status": "complete",
+ "total": 93,
+ "results": [
+  {
+   "species_id": 486,
+   "name": "Acer pseudoplatanus",
+   "outcome": "created",
+   "draft_id": 3452
+  },
+  {
+   "species_id": 567,
+   "name": "Alchemilla xanthochlora",
+   "outcome": "created",
+   "draft_id": 3453
+  },
+  {
+   "species_id": 583,
+   "name": "Allium cepa",
+   "outcome": "created",
+   "draft_id": 3454
+  },
+  {
+   "species_id": 844,
+   "name": "Amaranthus retroflexus",
+   "outcome": "created",
+   "draft_id": 3455
+  },
+  {
+   "species_id": 278,
+   "name": "Aruncus dioicus",
+   "outcome": "created",
+   "draft_id": 3456
+  },
+  {
+   "species_id": 646,
+   "name": "Cardamine impatiens",
+   "outcome": "created",
+   "draft_id": 3457
+  },
+  {
+   "species_id": 615,
+   "name": "Carlina acaulis",
+   "outcome": "created",
+   "draft_id": 3458
+  },
+  {
+   "species_id": 416,
+   "name": "Carpinus betulus",
+   "outcome": "created",
+   "draft_id": 3459
+  },
+  {
+   "species_id": 553,
+   "name": "Carpinus caroliniana",
+   "outcome": "created",
+   "draft_id": 3460
+  },
+  {
+   "species_id": 693,
+   "name": "Centaurium erythraea",
+   "outcome": "created",
+   "draft_id": 3461
+  },
+  {
+   "species_id": 565,
+   "name": "Centranthus ruber",
+   "outcome": "created",
+   "draft_id": 3462
+  },
+  {
+   "species_id": 738,
+   "name": "Cichorium endivia",
+   "outcome": "created",
+   "draft_id": 3463
+  },
+  {
+   "species_id": 748,
+   "name": "Circaea lutetiana",
+   "outcome": "created",
+   "draft_id": 3464
+  },
+  {
+   "species_id": 551,
+   "name": "Cirsium arvense",
+   "outcome": "created",
+   "draft_id": 3465
+  },
+  {
+   "species_id": 375,
+   "name": "Cirsium vulgare",
+   "outcome": "created",
+   "draft_id": 3466
+  },
+  {
+   "species_id": 639,
+   "name": "Cornus sanguinea",
+   "outcome": "created",
+   "draft_id": 3467
+  },
+  {
+   "species_id": 548,
+   "name": "Corylus cornuta",
+   "outcome": "created",
+   "draft_id": 3468
+  },
+  {
+   "species_id": 431,
+   "name": "Crataegus azarolus",
+   "outcome": "created",
+   "draft_id": 3469
+  },
+  {
+   "species_id": 562,
+   "name": "Cymbalaria muralis",
+   "outcome": "created",
+   "draft_id": 3470
+  },
+  {
+   "species_id": 518,
+   "name": "Cytisus scoparius",
+   "outcome": "created",
+   "draft_id": 3471
+  },
+  {
+   "species_id": 360,
+   "name": "Dactylorhiza maculata",
+   "outcome": "created",
+   "draft_id": 3472
+  },
+  {
+   "species_id": 151,
+   "name": "Entada phaseoloides",
+   "outcome": "created",
+   "draft_id": 3473
+  },
+  {
+   "species_id": 843,
+   "name": "Euphorbia corollata",
+   "outcome": "created",
+   "draft_id": 3474
+  },
+  {
+   "species_id": 667,
+   "name": "Euphrasia officinalis",
+   "outcome": "created",
+   "draft_id": 3475
+  },
+  {
+   "species_id": 574,
+   "name": "Fuchsia magellanica",
+   "outcome": "created",
+   "draft_id": 3476
+  },
+  {
+   "species_id": 768,
+   "name": "Geranium robertianum",
+   "outcome": "created",
+   "draft_id": 3477
+  },
+  {
+   "species_id": 618,
+   "name": "Geum rivale",
+   "outcome": "created",
+   "draft_id": 3478
+  },
+  {
+   "species_id": 638,
+   "name": "Hesperis matronalis",
+   "outcome": "created",
+   "draft_id": 3479
+  },
+  {
+   "species_id": 485,
+   "name": "Hieracium umbellatum",
+   "outcome": "created",
+   "draft_id": 3480
+  },
+  {
+   "species_id": 378,
+   "name": "Impatiens glandulifera",
+   "outcome": "created",
+   "draft_id": 3481
+  },
+  {
+   "species_id": 682,
+   "name": "Lamium galeobdolon",
+   "outcome": "created",
+   "draft_id": 3482
+  },
+  {
+   "species_id": 311,
+   "name": "Lathyrus pratensis",
+   "outcome": "created",
+   "draft_id": 3483
+  },
+  {
+   "species_id": 216,
+   "name": "Leucanthemum ircutianum",
+   "outcome": "created",
+   "draft_id": 3484
+  },
+  {
+   "species_id": 637,
+   "name": "Lilium martagon",
+   "outcome": "created",
+   "draft_id": 3485
+  },
+  {
+   "species_id": 240,
+   "name": "Lonicera periclymenum",
+   "outcome": "created",
+   "draft_id": 3486
+  },
+  {
+   "species_id": 834,
+   "name": "Lycopus europaeus",
+   "outcome": "created",
+   "draft_id": 3487
+  },
+  {
+   "species_id": 591,
+   "name": "Lysimachia vulgaris",
+   "outcome": "created",
+   "draft_id": 3488
+  },
+  {
+   "species_id": 340,
+   "name": "Melissa officinalis",
+   "outcome": "created",
+   "draft_id": 3489
+  },
+  {
+   "species_id": 684,
+   "name": "Nymphaea alba",
+   "outcome": "created",
+   "draft_id": 3490
+  },
+  {
+   "species_id": 747,
+   "name": "Nymphoides peltata",
+   "outcome": "created",
+   "draft_id": 3491
+  },
+  {
+   "species_id": 568,
+   "name": "Origanum vulgare",
+   "outcome": "created",
+   "draft_id": 3492
+  },
+  {
+   "species_id": 691,
+   "name": "Oxalis grandis",
+   "outcome": "created",
+   "draft_id": 3493
+  },
+  {
+   "species_id": 759,
+   "name": "Oxalis stricta",
+   "outcome": "created",
+   "draft_id": 3494
+  },
+  {
+   "species_id": 77,
+   "name": "Parietaria judaica",
+   "outcome": "created",
+   "draft_id": 3495
+  },
+  {
+   "species_id": 781,
+   "name": "Parnassia palustris",
+   "outcome": "created",
+   "draft_id": 3496
+  },
+  {
+   "species_id": 19,
+   "name": "Petasites albus",
+   "outcome": "created",
+   "draft_id": 3497
+  },
+  {
+   "species_id": 370,
+   "name": "Picea mariana",
+   "outcome": "created",
+   "draft_id": 3498
+  },
+  {
+   "species_id": 438,
+   "name": "Pinus nigra",
+   "outcome": "created",
+   "draft_id": 3499
+  },
+  {
+   "species_id": 289,
+   "name": "Pinus pinea",
+   "outcome": "created",
+   "draft_id": 3500
+  },
+  {
+   "species_id": 508,
+   "name": "Pinus radiata",
+   "outcome": "created",
+   "draft_id": 3501
+  },
+  {
+   "species_id": 670,
+   "name": "Polygonatum odoratum",
+   "outcome": "created",
+   "draft_id": 3502
+  },
+  {
+   "species_id": 134,
+   "name": "Polygonum aviculare",
+   "outcome": "created",
+   "draft_id": 3503
+  },
+  {
+   "species_id": 633,
+   "name": "Populus nigra",
+   "outcome": "created",
+   "draft_id": 3504
+  },
+  {
+   "species_id": 742,
+   "name": "Populus × canadensis",
+   "outcome": "created",
+   "draft_id": 3505
+  },
+  {
+   "species_id": 622,
+   "name": "Potentilla erecta",
+   "outcome": "created",
+   "draft_id": 3506
+  },
+  {
+   "species_id": 756,
+   "name": "Potentilla nepalensis",
+   "outcome": "created",
+   "draft_id": 3507
+  },
+  {
+   "species_id": 212,
+   "name": "Prunus cerasus",
+   "outcome": "created",
+   "draft_id": 3508
+  },
+  {
+   "species_id": 385,
+   "name": "Pyrola minor",
+   "outcome": "created",
+   "draft_id": 3509
+  },
+  {
+   "species_id": 433,
+   "name": "Pyrus communis",
+   "outcome": "created",
+   "draft_id": 3510
+  },
+  {
+   "species_id": 570,
+   "name": "Pyrus pyrifolia",
+   "outcome": "created",
+   "draft_id": 3511
+  },
+  {
+   "species_id": 571,
+   "name": "Quercus infectoria",
+   "outcome": "created",
+   "draft_id": 3512
+  },
+  {
+   "species_id": 801,
+   "name": "Rhododendron ferrugineum",
+   "outcome": "created",
+   "draft_id": 3513
+  },
+  {
+   "species_id": 391,
+   "name": "Ribes nigrum",
+   "outcome": "created",
+   "draft_id": 3514
+  },
+  {
+   "species_id": 536,
+   "name": "Rosa multiflora",
+   "outcome": "created",
+   "draft_id": 3515
+  },
+  {
+   "species_id": 812,
+   "name": "Rumex alpinus",
+   "outcome": "created",
+   "draft_id": 3516
+  },
+  {
+   "species_id": 73,
+   "name": "Rumex conglomeratus",
+   "outcome": "created",
+   "draft_id": 3517
+  },
+  {
+   "species_id": 305,
+   "name": "Rumex obtusifolius",
+   "outcome": "created",
+   "draft_id": 3518
+  },
+  {
+   "species_id": 348,
+   "name": "Rumex sanguineus",
+   "outcome": "created",
+   "draft_id": 3519
+  },
+  {
+   "species_id": 815,
+   "name": "Salix appendiculata",
+   "outcome": "created",
+   "draft_id": 3520
+  },
+  {
+   "species_id": 795,
+   "name": "Salix aurita",
+   "outcome": "created",
+   "draft_id": 3521
+  },
+  {
+   "species_id": 402,
+   "name": "Sambucus racemosa",
+   "outcome": "created",
+   "draft_id": 3522
+  },
+  {
+   "species_id": 617,
+   "name": "Sanguisorba officinalis",
+   "outcome": "created",
+   "draft_id": 3523
+  },
+  {
+   "species_id": 406,
+   "name": "Sedum album",
+   "outcome": "created",
+   "draft_id": 3524
+  },
+  {
+   "species_id": 164,
+   "name": "Silene vulgaris",
+   "outcome": "created",
+   "draft_id": 3525
+  },
+  {
+   "species_id": 347,
+   "name": "Sisymbrium officinale",
+   "outcome": "created",
+   "draft_id": 3526
+  },
+  {
+   "species_id": 814,
+   "name": "Soldanella alpina",
+   "outcome": "created",
+   "draft_id": 3527
+  },
+  {
+   "species_id": 713,
+   "name": "Solidago virgaurea",
+   "outcome": "created",
+   "draft_id": 3528
+  },
+  {
+   "species_id": 327,
+   "name": "Sonchus asper",
+   "outcome": "created",
+   "draft_id": 3529
+  },
+  {
+   "species_id": 350,
+   "name": "Sonchus oleraceus",
+   "outcome": "created",
+   "draft_id": 3530
+  },
+  {
+   "species_id": 689,
+   "name": "Spiraea salicifolia",
+   "outcome": "created",
+   "draft_id": 3531
+  },
+  {
+   "species_id": 68,
+   "name": "Syringa vulgaris",
+   "outcome": "created",
+   "draft_id": 3532
+  },
+  {
+   "species_id": 395,
+   "name": "Tanacetum parthenium",
+   "outcome": "created",
+   "draft_id": 3533
+  },
+  {
+   "species_id": 383,
+   "name": "Teucrium scorodonia",
+   "outcome": "created",
+   "draft_id": 3534
+  },
+  {
+   "species_id": 513,
+   "name": "Thlaspi arvense",
+   "outcome": "created",
+   "draft_id": 3535
+  },
+  {
+   "species_id": 594,
+   "name": "Thymus vulgaris",
+   "outcome": "created",
+   "draft_id": 3536
+  },
+  {
+   "species_id": 573,
+   "name": "Tilia americana",
+   "outcome": "created",
+   "draft_id": 3537
+  },
+  {
+   "species_id": 487,
+   "name": "Trifolium repens",
+   "outcome": "created",
+   "draft_id": 3538
+  },
+  {
+   "species_id": 262,
+   "name": "Turritis glabra",
+   "outcome": "created",
+   "draft_id": 3539
+  },
+  {
+   "species_id": 145,
+   "name": "Vaccinium corymbosum",
+   "outcome": "created",
+   "draft_id": 3540
+  },
+  {
+   "species_id": 737,
+   "name": "Verbena officinalis",
+   "outcome": "failed",
+   "reason": "WARNING: [_section_ai_draft] discarding placeholder draft for 'Verbena officinalis' → medicinal_notes (starts: 'Verbena officinalis is used internally as a tonic and restor')"
+  },
+  {
+   "species_id": 550,
+   "name": "Viburnum trilobum",
+   "outcome": "created",
+   "draft_id": 3541
+  },
+  {
+   "species_id": 645,
+   "name": "Vicia sylvatica",
+   "outcome": "created",
+   "draft_id": 3542
+  },
+  {
+   "species_id": 578,
+   "name": "Vitis vinifera",
+   "outcome": "created",
+   "draft_id": 3543
+  }
+ ]
+}

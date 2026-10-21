@@ -1,20 +1,19 @@
 """
-AI draft generator — Phase 8.
+AI draft prompts + source context — Phase 8.
 
-Uses the Anthropic Claude API to generate three draft fields per species:
-  1. taste_notes    — practical flavour and texture description
-  2. medicinal_notes — summarised from sourced folk/traditional data (with disclaimer)
-  3. recipe          — original recipe in Melvin Jarman's voice (exact system prompt)
+Since 21 Oct 2026 (Melvin D1) every AI call site uses DeepSeek
+(app/integrations/deepseek_draft.py). This module no longer calls any model:
+it keeps what the DeepSeek drafter and the other AI paths share —
 
-Rules:
-  - Requires ANTHROPIC_API_KEY in settings (returns None silently if absent)
-  - Drafts are NEVER shown to users until explicitly approved in the review queue
-  - All AI-generated content is clearly labelled with the generating model
-  - Medicinal notes always include the disclaimer: "Traditional and folk use only —
-    not medical advice."
-  - Context passed to Claude is built exclusively from already-stored sourced data
-    (PFAF, Wikidata, iNaturalist, Trompenburg) — never hallucinated
-  - Returns None on any failure so enrichment run is never blocked
+  - AIDraftResult      — the draft result shape
+  - _RECIPE_SYSTEM_PROMPT (recipe voice); _TASTE_SYSTEM_PROMPT and
+    _MEDICINAL_SYSTEM_PROMPT (shown as defaults in the prompt editor)
+  - _build_context / _context_to_text — context built exclusively from
+    already-stored sourced data (PFAF, Wikidata, iNaturalist, Trompenburg)
+  - _build_safety_caveat — the mandatory recipe safety caveat
+
+Rules (unchanged): drafts are never shown until approved in the review queue;
+medicinal notes carry "Traditional and folk use only — not medical advice."
 """
 
 import json
@@ -95,16 +94,6 @@ If the source data contains no medicinal information, write exactly: "No traditi
 
 If reference material is labelled 'synthesis only — do not reproduce', read it to inform your writing but do not quote it, closely paraphrase it, or reproduce its sentence structures. Write an original synthesis in Melvin Jarman's voice. Reference sources may be American or Scottish in tone — ignore their voice and write in Melvin's."""
 
-_MEDICINAL_FOLKLORE_SYSTEM_PROMPT = """You are synthesising traditional medicinal folklore for a wild-food forager's species card, based on raw source text scraped from Plants For A Future (PFAF).
-
-Read the source text and write an original synthesis in Melvin Jarman's voice — do not quote it, closely paraphrase it, or reproduce its sentence structures. This is a distinct field from medicinal_notes: it is folklore/historical-use framing, not a clinical-style summary.
-
-Cover, where the source material supports it: plant part used, preparation form, and the traditional application it was known for.
-
-Always end with exactly: "Traditional and folk use only — not medical advice."
-If the source text contains no usable medicinal information, write exactly: "No traditional medicinal folklore recorded in available sources."
-"""
-
 
 # ---------------------------------------------------------------------------
 # Context builder
@@ -123,11 +112,11 @@ def _build_context(
     synthesis_reference: Optional[str] = None,
 ) -> dict:
     """
-    Assemble the source context that will be passed to Claude.
+    Assemble the source context that will be passed to the AI drafter.
     Returns a dict of non-empty context items.
 
     synthesis_reference — optional text fetched from SYNTHESIS_SOURCES at generation
-    time. Never stored in the DB. Claude is instructed not to reproduce it verbatim.
+    time. Never stored in the DB. The drafter is instructed not to reproduce it verbatim.
     """
     ctx = {}
     if common_names:
@@ -165,6 +154,8 @@ def _context_to_text(scientific_name: str, ctx: dict) -> str:
         lines.append(f"Traditional uses (PFAF/Wikidata): {ctx['traditional_uses']}")
     if ctx.get("medicinal_folklore"):
         lines.append(f"Medicinal folklore (PFAF): {ctx['medicinal_folklore']}")
+    if ctx.get("pfaf_medicinal_uses"):
+        lines.append(f"Medicinal Uses (PFAF): {ctx['pfaf_medicinal_uses']}")
     if ctx.get("inat_description"):
         lines.append(f"Description (iNaturalist): {ctx['inat_description']}")
     if ctx.get("trompenburg_description"):
@@ -214,348 +205,3 @@ def _build_safety_caveat(
             "with a brief caution about preparation requirements before the ingredients."
         )
     return ""
-
-
-# ---------------------------------------------------------------------------
-# Draft generators
-# ---------------------------------------------------------------------------
-
-def _get_prompt(key: str, default: str) -> str:
-    """Get a prompt from app_settings, falling back to the hardcoded default if blank."""
-    try:
-        from app.services.settings_service import get_setting
-        val = get_setting(key)
-        return val.strip() if val and val.strip() else default
-    except Exception:
-        return default
-
-
-async def _generate_taste_notes(
-    client, model: str, scientific_name: str, ctx_text: str, voice_context: str = ""
-) -> Optional[str]:
-    prompt = (
-        f"Based only on the following sourced information, write 2–4 sentences "
-        f"describing the flavour, texture, and eating quality of {scientific_name}. "
-        f"Be practical and specific. If there is not enough information to write "
-        f"accurate taste notes, say so in one short sentence.\n\n{ctx_text}"
-    )
-    system = (voice_context + "\n\n" + _get_prompt("prompt_taste", _TASTE_SYSTEM_PROMPT)) if voice_context else _get_prompt("prompt_taste", _TASTE_SYSTEM_PROMPT)
-    log.info(
-        "[claude_draft] taste_notes request  model=%r  species=%r  prompt_len=%d",
-        model, scientific_name, len(prompt),
-    )
-    try:
-        msg = await client.messages.create(
-            model=model,
-            max_tokens=300,
-            system=system,
-            messages=[{"role": "user", "content": prompt}],
-        )
-        log.info(
-            "[claude_draft] taste_notes response  stop_reason=%r  content_blocks=%d",
-            msg.stop_reason, len(msg.content),
-        )
-        text = msg.content[0].text.strip() if msg.content else None
-        if text:
-            log.info("[claude_draft] taste_notes OK  len=%d  preview=%r", len(text), text[:80])
-        else:
-            log.warning("[claude_draft] taste_notes returned empty content block")
-        return text or None
-    except Exception as e:
-        log.error(
-            "[claude_draft] taste_notes FAILED  model=%r  species=%r  error=%s: %s",
-            model, scientific_name, type(e).__name__, e,
-        )
-        return None
-
-
-async def _generate_medicinal_notes(
-    client, model: str, scientific_name: str, ctx_text: str, voice_context: str = ""
-) -> Optional[str]:
-    prompt = (
-        f"Based only on the following sourced information, write a structured summary "
-        f"(4–8 sentences) of the traditional and folk medicinal uses of {scientific_name}. "
-        f"Distinguish topical from internal uses. Note preparation form and plant part where known. "
-        f"Flag any safety distinction between routes. "
-        f"Draw only from the source material provided.\n\n{ctx_text}"
-    )
-    system = (voice_context + "\n\n" + _get_prompt("prompt_medicinal", _MEDICINAL_SYSTEM_PROMPT)) if voice_context else _get_prompt("prompt_medicinal", _MEDICINAL_SYSTEM_PROMPT)
-    log.info(
-        "[claude_draft] medicinal_notes request  model=%r  species=%r  prompt_len=%d",
-        model, scientific_name, len(prompt),
-    )
-    try:
-        msg = await client.messages.create(
-            model=model,
-            max_tokens=600,
-            system=system,
-            messages=[{"role": "user", "content": prompt}],
-        )
-        log.info(
-            "[claude_draft] medicinal_notes response  stop_reason=%r  content_blocks=%d",
-            msg.stop_reason, len(msg.content),
-        )
-        text = msg.content[0].text.strip() if msg.content else None
-        if text:
-            log.info("[claude_draft] medicinal_notes OK  len=%d  preview=%r", len(text), text[:80])
-        else:
-            log.warning("[claude_draft] medicinal_notes returned empty content block")
-        return text or None
-    except Exception as e:
-        log.error(
-            "[claude_draft] medicinal_notes FAILED  model=%r  species=%r  error=%s: %s",
-            model, scientific_name, type(e).__name__, e,
-        )
-        return None
-
-
-async def _generate_medicinal_folklore(
-    client, model: str, scientific_name: str, pfaf_text: str, voice_context: str = ""
-) -> Optional[str]:
-    prompt = (
-        f"Based only on the following PFAF source text, write a short synthesis "
-        f"(3–6 sentences) of the traditional medicinal folklore for {scientific_name}. "
-        f"Do not quote or closely paraphrase the source text — write an original "
-        f"synthesis in your own words.\n\nPFAF source text:\n{pfaf_text}"
-    )
-    system = (voice_context + "\n\n" + _get_prompt("prompt_medicinal_folklore", _MEDICINAL_FOLKLORE_SYSTEM_PROMPT)) if voice_context else _get_prompt("prompt_medicinal_folklore", _MEDICINAL_FOLKLORE_SYSTEM_PROMPT)
-    log.info(
-        "[claude_draft] medicinal_folklore request  model=%r  species=%r  prompt_len=%d",
-        model, scientific_name, len(prompt),
-    )
-    try:
-        msg = await client.messages.create(
-            model=model,
-            max_tokens=500,
-            system=system,
-            messages=[{"role": "user", "content": prompt}],
-        )
-        log.info(
-            "[claude_draft] medicinal_folklore response  stop_reason=%r  content_blocks=%d",
-            msg.stop_reason, len(msg.content),
-        )
-        text = msg.content[0].text.strip() if msg.content else None
-        if text:
-            log.info("[claude_draft] medicinal_folklore OK  len=%d  preview=%r", len(text), text[:80])
-        else:
-            log.warning("[claude_draft] medicinal_folklore returned empty content block")
-        return text or None
-    except Exception as e:
-        log.error(
-            "[claude_draft] medicinal_folklore FAILED  model=%r  species=%r  error=%s: %s",
-            model, scientific_name, type(e).__name__, e,
-        )
-        return None
-
-
-async def _generate_recipe(
-    client, model: str, scientific_name: str, ctx_text: str, voice_context: str = ""
-) -> Optional[str]:
-    prompt = (
-        f"Write one original recipe using {scientific_name} as the primary ingredient. "
-        f"Use the following sourced information about this plant as context. "
-        f"The recipe must reflect genuine knowledge of how this species tastes and "
-        f"how it is prepared.\n\n{ctx_text}"
-    )
-    system = (voice_context + "\n\n" + _get_prompt("prompt_recipe", _RECIPE_SYSTEM_PROMPT)) if voice_context else _get_prompt("prompt_recipe", _RECIPE_SYSTEM_PROMPT)
-    log.info(
-        "[claude_draft] recipe request  model=%r  species=%r  prompt_len=%d",
-        model, scientific_name, len(prompt),
-    )
-    try:
-        msg = await client.messages.create(
-            model=model,
-            max_tokens=900,
-            system=system,
-            messages=[{"role": "user", "content": prompt}],
-        )
-        log.info(
-            "[claude_draft] recipe response  stop_reason=%r  content_blocks=%d",
-            msg.stop_reason, len(msg.content),
-        )
-        text = msg.content[0].text.strip() if msg.content else None
-        if text:
-            log.info("[claude_draft] recipe OK  len=%d  preview=%r", len(text), text[:80])
-        else:
-            log.warning("[claude_draft] recipe returned empty content block")
-        return text or None
-    except Exception as e:
-        log.error(
-            "[claude_draft] recipe FAILED  model=%r  species=%r  error=%s: %s",
-            model, scientific_name, type(e).__name__, e,
-        )
-        return None
-
-
-# ---------------------------------------------------------------------------
-# Public API
-# ---------------------------------------------------------------------------
-
-async def generate_ai_drafts(
-    scientific_name: str,
-    api_key: str,
-    model: str = "claude-haiku-4-5-20251001",
-    common_names: Optional[list] = None,
-    edible_parts: Optional[str] = None,
-    preparation_methods: Optional[str] = None,
-    traditional_uses: Optional[str] = None,
-    medicinal_folklore: Optional[str] = None,
-    inat_description: Optional[str] = None,
-    trompenburg_description: Optional[str] = None,
-    edibility_status: Optional[str] = None,
-    edibility_conditions: Optional[str] = None,  # human-set conditions text for caution species
-    preparation_warnings: Optional[str] = None,  # safety warning text (e.g. "must cook / toxic raw")
-    voice_context: str = "",
-    synthesis_context: Optional[str] = None,     # synthesis-only reference text; never stored
-    pfaf_medicinal_text: Optional[str] = None,   # this session's raw PFAF Medicinal Uses scrape —
-                                                   # source material for the medicinal_folklore draft
-                                                   # field only; distinct from `medicinal_folklore`
-                                                   # above (ci.medicinal_folklore context input)
-) -> Optional[AIDraftResult]:
-    """
-    Generate AI drafts for taste_notes, medicinal_notes, and recipe.
-
-    Gate rules — edibility_status controls which fields are generated:
-      - "edible"               → all three fields generated, no caveat
-      - "caution"              → all three fields generated; recipe prompt includes
-                                 edibility_conditions text as a mandatory caveat.
-                                 (Maps to "conditionally edible" in the UI.)
-      - "toxic" / "inedible" / "not_edible"
-                               → nothing generated (return None). Safety-critical.
-      - None / "unknown" / "unclear"
-                               → medicinal_notes only; recipe and taste_notes suppressed
-                                 until a human confirms edibility.
-      - any other value        → medicinal_notes only (conservative fallback)
-
-    Returns AIDraftResult or None if:
-      - api_key is empty (silently skip)
-      - edibility_status blocks all generation
-      - All three generations fail
-      - The anthropic library is not installed
-    """
-    # ── Edibility gate ────────────────────────────────────────────────────────
-    # Nothing generated for toxic/inedible — safety-critical, no exceptions.
-    _NO_CONTENT = ("toxic", "inedible", "not_edible")
-    # Culinary fields (recipe + taste_notes) suppressed when edibility is unconfirmed.
-    # "caution" is the DB value for "conditionally edible" and IS confirmed — recipes
-    # are permitted but must carry the conditions caveat (see recipe prompt below).
-    _UNCONFIRMED = (None, "unknown", "unclear")
-
-    if edibility_status in _NO_CONTENT:
-        log.info(
-            "[claude_draft] suppressing ALL drafts for %r — edibility_status=%r",
-            scientific_name, edibility_status,
-        )
-        return None
-
-    generate_culinary = edibility_status in ("edible", "caution")
-    is_conditional    = edibility_status == "caution"
-
-    if not generate_culinary:
-        log.info(
-            "[claude_draft] suppressing recipe/taste_notes for %r — edibility_status=%r (medicinal only)",
-            scientific_name, edibility_status,
-        )
-    if not api_key:
-        log.warning(
-            "[claude_draft] generate_ai_drafts called with empty api_key for %r — skipping",
-            scientific_name,
-        )
-        return None
-
-    log.info(
-        "[claude_draft] generate_ai_drafts START  species=%r  model=%r  api_key_prefix=%r",
-        scientific_name, model, api_key[:12] + "...",
-    )
-
-    try:
-        import anthropic  # lazy import — optional dependency
-        client = anthropic.AsyncAnthropic(api_key=api_key)
-        log.info("[claude_draft] Anthropic client created OK  sdk_version=%s",
-                 getattr(anthropic, "__version__", "unknown"))
-    except ImportError:
-        log.error("[claude_draft] anthropic library not installed — pip install anthropic")
-        return None
-    except Exception as e:
-        log.error("[claude_draft] Failed to init Anthropic client: %s: %s", type(e).__name__, e)
-        return None
-
-    ctx = _build_context(
-        scientific_name=scientific_name,
-        common_names=common_names or [],
-        edible_parts=edible_parts,
-        preparation_methods=preparation_methods,
-        traditional_uses=traditional_uses,
-        medicinal_folklore=medicinal_folklore,
-        inat_description=inat_description,
-        trompenburg_description=trompenburg_description,
-        preparation_warnings=preparation_warnings,
-        synthesis_reference=synthesis_context,
-    )
-
-    if not ctx:
-        log.warning(
-            "[claude_draft] No source context available for %r — skipping AI draft generation",
-            scientific_name,
-        )
-        return None
-
-    log.info(
-        "[claude_draft] Context built for %r: keys=%s  total_chars=%d",
-        scientific_name,
-        list(ctx.keys()),
-        sum(len(str(v)) for v in ctx.values()),
-    )
-
-    ctx_text = _context_to_text(scientific_name, ctx)
-
-    ctx_text += _build_safety_caveat(
-        generate_culinary=generate_culinary,
-        is_conditional=is_conditional,
-        preparation_warnings=preparation_warnings,
-        edibility_conditions=edibility_conditions,
-    )
-
-    # Run generations concurrently — culinary fields suppressed for unconfirmed species
-    import asyncio
-
-    async def _skip():
-        return None
-
-    log.info(
-        "[claude_draft] Launching API calls for %r — culinary=%s  conditional=%s",
-        scientific_name, generate_culinary, is_conditional,
-    )
-    taste, medicinal, recipe, folklore = await asyncio.gather(
-        _generate_taste_notes(client, model, scientific_name, ctx_text, voice_context) if generate_culinary else _skip(),
-        _generate_medicinal_notes(client, model, scientific_name, ctx_text, voice_context),
-        _generate_recipe(client, model, scientific_name, ctx_text, voice_context) if generate_culinary else _skip(),
-        _generate_medicinal_folklore(client, model, scientific_name, pfaf_medicinal_text, voice_context) if pfaf_medicinal_text else _skip(),
-        return_exceptions=False,
-    )
-
-    log.info(
-        "[claude_draft] All calls complete for %r: taste=%s  medicinal=%s  recipe=%s  folklore=%s",
-        scientific_name,
-        "OK" if taste else "NONE",
-        "OK" if medicinal else "NONE",
-        "OK" if recipe else "NONE",
-        "OK" if folklore else "NONE",
-    )
-
-    # If everything failed, return None
-    if taste is None and medicinal is None and recipe is None and folklore is None:
-        log.error(
-            "[claude_draft] ALL generations failed for %r — returning None",
-            scientific_name,
-        )
-        return None
-
-    return AIDraftResult(
-        taste_notes=taste,
-        medicinal_notes=medicinal,
-        medicinal_folklore=folklore,
-        recipe=recipe,
-        model=model,
-        context_used=ctx,
-    )

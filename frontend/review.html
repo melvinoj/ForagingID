@@ -573,6 +573,12 @@
       border-left: 3px solid #d4d4d8; border-radius: 0 5px 5px 0; padding: 6px 10px; margin-bottom: 8px;
     }
     .ai-draft-current-label { display: block; font-size: 0.7rem; font-weight: 700; color: #888; margin-bottom: 2px; }
+    /* PFAF text filled in because no AI text was available (D4, 21 Oct 2026) */
+    .pfaf-fallback-chip {
+      display: inline-block; font-size: 0.65rem; vertical-align: middle;
+      background: #fef3c7; color: #92400e; border: 1px solid #fcd34d; border-radius: 4px;
+      padding: 0 6px; margin-left: 5px; font-weight: 600; letter-spacing: 0.02em;
+    }
     .ai-draft-edit-area {
       width: 100%; min-height: 120px; padding: 8px 10px;
       font-size: 0.83rem; line-height: 1.6; resize: vertical;
@@ -3942,13 +3948,13 @@ async function loadAIDraftReview() {
     return;
   }
 
-  // Suppress "no traditional medicinal uses" placeholders — valid null states, not review items
-  const _MEDICINAL_SUPPRESS = /no\s+(known\s+)?traditional\s+medicinal\s+uses/i;
+  // Hide a draft that is only a "no medicinal uses" answer (server flag no_uses_only — the
+  // shared predicate, no copy of the rule here): a null state, not a review item. Except a
+  // FALSE one (PFAF lists Medicinal Uses — false_no_uses): shown with the reason, so it can
+  // be rejected; approving it is refused (422).
   data = data.map(sp => ({
     ...sp,
-    drafts: sp.drafts.filter(d =>
-      !(d.field_name === 'medicinal_notes' && _MEDICINAL_SUPPRESS.test(d.draft_text || ''))
-    ),
+    drafts: sp.drafts.filter(d => d.false_no_uses || !d.no_uses_only),
   })).filter(sp => sp.drafts.length > 0);
 
   _aiDraftData = data;
@@ -3957,7 +3963,7 @@ async function loadAIDraftReview() {
   if (badge) badge.textContent = data.length ? `${data.length} species` : '0';
 
   if (!data.length) {
-    area.innerHTML = '<div style="color:#888;font-size:0.85rem;padding:8px 0">No pending AI drafts — run <code>enrich.py</code> with an Anthropic API key to generate drafts.</div>';
+    area.innerHTML = '<div style="color:#888;font-size:0.85rem;padding:8px 0">No pending AI drafts — drafts come from DeepSeek during enrichment and backfill.</div>';
     return;
   }
 
@@ -4112,6 +4118,12 @@ function _renderAIDraftField(sciName, d) {
   const curatorHtml = isCurator ? `
     <div class="ai-draft-origin">${_resc(_WARNING_DRAFT_ORIGIN[d.model] || `Source: ${d.model || 'unknown'}`)}</div>
     ${_norm(d.current_text) !== _norm(d.draft_text) ? `<div class="ai-draft-current"><span class="ai-draft-current-label">In the field now — replaced when you approve:</span>${_resc(_norm(d.current_text) ? d.current_text : '(empty)')}</div>` : ''}` : '';
+  // The field holds PFAF text because no AI text was available (D4 chip) —
+  // approving this draft replaces it (history keeps the PFAF text as old value).
+  const falseNoUsesHtml = d.false_no_uses
+    ? `<div class="ai-draft-origin" style="color:#991b1b;background:#fef2f2;border-color:#fca5a5">⚠ ${_resc(d.false_no_uses)}</div>` : '';
+  const pfafHtml = (!isCurator && d.current_pfaf_fallback) ? `
+    <div class="ai-draft-current"><span class="ai-draft-current-label">In the field now — replaced when you approve: <span class="pfaf-fallback-chip">PFAF text — replace with your own</span></span>${_resc(d.current_text || '')}</div>` : '';
 
   // Season selector (only for recipe drafts)
   const seasonHtml = isRecipe ? `
@@ -4152,6 +4164,8 @@ function _renderAIDraftField(sciName, d) {
   return `<div class="ai-draft-field${isCurator ? ' ai-draft-safety' : ''}" id="draft-field-${d.id}">
     <div class="ai-draft-field-label">${_fieldLabel(d.field_name)}</div>
     ${curatorHtml}
+    ${falseNoUsesHtml}
+    ${pfafHtml}
     ${seasonHtml}
     <div class="ai-draft-text" id="draft-text-${d.id}">${_resc(d.draft_text || '')}</div>
     <textarea class="ai-draft-edit-area" id="${editId}">${_resc(d.draft_text || '')}</textarea>
@@ -4409,7 +4423,7 @@ function _refreshAIDraftBadge() {
   const remaining = area.querySelectorAll('.ai-draft-species-card');
   if (badge) badge.textContent = remaining.length ? `${remaining.length} species` : '0';
   if (!remaining.length) {
-    area.innerHTML = '<div style="color:#888;font-size:0.85rem;padding:8px 0">No pending AI drafts — run <code>enrich.py</code> with an Anthropic API key to generate drafts.</div>';
+    area.innerHTML = '<div style="color:#888;font-size:0.85rem;padding:8px 0">No pending AI drafts — drafts come from DeepSeek during enrichment and backfill.</div>';
   }
 }
 

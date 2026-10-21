@@ -641,10 +641,9 @@ async def _species_index(db: AsyncSession) -> list:
 
 @router.post("/{encounter_id}/extract")
 async def extract_encounter(encounter_id: int, db: AsyncSession = Depends(get_db)):
-    """Run a lightweight Claude extraction over the transcript. Stores the
+    """Run a lightweight AI extraction (DeepSeek) over the transcript. Stores the
     resulting suggestions (species / phenology / field_recipe / location) for the user
     to confirm or dismiss. Suggestions only — nothing is written to species cards."""
-    from app.config import settings
     from app.integrations.encounter_extract import extract_suggestions
 
     enc = await db.scalar(select(Encounter).where(Encounter.id == encounter_id))
@@ -654,12 +653,7 @@ async def extract_encounter(encounter_id: int, db: AsyncSession = Depends(get_db
         raise HTTPException(400, detail="Transcribe this encounter before extracting")
 
     index = await _species_index(db)
-    suggestions = await extract_suggestions(
-        enc.transcript,
-        api_key=settings.anthropic_api_key,
-        species_index=index,
-        model="claude-haiku-4-5-20251001",
-    )
+    suggestions = await extract_suggestions(enc.transcript, species_index=index)
 
     enc.encounter_suggestions = json.dumps(suggestions) if suggestions else None
     await db.commit()

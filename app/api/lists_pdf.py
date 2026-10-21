@@ -87,6 +87,11 @@ def _flatten_species(name: str, profile: Optional[Dict], base_by_name: Dict) -> 
     base = base_by_name.get(name) or {}
     sp   = (profile or {}).get('species') or base
     cul  = (profile or {}).get('culinary') or {}
+    # Print rule = D5 (Melvin B, 21 Oct 2026): a field holding PFAF fallback text
+    # never prints, as on the public experience page. pfaf_fallback_fields is the
+    # shared is_pfaf_fallback() predicate, served by /api/species/{name}/profile.
+    withheld = set((profile or {}).get('pfaf_fallback_fields') or [])
+    cul = {k: v for k, v in cul.items() if k not in withheld}
     recipes = (profile or {}).get('recipes') or []
     key_recipe = next((r for r in recipes if r.get('is_preferred')), recipes[0] if recipes else None)
 

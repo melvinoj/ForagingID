@@ -135,7 +135,7 @@ class SpeciesAIDraft(Base):
 
     # Source texts used as context for generation — stored for transparency
     generation_context_json: Mapped[Optional[str]] = mapped_column(Text)
-    model: Mapped[Optional[str]] = mapped_column(String(80))  # e.g. "claude-haiku-4-5-20251001"
+    model: Mapped[Optional[str]] = mapped_column(String(80))  # e.g. "deepseek/deepseek-chat"
 
     species: Mapped["Species"] = relationship("Species", back_populates="ai_drafts")
 
@@ -525,13 +525,40 @@ def is_fungal_kingdom(kingdom: Optional[str]) -> bool:
 # culinary_info field is curator-authored": the latest culinary_info_history
 # row for that field is changed_by='human' AND its new_value equals the current
 # value. 'ai_approved:human' (an AI draft a human approved) is NOT curator-
-# authored. Used by the experience export gates (gates.human_authored) and the
-# curator-review draft approval (culinary.approve_ai_draft).
+# authored, and neither is 'pfaf_fallback' (PFAF text filled in when no AI text
+# was available — Melvin D5, 21 Oct 2026). Used by the experience export gates
+# (gates.human_authored) and the curator-review draft approval
+# (culinary.approve_ai_draft).
 # ---------------------------------------------------------------------------
 def is_curator_authored(latest_changed_by: Optional[str], latest_new_value: Optional[str],
                         current: Optional[str]) -> bool:
     cur = (current or "").strip()
     return bool(cur) and latest_changed_by == "human" and (latest_new_value or "").strip() == cur
+
+
+# ---------------------------------------------------------------------------
+# PFAF fallback text (Melvin D2–D5, 21 Oct 2026) — the ONLY definition of "the
+# CURRENT value of a field is PFAF text filled in because no AI text was
+# available": the latest culinary_info_history row for the field is
+# changed_by=PFAF_FALLBACK_CHANGED_BY AND its new_value equals the current value.
+# The label is provenance, never a prefix in the stored text; the species card
+# and Review show the "PFAF text — replace with your own" chip from this.
+# Writer: app/services/pfaf_fallback.py.
+# ---------------------------------------------------------------------------
+PFAF_FALLBACK_CHANGED_BY = "pfaf_fallback"
+
+
+def is_pfaf_fallback(latest_changed_by: Optional[str], latest_new_value: Optional[str],
+                     current: Optional[str]) -> bool:
+    cur = (current or "").strip()
+    return bool(cur) and latest_changed_by == PFAF_FALLBACK_CHANGED_BY \
+        and (latest_new_value or "").strip() == cur
+
+
+# Verdicts for which no AI-drafted text is generated at all (safety-critical) —
+# and, since 21 Oct 2026, no PFAF fallback text either. The ONLY definition:
+# enrichment, section regenerate, Regenerate and the PFAF fallback read it.
+AI_NO_CONTENT_VERDICTS = frozenset({"toxic", "inedible", "not_edible"})
 
 
 # ---------------------------------------------------------------------------

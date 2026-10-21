@@ -1,0 +1,538 @@
+{
+ "invalidate_draft_ids": [
+  2160,
+  2292,
+  2154,
+  2166,
+  3154,
+  2202,
+  2189,
+  2242,
+  2209,
+  2325,
+  1787,
+  2206,
+  2352,
+  1710,
+  2801,
+  2811,
+  1829,
+  1830,
+  2235,
+  1655,
+  1805,
+  1703,
+  2250,
+  1821,
+  2327,
+  2346,
+  642,
+  1712,
+  3150,
+  2274,
+  2223,
+  1733,
+  2310,
+  3046,
+  2211,
+  2234,
+  1867,
+  1873,
+  2322,
+  1879,
+  1882,
+  2233,
+  1885,
+  3124,
+  2175,
+  2115,
+  1896,
+  2334,
+  2809,
+  1717,
+  2350,
+  3144,
+  2896,
+  3059,
+  3044,
+  760,
+  2142,
+  1928,
+  1930,
+  1932,
+  2280,
+  3038,
+  2230,
+  2806,
+  2215,
+  2836,
+  1951,
+  1960,
+  1963,
+  1723,
+  1726,
+  3089,
+  1978,
+  1986,
+  3076,
+  2891,
+  2001,
+  2003,
+  3079,
+  3171,
+  2009,
+  2210,
+  2013,
+  3006,
+  2023,
+  3078,
+  3173,
+  2028,
+  2030,
+  2345,
+  2886,
+  2042,
+  2045,
+  2276,
+  2213,
+  2051,
+  2130,
+  1730,
+  2061,
+  2064,
+  639,
+  2204,
+  2800,
+  1658,
+  2241,
+  1736
+ ],
+ "redraft": [
+  {
+   "species_id": 486,
+   "name": "Acer ser. Acer (*Acer pseudoplatanus*)"
+  },
+  {
+   "species_id": 567,
+   "name": "Lady's Mantle (*Alchemilla xanthochlora*)"
+  },
+  {
+   "species_id": 583,
+   "name": "Onion (*Allium cepa*)"
+  },
+  {
+   "species_id": 844,
+   "name": "Common Amaranth (*Amaranthus retroflexus*)"
+  },
+  {
+   "species_id": 278,
+   "name": "Goatsbeard (*Aruncus dioicus*)"
+  },
+  {
+   "species_id": 646,
+   "name": "Narrowleaf Bittercress (*Cardamine impatiens*)"
+  },
+  {
+   "species_id": 615,
+   "name": "Silver Thistle (*Carlina acaulis*)"
+  },
+  {
+   "species_id": 416,
+   "name": "Hornbeam (*Carpinus betulus*)"
+  },
+  {
+   "species_id": 553,
+   "name": "*Carpinus caroliniana*"
+  },
+  {
+   "species_id": 693,
+   "name": "Centaury (*Centaurium erythraea*)"
+  },
+  {
+   "species_id": 565,
+   "name": "Red Valerian (*Centranthus ruber*)"
+  },
+  {
+   "species_id": 738,
+   "name": "Endive (*Cichorium endivia*)"
+  },
+  {
+   "species_id": 748,
+   "name": "broadleaf enchanter's nightshade (*Circaea lutetiana*)"
+  },
+  {
+   "species_id": 551,
+   "name": "Field thistle (*Cirsium arvense*)"
+  },
+  {
+   "species_id": 375,
+   "name": "Bull Thistle (*Cirsium vulgare*)"
+  },
+  {
+   "species_id": 639,
+   "name": "Dogwood (*Cornus sanguinea*)"
+  },
+  {
+   "species_id": 548,
+   "name": "Beaked hazel (*Corylus cornuta*)"
+  },
+  {
+   "species_id": 431,
+   "name": "Azarole (*Crataegus azarolus*)"
+  },
+  {
+   "species_id": 562,
+   "name": "Ivy-leaved toadflax (*Cymbalaria muralis*)"
+  },
+  {
+   "species_id": 518,
+   "name": "Broom (*Cytisus scoparius*)"
+  },
+  {
+   "species_id": 360,
+   "name": "Spotted Orchis (*Dactylorhiza maculata*)"
+  },
+  {
+   "species_id": 151,
+   "name": "Gogovine (*Entada phaseoloides*)"
+  },
+  {
+   "species_id": 843,
+   "name": "flowering spurge (*Euphorbia corollata*)"
+  },
+  {
+   "species_id": 667,
+   "name": "Eyebright (*Euphrasia officinalis*)"
+  },
+  {
+   "species_id": 574,
+   "name": "Fuchsia (*Fuchsia magellanica*)"
+  },
+  {
+   "species_id": 768,
+   "name": "Herb Robert (*Geranium robertianum*)"
+  },
+  {
+   "species_id": 618,
+   "name": "Water Avens (*Geum rivale*)"
+  },
+  {
+   "species_id": 638,
+   "name": "Dames rocket (*Hesperis matronalis*)"
+  },
+  {
+   "species_id": 485,
+   "name": "Canada hawkweed (*Hieracium umbellatum*)"
+  },
+  {
+   "species_id": 378,
+   "name": "Indian Balsam (*Impatiens glandulifera*)"
+  },
+  {
+   "species_id": 682,
+   "name": "Yellow archangel (*Lamium galeobdolon*)"
+  },
+  {
+   "species_id": 311,
+   "name": "meadow pea (*Lathyrus pratensis*)"
+  },
+  {
+   "species_id": 216,
+   "name": "Daisy (*Leucanthemum ircutianum*)"
+  },
+  {
+   "species_id": 637,
+   "name": "Turk's cap (*Lilium martagon*)"
+  },
+  {
+   "species_id": 240,
+   "name": "Woodbine (*Lonicera periclymenum*)"
+  },
+  {
+   "species_id": 834,
+   "name": "Gypsywort (*Lycopus europaeus*)"
+  },
+  {
+   "species_id": 591,
+   "name": "Loosestrife (*Lysimachia vulgaris*)"
+  },
+  {
+   "species_id": 340,
+   "name": "lemon balm (*Melissa officinalis*)"
+  },
+  {
+   "species_id": 684,
+   "name": "*Nymphaea alba*"
+  },
+  {
+   "species_id": 747,
+   "name": "*Nymphoides peltata*"
+  },
+  {
+   "species_id": 568,
+   "name": "Oregano (*Origanum vulgare*)"
+  },
+  {
+   "species_id": 691,
+   "name": "*Oxalis grandis*"
+  },
+  {
+   "species_id": 759,
+   "name": "Yellow wood sorrel (*Oxalis stricta*)"
+  },
+  {
+   "species_id": 77,
+   "name": "Wall pellitory (*Parietaria judaica*)"
+  },
+  {
+   "species_id": 781,
+   "name": "Grass of Parnassus (*Parnassia palustris*)"
+  },
+  {
+   "species_id": 19,
+   "name": "White Butterbur (*Petasites albus*)"
+  },
+  {
+   "species_id": 370,
+   "name": "Bog spruce (*Picea mariana*)"
+  },
+  {
+   "species_id": 438,
+   "name": "black pine (*Pinus nigra*)"
+  },
+  {
+   "species_id": 289,
+   "name": "Stone Pine (*Pinus pinea*)"
+  },
+  {
+   "species_id": 508,
+   "name": "Monterey pine (*Pinus radiata*)"
+  },
+  {
+   "species_id": 670,
+   "name": "*Polygonatum odoratum*"
+  },
+  {
+   "species_id": 134,
+   "name": "knotgrass (*Polygonum aviculare*)"
+  },
+  {
+   "species_id": 633,
+   "name": "*Populus nigra*"
+  },
+  {
+   "species_id": 742,
+   "name": "Carolina poplar (*Populus × canadensis*)"
+  },
+  {
+   "species_id": 622,
+   "name": "Tormentil (*Potentilla erecta*)"
+  },
+  {
+   "species_id": 756,
+   "name": "Nepalese cinquefoil (*Potentilla nepalensis*)"
+  },
+  {
+   "species_id": 212,
+   "name": "Sour cherry (*Prunus cerasus*)"
+  },
+  {
+   "species_id": 385,
+   "name": "Mountain pyrola (*Pyrola minor*)"
+  },
+  {
+   "species_id": 433,
+   "name": "pear (*Pyrus communis*)"
+  },
+  {
+   "species_id": 570,
+   "name": "Asian Pear (*Pyrus pyrifolia*)"
+  },
+  {
+   "species_id": 571,
+   "name": "Aleppo Oak (*Quercus infectoria*)"
+  },
+  {
+   "species_id": 801,
+   "name": "Alpenrose (*Rhododendron ferrugineum*)"
+  },
+  {
+   "species_id": 391,
+   "name": "Инек-караа (*Ribes nigrum*)"
+  },
+  {
+   "species_id": 536,
+   "name": "Rambler rose (*Rosa multiflora*)"
+  },
+  {
+   "species_id": 812,
+   "name": "Monk's rhubarb (*Rumex alpinus*)"
+  },
+  {
+   "species_id": 73,
+   "name": "Green dock (*Rumex conglomeratus*)"
+  },
+  {
+   "species_id": 305,
+   "name": "broad-leaved dock (*Rumex obtusifolius*)"
+  },
+  {
+   "species_id": 348,
+   "name": "Wood Dock (*Rumex sanguineus*)"
+  },
+  {
+   "species_id": 815,
+   "name": "Balkan willow (*Salix appendiculata*)"
+  },
+  {
+   "species_id": 795,
+   "name": "Eared willow (*Salix aurita*)"
+  },
+  {
+   "species_id": 402,
+   "name": "red-berried elder (*Sambucus racemosa*)"
+  },
+  {
+   "species_id": 617,
+   "name": "Great Burnet (*Sanguisorba officinalis*)"
+  },
+  {
+   "species_id": 406,
+   "name": "white stonecrop (*Sedum album*)"
+  },
+  {
+   "species_id": 164,
+   "name": "Bladder campion (*Silene vulgaris*)"
+  },
+  {
+   "species_id": 347,
+   "name": "Hedge Mustard (*Sisymbrium officinale*)"
+  },
+  {
+   "species_id": 814,
+   "name": "Alpine Snowbell (*Soldanella alpina*)"
+  },
+  {
+   "species_id": 713,
+   "name": "Goldenrod (*Solidago virgaurea*)"
+  },
+  {
+   "species_id": 327,
+   "name": "spiny sowthistle (*Sonchus asper*)"
+  },
+  {
+   "species_id": 350,
+   "name": "common sowthistle (*Sonchus oleraceus*)"
+  },
+  {
+   "species_id": 689,
+   "name": "Bridewort (*Spiraea salicifolia*)"
+  },
+  {
+   "species_id": 68,
+   "name": "Lilac (*Syringa vulgaris*)"
+  },
+  {
+   "species_id": 395,
+   "name": "Feverfew (*Tanacetum parthenium*)"
+  },
+  {
+   "species_id": 383,
+   "name": "Wood Sage (*Teucrium scorodonia*)"
+  },
+  {
+   "species_id": 513,
+   "name": "field penny-cress (*Thlaspi arvense*)"
+  },
+  {
+   "species_id": 594,
+   "name": "*Thymus vulgaris*"
+  },
+  {
+   "species_id": 573,
+   "name": "Basswood (*Tilia americana*)"
+  },
+  {
+   "species_id": 487,
+   "name": "White Clover (*Trifolium repens*)"
+  },
+  {
+   "species_id": 262,
+   "name": "Tower Mustard (*Turritis glabra*)"
+  },
+  {
+   "species_id": 145,
+   "name": "Blueberry (*Vaccinium corymbosum*)"
+  },
+  {
+   "species_id": 737,
+   "name": "Common vervain (*Verbena officinalis*)"
+  },
+  {
+   "species_id": 550,
+   "name": "Snowball (*Viburnum trilobum*)"
+  },
+  {
+   "species_id": 645,
+   "name": "Wood Vetch (*Vicia sylvatica*)"
+  },
+  {
+   "species_id": 578,
+   "name": "Grape (*Vitis vinifera*)"
+  }
+ ],
+ "toxic_invalidate_only": [
+  {
+   "species_id": 630,
+   "name": "Wolfsbane (*Aconitum lycoctonum*)"
+  },
+  {
+   "species_id": 608,
+   "name": "*Anthemis tinctoria*"
+  },
+  {
+   "species_id": 611,
+   "name": "Mountain Bluet (*Centaurea montana*)"
+  },
+  {
+   "species_id": 683,
+   "name": "crested woodfern (*Dryopteris cristata*)"
+  },
+  {
+   "species_id": 690,
+   "name": "Blue devil (*Echium vulgare*)"
+  },
+  {
+   "species_id": 566,
+   "name": "Boneset (*Eupatorium cannabinum*)"
+  },
+  {
+   "species_id": 628,
+   "name": "Alder Buckthorn (*Frangula alnus*)"
+  },
+  {
+   "species_id": 215,
+   "name": "Hemp-nettle (*Galeopsis tetrahit*)"
+  },
+  {
+   "species_id": 595,
+   "name": "Wood pimpernel (*Lysimachia nemorum*)"
+  },
+  {
+   "species_id": 253,
+   "name": "Lewis' mock orange (*Philadelphus lewisii*)"
+  },
+  {
+   "species_id": 356,
+   "name": "common yew (*Taxus baccata*)"
+  },
+  {
+   "species_id": 620,
+   "name": "Meadow rue (*Thalictrum aquilegiifolium*)"
+  },
+  {
+   "species_id": 609,
+   "name": "White hellebore (*Veratrum album*)"
+  }
+ ]
+}

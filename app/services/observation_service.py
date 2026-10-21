@@ -104,6 +104,9 @@ async def update_observation_status(
         _log_edit(session, obs, "review_status", prev_status, review_status, edited_by)
         obs.review_status = review_status
         obs.reviewed_at = datetime.utcnow()
+        # Reject → orphan-GC the cards it pointed at; un-reject → clear markers.
+        from app.services.species_link import refresh_orphan_markers
+        await refresh_orphan_markers(session, obs)
 
     # 3. Handle human correction flag
     if human_corrected is not None:

@@ -563,7 +563,11 @@ async def audit_send_to_review(
     if payload.obs_id:
         obs = await db.get(Observation, payload.obs_id)
         if obs:
+            was_rejected = obs.review_status == "rejected"
             _demote(obs)
+            if was_rejected:                        # live again → clear orphan markers
+                from app.services.species_link import refresh_orphan_markers
+                await refresh_orphan_markers(db, obs)
 
     elif payload.species:
         rows = (await db.execute(
@@ -647,6 +651,10 @@ async def audit_reject(
         )).scalars().all()
         for obs in rows:
             _reject(obs)
+
+    from app.services.species_link import refresh_orphan_markers
+    for obs in rejected_obs:
+        await refresh_orphan_markers(db, obs)      # orphan-GC the cards it pointed at
 
     await db.commit()
 

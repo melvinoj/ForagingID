@@ -30,6 +30,7 @@ from app.models.observation import Observation
 from app.models.species import (Species, SpeciesEdibilityCondition, SpeciesLookalike, SpeciesEdibilityHistory,
                                 SeverityRuleError, severity_for_verdict)
 from app.api.identity import Identity, get_identity
+from app.services.species_link import species_is_listable_clause
 
 log = logging.getLogger(__name__)
 
@@ -216,6 +217,7 @@ async def edibility_review_queue(db: AsyncSession = Depends(get_db)):
                 and_(Species.edibility_status == "caution", Species.edibility_verified == False),
             )
         )
+        .where(species_is_listable_clause())        # live observation OR reference card
         .order_by(
             Species.edibility_confidence.desc().nullslast(),
             Species.scientific_name,
@@ -341,6 +343,7 @@ async def list_edibility_species(db: AsyncSession = Depends(get_db)):
     # Species that need curation
     stmt = select(Species).where(
         Species.edibility_status.in_(["edible", "caution"])
+    ).where(species_is_listable_clause()                # live observation OR reference card
     ).order_by(Species.scientific_name)
     rows = (await db.execute(stmt)).scalars().all()
 
@@ -418,6 +421,7 @@ async def list_unknown_edibility(db: AsyncSession = Depends(get_db)):
             Species.edibility_status.is_(None),
             Species.edibility_status.in_(_UNKNOWN_STATES),
         )
+    ).where(species_is_listable_clause()                # live observation OR reference card
     ).order_by(Species.scientific_name)
     rows = (await db.execute(stmt)).scalars().all()
 
@@ -678,6 +682,7 @@ async def list_verdict_drafts(db: AsyncSession = Depends(get_db),
         .join(Species, Species.id == SpeciesAIDraft.species_id)
         .where(SpeciesAIDraft.field_name == FIELD, SpeciesAIDraft.model == MODEL,
                SpeciesAIDraft.status == "pending")
+        .where(species_is_listable_clause())        # live observation OR reference card
     )).all()
     pins = await _confirmed_pin_counts(db)
     walks = await species_on_saved_walks(db)

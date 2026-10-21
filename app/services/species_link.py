@@ -231,26 +231,112 @@ async def ensure_species_row(session: AsyncSession, obs: Observation) -> Optiona
     return sid
 
 
-async def _name_has_backing_observation(
-    session: AsyncSession, name: Optional[str], species_id: Optional[int]
-) -> bool:
-    """True if ANY observation references this species by EITHER linkage column
-    (species_primary == name OR species_id == species_id). Both are checked
-    because the columns desync. Callers rely on autoflush so a pending move-off
-    of the current observation is already visible (it won't self-count)."""
-    if name:
-        hit = await session.scalar(
-            select(Observation.id).where(Observation.species_primary == name).limit(1)
-        )
-        if hit is not None:
-            return True
-    if species_id is not None:
-        hit = await session.scalar(
-            select(Observation.id).where(Observation.species_id == species_id).limit(1)
-        )
-        if hit is not None:
-            return True
-    return False
+# ---------------------------------------------------------------------------
+# Orphan-card predicates (Melvin, 21 Oct 2026) — the ONLY definitions. The GC
+# below, the verdict sweep (scripts/verdict_sweep_drafts.py), the verdict-draft
+# queue and the edibility lists all read these. Extend them here; never copy
+# their logic into a call site.
+#
+#   live       not orphan-marked AND a non-rejected observation points at the
+#              card by species_id, species_primary or species_suggested.
+#              Candidate-list mentions (species_candidates_json, the
+#              species_candidates table) do NOT count.
+#   reference  the card carries human work or is linked to: any history row
+#              changed_by='human' (species_edibility_history or
+#              culinary_info_history — this covers curator-authored text, which
+#              is_curator_authored also keys on changed_by='human'), a recipe,
+#              edibility_verified_by='human', the target of a look-alike row,
+#              the canonical name of a registered synonym, an encounter, a
+#              personal-list entry, or a foray-session entry.
+#   orphan     NOT live AND NOT reference. Only the GC marks; nothing deletes.
+#
+# 'ai_approved:human' (an approved AI draft) is not changed_by='human' and does
+# not make a card a reference — same line as is_curator_authored.
+# ---------------------------------------------------------------------------
+
+# The one review status that does not keep a card live.
+_NOT_LIVE_STATUS = "rejected"
+
+
+def obs_is_live(obs: Observation) -> bool:
+    """Python form of the observation half of the live rule (for an obs in hand)."""
+    return obs.review_status != _NOT_LIVE_STATUS
+
+
+def _live_observation_exists(extra_names: tuple = ()):
+    """SQL: a non-rejected observation points at the (correlated) Species row.
+    Ignores orphaned_at — this is the evidence the GC weighs. extra_names: a
+    moved-off spelling that may differ from the card's scientific_name (the GC
+    passes it so a not-yet-linked obs still counts)."""
+    from sqlalchemy import exists, or_
+    names = [Species.scientific_name] + [n for n in extra_names if n]
+    points = [Observation.species_id == Species.id]
+    for n in names:
+        points += [Observation.species_primary == n, Observation.species_suggested == n]
+    return exists().where(
+        or_(Observation.review_status.is_(None), Observation.review_status != _NOT_LIVE_STATUS),
+        or_(*points),
+    )
+
+
+def species_has_live_observation_clause():
+    """SQL (correlated to Species): not orphan-marked AND a live observation."""
+    from sqlalchemy import and_
+    return and_(Species.orphaned_at.is_(None), _live_observation_exists())
+
+
+def species_is_reference_clause():
+    """SQL (correlated to Species): the card carries human work or is linked to."""
+    from sqlalchemy import exists, or_
+    from app.models.culinary import CulinaryInfo
+    from app.models.encounter import Encounter
+    from app.models.foray_session import SessionSpecies
+    from app.models.personal_list import PersonalListSpecies
+    from app.models.species import (CulinaryInfoHistory, SpeciesEdibilityHistory, SpeciesLookalike,
+                                    SpeciesRecipe, SpeciesSynonym)
+    return or_(
+        Species.edibility_verified_by == "human",
+        exists().where(SpeciesEdibilityHistory.species_id == Species.id,
+                       SpeciesEdibilityHistory.changed_by == "human"),
+        exists().where(CulinaryInfo.species_id == Species.id,
+                       CulinaryInfoHistory.culinary_info_id == CulinaryInfo.id,
+                       CulinaryInfoHistory.changed_by == "human"),
+        exists().where(SpeciesRecipe.species_id == Species.id),
+        exists().where(SpeciesLookalike.lookalike_species_id == Species.id),
+        exists().where(SpeciesSynonym.canonical_species_id == Species.id),
+        exists().where(Encounter.species_id == Species.id),
+        exists().where(PersonalListSpecies.species_id == Species.id),
+        exists().where(SessionSpecies.species_id == Species.id),
+    )
+
+
+def species_is_listable_clause():
+    """SQL (correlated to Species): what queues and lists show — live OR reference."""
+    from sqlalchemy import or_
+    return or_(species_has_live_observation_clause(), species_is_reference_clause())
+
+
+def listable_species_ids_sql() -> str:
+    """species_is_listable_clause as plain SQLite text ('SELECT species.id FROM
+    species WHERE …') for raw-sqlite3 callers (scripts/verdict_sweep_drafts.py),
+    so they read the same definition instead of a copy."""
+    from sqlalchemy.dialects import sqlite
+    stmt = select(Species.id).where(species_is_listable_clause())
+    return str(stmt.compile(dialect=sqlite.dialect(), compile_kwargs={"literal_binds": True}))
+
+
+async def _holds(session: AsyncSession, clause, species_id: int) -> bool:
+    return await session.scalar(
+        select(Species.id).where(Species.id == species_id, clause)
+    ) is not None
+
+
+async def species_has_live_observation(session: AsyncSession, species_id: int) -> bool:
+    return await _holds(session, species_has_live_observation_clause(), species_id)
+
+
+async def species_is_reference(session: AsyncSession, species_id: int) -> bool:
+    return await _holds(session, species_is_reference_clause(), species_id)
 
 
 async def _find_card(
@@ -271,16 +357,23 @@ async def _find_card(
 async def gc_species_card_if_orphaned(
     session: AsyncSession, name: Optional[str], species_id: Optional[int]
 ) -> Optional[int]:
-    """Mark a species card orphaned (set orphaned_at=now) when NO observation
-    references it by either column — a true phantom. Keyed on zero-observation
-    ONLY, never on review status, so in_review cards are never marked. Does not
-    delete. Returns the marked Species.id, or None if nothing was marked."""
+    """Mark a species card orphaned (set orphaned_at=now) under the orphan rule:
+    no live observation (rejected rows do NOT count as backing — before 21 Oct
+    they did, so a card created for a rejected photo's guess was never marked)
+    AND not a reference card. needs_review / pending rows still count, so
+    in_review cards are never marked. Does not delete. Returns the card's
+    Species.id when it is (now) marked, or None.
+
+    Callers rely on autoflush so a pending status change / move-off of the
+    current observation is already visible to the queries."""
     if not name and species_id is None:
-        return None
-    if await _name_has_backing_observation(session, name, species_id):
         return None
     card = await _find_card(session, name, species_id)
     if card is None:
+        return None
+    if await _holds(session, _live_observation_exists((name,)), card.id):
+        return None
+    if await species_is_reference(session, card.id):
         return None
     if card.orphaned_at is None:
         card.orphaned_at = datetime.utcnow()
@@ -297,6 +390,25 @@ async def _clear_orphan_marker(
         card.orphaned_at = None
 
 
+async def refresh_orphan_markers(session: AsyncSession, obs: Observation) -> None:
+    """Re-apply the orphan rule to every card this observation points at
+    (species_primary/species_id, and species_suggested) after its review status
+    changed. Call it on EVERY reject path and every path that makes a rejected
+    row live again, after setting the new status and before commit:
+      rejected → GC each card (marks it only if nothing else keeps it).
+      live     → clear any marker (the card has a live observation again)."""
+    targets = []
+    if obs.species_primary or obs.species_id is not None:
+        targets.append((obs.species_primary, obs.species_id))
+    if obs.species_suggested and obs.species_suggested != obs.species_primary:
+        targets.append((obs.species_suggested, None))
+    for name, sid in targets:
+        if obs_is_live(obs):
+            await _clear_orphan_marker(session, name, sid)
+        else:
+            await gc_species_card_if_orphaned(session, name, sid)
+
+
 async def set_observation_species(
     session: AsyncSession,
     obs: Observation,
@@ -307,8 +419,9 @@ async def set_observation_species(
     Pass scientific_name=None to clear both fields.
 
     Orphan-GC: when the observation moves OFF a name, mark that name's card
-    orphaned if nothing else references it (both columns, all observations); and
-    un-mark the card it moves ONTO. Additive marking only — never deletes.
+    orphaned under the orphan rule (no live observation, not a reference card);
+    and un-mark the card it moves ONTO when this observation is live. Additive
+    marking only — never deletes.
     """
     old_name = obs.species_primary
     old_id = obs.species_id
@@ -316,9 +429,9 @@ async def set_observation_species(
     obs.species_primary = scientific_name
     obs.species_id = await resolve_species_id(session, scientific_name)
 
-    # The card this obs now points at has a backing observation → clear any
-    # stale orphan marker on it.
-    if scientific_name:
+    # The card this obs now points at has a live observation → clear any stale
+    # orphan marker on it. A rejected row is not backing, so it clears nothing.
+    if scientific_name and obs_is_live(obs):
         await _clear_orphan_marker(session, scientific_name, obs.species_id)
 
     # The obs moved off old_name → orphan-check that name's card. Guarded on a

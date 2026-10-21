@@ -208,6 +208,12 @@ async def prefilter_tier_action(
             o.review_status      = "rejected"
             o.identification_status = "not_plant"
 
+    if req.action in ("send_to_review", "reject"):
+        # Reject → orphan-GC the cards each pointed at; to review → clear markers.
+        from app.services.species_link import refresh_orphan_markers
+        for o in targets:
+            await refresh_orphan_markers(db, o)
+
     await db.commit()
 
     if req.action == "reject":

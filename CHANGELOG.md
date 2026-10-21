@@ -4,6 +4,57 @@
 
 ### Build
 - Alembic head 0055 (CLAUDE.md still states an older head — fix in batch 17).
+- 202+ tests pass (plus 13 new orphan tests). Service worker v9 (species cache renamed, old cached profiles dropped).
+
+### Done since 16:00
+- Batch 6: one shared warnings helper. In-app shows full text; uncurated text is labelled "Source text — not yet reviewed" and is never dropped. Handouts (Lists, print, PDF, Export summary, experience page) show curator text only, uncut, read from the DB. Caution species with no curator prep warning print no culinary content ("⚠ caution — warning not yet reviewed"): 25 of 45 caution species. Marker writes are refused by a DB trigger (0055).
+- Aspen (97) edible + edible_parts (edibility history #2229, culinary history #3388). Recipe #48 shows. David's-harp stays toxic, recipe #37 hidden.
+- Oenanthe crocata (653) look-alike text, curator-authored (#3389).
+- E-14 cleanup: 10 marker fields got a real human row (#3390–3399); drafts 3181/3194/3202/3209/3223/3232 approved. Melvin read the Keck and Meum texts.
+- Common names in sentence case through the shared helpers (no DB writes).
+- Species page: Large / Grid / List views; List sorts by every column, including safety.
+- 1b: dual-API-agreed harmless species are now included on published walks (rule 7 hazard blocker unchanged). Walk 4 republished: ed3b4d9, 63 species, 31 stops, 244 photos with clean EXIF/GPS, live pages byte-identical to the build. w/walk-4/ not published.
+- Orphan species cards: one shared rule (species_has_live_observation / species_is_reference); rejected photos no longer back a card; GC runs on every reject and un-reject path; verdict and edibility queues filtered; kingdom gate at card creation (no card for non-plant/fungi top candidates). 44 cards orphan-marked, 72 drafts invalidated (snapshot db_20261021_193804). Stale markers cleared on 808 and 810 (db_20261021_194150). Verdict queue 33 → 5 (Hoheria, Fagus × taurica, Ulmus laciniata, Aspalathus, Bowlesia — fix the photo IDs in Species ID review).
+- Grid "toxicity unknown" everywhere was a stale browser cache, not a bug.
+
+### Next (order)
+1. Batch 7: share-link secret gates LAN/ngrok (localhost exempt) + escape source text on all pages (review.html:1962 first).
+2. Batch 8.
+3. Stage C publish panel (in-app republish) after batch 8.
+4. Batches 9, 10, 11, 11b, 12, 13, 15, 15b, 16, 17 per REPORT.md section 9.
+
+### Scope added (keep)
+- 11b, first:
+  - Merges: 704→457 Trametes versicolor; 758↔757 Coronilla varia; 708↔412 Thelypteris limbosperma; 608↔589 Cota tinctoria; 103↔531 Chamaenerion angustifolium; 600↔749 Mycelis muralis; 82↔200 Cirsium ferox.
+  - Relink the Collybia nuda and Conyza canadensis observations (incl. obs 8410 species_primary vs species_id 505). GBIF check on 187 "Hypericum perfoliatum".
+  - Genus/family sweep (family column holding a genus: Aconitum, Alchemilla, Bellis, Erigeron, Imleria, Matricaria, "Rubus subg. Rubus", "Rosa sect. Caninae"; 494 puffball as Caprifoliaceae) + find the fill that wrote them.
+  - Non-European species card sweep against data/reference/plantnet_europe_species.json (e.g. Rubus occidentalis, Quercus bicolor/velutina, Acer macrophyllum, Juglans nigra, Picea mariana, Tilia americana, Salix barclayi, Erigeron aliceae, Chrysosplenium americanum, Luffa, 808 Ambrosia confertiflora/obs 24222). Junk cards carrying a human census verdict are protected as reference cards and need deliberate removal. "norway spruce" 685 stays marked (C-04).
+  - English common-name backfill (e.g. Dianthus carthusianorum → Carthusian pink).
+- 15b: empty saved walk stops (walk 5 stop 35) hide or drop.
+- 17: the Lists "Lookalike warnings" toggle is now dead (remove or relabel); a reload banner on a new app version; a thumbnail field on /api/species/ (Large/List views currently load all map data); CLAUDE.md Alembic head; scan.html:1795 loadPrefilterThreshold.
+
+### Open decisions (Melvin)
+- Should a curator look-alike warning (not only prep) let a caution species print culinary content on handouts? Affects 817 Meadow Mushroom, 711 Marasmius.
+
+### Melvin's review queue
+- Caution species with no warning text: 817, 460, 810, 677, 381, 702, 816, 821, 405, 820, 711, 411.
+- Uncurated caution text to review: 295 Ramsons, 764, 98, 672, 639, 149, 363, 229, 148, 590, 603, 194, 399.
+- 5 verdict-queue photos to re-ID (above). 92 medicinal drafts + Verbena 3544; edit Oxalis grandis 3493. Refusal drafts to reject. 347 Takeout person_animal rejects (mount DIGIERA). Draft #3252 Amaranthus hybridus.
+
+### Browser checks: six walkthroughs (replace the old numbered list)
+Test species: Conium maculatum, Oenanthe crocata, Sambucus nigra, 229 St John's wort, 295 Ramsons, 97 Aspen, Pineapple weed.
+- A. Species page: three views, safety sort, filters kept, capitalised names, test species pages (badges, full warnings, labels, recipe #48).
+- B. Map + walk 4: Conium pin full look-alike; Ramsons labelled; ☠ on 155/688/745; walk panel stop cards (817 look-alike, Sambucus open, "Also here" lines); Edit walk → Save → Re-route; Export summary; published Rümmelsbühl page (Stellaria graminea present, caution recipes withheld).
+- C. Handouts: Lists → browser print (field guide with ID notes off; workshop) + PDF in 3 layouts: Conium uncut, 229 withheld label, no PFAF Folklore section, corners present.
+- D. Review: Critical section + red badge; verdict queue shows 5; warning drafts; Second Opinion 24149; capitalised names.
+- E. Phone: SW v9; List view at 390px; proximity alert folds and opens; guest /api/settings 403 over ngrok.
+- F. Settings/system: DeepSeek key set; API dashboard; species chat; About regenerate; Jobs pop-up drag; caffeinate exits with the server.
+Rule: Code tests whatever it can (real JS via jsc, real PDFs); new browser checks are added to a walkthrough, not numbered.
+
+## Current State — 21 Oct 2026, evening
+
+### Build
+- Alembic head 0055 (CLAUDE.md still states an older head — fix in batch 17).
 - 202 tests pass. Service worker v9 (species cache renamed, old cached profiles dropped).
 - Uncommitted until this End Session: batch 6, Aspen, Oenanthe text, E-14 cleanup, sentence-case names, species views, 1b gate change.
 
@@ -54,6 +105,46 @@ Test species: Conium maculatum, Oenanthe crocata, Sambucus nigra, 229 St John's 
 -
 
 ## History
+
+### 2026-10-21 19:56
+**Snapshot** — End of session — Session ended from Settings page
+DB: `snapshots/db_20261021_195616.sqlite`
+
+### 2026-10-21 19:56
+**Session ended** — Session ended from Settings page
+
+### 2026-10-21 19:42
+**Cleared stale orphan markers on Ambrosia confertiflora (808, live needs_review photo, human-verified) and Hypericum humifusum (810, human-verified). Snapshot snapshots/db_20261021_194150.sqlite first. norway spruce (685) left marked. Read back by ID: 808/810 orphaned_at NULL, 685 unchanged.**
+
+**Fixed:**
+- Stale orphan markers cleared on 808 and 810
+**Pending:**
+- Session code changes still uncommitted
+
+### 2026-10-21 19:39
+**Orphan cards data write: DB snapshot snapshots/db_20261021_193804.sqlite (backup API, no git commit), 44 species orphan-marked (orphaned_at 2026-10-21 17:38:51 UTC), 72 pending drafts on the 67 orphan cards set to invalidated with invalidated_reason in generation_context_json. Read back by ID: 44/44 marked, 72/72 invalidated; verdict queue 33 -> 5.**
+
+**Fixed:**
+- 44 phantom species cards orphan-marked; 72 drafts on orphan cards invalidated (redraftable if a card becomes live)
+**Pending:**
+- Stale orphan markers on live/reference cards not cleared: Ambrosia confertiflora 808, Hypericum humifusum 810, norway spruce 685
+- Code changes from this session still uncommitted
+
+### 2026-10-21 19:33
+**Orphan species cards: shared orphan rule (live observation / reference card), GC on every reject path, queues filtered, kingdom gate at card creation. Code only — no data written, nothing committed.**
+
+**Built:**
+- species_link: species_has_live_observation / species_is_reference / species_is_listable predicates (single definition; SQL text form for the sweep script)
+- Orphan rule: marked only if no non-rejected obs (species_id/primary/suggested) AND not a reference card; rejected rows no longer count as backing
+- refresh_orphan_markers on reject paths (update_observation_status, bulk review, audit reject, identify tier reject, both prefilter rejects) and un-reject paths (status helper, bulk, undo, audit send-to-review, identify send-to-review, trust bulk/kingdom send, scan below-threshold suggestion)
+- Verdict sweep plan(), verdict-draft queue, edibility review-queue / species / unknown lists show only live-or-reference cards
+- scan.py kingdom gate: no card when iNat files the top name outside Plantae/Fungi (logged as species_card_skipped); unknown kingdom keeps today's behaviour
+**Fixed:**
+- Cards created for a rejected photo's guess were never orphan-marked (GC only ran on move-off and counted rejected rows)
+**Files:** `app/services/species_link.py`, `app/services/observation_service.py`, `app/services/prefilter.py`, `app/api/bulk_actions.py`, `app/api/audit.py`, `app/api/identify.py`, `app/api/observations.py`, `app/api/trust.py`, `app/api/edibility.py`, `app/api/scan.py`, `scripts/verdict_sweep_drafts.py`, `tests/test_orphan_cards.py`, `tests/test_verdict_drafts.py`
+**Pending:**
+- Data dry run reported: 67 cards would be orphan-marked (44 new), 8 reference cards protected, 72 pending drafts on them, verdict queue 33 -> 5. Awaiting Melvin's go (snapshot first)
+- Stale orphan markers on live/reference cards (Ambrosia confertiflora 808, Hypericum humifusum 810, norway spruce 685) not cleared
 
 ### 2026-10-21 19:09
 **Snapshot** — End of session — Session ended from Settings page

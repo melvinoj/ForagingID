@@ -147,6 +147,11 @@ async def _bulk_review_task(obs_ids: List[int], status: str, pid: Optional[int])
                     obs.species_suggested = None
                     obs.human_corrected = True
 
+                # Reject → orphan-GC the cards it pointed at; un-reject → clear markers.
+                if prev_status != status:
+                    from app.services.species_link import refresh_orphan_markers
+                    await refresh_orphan_markers(session, obs)
+
                 # A confirmed species name always has a linked species row (C-03).
                 if status in confirmed_statuses:
                     from app.services.species_link import ensure_species_row

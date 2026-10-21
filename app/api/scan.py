@@ -1805,6 +1805,10 @@ async def _identify_scanned_inner(
                     obs.review_status            = "needs_review"
                     obs.review_label             = "low_confidence"
                     obs.identification_status    = "below_threshold"  # distinct from 'identified'
+                    # The suggestion's card now has a live observation → clear
+                    # any orphan marker on it (species_link orphan rule).
+                    from app.services.species_link import refresh_orphan_markers
+                    await refresh_orphan_markers(session, obs)
                     msg = (
                         f"[no-match] Best candidate {top['scientific_name']!r} "
                         f"({top['score']:.2%}) is below min threshold "
@@ -1976,7 +1980,25 @@ async def _identify_scanned_inner(
             # ── Species card upsert ───────────────────────────────────────
             # Create/link species record so the observation is immediately
             # visible in the species list and enrichment queue.
-            if top["scientific_name"]:
+            #
+            # Kingdom gate (Melvin, 21 Oct 2026): no card when iNaturalist
+            # files the top name outside Plantae/Fungi, at ANY score — that is
+            # how cards for a coronavirus, a glow-worm and a yeast were made.
+            # The observation's routing above is unchanged (it still goes to
+            # review); a curator confirming it creates the card on approve
+            # (ensure_species_row). Kingdom unknown (iNat didn't name it, or
+            # gave no iconic taxon) → today's behaviour, a card is created.
+            _card_kingdom = top_candidate_inat_kingdom(top["scientific_name"], inat_hits)
+            if top["scientific_name"] and _card_kingdom is not None \
+                    and _card_kingdom.lower() not in _INAT_ALLOWED:
+                async with AsyncSessionLocal() as _ks:
+                    _ks.add(ProcessingLog(
+                        observation_id=obs_id, stage="species_card_skipped", status="success",
+                        message=(f"No species card for {top['scientific_name']!r}: iNaturalist "
+                                 f"kingdom {_card_kingdom} is not Plantae/Fungi"),
+                    ))
+                    await _ks.commit()
+            elif top["scientific_name"]:
                 await _upsert_species_card(obs_id, top, candidates)
 
         _scan_status[obs_id] = "done"
@@ -1998,6 +2020,19 @@ async def _identify_scanned_inner(
 # ---------------------------------------------------------------------------
 # Species card upsert — called after identification
 # ---------------------------------------------------------------------------
+
+def top_candidate_inat_kingdom(scientific_name: Optional[str], inat_hits) -> Optional[str]:
+    """iNaturalist's iconic taxon (kingdom-level) for this name, matched by
+    name_key against this run's iNat hits — or None when iNat did not name it
+    or gave no iconic taxon (kingdom unknown)."""
+    if not scientific_name:
+        return None
+    key = normalize_taxon_key(scientific_name)
+    for ic in inat_hits or ():
+        if normalize_taxon_key(ic.scientific_name or "") == key:
+            return ic.iconic_taxon_name or None
+    return None
+
 
 async def _upsert_species_card(
     obs_id: int,

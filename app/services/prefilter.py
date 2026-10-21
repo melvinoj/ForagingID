@@ -61,6 +61,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.observation import Observation
 from app.models.processing import ProcessingLog
 from app.services.file_cleanup import delete_observation_file
+from app.services.species_link import refresh_orphan_markers
 
 _pf_log = logging.getLogger("foragingid.prefilter")
 
@@ -409,6 +410,7 @@ async def run_prefilter_batch(
             if not is_plant:
                 obs.identification_status = "not_plant"
                 obs.review_status = "rejected"
+                await refresh_orphan_markers(session, obs)     # orphan-GC its cards
                 rejected_obs.append(obs)
                 categories[category] = categories.get(category, 0) + 1
 
@@ -513,6 +515,7 @@ async def refilter_failed_observations(
                 obs.prefilter_category = category
                 obs.identification_status = "not_plant"
                 obs.review_status = "rejected"
+                await refresh_orphan_markers(session, obs)     # orphan-GC its cards
                 rejected_obs.append(obs)
                 session.add(ProcessingLog(
                     observation_id=obs.id,

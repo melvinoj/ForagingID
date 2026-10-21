@@ -184,6 +184,11 @@ async def _db():
                 s.add(Observation(id=oid, file_path=f"/nonexistent/vd{oid}.jpg", file_hash=f"h{oid}",
                                   species_id=sid, species_primary=name, review_status="approved",
                                   identification_status="identified", latitude=47.7, longitude=7.7))
+        # Agrimonia: 0 confirmed pins, but a photo in review keeps it live (orphan rule,
+        # species_link) — a card with no observation at all is left out of the sweep.
+        s.add(Observation(id=500, file_path="/nonexistent/vd500.jpg", file_hash="h500",
+                          species_id=3, species_primary="Agrimonia eupatoria", review_status="needs_review",
+                          identification_status="identified", latitude=47.7, longitude=7.7))
         s.add(SpeciesAIDraft(id=900, species_id=4, field_name="edibility_status", status="pending",
                              model="fao_fungi+mushroom_observer",
                              draft_text="Fungi edibility lookup: status=unknown, confidence=0.00. Sources: no source data."))

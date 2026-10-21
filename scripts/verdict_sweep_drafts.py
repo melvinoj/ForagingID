@@ -6,8 +6,9 @@ set: each draft is one decision for the curator in Review → Edibility Review �
 Verdict drafts (POST /api/edibility/verdict-drafts/{id}/approve).
 
 In scope: edibility_status NULL / 'unknown' / 'unclear', or a severity outside
-ALLOWED_SEVERITIES for its verdict. Left out: orphan-marked cards (no
-observation references them) and '_merged_into:' markers.
+ALLOWED_SEVERITIES for its verdict. Left out: cards with no live observation
+that are not reference cards (species_link.species_is_listable_clause — which
+also leaves out orphan-marked non-reference cards) and '_merged_into:' markers.
 
 Sources per species (no network; app/services/verdict_drafts.py decides):
   severity    recorded toxic / deadly toxicity_severity (+ its history row)
@@ -51,6 +52,7 @@ sys.path.insert(0, str(PROJECT_ROOT))
 
 from app.integrations import pfaf  # noqa: E402
 from app.models.species import ALLOWED_SEVERITIES, is_curator_authored  # noqa: E402
+from app.services.species_link import listable_species_ids_sql  # noqa: E402
 from app.services.verdict_drafts import (FIELD, MODEL, VERDICTS, pfaf_signal, propose,  # noqa: E402
                                          verdict_state)
 
@@ -187,13 +189,16 @@ def plan(conn):
                                    AND identification_status = 'identified' AND latitude IS NOT NULL
                                  GROUP BY species_id""").fetchall())
     items, skipped = [], Counter()
+    # Live observation OR reference card — the shared predicate (species_link), not a copy.
+    listable = {r[0] for r in conn.execute(listable_species_ids_sql()).fetchall()}
     for sp in conn.execute("""SELECT id, scientific_name, kingdom, edibility_status, toxicity_severity,
                                      edibility_verified, edibility_verified_by, orphaned_at
                                 FROM species ORDER BY scientific_name""").fetchall():
         if not in_scope(sp["edibility_status"], sp["toxicity_severity"]):
             continue
-        if sp["orphaned_at"]:
-            skipped["orphan-marked card (no observations)"] += 1
+        if sp["id"] not in listable:
+            skipped["no live observation and not a reference card"
+                    + (" (orphan-marked)" if sp["orphaned_at"] else "")] += 1
             continue
         prior = conn.execute(f"""SELECT id, status FROM species_ai_drafts WHERE species_id = ? AND field_name = ?
                                    AND model = ? AND status IN ({','.join('?' * len(DECIDED))})""",

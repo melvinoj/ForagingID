@@ -391,6 +391,9 @@ async def bulk_send_to_review(
             new_value="needs_review",
             edited_by="trust:bulk_send",
         ))
+        if old_status == "rejected":                # live again → clear orphan markers
+            from app.services.species_link import refresh_orphan_markers
+            await refresh_orphan_markers(db, obs)
         sent += 1
 
     await db.commit()
@@ -639,6 +642,9 @@ async def kingdom_audit(
             new_value="needs_review",
             edited_by="trust:kingdom_audit",
         ))
+        if old_status == "rejected":                # live again → clear orphan markers
+            from app.services.species_link import refresh_orphan_markers
+            await refresh_orphan_markers(db, obs)
         sent += 1
 
     await db.commit()

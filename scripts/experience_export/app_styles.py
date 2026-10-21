@@ -25,6 +25,7 @@ TOKENS_CSS = REPO / "frontend" / "static" / "css" / "tokens.css"
 SPECIES_HTML = REPO / "frontend" / "species.html"
 LISTS_HTML = REPO / "frontend" / "lists.html"
 INDEX_HTML = REPO / "frontend" / "index.html"
+SAFETY_GATE_JS = REPO / "frontend" / "static" / "js" / "safety-gate.js"
 
 TOKEN_NAMES = ("--ink", "--ground", "--paper", "--moss", "--moss-light", "--leaf", "--leaf-pale",
                "--hairline", "--damson", "--amber", "--water", "--alert",
@@ -82,15 +83,18 @@ def _body_colours(src: Path) -> dict:
 def _walk_badges() -> dict:
     """renderWalkPanel()'s inline badge colours (toxic + per-status)."""
     js = INDEX_HTML.read_text(encoding="utf-8")
-    # Toxic badge colours live in _culinaryGateBadge() since the 16 Oct 2026
-    # toxic guard (was an inline ☠ span in renderWalkPanel).
-    tox = _one(r"const bg = gate\.isToxic \? '(#[0-9a-fA-F]{6})'.*?const fg = gate\.isToxic \? '(#[0-9a-fA-F]{3,6})'",
-               js, "index.html walk toxic badge (_culinaryGateBadge)", re.S)
+    # Toxic badge colours live in SafetyGate.badge() (static/js/safety-gate.js)
+    # since batch 5, 21 Oct 2026 — _culinaryGateBadge() in index.html now calls
+    # it (before: inline in _culinaryGateBadge since 16 Oct; before that an
+    # inline ☠ span in renderWalkPanel). Red = deadly/toxic.
+    tox = _one(r"background:' \+ \(red \? '(#[0-9a-fA-F]{6})' : '#[0-9a-fA-F]{6}'\) \+\s*';color:' \+ \(red \? '(#[0-9a-fA-F]{3,6})'",
+               SAFETY_GATE_JS.read_text(encoding="utf-8"), "safety-gate.js walk toxic badge (SafetyGate.badge)", re.S)
     statuses = r"\$\{edib==='edible'\?'(#\w+)':edib==='toxic'\?'(#\w+)':edib==='inedible'\?'(#\w+)':edib==='medicinal'\?'(#\w+)':'(#\w+)'\}"
     bg = _one(r"background:" + statuses, js, "index.html walk badge backgrounds")
     fg = _one(r"color:" + statuses, js, "index.html walk badge colours")
-    shape = _one(r"<span style=\"font-size:(0\.\d+rem);padding:(\d+px \d+px);border-radius:(\d+px);font-weight:700;", js,
-                 "index.html walk badge shape")
+    # Badge shape: SafetyGate.badge() too (batch 5) — same span the walk shows.
+    shape = _one(r"font-size:(0\.\d+rem);' \+\s*'padding:(\d+px \d+px);border-radius:(\d+px);font-weight:700;",
+                 SAFETY_GATE_JS.read_text(encoding="utf-8"), "safety-gate.js walk badge shape (SafetyGate.badge)", re.S)
     return {
         "toxic":    (tox.group(1), tox.group(2)),
         "edible":   (bg.group(1), fg.group(1)),

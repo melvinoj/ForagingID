@@ -1,72 +1,50 @@
 ## Current State
 
-21 Oct 2026, afternoon session end
+### Addendum, 21 Oct ~16:00
+- Census chunks 12–16 written. Snapshot db_20261021_155418; verdict history 1887–2228; text 3384–3385; names 3386–3387.
+- CENSUS COMPLETE: 632 species with a card, all human-verified.
+  - edible 355, inedible 143, toxic 81, caution 40, deadly 12.
+  - Not verified: only Collybia nuda / Conyza canadensis (no card, 11b relink) and 479 (in Review).
+  - 0 badge mismatches.
+- Rosa dumalis now human-verified edible.
+- 1b build gate passes (exit 0, 62 species). Fixed the batch-5 regression in app_styles.py (badge style checks now read static/js/safety-gate.js). Stellaria graminea is flagged for review (AI-agreed only); not blocking.
+- Names: Blackcurrant (391), Nodding catchfly (217; "Ragged Robin" stays on 621).
+- Comfrey (25) and red-berried elder (402): caution with curator preparation text.
+- 182 tests pass.
+- Open question: recipes now hidden by today's verdicts. David's-harp #37 (toxic) and Aspen #48 (inedible). Keep hidden, or change verdict to caution with a warning?
 
-### Done since 10:14 (read back by id; snapshots taken before every write; uncommitted until this End Session)
-- Batch 4 (A-02 + D1-01):
-  - /api/settings never returns secret values (is_set only); guests get 403 on all settings routes.
-  - PDF: autoescape on, _mdlite escapes headings, url_fetcher only allows data: and app folders.
-  - 13 tests.
-- Batch 5 (B2-01/B2-04/B2-09 + P1):
-  - safety_decision() in species.py is the single rule. Culinary content shows only for edible/caution verdicts with severity exactly 'none'.
-  - Labels ☠ deadly / ☠ toxic / ⚠ toxicity unknown / ⚠ caution (curator preparation_warnings).
-  - Every surface reads the served decision via safety-gate.js. PDF and Export summary re-check on the server.
-  - culinary_allowed() delegates to safety_decision(). Species grid uses the served label. SW cache v8.
-- Blusher (467): curator preparation and look-alike warnings, caution verified human.
-- Turkey tail (457): edible_parts "Tea or broth only…", edible verified human.
-- Species-page field path records an empty old value as NULL.
-- Verdict-draft reject path takes an optional reason, stored in generation_context_json.
-- Verdict census (docs/audit/2026-10-20/verdict_census/, 633 species = species page):
-  - Chunks 01, 02, 03, 04–07 and 08–11 decided and written; decisions files are in the folder.
-  - Curator warnings written for: meadow mushroom, Caucasian fir, angelica, both puffballs, honey fungi (3), juniper, parasols (4), fairy ring champignon, both melilots, ramsons, yellow gentian, chicken of the woods, watercress, both Leccinum, St John's wort (187), field horsetail; plus opium poppy edible_parts.
-  - Name fixes: Good King Henry (Fat hen dropped), Suede bolete, Walnut, Peppermint, St John's wort.
-  - 479 Phyllospadix scouleri sent back to Review (implausible ID).
-  - Keck (106) kept Melvin's existing look-alike text.
-- Tests: 179+ pass.
-
-### Next
-1. Census chunks 12–16 (last round). Claude's proposal is pending Melvin's answers on:
-   1. Comfrey (S. officinale, S. caucasicum): caution or toxic (Rough Comfrey is toxic).
-   2. Melampyrum pratense → toxic?
-   3. Polygonatum odoratum → toxic?
-   4. Genista sagittalis / G. tinctoria → inedible?
-   5. Minor cautions → edible (hairy lady's mantle, Crataegus rhipidophylla, Erigeron annuus, sour cherry, 2 geraniums).
-   - Also: reject #3063 (Sparassis). Confirming Rosa dumalis removes the block on 1b.
-2. 1b: walk 4 (Rümmelsbühl foray) warning drafts, Heracleum sibiricum now edible, then republish.
-3. Batches 6, 7, 8, 9, 10, 11, 11b, 12, 13, 15, 15b, 16, 17 per REPORT.md section 9.
-
-### Scope added today
-- Batch 6:
-  - Walk stop card shows curator look_alike_warnings for every species.
-  - Map pop-up stops cutting look-alike text at 120 chars.
-  - Keck preparation_warnings placeholder (E-14).
-- Batch 11b (before the GBIF sweep):
-  - Merge/relink pairs:
-    - 704 Polyporus versicolor → 457 Trametes versicolor
-    - 758 Securigera ↔ 757 Coronilla varia
-    - 708 Oreopteris ↔ 412 Thelypteris limbosperma
-    - 608 Anthemis ↔ 589 Cota tinctoria
-    - 103 Epilobium ↔ 531 Chamaenerion angustifolium
-    - 600 Lactuca ↔ 749 Mycelis muralis
-    - 82 Lophiolepis ↔ 200 Cirsium ferox
-  - Relink the Collybia nuda and Conyza canadensis observations.
-  - Check 187 "Hypericum perfoliatum" against GBIF.
-  - Fix cards whose genus/family disagrees with their scientific name (e.g. 494 puffball filed as Caprifoliaceae/Dipsacus) and find the fill that wrote them.
-- Batch 17: scan.html:1795 loadPrefilterThreshold reads .find on the response instead of .settings.
-
-### Melvin's review queue
-- 92 + Verbena (3544) medicinal drafts; edit Oxalis grandis 3493.
-- 61 caution-warning drafts (3178–3238).
-- 64 refusal/placeholder drafts to reject.
-- 347 Takeout person_animal rejects (mount DIGIERA first).
-- Edible parts for Verbascum densiflorum + 11 others.
-
-### Live checks owed (Melvin, browser) — numbered tally
-- 1–31: earlier list (PFAF chip, Review, print/PDF, DeepSeek, map, walk panel, settings/system, batch 4).
-- 32–39: batch 5 (grid ☠ deadly, map pins, walk panel labels, Conium page, Lists/print, PDF, Export summary, no console errors). On the phone, use Settings → Refresh first.
-- 40–47: census (foxglove deadly; inedible badges; turkey tail; monkshoods deadly; meadow mushroom and fir pages; columbine/marsh marigold toxic; Good King Henry everywhere; surfgrass gone from pins; ramsons/parasol/chicken of the woods caution; white butterbur toxic).
+### Next (order)
+1. New Code session → batch 6 (B2-03 + walk card look-alike + map pop-up uncut + E-14).
+2. Melvin reviews walk 4's 10 caution-warning drafts while batch 6 runs.
+3. 1b republish Rümmelsbühl foray after batch 6.
 
 ## History
+
+### 2026-10-21 15:58
+**Snapshot** — End of session — Session ended from Settings page
+DB: `snapshots/db_20261021_155835.sqlite`
+
+### 2026-10-21 15:58
+**Session ended** — Session ended from Settings page
+
+### 2026-10-21 15:56
+**Census chunks 12-16 (final round) applied: 123 verdicts (81 DEFAULT keep+verify incl. 277 Rosa dumalis), text 402/25, names 391 Blackcurrant / 217 Nodding catchfly, draft #3063 rejected; walk 4 build gate passes; census summary**
+
+**Built:**
+- docs/audit/2026-10-20/verdict_census/chunk_12-16_decisions.md (with census summary)
+**Fixed:**
+- Batch 5 regression: experience export app_styles.py read the walk badge colours/shape from index.html _culinaryGateBadge; now reads static/js/safety-gate.js (same values) - walk 4 build gate (plan-only) passes
+- Snapshot db_20261021_155418.sqlite; edibility history 1887-2228; culinary history 3384-3387; read-back 0 mismatches
+- Census: 633 species - edible 355, inedible 143, toxic 81, deadly 12, caution 40; not human-verified 3 (2 no-card + 479); badge mismatches 0 among carded species
+**Files:** `scripts/experience_export/app_styles.py`, `docs/audit/2026-10-20/verdict_census/chunk_12-16_decisions.md`
+**Pending:**
+- 16 species newly hide culinary content incl. recipes #37, #48
+- Walk 4 plan: 193 Stellaria graminea AI-agreed only (needs review); republish is Melvin's (1b)
+- Batch 11b merges/relinks; batch 6 warnings
+
+### 2026-10-21 15:54
+**Snapshot** — Before census chunks 12–16 (final round: Melvin's 123 verdict decisions, 21 Oct) + curator text 402/25 + common names 391/217 + reject draft #3063; Settings snapshot routine without the git commit — Melvin: End Session commits
+DB: `snapshots/db_20261021_155418.sqlite`
 
 ### 2026-10-21 15:47
 **Snapshot** — End of session — Session ended from Settings page

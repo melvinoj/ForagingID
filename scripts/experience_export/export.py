@@ -131,12 +131,10 @@ def load_print_pdf_texts() -> dict:
     paras = re.findall(r"<p>(.*?)</p>", m.group(2), re.S)
     if not paras:
         die("print_pdf.html: final-disclaimer has no <p> text")
-    fb = re.search(r"preparation_warnings or '([^']+)'", src)
-    if not fb:
-        die("print_pdf.html: toxic fallback sentence not found")
+    # The toxic fallback sentence is app.models.species.TOXIC_FALLBACK_TEXT —
+    # gates.safety_texts takes it from there (batch 6), as the PDF does.
     return {"disclaimer_heading": m.group(1).strip(),
-            "disclaimer_paras": [p.strip() for p in paras],
-            "toxic_fallback": fb.group(1)}
+            "disclaimer_paras": [p.strip() for p in paras]}
 
 
 # ── recipe teaser (approved text only — never newly written) ─────────────────
@@ -562,8 +560,15 @@ def main(argv=None):
     missing_obs = [i for i in obs_ids if i not in rows]
     if missing_obs:
         warnings.append(f"membership references {len(missing_obs)} observations not loaded: {missing_obs}")
-    passing = [o for o in obs_order if gates.obs_passes(o, hide, hide_sp)]
-    failing = [o for o in obs_order if not gates.obs_passes(o, hide, hide_sp)]
+    sp_cache = {}
+    def _species_row(sid):
+        if sid not in sp_cache:
+            r = conn.execute("SELECT * FROM species WHERE id = ?", (sid,)).fetchone() if sid is not None else None
+            sp_cache[sid] = dict(r) if r else None
+        return sp_cache[sid]
+    # Rule 1 + 1b: the gate also needs the species row (AI-agreed harmless species are shown).
+    passing = [o for o in obs_order if gates.obs_passes(o, hide, hide_sp, _species_row(o["species_id"]))]
+    failing = [o for o in obs_order if not gates.obs_passes(o, hide, hide_sp, _species_row(o["species_id"]))]
 
     # Species (rule 1: human-confirmed members only)
     sp_obs = defaultdict(list)
@@ -599,6 +604,7 @@ def main(argv=None):
             "edibility_status": sp_ai.get("edibility_status") if sp_ai else None,
             "toxicity_severity": sp_ai.get("toxicity_severity") if sp_ai else None,
             "blocker": hazard,
+            "included": sid in sp_obs,      # rule 1b: shown (harmless, not hidden)
         })
         if hazard:
             where = ("stop " if len(e["stops"]) == 1 else "stops ") + ", ".join(e["stops"])
@@ -606,12 +612,6 @@ def main(argv=None):
     # Rule 7 per stop: the per-species check above misses a toxic species that is
     # human-confirmed at one stop (so it IS on the page) but only AI-agreed at
     # another — that stop would carry no ☠. Checked per member observation.
-    sp_cache = {}
-    def _species_row(sid):
-        if sid not in sp_cache:
-            r = conn.execute("SELECT * FROM species WHERE id = ?", (sid,)).fetchone() if sid is not None else None
-            sp_cache[sid] = dict(r) if r else None
-        return sp_cache[sid]
     for st_m in mem_stops:
         for sp_m in st_m["species"]:
             bad = [oid for oid in sp_m["obs_ids"]
@@ -680,7 +680,7 @@ def main(argv=None):
             "deadly": gates.is_deadly(sp),
             "apiaceae": gates.is_apiaceae(sp),
             "badge": badge,
-            "safety": gates.safety_texts(sp, ci, conn, texts["toxic_fallback"]),
+            "safety": gates.safety_texts(sp, ci, conn),
             "photo": f"photos/{sid}.jpg" if pp else None,
             "thumb": f"photos/{sid}_t.jpg" if pp else None,
             "n_obs": len(sp_obs[sid]),
@@ -751,7 +751,8 @@ def main(argv=None):
         for sp_m in st_m["species"]:
             for oid in sp_m["obs_ids"]:
                 o = rows.get(oid)
-                if o and gates.obs_passes(o, hide, hide_sp) and o["species_id"] in pub and o["species_id"] not in sids:
+                if o and gates.obs_passes(o, hide, hide_sp, _species_row(o["species_id"])) \
+                        and o["species_id"] in pub and o["species_id"] not in sids:
                     sids.append(o["species_id"])
         if not sids:
             emptied_stops.append(st_m["label"])
@@ -986,10 +987,11 @@ def main(argv=None):
     print(f"Species: {len(pub)} shown, {len(hidden_species)} hidden, {len(ai_agreed)} AI-agreed only")
     for sid, why in hidden_species.items():
         print(f"  hidden {sid}: {why}")
-    print("AI-agreed — needs your review before they can appear:" + ("" if ai_agreed else " none"))
+    print("AI-agreed only (rule 1b: harmless ones are shown; hazards block):" + ("" if ai_agreed else " none"))
     for a in ai_agreed_out:
         print(f"  {a['species_id'] if a['species_id'] is not None else '?':>4} {a['name']:<28} "
-              f"stops {', '.join(a['stops'])}  toxicity {a['toxicity_severity']}" + ("  ← BLOCKER" if a["blocker"] else ""))
+              f"stops {', '.join(a['stops'])}  toxicity {a['toxicity_severity']}"
+              + ("  ← BLOCKER" if a["blocker"] else "  → shown" if a["included"] else "  (hidden)"))
     badges = Counter(p["badge"]["kind"] for p in pub.values())
     print(f"Badges: {dict(badges)}")
     for p in sorted(pub.values(), key=lambda p: p["badge"]["kind"]):

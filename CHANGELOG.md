@@ -1,24 +1,156 @@
 ## Current State
 
-### Addendum, 21 Oct ~16:00
-- Census chunks 12–16 written. Snapshot db_20261021_155418; verdict history 1887–2228; text 3384–3385; names 3386–3387.
-- CENSUS COMPLETE: 632 species with a card, all human-verified.
-  - edible 355, inedible 143, toxic 81, caution 40, deadly 12.
-  - Not verified: only Collybia nuda / Conyza canadensis (no card, 11b relink) and 479 (in Review).
-  - 0 badge mismatches.
-- Rosa dumalis now human-verified edible.
-- 1b build gate passes (exit 0, 62 species). Fixed the batch-5 regression in app_styles.py (badge style checks now read static/js/safety-gate.js). Stellaria graminea is flagged for review (AI-agreed only); not blocking.
-- Names: Blackcurrant (391), Nodding catchfly (217; "Ragged Robin" stays on 621).
-- Comfrey (25) and red-berried elder (402): caution with curator preparation text.
-- 182 tests pass.
-- Open question: recipes now hidden by today's verdicts. David's-harp #37 (toxic) and Aspen #48 (inedible). Keep hidden, or change verdict to caution with a warning?
+## Current State — 21 Oct 2026, evening
+
+### Build
+- Alembic head 0055 (CLAUDE.md still states an older head — fix in batch 17).
+- 202 tests pass. Service worker v9 (species cache renamed, old cached profiles dropped).
+- Uncommitted until this End Session: batch 6, Aspen, Oenanthe text, E-14 cleanup, sentence-case names, species views, 1b gate change.
+
+### Done since 16:00
+- Batch 6: one shared warnings helper. In-app shows full text; uncurated text is labelled "Source text — not yet reviewed" and is never dropped. Handouts (Lists, print, PDF, Export summary, experience page) show curator text only, uncut, read from the DB. Caution species with no curator prep warning print no culinary content ("⚠ caution — warning not yet reviewed"): 25 of 45 caution species, after Keck. Marker writes are refused by a DB trigger (0055).
+- Aspen (97) edible + edible_parts (edibility history #2229, culinary history #3388). Recipe #48 shows. David's-harp stays toxic, recipe #37 hidden.
+- Oenanthe crocata (653) look-alike text, curator-authored (#3389).
+- E-14 cleanup: 10 marker fields got a real human row (#3390–3399); drafts 3181/3194/3202/3209/3223/3232 approved. Melvin read the Keck and Meum texts.
+- Common names in sentence case through the shared helpers (no DB writes).
+- Species page: Large / Grid / List views; List sorts by every column, including safety.
+- 1b: dual-API-agreed harmless species are now included on published walks (rule 7 hazard blocker unchanged). Walk 4 republished: ed3b4d9, 63 species, 31 stops, 244 photos with clean EXIF/GPS, live pages byte-identical to the build. w/walk-4/ not published.
+- Grid "toxicity unknown" everywhere was a stale browser cache, not a bug.
+
+### In progress
+- Read-only diagnosis of orphan species cards (0 pins, e.g. Betacoronavirus, Maniola jurtina, Noctiluca; 33 with verdict drafts). Leave those 33 drafts untouched until the cleanup dry run.
 
 ### Next (order)
-1. New Code session → batch 6 (B2-03 + walk card look-alike + map pop-up uncut + E-14).
-2. Melvin reviews walk 4's 10 caution-warning drafts while batch 6 runs.
-3. 1b republish Rümmelsbühl foray after batch 6.
+1. Orphan-card report → source fix + verdict queue limited to species with observations + cleanup dry run.
+2. Batch 7, plus: review.html:1962 shows common names unescaped.
+3. Batch 8.
+4. Stage C publish panel (in-app republish) after batch 8.
+5. Batches 9, 10, 11, 11b, 12, 13, 15, 15b, 16, 17 per REPORT.md section 9.
+
+### Scope added (keep)
+- 11b, first:
+  - Merges: 704→457 Trametes versicolor; 758↔757 Coronilla varia; 708↔412 Thelypteris limbosperma; 608↔589 Cota tinctoria; 103↔531 Chamaenerion angustifolium; 600↔749 Mycelis muralis; 82↔200 Cirsium ferox.
+  - Relink the Collybia nuda and Conyza canadensis observations. GBIF check on 187 "Hypericum perfoliatum".
+  - Genus/family sweep (family column holding a genus: Aconitum, Alchemilla, Bellis, Erigeron, Imleria, Matricaria, "Rubus subg. Rubus", "Rosa sect. Caninae"; 494 puffball as Caprifoliaceae) + find the fill that wrote them.
+  - Non-European species card sweep against data/reference/plantnet_europe_species.json (e.g. Rubus occidentalis, Quercus bicolor/velutina, Acer macrophyllum, Juglans nigra, Picea mariana, Tilia americana, Salix barclayi, Erigeron aliceae, Chrysosplenium americanum, Luffa).
+  - English common-name backfill (e.g. Dianthus carthusianorum → Carthusian pink).
+- 15b: empty saved walk stops (walk 5 stop 35) hide or drop.
+- 17: the Lists "Lookalike warnings" toggle is now dead (remove or relabel); a reload banner on a new app version; a thumbnail field on /api/species/ (Large/List views currently load all map data); CLAUDE.md Alembic head; scan.html:1795 loadPrefilterThreshold.
+
+### Open decisions (Melvin)
+- Should a curator look-alike warning (not only prep) let a caution species print culinary content on handouts? Affects 817 Meadow Mushroom, 711 Marasmius.
+
+### Melvin's review queue
+- Caution species with no warning text (13): 817, 460, 810, 677, 381, 702, 816, 821, 405, 820, 711, 411 (+ Hypericum group).
+- Uncurated caution text to review (12): 295 Ramsons, 764, 98, 672, 639, 149, 363, 229, 148, 590, 603, 194, 399.
+- 92 medicinal drafts + Verbena 3544; edit Oxalis grandis 3493. Refusal drafts to reject. 347 Takeout person_animal rejects (mount DIGIERA). Draft #3252 Amaranthus hybridus.
+
+### Browser checks: six walkthroughs (replace the old numbered list)
+Test species: Conium maculatum, Oenanthe crocata, Sambucus nigra, 229 St John's wort, 295 Ramsons, 97 Aspen, Pineapple weed.
+- A. Species page: three views, safety sort, filters kept, capitalised names, test species pages (badges, full warnings, labels, recipe #48).
+- B. Map + walk 4: Conium pin full look-alike; Ramsons labelled; ☠ on 155/688/745; walk panel stop cards (817 look-alike, Sambucus open, "Also here" lines); Edit walk → Save → Re-route; Export summary; published Rümmelsbühl page.
+- C. Handouts: Lists → browser print (field guide with ID notes off; workshop) + PDF in 3 layouts: Conium uncut, 229 withheld label, no PFAF Folklore section, corners present.
+- D. Review: Critical section + red badge; verdict and warning drafts; Second Opinion 24149; capitalised names.
+-
 
 ## History
+
+### 2026-10-21 19:09
+**Snapshot** — End of session — Session ended from Settings page
+DB: `snapshots/db_20261021_190913.sqlite`
+
+### 2026-10-21 19:09
+**Session ended** — Session ended from Settings page
+
+### 2026-10-21 19:05
+**Republished walk 4 (Rümmelsbühl foray) to melvinoj/foraging-experience (ed3b4d9)**
+
+**Built:**
+- Walk 4 build: 63 species, 31 stops (4 with skull), 244 images; rule 1b, batch 6 warnings, sentence-case names
+**Fixed:**
+- Photos EXIF/GPS-free: exporter check 0, exiftool GPS 0 + EXIF/XMP/IPTC 0, PIL 0 of 244
+- Live index, index.html, preview.html, tree.html + 3 sampled photos: HTTP 200, byte-identical to the build
+**Files:** `(separate repo) foraging-experience: index.html, tree.html, preview.html, photos/ (+36, 4 replaced)`
+**Pending:**
+- w/walk-4 mirror built but not published (not part of the previous publish)
+- Taxonomy warning: 277 Rosa dumalis family Rosa sect. Caninae (data, 11b)
+
+### 2026-10-21 18:54
+**1b rule 1b (AI-agreed harmless species shown on published walks) + walk 4 plan diff (stopped for OK); read-only diagnosis of 88 zero-pin species rows**
+
+**Built:**
+- gates.ai_agreed_included (safety_decision level none/caution) = not unconfirmed_hazard; obs_passes takes the species row; plan labels AI-agreed shown/blocker
+- tests: rule 1b in test_experience_gates.py (2)
+**Files:** `scripts/experience_export/gates.py`, `scripts/experience_export/export.py`, `tests/test_experience_gates.py`
+**Pending:**
+- Walk 4 republish: awaiting Melvin OK on the plan diff (12 added, 5 badge changes, recipes 12/76 withheld, 99 added)
+- Zero-pin species: fixes proposed, nothing applied; no species delete path exists
+
+### 2026-10-21 18:28
+**Common names in sentence case (shared helpers) + species page Large / Grid / List view toggle**
+
+**Built:**
+- sentence_case_name + display_common_name (server), spCommon / spCommonList + spNameHtml/Text (species-names.js)
+- Routed: species grid + header, map pop-up, walk stop card, lasso, proximity, near-me, find, search, walk diary, Lists, browser print, PDF, Export summary, review cards, re-identify candidates, seasonal returns
+- species.html Large / Grid / List toggle: one data set, shared badge (_spEdibBadge -> SafetyGate), sortable List (safety: deadly, toxic, unknown, caution, edible, not edible), select mode in all views, remembered view, lazy thumbnails from /api/map/geojson, phone layout drops family
+- tests/test_names_and_species_views.py (10, JS executed via JavaScriptCore)
+**Files:** `app/models/species.py`, `app/api/lists_pdf.py`, `app/api/sharing.py`, `frontend/static/js/species-names.js`, `frontend/species.html`, `frontend/index.html`, `frontend/lists.html`, `frontend/print.html`, `frontend/review.html`, `frontend/static/js/reidentify.js`, `frontend/static/js/seasonal-returns.js`, `tests/test_names_and_species_views.py`
+**Pending:**
+- Not routed: seasons.html, encounters-main.js (pages don't load species-names.js), scan.html (labels only)
+- review.html:1962 renders the joined common names unescaped (pre-existing)
+- Browser checks 52-63 (Melvin; numbering overlaps batch 6's 52-61)
+
+### 2026-10-21 16:26
+**E-14 cleanup: real human history rows (current text) for the 10 remaining placeholder-marker fields**
+
+**Fixed:**
+- Snapshot db_20261021_162623
+- 6 preparation_warnings via approve of marker_confirm drafts 3181/3194/3202/3209/3223/3232 -> history 3390-3395 (106, 27, 94, 50, 97, 347)
+- 605 taste_notes, 373 taste_notes/medicinal_notes/recipe via species-page field path -> history 3396-3399
+- Read-back: all 10 byte-identical to pre-write text, old=new=current, curator-authored; 0 fields with a marker as latest row; 11 marker rows kept as audit trail
+- Keck 106 now has a curator caution warning: handout-withheld caution species 26 -> 25
+**Pending:**
+- Browser checks 50-61 (Melvin)
+
+### 2026-10-21 16:26
+**Snapshot** — Before E-14 cleanup: real human history rows (current text) for the 10 remaining placeholder-marker rows (Melvin, 21 Oct); Settings snapshot routine without the git commit — Melvin: End Session commits
+DB: `snapshots/db_20261021_162623.sqlite`
+
+### 2026-10-21 16:24
+**Aspen 97 edible + edible_parts; batch 6 (B2-03 + E-14): one shared warnings helper on every surface, handout rule for caution, no truncation, DB refuses placeholder markers; Oenanthe crocata 653 curator look-alike**
+
+**Built:**
+- species_warnings / handout_warnings / is_placeholder_marker in app/models/species.py, served as safety.warnings + safety.handout_warnings
+- safety_decision handout_culinary_allowed + handout_label ('⚠ caution — warning not yet reviewed'); experience rule 8 uses it
+- SafetyGate.warnings / handoutWarningsHtml / handoutCulinary / handoutRecipes / handoutBadge
+- Map pop-up, walk stop card, proximity alert, species page: full warnings, uncurated text labelled
+- Lists, browser print, PDF, Export summary, experience page: curator-only warnings always printed, uncut; PDF + Export summary warnings from the DB
+- Migration 0055: triggers refuse placeholder markers (applied to live DB)
+- SW v9 + species cache renamed foragingid-species-2
+- tests/test_batch6_warnings.py (10)
+**Fixed:**
+- 97 Populus tremula inedible->edible/none verified human (edibility history 2229), edible_parts (culinary history 3388); recipe #48 shown again
+- Map pop-up 120-char cut, PDF 140-char cut, id_notes toggle hiding warnings, booklet caution warnings missing
+- 653 Oenanthe crocata look_alike_warnings curator text (culinary history 3389), replaces the (set) marker lock
+- Snapshots db_20261021_160140, db_20261021_162146, db_20261021_162236
+**Files:** `app/models/species.py`, `app/services/safety_gate.py`, `app/api/sharing.py`, `app/api/lists_pdf.py`, `app/templates/print_pdf.html`, `frontend/static/js/safety-gate.js`, `frontend/index.html`, `frontend/lists.html`, `frontend/print.html`, `frontend/species.html`, `frontend/static/sw.js`, `scripts/experience_export/gates.py`, `scripts/experience_export/export.py`, `scripts/experience_export/templates/index.html`, `migrations/versions/0055_refuse_placeholder_markers.py`, `tests/test_batch6_warnings.py`, `tests/test_batch5_safety_gate.py`, `tests/test_experience_gates.py`
+**Pending:**
+- E-14 cleanup: dry run reported, no write — 6 prep marker rows have pending marker_confirm drafts 3181/3194/3202/3209/3223/3232; 4 non-warning marker rows (552, 561, 562, 611) need a decision
+- 26 caution species withheld on handouts until a curator warning exists
+- Browser checks 50-61 (Melvin)
+- CLAUDE.md alembic head says 0050; actual 0055
+
+### 2026-10-21 16:22
+**Snapshot** — Before Oenanthe crocata (653) curator look_alike_warnings (Melvin addendum 21 Oct 16:15, E-14); Settings snapshot routine without the git commit — Melvin: End Session commits
+DB: `snapshots/db_20261021_162236.sqlite`
+
+### 2026-10-21 16:21
+**Snapshot** — Before migration 0055 (E-14: triggers refuse placeholder markers; no row changes), batch 6; Settings snapshot routine without the git commit — Melvin: End Session commits
+DB: `snapshots/db_20261021_162146.sqlite`
+
+### 2026-10-21 16:01
+**Snapshot** — Before Aspen (97) verdict edible/none + curator edible_parts (Melvin, 21 Oct); Settings snapshot routine without the git commit — Melvin: End Session commits
+DB: `snapshots/db_20261021_160140.sqlite`
 
 ### 2026-10-21 15:58
 **Snapshot** — End of session — Session ended from Settings page

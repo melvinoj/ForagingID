@@ -65,7 +65,7 @@
 
   function _renderItem(it) {
     var name = it.common_name
-      ? '<span class="sr-sp">' + _esc(it.scientific_name) + ' <small>(' + _esc(it.common_name) + ')</small></span>'
+      ? '<span class="sr-sp">' + _esc(it.scientific_name) + ' <small>(' + _esc(window.spCommon ? window.spCommon(it.common_name) : it.common_name) + ')</small></span>'   // names rule
       : '<span class="sr-sp">' + _esc(it.scientific_name) + '</span>';
     var lastDate = it.last_seen ? new Date(it.last_seen).toLocaleDateString() : "";
     var lastBits = [];

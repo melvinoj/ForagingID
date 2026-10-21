@@ -187,6 +187,12 @@ window.ReID = (() => {
 
   // ── Helpers ────────────────────────────────────────────────────────────
 
+  // Names rule (species-names.js spCommon): sentence case for display. Not every
+  // page that loads this file loads species-names.js — then names show as sourced.
+  function _spCommon(s) {
+    return window.spCommon ? window.spCommon(s) : (s || '');
+  }
+
   function _esc(s) {
     if (!s) return '';
     return String(s)
@@ -212,7 +218,7 @@ window.ReID = (() => {
          onclick="ReID._selectCandidate(this)">
       <div style="flex:1;min-width:0">
         <div class="reid-cand-sci">${_esc(c.scientific_name)}</div>
-        ${c.common_name ? `<div class="reid-cand-common">${_esc(c.common_name)}</div>` : ''}
+        ${c.common_name ? `<div class="reid-cand-common">${_esc(_spCommon(c.common_name))}</div>` : ''}
         <div class="reid-cand-meta">
           <span class="reid-cand-score">${pct}%</span>
           ${_sourceBadge(c.source)}
@@ -387,7 +393,7 @@ window.ReID = (() => {
              onclick="ReID._selectCandidate(this)">
           <div style="flex:1;min-width:0">
             <div class="reid-cand-sci">${_esc(item.scientific_name)}</div>
-            ${item.common_name ? `<div class="reid-cand-common">${_esc(item.common_name)}</div>` : ''}
+            ${item.common_name ? `<div class="reid-cand-common">${_esc(_spCommon(item.common_name))}</div>` : ''}
             <div class="reid-cand-meta">
               ${item.family ? `<span>${_esc(item.family)}</span>` : ''}
               <span class="reid-source-badge ${item.source === 'inaturalist' ? 'inaturalist' : ''}">${_esc(item.source || 'gbif')}</span>

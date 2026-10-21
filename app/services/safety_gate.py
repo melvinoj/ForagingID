@@ -7,6 +7,10 @@ warning) for one species or for a list of names sent by a client.
 The caution warning is the curator-authored preparation_warnings (an approved
 curator-review warning draft counts — approval writes changed_by='human'),
 the same rule as the experience export's rule 8 (gates.caution_warning).
+
+Batch 6 (B2-03): the decision also carries the species' warnings —
+`warnings` (in-app: full text + reviewed flag, species_warnings()) and
+`handout_warnings` (outgoing: curator-authored only, handout_warnings()).
 """
 from typing import Dict, Iterable, Optional
 
@@ -14,36 +18,46 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.culinary import CulinaryInfo
-from app.models.species import CulinaryInfoHistory, Species, is_curator_authored, safety_decision
+from app.models.species import (CulinaryInfoHistory, Species, WARNING_FIELDS, handout_warnings,
+                                safety_decision, species_warnings)
 from app.services.taxonomy import normalize_taxon_key
 
 
-async def _caution_warning(db: AsyncSession, sp: Species, ci: Optional[CulinaryInfo]) -> Optional[str]:
-    if (sp.edibility_status or "").strip().lower() != "caution":
-        return None
+async def _warning_fields(db: AsyncSession, ci: Optional[CulinaryInfo]) -> dict:
+    """{column: (current, latest_changed_by, latest_new_value)} for the warning columns."""
     if ci is None:
-        ci = await db.scalar(select(CulinaryInfo).where(CulinaryInfo.species_id == sp.id))
-    pw = ci.preparation_warnings if ci else None
-    if not (pw or "").strip():
-        return None
-    row = (await db.execute(
-        select(CulinaryInfoHistory.changed_by, CulinaryInfoHistory.new_value)
-        .where(CulinaryInfoHistory.culinary_info_id == ci.id)
-        .where(CulinaryInfoHistory.field_name == "preparation_warnings")
-        .order_by(CulinaryInfoHistory.changed_at.desc(), CulinaryInfoHistory.id.desc())
-        .limit(1)
-    )).first()
-    if row and is_curator_authored(row[0], row[1], pw):
-        return pw.strip()
-    return None
+        return {}
+    out = {}
+    for col in WARNING_FIELDS.values():
+        row = (await db.execute(
+            select(CulinaryInfoHistory.changed_by, CulinaryInfoHistory.new_value)
+            .where(CulinaryInfoHistory.culinary_info_id == ci.id)
+            .where(CulinaryInfoHistory.field_name == col)
+            .order_by(CulinaryInfoHistory.changed_at.desc(), CulinaryInfoHistory.id.desc())
+            .limit(1)
+        )).first()
+        out[col] = (getattr(ci, col, None), row[0] if row else None, row[1] if row else None)
+    return out
+
+
+def _with_warnings(decision: dict, warnings: dict) -> dict:
+    decision["warnings"] = warnings
+    decision["handout_warnings"] = handout_warnings(decision["level"], warnings)
+    return decision
 
 
 async def safety_for_species(db: AsyncSession, sp: Optional[Species],
                              ci: Optional[CulinaryInfo] = None) -> dict:
     """The served decision for one species row. sp=None fails closed (unknown)."""
     if sp is None:
-        return safety_decision(None, None)
-    return safety_decision(sp.toxicity_severity, sp.edibility_status, await _caution_warning(db, sp, ci))
+        return _with_warnings(safety_decision(None, None), species_warnings({}))
+    if ci is None:
+        ci = await db.scalar(select(CulinaryInfo).where(CulinaryInfo.species_id == sp.id))
+    warnings = species_warnings(await _warning_fields(db, ci))
+    prep = warnings["preparation"]
+    caution_warning = prep["text"] if (prep and prep["reviewed"]
+                                       and (sp.edibility_status or "").strip().lower() == "caution") else None
+    return _with_warnings(safety_decision(sp.toxicity_severity, sp.edibility_status, caution_warning), warnings)
 
 
 async def safety_by_names(db: AsyncSession, names: Iterable[str]) -> Dict[str, dict]:

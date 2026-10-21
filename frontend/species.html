@@ -86,6 +86,62 @@
       padding: 2px 7px; border-radius: 10px;
     }
 
+    /* ── Species views: Large / Grid / List (21 Oct 2026) ───────────────── */
+    .sp-view-toggle { display: inline-flex; flex-shrink: 0; border: 1px solid #4a5e5a; border-radius: 6px; overflow: hidden; }
+    .sp-view-btn {
+      background: #344440; color: #8a9a88; border: 0; padding: 0 10px; min-height: 38px; min-width: 38px;
+      cursor: pointer; display: inline-flex; align-items: center; justify-content: center;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .sp-view-btn + .sp-view-btn { border-left: 1px solid #4a5e5a; }
+    .sp-view-btn.active { background: #3a5c2a; color: #c8ddb0; }
+    .sp-view-btn svg { width: 16px; height: 16px; fill: currentColor; }
+    .species-grid.sp-large { grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 14px; }
+    .sp-large .sp-thumb-lg {
+      margin: -14px -14px 10px; aspect-ratio: 4 / 3; background: #2a3634;
+      border-radius: 8px 8px 0 0; overflow: hidden;
+    }
+    .sp-large .sp-thumb-lg-img { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .sp-list { width: 100%; }
+    .sp-table { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 0.84rem; }
+    .sp-table th { text-align: left; padding: 0; border-bottom: 1px solid #4a5e5a; }
+    .sp-sort-btn {
+      background: none; border: 0; color: #a8c88a; font: inherit; font-weight: 700;
+      padding: 6px 6px; cursor: pointer; width: 100%; text-align: left;
+    }
+    .sp-table td { padding: 5px 6px; border-bottom: 1px solid #3a4c48; vertical-align: middle;
+                   overflow-wrap: anywhere; color: #c8d8c0; }
+    .sp-row { cursor: pointer; }
+    .sp-row:hover { background: #3a4c48; }
+    .sp-row.selected { background: #2e4a2a; }
+    .sp-row a { color: inherit; text-decoration: none; }
+    .sp-table .common { font-weight: 700; color: #a8c88a; }
+    .sp-table .common-de { font-size: 0.75rem; color: #7a6530; font-style: italic; }
+    .sp-table .sci-name { font-style: italic; color: #8aa86a; }
+    .sp-table .col-thumb { width: 52px; position: relative; }
+    .sp-table .col-family { width: 18%; color: #888; }
+    .sp-table .col-sightings { width: 58px; text-align: right; }
+    .sp-table .col-safety { width: 118px; }
+    .sp-thumb-sm { width: 44px; height: 44px; object-fit: cover; border-radius: 4px; display: block; }
+    .sp-table .sel-check { display: none; position: absolute; left: 2px; top: 2px; }
+    .sp-row.selected .sel-check { display: flex; }
+    .sp-table .obs-badge, .sp-table .inedible-badge {
+      display: inline-block; font-size: 0.72rem; padding: 2px 7px; border-radius: 10px; font-weight: 600;
+    }
+    .sp-table .inedible-badge { background: #fef3c7; color: #854d0e; font-weight: 400; }
+    .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+    @media (max-width: 640px) {
+      .species-grid.sp-large { grid-template-columns: 1fr; }
+      .sp-large .sp-thumb-lg { margin: -10px -11px 8px; }
+      .sp-table { font-size: 0.8rem; }
+      .sp-table .col-family { display: none; }              /* phone: family column dropped */
+      .sp-table .col-thumb { width: 44px; }
+      .sp-thumb-sm { width: 38px; height: 38px; }
+      .sp-table .col-sightings { width: 44px; }
+      .sp-table .col-safety { width: 92px; }
+      .sp-table td, .sp-sort-btn { padding: 4px 4px; }
+    }
+
     /* ── Filter chips ───────────────────────────────────────────────────── */
     .filter-chip {
       padding: 5px 13px; border-radius: 16px; border: 1px solid #d0dbb8;
@@ -995,6 +1051,18 @@
     <button class="de-toggle" id="de-toggle-btn" onclick="toggleDeNames()" title="Show/hide German folk names">
       <span class="flag">🇩🇪</span> <span class="de-label">Deutsche Namen</span>
     </button>
+    <!-- View toggle (Large / Grid / List) — setSpeciesView() -->
+    <div class="sp-view-toggle" role="group" aria-label="View">
+      <button type="button" class="sp-view-btn" data-view="large" onclick="setSpeciesView('large')" title="Large — big photo cards" aria-label="Large view">
+        <svg viewBox="0 0 16 16" aria-hidden="true"><rect x="1" y="1" width="6" height="6" rx="1"/><rect x="9" y="1" width="6" height="6" rx="1"/><rect x="1" y="9" width="6" height="6" rx="1"/><rect x="9" y="9" width="6" height="6" rx="1"/></svg>
+      </button>
+      <button type="button" class="sp-view-btn" data-view="grid" onclick="setSpeciesView('grid')" title="Grid — compact cards" aria-label="Grid view">
+        <svg viewBox="0 0 16 16" aria-hidden="true"><rect x="1" y="1" width="4" height="4" rx=".6"/><rect x="6" y="1" width="4" height="4" rx=".6"/><rect x="11" y="1" width="4" height="4" rx=".6"/><rect x="1" y="6" width="4" height="4" rx=".6"/><rect x="6" y="6" width="4" height="4" rx=".6"/><rect x="11" y="6" width="4" height="4" rx=".6"/><rect x="1" y="11" width="4" height="4" rx=".6"/><rect x="6" y="11" width="4" height="4" rx=".6"/><rect x="11" y="11" width="4" height="4" rx=".6"/></svg>
+      </button>
+      <button type="button" class="sp-view-btn" data-view="list" onclick="setSpeciesView('list')" title="List — sortable rows" aria-label="List view">
+        <svg viewBox="0 0 16 16" aria-hidden="true"><rect x="1" y="2" width="3" height="3" rx=".6"/><rect x="6" y="2.75" width="9" height="1.5" rx=".5"/><rect x="1" y="6.5" width="3" height="3" rx=".6"/><rect x="6" y="7.25" width="9" height="1.5" rx=".5"/><rect x="1" y="11" width="3" height="3" rx=".6"/><rect x="6" y="11.75" width="9" height="1.5" rx=".5"/></svg>
+      </button>
+    </div>
   </div>
 
   <!-- Filter chips row -->
@@ -1380,6 +1448,7 @@
 </div>
 
 <script src="/static/js/safety-gate.js"></script>
+<script src="/static/js/species-names.js"></script>
 <script src="/static/js/lists.js"></script>
 <script src="/static/js/gps.js"></script>
 <script>
@@ -1391,7 +1460,17 @@ const _selectMode = params.get('select') === '1' && !speciesParam;
 
 let allSpecies = [];
 let obsMap = null;
-let _spThumbs = {};   // select mode: species name -> [{file, conf}] sorted by confidence desc
+let _spThumbs = {};   // species name -> [{file, conf}] sorted by confidence desc (select mode, Large, List)
+// Species views (Large / Grid / List) — declared before the router runs (TDZ).
+const _SP_VIEWS = ['large', 'grid', 'list'];
+const _SP_VIEW_KEY = 'foragingid_species_view';
+let _spView = (() => {
+  try { const v = localStorage.getItem(_SP_VIEW_KEY); return _SP_VIEWS.includes(v) ? v : 'grid'; }
+  catch (_) { return 'grid'; }
+})();
+let _spListSort = { key: 'name', dir: 1 };   // List view column sort
+let _spLastItems = [];                       // the filtered set the current view shows
+let _spThumbsPromise = null;
 // Track the current species name so the rename form knows the old name.
 // Must be declared here (before loadProfile is called) to avoid TDZ ReferenceError.
 let _profCurrentSciName = '';
@@ -1413,17 +1492,7 @@ async function _initSpSelectMode() {
   _updateSpSelectCount();
   // Build a species → thumbnails map (with confidence) from the map data, so each
   // card can show a photo strip and default to the highest-confidence photo.
-  try {
-    const geo = await (await fetch('/api/map/geojson')).json();
-    (geo.features || []).forEach(f => {
-      const pr = f.properties || {};
-      const sp = pr.species_primary;
-      if (!sp || !pr.thumbnail) return;
-      const file = pr.thumbnail.split('/').pop();
-      (_spThumbs[sp] = _spThumbs[sp] || []).push({ file, conf: pr.confidence || 0 });
-    });
-    Object.values(_spThumbs).forEach(arr => arr.sort((a, b) => b.conf - a.conf));
-  } catch (_) { /* photo strips degrade to empty */ }
+  await _loadSpThumbs();      // shared with the Large / List views; degrades to empty strips
   await loadSpeciesList();
 }
 
@@ -1471,6 +1540,11 @@ function finishSpSelectMode() {
 // ── Species list ──────────────────────────────────────────────────────────
 
 async function loadSpeciesList() {
+  _syncSpViewButtons();
+  // Large / List show thumbnails: fetch them alongside (re-render when they arrive).
+  if (_spView !== 'grid' && !_selectMode) {
+    _loadSpThumbs().then(() => { if (_spView !== 'grid' && allSpecies.length) renderList(_spLastItems); });
+  }
   try {
     const r = await fetch('/api/species/');
     if (!r.ok) throw new Error(`HTTP ${r.status}`);
@@ -1579,23 +1653,95 @@ function applyFilters() {
   renderList(items);
 }
 
-function renderList(items) {
-  if (!items.length) {
-    document.getElementById('species-grid').innerHTML =
-      '<div class="empty-state">No species match the current filters.<br>Try clearing the filter chips above.</div>';
-    return;
-  }
+// ── Species views (Melvin, 21 Oct 2026): Large / Grid / List, like Finder ──
+// One data set (applyFilters → renderList(items)), the same filters, search,
+// In season, DE names and select mode for all three; only the renderer
+// differs. Safety badges come from _spEdibBadge — the grid's own SafetyGate
+// reading, unchanged — so every view shows the same badge. The chosen view is
+// remembered per browser; default Grid.
+// (state — _spView, _spListSort, _spLastItems, _spThumbsPromise — is declared
+// with the router, above: the router calls into these functions at load.)
 
-  document.getElementById('species-grid').innerHTML = items.map(sp => {
-    const displayName = sp.preferred_common_name || (sp.common_names && sp.common_names[0]) || null;
-    const allNames = sp.preferred_common_name
-      ? [sp.preferred_common_name, ...(sp.common_names || []).filter(n => n !== sp.preferred_common_name)]
-      : (sp.common_names || []);
-    // Lookalike warning: prefer structured table, fall back to free-text flag
-    const hasStructuredLook = (sp.lookalike_count || 0) > 0;
-    const warnBadge = (hasStructuredLook || sp.look_alike_warnings)
-      ? '<span class="warn-badge">⚠ look-alike</span>' : '';
-    const enrichBadge = sp.enriched ? '' : '<span class="enrich-badge">no culinary data</span>';
+// species → [{file, conf}] (highest confidence first) from the map data — the
+// source select mode has always used. Loaded once, on first need.
+function _loadSpThumbs() {
+  if (!_spThumbsPromise) {
+    _spThumbsPromise = (async () => {
+      try {
+        const geo = await (await fetch('/api/map/geojson')).json();
+        (geo.features || []).forEach(f => {
+          const pr = f.properties || {};
+          const sp = pr.species_primary;
+          if (!sp || !pr.thumbnail) return;
+          const file = pr.thumbnail.split('/').pop();
+          (_spThumbs[sp] = _spThumbs[sp] || []).push({ file, conf: pr.confidence || 0 });
+        });
+        Object.values(_spThumbs).forEach(arr => arr.sort((a, b) => b.conf - a.conf));
+      } catch (_) { /* thumbnails degrade to the empty placeholder */ }
+    })();
+  }
+  return _spThumbsPromise;
+}
+
+function _spThumbFile(name) {
+  return (_selectMode && ForagingList.getPhoto(name)) || ((_spThumbs[name] || [])[0] || {}).file || null;
+}
+
+function _spThumbImg(name, cls) {
+  const file = _spThumbFile(name);
+  return file
+    ? `<img class="${cls}" src="/thumbnails/${_esc(file)}" loading="lazy" alt="" onerror="this.remove()">`
+    : '';
+}
+
+function setSpeciesView(view) {
+  if (!_SP_VIEWS.includes(view) || view === _spView) return;
+  const anchor = _spFirstVisibleName();
+  _spView = view;
+  try { localStorage.setItem(_SP_VIEW_KEY, view); } catch (_) {}
+  _syncSpViewButtons();
+  if (!allSpecies.length) return;            // list not loaded yet — loadSpeciesList renders it
+  renderList(_spLastItems);
+  _spScrollToName(anchor);
+  if (view !== 'grid' && !_selectMode) {
+    _loadSpThumbs().then(() => {
+      if (_spView !== view) return;
+      const a2 = _spFirstVisibleName();
+      renderList(_spLastItems);
+      _spScrollToName(a2);
+    });
+  }
+}
+
+function _syncSpViewButtons() {
+  document.querySelectorAll('.sp-view-btn').forEach(b => {
+    const on = b.dataset.view === _spView;
+    b.classList.toggle('active', on);
+    b.setAttribute('aria-pressed', on ? 'true' : 'false');
+  });
+}
+
+// Scroll anchor: the first species still on screen and its offset from the
+// top of the window, so a view switch keeps the reader's place where possible
+// (at the top of the page nothing moves).
+function _spFirstVisibleName() {
+  if (window.scrollY <= 0) return null;
+  for (const el of document.querySelectorAll('#species-grid [data-name]')) {
+    const top = el.getBoundingClientRect().top;
+    if (el.getBoundingClientRect().bottom > 60) return { name: el.dataset.name, top };
+  }
+  return null;
+}
+
+function _spScrollToName(anchor) {
+  if (!anchor) return;
+  const el = [...document.querySelectorAll('#species-grid [data-name]')].find(e => e.dataset.name === anchor.name);
+  if (el) window.scrollBy(0, el.getBoundingClientRect().top - anchor.top);
+}
+
+// The species' badge — the grid's existing reading of the served decision
+// (SafetyGate), moved here unchanged so all three views share it.
+function _spEdibBadge(sp) {
     const edib = sp.edibility_status;
     const hasConditions = (sp.condition_count || 0) > 0;
     // Safety gate (batch 5): blocked species (deadly / toxic / toxicity unknown)
@@ -1616,39 +1762,144 @@ function renderList(items) {
       : edib === 'edible'
         ? '<span class="obs-badge" style="background:#1e3828;color:#7ac8a0">✓ edible</span>'
         : '';
-    const kindIcon = (sp.kingdom || '').toLowerCase() === 'fungi' ? '🍄 ' : '';
-    const inner = `
-        ${allNames.length ? `<div class="common">${kindIcon}${allNames.map(_esc).join(' · ')}</div>` : `<div class="common">${kindIcon}</div>`}
+    return edibBadge;
+}
+
+function _spWarnBadges(sp) {
+  const hasStructuredLook = (sp.lookalike_count || 0) > 0;
+  const warnBadge = (hasStructuredLook || sp.look_alike_warnings)
+    ? '<span class="warn-badge">⚠ look-alike</span>' : '';
+  const enrichBadge = sp.enriched ? '' : '<span class="enrich-badge">no culinary data</span>';
+  return enrichBadge + warnBadge;
+}
+
+function _spAllNames(sp) {
+  return sp.preferred_common_name
+    ? [sp.preferred_common_name, ...(sp.common_names || []).filter(n => n !== sp.preferred_common_name)]
+    : (sp.common_names || []);
+}
+
+// List sort order for the safety column: deadly, toxic, unknown, caution,
+// edible, not edible — read from the served decision (ordering only).
+const _SP_SAFETY_ORDER = { deadly: 0, toxic: 1, unknown: 2, caution: 3 };
+function _spSafetyRank(sp) {
+  const d = SafetyGate.decision(sp.safety);
+  if (d.level in _SP_SAFETY_ORDER) return _SP_SAFETY_ORDER[d.level];
+  return d.verdict === 'edible' ? 4 : 5;
+}
+
+const _SP_SORTS = {
+  name:      sp => _sortKey(sp),
+  latin:     sp => sp.scientific_name.toLowerCase(),
+  family:    sp => (sp.family || '').toLowerCase() || '￿',   // no family sorts last
+  sightings: sp => sp.observation_count || 0,
+  safety:    sp => _spSafetyRank(sp),
+};
+
+function _spSortedForList(items) {
+  const f = _SP_SORTS[_spListSort.key] || _SP_SORTS.name;
+  const dir = _spListSort.dir;
+  return [...items].sort((a, b) => {
+    const x = f(a), y = f(b);
+    const c = typeof x === 'number' ? x - y : String(x).localeCompare(String(y));
+    return c ? c * dir : _sortKey(a).localeCompare(_sortKey(b));
+  });
+}
+
+function sortSpeciesList(key) {
+  if (!_SP_SORTS[key]) return;
+  _spListSort = _spListSort.key === key
+    ? { key, dir: -_spListSort.dir }
+    : { key, dir: key === 'sightings' ? -1 : 1 };          // most sightings first
+  renderList(_spLastItems);
+}
+
+function renderList(items) {
+  _spLastItems = items;
+  const grid = document.getElementById('species-grid');
+  grid.className = _spView === 'list' ? 'sp-list' : (_spView === 'large' ? 'species-grid sp-large' : 'species-grid');
+  if (!items.length) {
+    grid.innerHTML =
+      '<div class="empty-state">No species match the current filters.<br>Try clearing the filter chips above.</div>';
+    return;
+  }
+  grid.innerHTML = _spView === 'list' ? _spListHtml(items) : items.map(_spCardHtml).join('');
+}
+
+function _spCardHtml(sp) {
+  const allNames = _spAllNames(sp);
+  const kindIcon = (sp.kingdom || '').toLowerCase() === 'fungi' ? '🍄 ' : '';
+  const large = _spView === 'large';
+  const thumb = large
+    ? `<div class="sp-thumb-lg">${_spThumbImg(sp.scientific_name, 'sp-thumb-lg-img')}</div>` : '';
+  const inner = `${thumb}
+        ${allNames.length ? `<div class="common">${kindIcon}${_esc(spCommonList(allNames))}</div>` : `<div class="common">${kindIcon}</div>`}
         <div class="sci-name">${_esc(sp.scientific_name)}</div>
         ${(sp.common_names_de || []).length ? `<div class="common-de">${sp.common_names_de.map(_esc).join(' · ')}</div>` : ''}
         ${sp.family ? `<div class="family">${_esc(sp.family)}</div>` : ''}
         <span class="obs-badge">${sp.observation_count} sighting${sp.observation_count !== 1 ? 's' : ''}</span>
-        ${enrichBadge}${warnBadge}${edibBadge}`;
+        ${_spWarnBadges(sp)}${_spEdibBadge(sp)}`;
 
-    if (_selectMode) {
-      const name = sp.scientific_name;
-      const selected = ForagingList.has(name);
-      const chosen = ForagingList.getPhoto(name) || (selected && (_spThumbs[name] || [])[0] ? _spThumbs[name][0].file : null);
-      const thumbs = _spThumbs[name] || [];
-      const strip = thumbs.length
-        ? thumbs.slice(0, 8).map(t =>
-            `<img class="ps-thumb${t.file === chosen ? ' chosen' : ''}" data-file="${_esc(t.file)}"
-                  src="/thumbnails/${_esc(t.file)}"
-                  onclick="_selPickPhoto(event, '${_esc(name)}', '${_esc(t.file)}', this)"
-                  onerror="this.remove()">`).join('')
-        : '<span class="ps-empty">No photos available</span>';
-      return `
+  if (_selectMode) {
+    const name = sp.scientific_name;
+    const selected = ForagingList.has(name);
+    const chosen = ForagingList.getPhoto(name) || (selected && (_spThumbs[name] || [])[0] ? _spThumbs[name][0].file : null);
+    const thumbs = _spThumbs[name] || [];
+    const strip = thumbs.length
+      ? thumbs.slice(0, 8).map(t =>
+          `<img class="ps-thumb${t.file === chosen ? ' chosen' : ''}" data-file="${_esc(t.file)}"
+                src="/thumbnails/${_esc(t.file)}"
+                onclick="_selPickPhoto(event, '${_esc(name)}', '${_esc(t.file)}', this)"
+                onerror="this.remove()">`).join('')
+      : '<span class="ps-empty">No photos available</span>';
+    return `
       <div class="species-card sel-card${selected ? ' selected' : ''}" data-name="${_esc(name)}" onclick="_selToggleCard(this)">
         <div class="sel-check">✓</div>
         ${inner}
         <div class="photo-strip" onclick="event.stopPropagation()">${strip}</div>
       </div>`;
-    }
+  }
 
-    return `
-      <a class="species-card" href="/species?s=${encodeURIComponent(sp.scientific_name)}">${inner}
+  return `
+      <a class="species-card" data-name="${_esc(sp.scientific_name)}" href="/species?s=${encodeURIComponent(sp.scientific_name)}">${inner}
       </a>`;
+}
+
+function _spListHtml(items) {
+  const th = (key, label, cls) => {
+    const on = _spListSort.key === key;
+    const arrow = on ? (_spListSort.dir > 0 ? ' ▲' : ' ▼') : '';
+    return `<th class="${cls || ''}" aria-sort="${on ? (_spListSort.dir > 0 ? 'ascending' : 'descending') : 'none'}">
+      <button type="button" class="sp-sort-btn" onclick="sortSpeciesList('${key}')">${label}${arrow}</button></th>`;
+  };
+  const rows = _spSortedForList(items).map(sp => {
+    const name = sp.scientific_name;
+    const allNames = _spAllNames(sp);
+    const kindIcon = (sp.kingdom || '').toLowerCase() === 'fungi' ? '🍄 ' : '';
+    const href = `/species?s=${encodeURIComponent(name)}`;
+    const commonCell = `<div class="common">${kindIcon}${allNames.length ? _esc(spCommon(allNames[0])) : ''}</div>
+        ${(sp.common_names_de || []).length ? `<div class="common-de">${_esc(sp.common_names_de[0])}</div>` : ''}`;
+    const selected = _selectMode && ForagingList.has(name);
+    const rowAttrs = _selectMode
+      ? `class="sp-row sel-card${selected ? ' selected' : ''}" onclick="_selToggleCard(this)"`
+      : `class="sp-row" onclick="location.href='${href}'"`;
+    return `<tr ${rowAttrs} data-name="${_esc(name)}">
+      <td class="col-thumb">${_selectMode ? '<span class="sel-check">✓</span>' : ''}${_spThumbImg(name, 'sp-thumb-sm')}</td>
+      <td class="col-name">${_selectMode ? commonCell : `<a href="${href}" onclick="event.stopPropagation()">${commonCell}</a>`}</td>
+      <td class="col-latin"><span class="sci-name">${_esc(name)}</span></td>
+      <td class="col-family">${_esc(sp.family || '')}</td>
+      <td class="col-sightings">${sp.observation_count || 0}</td>
+      <td class="col-safety">${_spEdibBadge(sp)}</td>
+    </tr>`;
   }).join('');
+  return `<table class="sp-table">
+    <thead><tr>
+      <th class="col-thumb"><span class="sr-only">Photo</span></th>
+      ${th('name', 'Name', 'col-name')}${th('latin', 'Latin', 'col-latin')}${th('family', 'Family', 'col-family')}
+      ${th('sightings', 'Seen', 'col-sightings')}${th('safety', 'Safety', 'col-safety')}
+    </tr></thead>
+    <tbody>${rows}</tbody>
+  </table>`;
 }
 
 // Legacy alias (old oninput handler)
@@ -1769,14 +2020,14 @@ function renderProfile(data, observations) {
       if (_isGuestView) {
         return `<span class="common-name-item${isPref ? ' pref-name' : ''}"
                       style="${isPref ? 'font-weight:700' : ''}">
-                  ${_esc(n)}${isPref ? ' ★' : ''}
+                  ${_esc(spCommon(n))}${isPref ? ' ★' : ''}
                 </span>`;
       }
       return `<span class="common-name-item${isPref ? ' pref-name' : ''}"
                     title="${isPref ? 'Preferred sort name' : 'Click to set as preferred sort name'}"
                     onclick="setPreferredCommonName(${JSON.stringify(sp.scientific_name)}, ${JSON.stringify(n)})"
                     style="cursor:pointer;${isPref ? 'font-weight:700;text-decoration:underline dotted' : ''}">
-                ${_esc(n)}${isPref ? ' ★' : ''}
+                ${_esc(spCommon(n))}${isPref ? ' ★' : ''}
               </span>`;
     }).join(' <span style="color:#aaa">·</span> ');
     if (preferred && !_isGuestView) {
@@ -1785,7 +2036,7 @@ function renderProfile(data, observations) {
         title="Clear preferred sort name">[clear ★]</span>`;
     }
   } else if (preferred) {
-    commonEl.textContent = preferred;
+    commonEl.textContent = spCommon(preferred);
   } else {
     commonEl.textContent = '';
   }
@@ -1888,16 +2139,24 @@ function renderProfile(data, observations) {
   // decision (_safety.level): 'deadly' | 'toxic' | 'unknown' | 'caution' | 'none'.
   // ALWAYS FIRST, always visible.
   {
-    const _warnBlock = (key, title, val) => {
+    // Batch 6 (B2-03): the text shown is the served safety.warnings entry
+    // ({text, reviewed} — full text, placeholder markers never shown); text that
+    // is not curator-authored is labelled. data-field-orig keeps the REAL stored
+    // value so inline edit seeds from the field.
+    const _unrev = w => (w && !w.reviewed)
+      ? ` <span class="sw-unreviewed" style="font-weight:400;font-style:italic;font-size:0.85em;opacity:0.8">(${_esc(SafetyGate.UNREVIEWED)})</span>` : '';
+    const _warnBlock = (key, title, w, raw) => {
       return `<div class="safety-warn">
-        <strong>⚠ ${title}</strong>
-        <br><span data-field-key="${key}" data-field-orig="${_esc(val)}">${_esc(val)}</span>
+        <strong>⚠ ${title}</strong>${_unrev(w)}
+        <br><span data-field-key="${key}" data-field-orig="${_esc(raw)}">${_esc(w.text)}</span>
       </div>`;
     };
     const severity = _safety.level;   // deadly | toxic | unknown | caution | none (served)
     const safetyEl = document.getElementById('safety-content');
     const prepRaw  = (ci && ci.preparation_warnings) || '';
     const lookRaw  = (ci && ci.look_alike_warnings)  || '';
+    const prepW    = (_safety.warnings || {}).preparation || null;
+    const lookW    = (_safety.warnings || {}).look_alike  || null;
 
     if (severity === 'deadly' || severity === 'toxic') {
       // Not-safe species: the SAFETY box itself IS the warning. Never a green
@@ -1908,9 +2167,8 @@ function renderProfile(data, observations) {
       // description — misleading inside a red NOT SAFE box for a toxic/deadly
       // species, so it's treated like "no detail" rather than shown verbatim.
       const isPrepNoneKnown = prepRaw && prepRaw.trim().toLowerCase() === 'none known';
-      const bodyText = isPrepNoneKnown
-        ? 'No PFAF hazard detail on record'
-        : (prepRaw || DEFAULT_NOTSAFE_TEXT);
+      const bodyText = prepW ? prepW.text
+        : isPrepNoneKnown ? 'No PFAF hazard detail on record' : DEFAULT_NOTSAFE_TEXT;
       const isDeadly = (severity === 'deadly');
       const boxClass = isDeadly ? 'safety-severity safety-deadly' : 'safety-severity safety-toxic';
       const title    = isDeadly ? '☠ NOT SAFE — DEADLY' : 'NOT SAFE';
@@ -1919,12 +2177,12 @@ function renderProfile(data, observations) {
       let html =
         `<div class="${boxClass}">
           <div class="safety-severity-title">${title}</div>
-          <div class="safety-severity-body" data-field-key="preparation_warnings" data-field-orig="${_esc(prepRaw)}">${_esc(bodyText)}</div>
+          <div class="safety-severity-body" data-field-key="preparation_warnings" data-field-orig="${_esc(prepRaw)}">${_esc(bodyText)}${_unrev(prepW)}</div>
         </div>`;
       // Look-alike free-text still renders, below the coloured warning.
-      if (lookRaw) html += _warnBlock('look_alike_warnings', 'Look-alike Warning', lookRaw);
+      if (lookW) html += _warnBlock('look_alike_warnings', 'Look-alike Warning', lookW, lookRaw);
       safetyEl.innerHTML = html;
-    } else if (ci && (lookRaw || prepRaw)) {
+    } else if (ci && (lookW || prepW || prepRaw.trim().toLowerCase() === 'none known')) {
       // severity 'none' with populated warning fields.
       // prepRaw === 'None known' is PFAF's explicit "checked, nothing found" value
       // (from the ratings-table Known Hazards cell) — a confirmed-clear state, not
@@ -1936,10 +2194,10 @@ function renderProfile(data, observations) {
         html += `<div class="safety-confirmed" data-field-key="preparation_warnings" data-field-orig="${_esc(prepRaw)}">
           ✓ PFAF: no known hazards recorded
         </div>`;
-      } else if (prepRaw) {
-        html += _warnBlock('preparation_warnings', 'Preparation Warning', prepRaw);
+      } else if (prepW) {
+        html += _warnBlock('preparation_warnings', 'Preparation Warning', prepW, prepRaw);
       }
-      if (lookRaw) html += _warnBlock('look_alike_warnings',  'Look-alike Warning',  lookRaw);
+      if (lookW) html += _warnBlock('look_alike_warnings',  'Look-alike Warning',  lookW, lookRaw);
       safetyEl.innerHTML = html;
     } else if (severity === 'caution') {
       // Caution species with no documented reason: amber placeholder.
@@ -3545,14 +3803,14 @@ function _cnRefreshDisplay(sciName) {
       if (_isGuestView) {
         return `<span class="common-name-item${isPref ? ' pref-name' : ''}"
                       style="${isPref ? 'font-weight:700' : ''}">
-                  ${_esc(n)}${isPref ? ' ★' : ''}
+                  ${_esc(spCommon(n))}${isPref ? ' ★' : ''}
                 </span>`;
       }
       return `<span class="common-name-item${isPref ? ' pref-name' : ''}"
                     title="${isPref ? 'Preferred sort name' : 'Click to set as preferred sort name'}"
                     onclick="setPreferredCommonName(${JSON.stringify(sciName)}, ${JSON.stringify(n)})"
                     style="cursor:pointer;${isPref ? 'font-weight:700;text-decoration:underline dotted' : ''}">
-                ${_esc(n)}${isPref ? ' ★' : ''}
+                ${_esc(spCommon(n))}${isPref ? ' ★' : ''}
               </span>`;
     }).join(' <span style="color:#aaa">·</span> ');
     if (preferred && !_isGuestView) {

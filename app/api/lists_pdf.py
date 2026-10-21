@@ -14,7 +14,7 @@ from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.models.species import safety_decision
+from app.models.species import safety_decision, sentence_case_name
 from app.services.safety_gate import safety_by_names
 
 log = logging.getLogger(__name__)
@@ -138,10 +138,15 @@ def _flatten_species(name: str, profile: Optional[Dict], base_by_name: Dict,
                      safety: Optional[Dict] = None) -> Dict:
     """Merge base species record + profile into a flat dict for the template.
     safety = the server's safety_decision() for this species (B2-09: the
-    client's severity / culinary text is never trusted). Missing → fails closed."""
+    client's severity / culinary text is never trusted). Missing → fails closed.
+    The PDF is an outgoing surface (batch 6): the handout half of the decision
+    gates culinary content, and the warnings come from the server's
+    handout_warnings (curator-authored, toxic fallback included), never from
+    the payload."""
     if safety is None:
         safety = safety_decision(None, None)
-    allowed = bool(safety.get('culinary_allowed'))
+    allowed = bool(safety.get('handout_culinary_allowed'))
+    hw = safety.get('handout_warnings') or {}
     base = base_by_name.get(name) or {}
     sp   = (profile or {}).get('species') or base
     cul  = (profile or {}).get('culinary') or {}
@@ -167,15 +172,15 @@ def _flatten_species(name: str, profile: Optional[Dict], base_by_name: Dict,
 
     return {
         'scientific_name': name,
-        'common_name':    common_names[0] if common_names else '',
+        'common_name':    sentence_case_name(common_names[0]) if common_names else '',   # names: sentence case
         'edibility_status': sp.get('edibility_status') or '',
         'culinary_allowed': allowed,
         'safety_level':    safety.get('level') or 'unknown',
-        'safety_label':    safety.get('label') or '',
+        'safety_label':    safety.get('handout_label', safety.get('label')) or '',
         'safety_warning':  safety.get('warning') or '',
         'id_notes':        id_notes,
-        'look_alike':      (cul.get('look_alike_warnings') or '').strip(),
-        'preparation_warnings': (cul.get('preparation_warnings') or '').strip(),
+        'look_alike':      (hw.get('look_alike') or '').strip(),
+        'preparation_warnings': (hw.get('preparation') or '').strip(),
         'edible_parts':    cul.get('edible_parts') or '',
         'harvest_stage':   cul.get('harvest_stage') or '',
         'medicinal_notes': cul.get('medicinal_notes') or '',

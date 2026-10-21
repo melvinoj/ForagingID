@@ -75,6 +75,9 @@ EXPECT = {   # name: (level, allowed, warning)
     "Not in the database": ("unknown", False, None),
 }
 BLOCKED = [n for n, (lvl, ok, _) in EXPECT.items() if not ok]
+# Outgoing surfaces (batch 6): a caution species without a curator-authored
+# warning also withholds culinary content there (handout_culinary_allowed).
+HANDOUT_WITHHELD = {"Ajuga reptans"}
 
 
 def _run(coro):
@@ -240,6 +243,7 @@ def test_pdf_every_layout_gates_on_the_server_decision():
     for layout in ("field_guide", "recipe_booklet", "workshop"):
         for name, html in _pdf_html(layout, decisions).items():
             level, ok, warn = EXPECT[name]
+            ok = ok and name not in HANDOUT_WITHHELD
             for sentinel in (EDIBLE_TEXT, RECIPE_TEXT, "HARVEST-SENTINEL"):
                 if ok and layout == "field_guide" and sentinel == RECIPE_TEXT:
                     continue                                  # field guide prints no recipe
@@ -251,7 +255,7 @@ def test_pdf_every_layout_gates_on_the_server_decision():
             if label:
                 assert label in html, (layout, name, label)
             if warn:
-                assert "⚠ Caution: " + warn in html, (layout, name)
+                assert "Caution: " + warn in html, (layout, name)     # workshop: inside the ⚠ Safety box
             assert "AI-approved prep text" not in html.split("Caution:")[-1][:60] if "Caution:" in html else True
     # No decision at all (flatten called without one) fails closed.
     flat = lp._flatten_species("Allium ursinum", _client_profile("Allium ursinum"), {})
@@ -314,6 +318,7 @@ def test_export_summary_regates_server_side():
         blocks[name] = html[i: j if j != -1 else html.index("Also here:")]
     for name, (level, ok, warn) in EXPECT.items():
         b = blocks[name]
+        ok = ok and name not in HANDOUT_WITHHELD
         assert (EDIBLE_TEXT in b) == ok and (RECIPE_TEXT in b) == ok, (name, b[:300])
         if SAFETY_LABELS[level]:
             assert SAFETY_LABELS[level] in b, (name, level)
@@ -345,7 +350,7 @@ def test_every_page_loads_the_helper_and_sw_caches_it():
     for p in PAGES:
         assert '<script src="/static/js/safety-gate.js"></script>' in _src(p), p
     sw = _src("frontend/static/sw.js")
-    assert "'/static/js/safety-gate.js'" in sw and "foragingid-v8" in sw
+    assert "'/static/js/safety-gate.js'" in sw and "foragingid-v9" in sw
 
 
 def test_no_page_rederives_the_rule():
@@ -375,11 +380,11 @@ def test_culinary_reads_go_through_the_gate():
                 ok = (
                     # Lists / print: `cul` is _printCulinary(prof) (gated); recipes only via _printRecipes
                     (rel in ("frontend/lists.html", "frontend/print.html")
-                     and ("cul." in line or "SafetyGate.recipes" in line))
+                     and ("cul." in line or "SafetyGate.recipes" in line or "SafetyGate.handoutRecipes" in line))
                     # map pop-up (inside the SafetyGate.allowed else-branch), Export summary (gate.ok),
                     # Find recipes (server-gated by CULINARY_ALLOWED_SQL)
                     or (rel == "frontend/index.html" and (
-                        "ci.edible_parts" in line or "gate.ok ? (ed?.recipes" in line
+                        "ci.edible_parts" in line or "_hOk ? (ed?.recipes" in line
                         or "ci ? (ci.edible_parts" in line or "sp.recipes" in line))
                     # species page: inside `if (culinaryBlocked) … else` / SafetyGate.allowed
                     or (rel == "frontend/species.html" and (
@@ -406,7 +411,7 @@ def test_gated_branches_are_where_the_grep_assumes():
     for p in ("frontend/lists.html", "frontend/print.html"):
         s = _src(p)
         acc = s[s.index("function _printCulinary("):s.index("function _printSafety(")]
-        assert "SafetyGate.culinary(" in acc and "SafetyGate.recipes(" in acc
+        assert "SafetyGate.handoutCulinary(" in acc and "SafetyGate.handoutRecipes(" in acc   # batch 6: handout rule
 
 
 def test_js_and_pdf_share_one_field_list_and_labels():

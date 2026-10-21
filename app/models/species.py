@@ -537,6 +537,13 @@ SAFETY_LABELS = {
     "none":    "",
 }
 
+# Outgoing surfaces (Melvin, 21 Oct 2026 — batch 6): browser print, PDF, walk
+# Export summary, experience page. A CAUTION species with no curator-authored
+# preparation warning withholds its culinary content there and carries this
+# label instead of "⚠ caution" — experience-gates rule 8, applied to every
+# outgoing surface. In-app surfaces keep "⚠ caution" and the culinary content.
+CAUTION_UNREVIEWED_LABEL = "⚠ caution — warning not yet reviewed"
+
 
 def safety_decision(toxicity_severity: Optional[str], edibility_status: Optional[str],
                     caution_warning: Optional[str] = None) -> dict:
@@ -552,13 +559,95 @@ def safety_decision(toxicity_severity: Optional[str], edibility_status: Optional
     else:
         level = "none"
     warning = (caution_warning or "").strip() or None
+    culinary = level == "caution" or (level == "none" and verdict == "edible")
+    caution_unreviewed = level == "caution" and warning is None
     return {
         # == verdict in CULINARY_VERDICTS and severity_is_none() (levels above)
-        "culinary_allowed": level == "caution" or (level == "none" and verdict == "edible"),
+        "culinary_allowed": culinary,
         "level": level,
         "label": SAFETY_LABELS[level],
         "warning": warning if level == "caution" else None,
         "verdict": verdict or None,     # the DB verdict the decision used (lowercased)
+        # Outgoing surfaces only (CAUTION_UNREVIEWED_LABEL above).
+        "handout_culinary_allowed": culinary and not caution_unreviewed,
+        "handout_label": CAUTION_UNREVIEWED_LABEL if caution_unreviewed else SAFETY_LABELS[level],
+    }
+
+
+# ---------------------------------------------------------------------------
+# Placeholder marker (audit E-14) — the ONLY definition of "this text stands in
+# for content and is not content": the whole value is one parenthesised phrase
+# of at most 80 characters, e.g. "(set)" or "(human-authored
+# preparation_warnings)". One-off SQL in June 2026 wrote 11 such
+# culinary_info_history rows. A marker is never shown as warning text and never
+# counts as curator-authored; the DB refuses new ones (migration 0051, whose
+# trigger condition is placeholder_marker_sql() — kept equal to this rule by
+# tests/test_batch6_warnings.py).
+# ---------------------------------------------------------------------------
+PLACEHOLDER_MARKER_MAX = 80
+_SQL_WS = "' ' || char(9) || char(10) || char(13)"
+
+
+def is_placeholder_marker(text: Optional[str]) -> bool:
+    t = (text or "").strip(" \t\n\r")
+    return 2 <= len(t) <= PLACEHOLDER_MARKER_MAX and t[0] == "(" and t[-1] == ")" and ")" not in t[1:-1]
+
+
+def placeholder_marker_sql(col: str) -> str:
+    """SQLite form of is_placeholder_marker() for a column expression."""
+    t = f"trim({col}, {_SQL_WS})"
+    return (f"(length({t}) BETWEEN 2 AND {PLACEHOLDER_MARKER_MAX} AND substr({t}, 1, 1) = '(' "
+            f"AND substr({t}, -1, 1) = ')' AND instr(substr({t}, 2, length({t}) - 2), ')') = 0)")
+
+
+# ---------------------------------------------------------------------------
+# Species warnings (batch 6, B2-03) — the ONLY definition of which
+# preparation / look-alike warning text a surface shows. Every surface reads it
+# through the served `safety.warnings` / `safety.handout_warnings`
+# (app/services/safety_gate.py → static/js/safety-gate.js; the PDF, Export
+# summary and experience export call it server-side).
+#   species_warnings — in-app view: the full text of each field (never cut),
+#                      with reviewed=True when curator-authored. Empty text,
+#                      PFAF's "None known" and placeholder markers are no
+#                      warning. In-app pages label reviewed=False text "Source
+#                      text — not yet reviewed" and never drop it.
+#   handout_warnings — outgoing view: curator-authored text only; a toxic /
+#                      deadly species with no curator-authored preparation text
+#                      prints TOXIC_FALLBACK_TEXT. Preparation warnings print for
+#                      every verdict.
+# ---------------------------------------------------------------------------
+TOXIC_FALLBACK_TEXT = ("Not safe to eat. Please simply appreciate the natural beauty and power "
+                       "of this plant without handling or consuming it.")
+WARNING_FIELDS = {"preparation": "preparation_warnings", "look_alike": "look_alike_warnings"}
+
+
+def warning_text(current: Optional[str]) -> Optional[str]:
+    t = (current or "").strip()
+    if not t or t.lower() == "none known" or is_placeholder_marker(t):
+        return None
+    return t
+
+
+def species_warnings(fields: dict) -> dict:
+    """fields: {culinary_info column: (current, latest_changed_by, latest_new_value)}
+    for the two WARNING_FIELDS columns (a missing column = no text)."""
+    out = {}
+    for key, col in WARNING_FIELDS.items():
+        cur, by, new = fields.get(col) or (None, None, None)
+        t = warning_text(cur)
+        out[key] = {"text": t, "reviewed": is_curator_authored(by, new, cur)} if t else None
+    return out
+
+
+def handout_warnings(level: str, warnings: dict) -> dict:
+    def reviewed(w):
+        return w["text"] if w and w.get("reviewed") else None
+    prep = reviewed((warnings or {}).get("preparation"))
+    fallback = prep is None and level in TOXIC_SEVERITIES
+    return {
+        "preparation": TOXIC_FALLBACK_TEXT if fallback else prep,
+        "preparation_is_fallback": fallback,
+        "look_alike": reviewed((warnings or {}).get("look_alike")),
     }
 
 
@@ -570,7 +659,21 @@ def safety_decision(toxicity_severity: Optional[str], edibility_status: Optional
 # Used by map pins, the walk API, critical hazards, the walk summary export and
 # scripts/experience_export (en_name). Frontend formatting: _spNameHtml.
 # ---------------------------------------------------------------------------
+def sentence_case_name(name: Optional[str]) -> str:
+    """Display form of ONE English common name (Melvin, 21 Oct 2026): the first
+    character upper-cased when it is a letter, the rest exactly as sourced
+    ("disc mayweed" → "Disc mayweed", "St John's wort" unchanged). Display
+    only — stored names stay as sourced. German names are never passed here.
+    JS twin: spCommon() in frontend/static/js/species-names.js."""
+    n = (name or "").strip()
+    return n[0].upper() + n[1:] if n and n[0].isalpha() else n
+
+
 def display_common_name(preferred: Optional[str], common_names) -> str:
+    return sentence_case_name(_raw_common_name(preferred, common_names))
+
+
+def _raw_common_name(preferred: Optional[str], common_names) -> str:
     import json as _json
     p = (preferred or "").strip()
     if p and not p.startswith("["):
@@ -609,7 +712,8 @@ def is_fungal_kingdom(kingdom: Optional[str]) -> bool:
 def is_curator_authored(latest_changed_by: Optional[str], latest_new_value: Optional[str],
                         current: Optional[str]) -> bool:
     cur = (current or "").strip()
-    return bool(cur) and latest_changed_by == "human" and (latest_new_value or "").strip() == cur
+    return bool(cur) and latest_changed_by == "human" and (latest_new_value or "").strip() == cur \
+        and not is_placeholder_marker(cur)      # E-14: a marker is never content
 
 
 # ---------------------------------------------------------------------------

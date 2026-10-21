@@ -7,8 +7,14 @@ discipline as app/models/observation.py's predicates).
 Rules (Melvin, 15 Oct 2026; tightened for Publish B1, 18 Oct 2026):
   1. Species shown = species of this walk's observations that are
      HUMAN-confirmed (is_human_confirmed — approved/manually_verified,
-     identified, and a human made the decision; AI-agreed-only is excluded),
-     not in hide_obs_ids and not in the walk's hide_species_ids.
+     identified, and a human made the decision), not in hide_obs_ids and not
+     in the walk's hide_species_ids.
+     1b (Melvin, 21 Oct 2026): an observation confirmed only by dual-API
+     agreement (AI-agreed) also counts when the app's shared safety decision
+     allows its species — severity 'none' and verdict edible / caution /
+     inedible (ai_agreed_included). Every other AI-agreed species is a rule-7
+     blocker: ai_agreed_included is exactly `not unconfirmed_hazard`, so an
+     AI-agreed species is either shown or blocks — never silently dropped.
   2. Edible claims and recipes ONLY if edibility_verified=1 AND
      edibility_verified_by='human'. A species whose verdict is edible/caution
      but NOT human-verified, and that would otherwise get an edible label,
@@ -21,7 +27,7 @@ Rules (Melvin, 15 Oct 2026; tightened for Publish B1, 18 Oct 2026):
      whatever the data (was config apiaceae_id_only; now unconditional).
   5. Recipes: status='approved' only; never is_medicinal_prep.
   6. No medicinal content anywhere.
-  7. A species on the route that is AI-agreed only (excluded by rule 1) and
+  7. A species on the route that is AI-agreed only (not shown by rule 1b) and
      toxic/deadly or of unknown toxicity is a BLOCKER: the full build fails
      (the plan still prints) until a human confirms or re-identifies it.
      Also per STOP: any AI-agreed-only member observation at a stop whose
@@ -43,7 +49,9 @@ from __future__ import annotations
 import sqlite3
 
 from app.models.observation import is_human_confirmed
-from app.models.species import is_curator_authored, is_toxic_severity, severity_is_none
+from app.models.observation import is_confirmed_observation
+from app.models.species import (CAUTION_UNREVIEWED_LABEL, WARNING_FIELDS, handout_warnings, is_curator_authored, is_toxic_severity,
+                                safety_decision, severity_is_none, species_warnings)
 
 APPROVED_REVIEW = ("approved", "manually_verified")
 APIACEAE = "Apiaceae"
@@ -70,15 +78,17 @@ class GateError(RuntimeError):
 
 # ── observations ─────────────────────────────────────────────────────────────
 
-def obs_passes(obs: dict, hide_obs_ids: set, hide_species_ids=frozenset()) -> bool:
-    """Rule 1 for a single observation."""
+def obs_passes(obs: dict, hide_obs_ids: set, hide_species_ids=frozenset(), sp=None) -> bool:
+    """Rule 1 (+ 1b) for a single observation. sp = its species row; without it
+    an AI-agreed observation fails closed (not shown)."""
     return (
         obs["id"] not in hide_obs_ids
         and obs["species_id"] is not None
         and obs["species_id"] not in hide_species_ids
         and obs["review_status"] in APPROVED_REVIEW
         and obs["identification_status"] == "identified"
-        and is_human_confirmed(obs)
+        and (is_human_confirmed(obs)
+             or (is_confirmed_observation(obs) and sp is not None and ai_agreed_included(sp)))
     )
 
 
@@ -116,12 +126,26 @@ def taxonomy_warnings(sp: dict) -> list:
     return out
 
 
+def ai_agreed_included(sp) -> bool:
+    """Rule 1b (Melvin, 21 Oct 2026): may an AI-agreed-only species be shown?
+    The app's shared safety decision (safety_decision) — level 'none' or
+    'caution', i.e. severity exactly 'none' and a verdict that is neither toxic
+    nor unassessed (edible / caution / inedible) — and not toxic by this file's
+    rule 3 either. sp=None fails closed."""
+    if sp is None or is_toxic(sp):
+        return False
+    return safety_decision(sp.get("toxicity_severity"), sp.get("edibility_status"))["level"] in ("none", "caution")
+
+
 def unconfirmed_hazard(sp) -> bool:
     """Rule 7 (B2, 19 Oct 2026): an AI-agreed-only species on the route that is
     toxic/deadly OR of unknown toxicity blocks the full build — it is left off
     the page, so its stop would carry no ☠. sp=None (observation not linked to
-    a species row) is unknown, so it blocks too (fails closed)."""
-    return sp is None or is_toxic(sp) or not toxicity_known_safe(sp)
+    a species row) is unknown, so it blocks too (fails closed). Exactly the
+    complement of ai_agreed_included (rule 1b): an AI-agreed species is shown
+    or it blocks. (Since 1b this also blocks a severity-'none' species whose
+    verdict is unassessed — none exist on 21 Oct 2026.)"""
+    return not ai_agreed_included(sp)
 
 
 def obs_unconfirmed_hazard(obs: dict, sp) -> bool:
@@ -168,8 +192,8 @@ def caution_warning(sp: dict, ci: dict, conn: sqlite3.Connection):
     None. Toxic species are rule 3's (their warning is the toxic one)."""
     if not is_caution(sp) or is_toxic(sp):
         return None
-    pw = ci.get("preparation_warnings")
-    return pw.strip() if human_authored(conn, ci.get("id"), "preparation_warnings", pw) else None
+    prep = species_warnings(_latest_rows(conn, ci))["preparation"]     # the app's one warnings rule
+    return prep["text"] if prep and prep["reviewed"] else None
 
 
 def may_claim_edible(sp: dict, ci: dict, conn: sqlite3.Connection, cfg: dict) -> bool:
@@ -206,24 +230,41 @@ def edibility_badge(sp: dict, ci: dict, conn: sqlite3.Connection, cfg: dict) -> 
             f"— it would show an edible label. Verify it in the app, or add {sp['id']} to this walk's hide_species_ids.")
     if may_claim_edible(sp, ci, conn, cfg):
         if sp["edibility_status"] == "caution":
+            if caution_warning(sp, ci, conn) is None:          # rule 8 (batch 6: same label as every handout)
+                return {"kind": "caution", "text": CAUTION_UNREVIEWED_LABEL}
             return {"kind": "caution", "text": "Edible with caution"}
         return {"kind": "edible", "text": "Edible"}
     return {"kind": "none", "text": "For identification"}
 
 
-def safety_texts(sp: dict, ci: dict, conn: sqlite3.Connection, toxic_fallback: str) -> dict:
-    """Curator-authored warnings only; toxic species always get a warning."""
+def _latest_rows(conn: sqlite3.Connection, ci: dict) -> dict:
+    """{column: (current, latest_changed_by, latest_new_value)} — species_warnings() input."""
     out = {}
-    if human_authored(conn, ci.get("id"), "look_alike_warnings", ci.get("look_alike_warnings")):
-        out["look_alike"] = ci["look_alike_warnings"].strip()
+    for col in WARNING_FIELDS.values():
+        row = conn.execute(
+            """SELECT changed_by, new_value FROM culinary_info_history
+                WHERE culinary_info_id = ? AND field_name = ?
+                ORDER BY changed_at DESC, id DESC LIMIT 1""",
+            (ci.get("id"), col),
+        ).fetchone() if ci.get("id") is not None else None
+        out[col] = (ci.get(col), row[0] if row else None, row[1] if row else None)
+    return out
+
+
+def safety_texts(sp: dict, ci: dict, conn: sqlite3.Connection) -> dict:
+    """The app's handout_warnings() (batch 6, one definition for every outgoing
+    surface): curator-authored warnings only; toxic species always get a
+    warning (TOXIC_FALLBACK_TEXT when none is curator-authored). Keys: toxic /
+    caution / preparation (the preparation warning, by verdict) + look_alike."""
+    level = "toxic" if is_toxic(sp) else safety_decision(sp.get("toxicity_severity"), sp.get("edibility_status"))["level"]
+    hw = handout_warnings(level, species_warnings(_latest_rows(conn, ci)))
+    out = {}
+    if hw["look_alike"]:
+        out["look_alike"] = hw["look_alike"]
     if is_toxic(sp):
-        if human_authored(conn, ci.get("id"), "preparation_warnings", ci.get("preparation_warnings")):
-            out["toxic"] = ci["preparation_warnings"].strip()
-        else:
-            out["toxic"] = toxic_fallback
-    caution = caution_warning(sp, ci, conn)                 # rule 8
-    if caution:
-        out["caution"] = caution
+        out["toxic"] = hw["preparation"]
+    elif hw["preparation"]:
+        out["caution" if is_caution(sp) else "preparation"] = hw["preparation"]   # caution = rule 8's reason
     return out
 
 
@@ -262,6 +303,9 @@ def recipe_allowed(sp: dict, ci: dict, recipe: dict, conn: sqlite3.Connection, c
         return False, "Apiaceae — ID card only"
     if not may_claim_edible(sp, ci, conn, cfg):
         return False, "no edible claim (not human-verified edible/caution)"
-    if is_caution(sp) and caution_warning(sp, ci, conn) is None:
+    # Rule 8 = the app's outgoing-surface rule (safety_decision's
+    # handout_culinary_allowed, batch 6) — one predicate for every handout.
+    d = safety_decision(sp.get("toxicity_severity"), sp.get("edibility_status"), caution_warning(sp, ci, conn))
+    if d["level"] == "caution" and not d["handout_culinary_allowed"]:
         return False, CAUTION_WITHHELD                       # rule 8
     return True, ""

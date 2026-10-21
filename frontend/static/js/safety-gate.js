@@ -49,6 +49,92 @@
       'border-left:3px solid #f59e0b;padding:4px 8px;margin:4px 0">⚠ Caution: ' + _h(d.warning) + '</div>';
   }
 
+  // ── Batch 6 (B2-03): warnings and outgoing surfaces ───────────────────────
+  // The server serves safety.warnings (in-app: {preparation, look_alike}, each
+  // {text, reviewed} or null — app/models/species.py species_warnings) and
+  // safety.handout_warnings (outgoing: curator-authored text only, toxic
+  // fallback included — handout_warnings), plus handout_culinary_allowed /
+  // handout_label. Text is never cut here; compact surfaces collapse it.
+  const UNREVIEWED = 'Source text — not yet reviewed';
+  const CAUTION_UNREVIEWED = '⚠ caution — warning not yet reviewed';
+  const WARN_TITLES = { look_alike: 'Look-alike warning', preparation: 'Preparation warning' };
+
+  // Outgoing surfaces (print, PDF, Export summary): culinary content also needs
+  // a curator-authored caution warning. Missing field (old payload) fails closed.
+  function handoutAllowed(safety) {
+    const d = decision(safety);
+    return allowed(d) && d.handout_culinary_allowed === true;
+  }
+
+  function handoutCulinary(cul, safety) {
+    const out = Object.assign({}, cul || {});
+    if (!handoutAllowed(safety)) CULINARY_FIELDS.forEach(function (f) { delete out[f]; });
+    return out;
+  }
+
+  function handoutRecipes(list, safety) {
+    return handoutAllowed(safety) ? (list || []) : [];
+  }
+
+  // Badge for outgoing surfaces: "⚠ caution — warning not yet reviewed" for a
+  // caution species without a curator-authored warning.
+  function handoutBadge(safety, extraStyle) {
+    const d = decision(safety);
+    let label = typeof d.handout_label === 'string' ? d.handout_label : d.label;
+    if (d.level === 'caution' && d.handout_culinary_allowed !== true) label = CAUTION_UNREVIEWED;
+    return badge(Object.assign({}, d, { label: label }), extraStyle);
+  }
+
+  function _warnBox(title, text, note, collapsed) {
+    const head = '⚠ ' + _h(title) + (note ? ' <span class="sw-unreviewed" style="font-weight:400;font-style:italic;' +
+      'font-size:0.92em;color:#78716c">(' + _h(note) + ')</span>' : '');
+    const box = 'font-size:0.78rem;color:#7a2000;background:#fff7ed;border-left:3px solid #ea580c;' +
+      'padding:4px 8px;margin:4px 0;line-height:1.4;white-space:pre-wrap';
+    if (collapsed) {
+      return '<details class="safety-warn-text" style="' + box + '"><summary style="cursor:pointer;' +
+        'font-weight:700;white-space:normal">' + head + '</summary>' + _h(text) + '</details>';
+    }
+    return '<div class="safety-warn-text" style="' + box + '"><strong>' + head + '</strong><br>' + _h(text) + '</div>';
+  }
+
+  // In-app warnings (map pop-up, walk stop card, proximity alert, species
+  // page): every warning, full text; text that is not curator-authored is
+  // labelled, never dropped. opts.collapse: 'all' collapses every warning,
+  // 'auto' collapses all but a caution species' preparation warning.
+  function warnings(safety, opts) {
+    const d = decision(safety);
+    const w = (d && d.warnings) || {};
+    const collapse = (opts && opts.collapse) || 'none';
+    return ['look_alike', 'preparation'].map(function (k) {
+      const x = w[k];
+      if (!x || !x.text) return '';
+      const folded = collapse === 'all' || (collapse === 'auto' && !(k === 'preparation' && d.level === 'caution'));
+      return _warnBox(WARN_TITLES[k], x.text, x.reviewed ? '' : UNREVIEWED, folded);
+    }).join('');
+  }
+
+  // Outgoing warnings: {preparation, look_alike} text (curator-authored, toxic
+  // fallback included), for printers that lay the text out themselves.
+  function handoutWarnings(safety) {
+    const hw = (decision(safety) || {}).handout_warnings || {};
+    return { preparation: (hw.preparation || '').trim(), look_alike: (hw.look_alike || '').trim() };
+  }
+
+  // Outgoing warnings as printed lines (Lists, browser print): look-alikes, then
+  // the preparation warning — "Caution:" for a caution species, whose reason it
+  // is. Always printed when present, whatever the content toggles say.
+  function handoutWarningsHtml(safety, tag, cls) {
+    const d = decision(safety);
+    const hw = handoutWarnings(d);
+    const t = tag || 'p';
+    const open = '<' + t + (cls ? ' class="' + cls + '"' : '') + '>';
+    const out = [];
+    if (hw.look_alike) out.push(open + '⚠ Look-alikes: ' + _h(hw.look_alike) + '</' + t + '>');
+    if (hw.preparation) out.push(open + '⚠ ' + (d.level === 'caution' ? 'Caution' : 'Preparation') + ': ' +
+                                 _h(hw.preparation) + '</' + t + '>');
+    return out.join('');
+  }
+
   // Culinary content fields (species page "Culinary" section + taste notes).
   // Keep in step with CULINARY_FIELDS in app/api/lists_pdf.py's gate.
   const CULINARY_FIELDS = ['edible_parts', 'preparation_methods', 'cooking_techniques', 'preservation_methods',
@@ -68,5 +154,9 @@
   }
 
   window.SafetyGate = { decision: decision, allowed: allowed, badge: badge, warning: warning,
-                        culinary: culinary, recipes: recipes, CULINARY_FIELDS: CULINARY_FIELDS, UNKNOWN: UNKNOWN };
+                        culinary: culinary, recipes: recipes, CULINARY_FIELDS: CULINARY_FIELDS, UNKNOWN: UNKNOWN,
+                        warnings: warnings, handoutWarnings: handoutWarnings, handoutWarningsHtml: handoutWarningsHtml,
+                        handoutAllowed: handoutAllowed,
+                        handoutCulinary: handoutCulinary, handoutRecipes: handoutRecipes,
+                        handoutBadge: handoutBadge, UNREVIEWED: UNREVIEWED };
 })();

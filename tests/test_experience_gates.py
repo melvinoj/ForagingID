@@ -77,7 +77,7 @@ def test_caution_with_approved_warning_keeps_recipes_and_shows_it():
     conn = _conn(HUMAN_ROW)
     assert gates.caution_warning(_sp(), _ci(), conn) == WARNING
     assert gates.recipe_allowed(_sp(), _ci(), _recipe(), conn, CFG) == (True, "")
-    assert gates.safety_texts(_sp(), _ci(), conn, "fallback")["caution"] == WARNING
+    assert gates.safety_texts(_sp(), _ci(), conn)["caution"] == WARNING
     assert gates.edibility_badge(_sp(), _ci(), conn, CFG)["kind"] == "caution"
 
 
@@ -87,7 +87,7 @@ def test_caution_with_pfaf_text_only_withholds_recipes_keeps_badge():
     conn = _conn([(7, "preparation_warnings", "pfaf_reparse", WARNING, "2026-06-11 07:00:00")])
     assert gates.caution_warning(_sp(), _ci(), conn) is None
     assert gates.recipe_allowed(_sp(), _ci(), _recipe(), conn, CFG) == (False, gates.CAUTION_WITHHELD)
-    assert "caution" not in gates.safety_texts(_sp(), _ci(), conn, "fallback")
+    assert "caution" not in gates.safety_texts(_sp(), _ci(), conn)
     assert gates.edibility_badge(_sp(), _ci(), conn, CFG)["kind"] == "caution"   # species still shown
 
 
@@ -132,13 +132,13 @@ def test_other_species_warning_row_does_not_count():
 def test_edible_species_needs_no_warning():
     conn = _conn()
     assert gates.recipe_allowed(_sp(status="edible"), _ci(pw=None), _recipe(), conn, CFG) == (True, "")
-    assert "caution" not in gates.safety_texts(_sp(status="edible"), _ci(pw=None), conn, "fallback")
+    assert "caution" not in gates.safety_texts(_sp(status="edible"), _ci(pw=None), conn)
 
 
 def test_toxic_species_gets_toxic_warning_not_caution():
     conn = _conn(HUMAN_ROW)
     sp = _sp(status="caution", severity="toxic")
-    out = gates.safety_texts(sp, _ci(), conn, "fallback")
+    out = gates.safety_texts(sp, _ci(), conn)
     assert out.get("toxic") == WARNING and "caution" not in out
     assert gates.recipe_allowed(sp, _ci(), _recipe(), conn, CFG)[0] is False
 
@@ -157,7 +157,7 @@ def test_apiaceae_caution_keeps_id_card_and_shows_approved_warning():
     sp = _sp(sci="Pimpinella major", family="Apiaceae")
     assert gates.edibility_badge(sp, _ci(), conn, CFG)["kind"] == "apiaceae"
     assert gates.recipe_allowed(sp, _ci(), _recipe(), conn, CFG) == (False, "Apiaceae — ID card only")
-    assert gates.safety_texts(sp, _ci(), conn, "fallback")["caution"] == WARNING
+    assert gates.safety_texts(sp, _ci(), conn)["caution"] == WARNING
 
 
 # ── import classifier (scripts/import_caution_warning_drafts.py) ─────────────
@@ -191,6 +191,46 @@ def test_classify_marker_row_queues_confirmation_of_current_text():
 
 def test_classify_other_human_row_left_alone():
     assert classify(WARNING, [("pfaf_reparse", WARNING), ("human", "Older own text.")], "PFAF text")[0] is None
+
+
+# ── rule 1b (Melvin, 21 Oct 2026): AI-agreed harmless species are shown ──────
+
+def _obs(human=False, status="approved"):
+    return {"id": 1, "species_id": 193, "species_primary": "Stellaria graminea", "review_status": status,
+            "identification_status": "identified", "reviewed_at": "2026-10-21" if human else None}
+
+
+def test_rule_1b_ai_agreed_harmless_included_hazard_blocks():
+    stellaria = _sp(status="edible", sci="Stellaria graminea", family="Caryophyllaceae")
+    ai = _obs(human=False)
+    for verdict in ("edible", "caution", "inedible"):                    # harmless → shown
+        sp = _sp(status=verdict, sci="Stellaria graminea", family="Caryophyllaceae")
+        assert gates.ai_agreed_included(sp) and not gates.unconfirmed_hazard(sp), verdict
+    assert gates.obs_passes(ai, set(), frozenset(), stellaria)
+    assert not gates.obs_passes(ai, set(), frozenset())                  # no species row → fails closed
+    assert not gates.obs_passes(ai, {1}, frozenset(), stellaria)         # hide_obs_ids still wins
+    assert not gates.obs_passes(ai, set(), {193}, stellaria)             # hide_species_ids still wins
+    assert not gates.obs_passes(_obs(status="needs_review"), set(), frozenset(), stellaria)
+    # rule 7 unchanged: toxic / deadly / unknown AI-agreed species block and are not shown
+    for status, sev in (("toxic", "toxic"), ("toxic", "deadly"), ("edible", "unknown"), ("unknown", "unknown"),
+                        ("caution", "toxic"), ("unknown", "none"), (None, "none")):
+        sp = _sp(status=status, severity=sev)
+        assert gates.unconfirmed_hazard(sp) and not gates.ai_agreed_included(sp), (status, sev)
+        assert not gates.obs_passes(ai, set(), frozenset(), sp), (status, sev)
+        assert gates.obs_unconfirmed_hazard(ai, sp), (status, sev)
+    assert gates.unconfirmed_hazard(None) and gates.obs_unconfirmed_hazard(ai, None)
+    # human-confirmed observations pass whatever the verdict (warnings shown by rule 3)
+    assert gates.obs_passes(_obs(human=True), set(), frozenset(), _sp(status="toxic", severity="deadly"))
+
+
+def test_rule_1b_keeps_apiaceae_and_caution_rules():
+    conn = _conn()                                                      # no curator warning
+    hogweed = _sp(status="edible", sci="Heracleum sphondylium", family="Apiaceae")
+    assert gates.ai_agreed_included(hogweed)                            # shown …
+    assert gates.edibility_badge(hogweed, _ci(), conn, CFG)["kind"] == "apiaceae"   # … as an ID card only
+    caution = _sp(status="caution")
+    assert gates.ai_agreed_included(caution)
+    assert gates.recipe_allowed(caution, _ci(pw=None), _recipe(), conn, CFG) == (False, gates.CAUTION_WITHHELD)
 
 
 if __name__ == "__main__":

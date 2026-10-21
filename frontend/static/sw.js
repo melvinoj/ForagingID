@@ -13,7 +13,7 @@
 //
 // Writes (POST / PATCH / DELETE) are never intercepted — they always go to the network.
 
-const CACHE_VERSION  = 'foragingid-v8';   // bump → old STATIC/RUNTIME caches evicted on activate
+const CACHE_VERSION  = 'foragingid-v9';   // bump → old STATIC/RUNTIME caches evicted on activate
 const STATIC_CACHE   = CACHE_VERSION + '-static';
 const RUNTIME_CACHE  = CACHE_VERSION + '-runtime';
 // TILE_CACHE and SPECIES_CACHE are deliberately version-independent. Both
@@ -23,7 +23,11 @@ const RUNTIME_CACHE  = CACHE_VERSION + '-runtime';
 // rename them, and the activate cleanup below would then delete the old
 // name, wiping every offline map tile on that one deploy. Fixed names avoid that.
 const TILE_CACHE     = 'foragingid-tiles';
-const SPECIES_CACHE  = 'foragingid-species';
+// Renamed when the cached payload's shape changes in a way pages depend on:
+// '-2' since batch 6 (safety.warnings / handout_warnings, 21 Oct 2026) — a
+// profile cached before it has no warnings, so the activate cleanup below
+// deletes the old 'foragingid-species' instead of serving it for 7 days.
+const SPECIES_CACHE  = 'foragingid-species-2';
 
 const TILE_TTL_MS    = 30 * 24 * 60 * 60 * 1000;   // 30 days — bulk cache expiry
 const SPECIES_TTL_MS =  7 * 24 * 60 * 60 * 1000;   // 7 days  — per-entry TTL

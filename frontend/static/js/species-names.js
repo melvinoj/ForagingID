@@ -11,10 +11,26 @@
       return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
     });
   }
+  // Sentence case for ONE English common name (Melvin, 21 Oct 2026): the first
+  // character upper-cased when it is a letter, the rest exactly as sourced —
+  // "disc mayweed" → "Disc mayweed", never "Disc Mayweed". Display only; stored
+  // names stay as sourced, and German names never go through it. Server twin:
+  // sentence_case_name() in app/models/species.py.
+  function sentence(name) {
+    var n = (name == null ? '' : String(name)).trim();
+    return n && /\p{L}/u.test(n.charAt(0)) ? n.charAt(0).toUpperCase() + n.slice(1) : n;
+  }
   function clean(common, sci) {
     var c = (common == null ? '' : String(common)).trim();
-    return c && c.charAt(0) !== '[' && c.toLowerCase() !== String(sci || '').trim().toLowerCase() ? c : '';
+    return c && c.charAt(0) !== '[' && c.toLowerCase() !== String(sci || '').trim().toLowerCase() ? sentence(c) : '';
   }
+  // One English common name for display ('' when none).
+  window.spCommon = sentence;
+  // A list of English common names, each sentence-cased, joined
+  // ("disc mayweed · pineapple weed" → "Disc mayweed · Pineapple weed").
+  window.spCommonList = function (names, sep) {
+    return (names || []).map(sentence).filter(Boolean).join(sep == null ? ' · ' : sep);
+  };
   // HTML: "Common (<em>Latin</em>)" or "<em>Latin</em>"
   window.spNameHtml = function (sci, common) {
     var c = clean(common, sci);

@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>LandMemory — Print</title>
   <script src="/static/js/safety-gate.js"></script>
+  <script src="/static/js/species-names.js"></script>
   <script src="/static/js/lists.js"></script>
   <style>
     /* ── Base ──────────────────────────────────────────────────────────────── */
@@ -438,19 +439,27 @@ function applyContentPadding(style) {
 function _printCulinary(prof) {
   // Safety gate (batch 5, B2-04): culinary fields dropped unless the server's
   // decision (prof.safety) allows them — missing profile / decision fails closed.
-  const cul = SafetyGate.culinary((prof && prof.culinary) || {}, prof && prof.safety);
+  // Batch 6: printed output = outgoing surface — a caution species without a
+  // curator-authored warning also prints no culinary content (handout rule).
+  const cul = SafetyGate.handoutCulinary((prof && prof.culinary) || {}, prof && prof.safety);
   ((prof && prof.pfaf_fallback_fields) || []).forEach(f => { delete cul[f]; });
   return cul;
 }
 
 // Recipes for print — [] unless the safety gate allows culinary content.
 function _printRecipes(prof) {
-  return SafetyGate.recipes(prof && prof.recipes, prof && prof.safety);
+  return SafetyGate.handoutRecipes(prof && prof.recipes, prof && prof.safety);
 }
 
-// ☠ / ⚠ label + approved caution warning from the served decision.
+// ☠ / ⚠ label from the served decision (handout label: "⚠ caution — warning not
+// yet reviewed" for a caution species without a curator-authored warning).
 function _printSafety(prof) {
-  return SafetyGate.badge(prof && prof.safety, 'margin-left:4px');
+  return SafetyGate.handoutBadge(prof && prof.safety, 'margin-left:4px');
+}
+
+// Look-alike + preparation warnings, full text, always printed (batch 6, B2-03).
+function _printWarnings(prof, tag, cls) {
+  return SafetyGate.handoutWarningsHtml(prof && prof.safety, tag, cls);
 }
 
 // ── Field entry HTML ────────────────────────────────────────────────────────
@@ -458,13 +467,14 @@ function _fieldEntry(name, prof, baseByName, photos, showPhotos, ct) {
   const base   = baseByName[name] || {};
   const sp     = (prof && prof.species)  || base;
   const cul    = _printCulinary(prof);
-  const common = (sp.common_names && sp.common_names[0]) || (base.common_names && base.common_names[0]) || '';
+  const common = spCommon((sp.common_names && sp.common_names[0]) || (base.common_names && base.common_names[0]) || '');
   const edib   = sp.edibility_status;
   const recipes = _printRecipes(prof);
   const key     = recipes.find(r => r.is_preferred) || recipes[0];
 
   const idNote    = (cul.id_notes || '').replace(/\[[^\]]*\]\s*/g,'').trim();
-  const lookalike = (cul.look_alike_warnings || '').trim();
+  // Look-alike + preparation warnings — always printed, full text (batch 6, B2-03).
+  const warningsHtml = _printWarnings(prof, 'div', 'fg-lookalike');
   const partsBits = [];
   if (ct.culinary && cul.edible_parts)  partsBits.push(cul.edible_parts);
   if (ct.culinary && cul.harvest_stage) partsBits.push(cul.harvest_stage);
@@ -479,11 +489,11 @@ function _fieldEntry(name, prof, baseByName, photos, showPhotos, ct) {
     <div class="fg-sci">${_esc(name)}</div>
     ${common     ? `<div class="fg-common">${_esc(common)}</div>` : ''}
     <div class="fg-row">
-      <span class="fg-pill ${edClass(edib)}">${_esc(edLabel(edib))}</span>${_printSafety(prof)}${SafetyGate.warning(prof && prof.safety)}
+      <span class="fg-pill ${edClass(edib)}">${_esc(edLabel(edib))}</span>${_printSafety(prof)}
       ${ct.season ? `<span class="fg-season">${_seasonText(sp)}</span>` : ''}
     </div>
     ${ct.id_notes && idNote    ? `<div class="fg-id-primary">${_esc(idNote)}</div>` : ''}
-    ${ct.id_notes && lookalike ? `<div class="fg-lookalike">⚠ ${_esc(lookalike)}</div>` : ''}
+    ${warningsHtml}
     ${partsText  ? `<div class="fg-note">${_esc(partsText)}</div>` : ''}
     ${ct.recipes && key ? `<div class="fg-recipe"><div class="rt">${_esc(key.title)}</div>${_mdLite(key.body)}</div>` : ''}
   </div>`;
@@ -494,7 +504,7 @@ function _workshopPage(name, prof, baseByName, photos, showPhotos, withFieldBloc
   const base   = baseByName[name] || {};
   const sp     = (prof && prof.species)  || base;
   const cul    = _printCulinary(prof);
-  const common = (sp.common_names && sp.common_names[0]) || (base.common_names && base.common_names[0]) || '';
+  const common = spCommon((sp.common_names && sp.common_names[0]) || (base.common_names && base.common_names[0]) || '');
   const edib   = sp.edibility_status;
   const recipes = _printRecipes(prof);
   const key     = recipes.find(r => r.is_preferred) || recipes[0];
@@ -505,24 +515,18 @@ function _workshopPage(name, prof, baseByName, photos, showPhotos, withFieldBloc
   const bannerHtml = (showPhotos && thumbUrl)
     ? `<img class="ws-banner-photo" src="${_esc(thumbUrl)}" onerror="this.style.display='none'" alt="">` : '';
 
-  // Safety section — only rendered when id_notes toggle is on
-  let safetyHtml = '';
-  if (ct.id_notes !== false) {
-    const warnings = [];
-    if (cul.look_alike_warnings)  warnings.push('Look-alikes: ' + cul.look_alike_warnings);
-    if (cul.preparation_warnings) warnings.push('Preparation: ' + cul.preparation_warnings);
-    const hasWarnings = warnings.length > 0;
-    const safetyBody = hasWarnings
-      ? warnings.map(w => `<p>${_esc(w)}</p>`).join('')
-      : SafetyGate.decision(prof && prof.safety).level === 'caution'
+  // Safety section — always rendered (batch 6, B2-03: the warnings print
+  // whatever the content toggles say), full text.
+  const warningsBody = _printWarnings(prof, 'p', '');
+  const safetyBody = warningsBody
+    || (SafetyGate.decision(prof && prof.safety).level === 'caution'
         ? '<p style="color:#92400e">⚠ Marked caution — specific reason not yet documented. Exercise care and verify before consuming.</p>'
-        : '<p>No specific look-alike warnings on record — always confirm identification before eating.</p>';
-    safetyHtml = `<div class="ws-safety">
+        : '<p>No specific look-alike warnings on record — always confirm identification before eating.</p>');
+  const safetyHtml = `<div class="ws-safety">
       <div class="ws-safety-h">⚠ Safety &amp; edibility</div>
-      <div class="ws-edib"><span class="fg-pill ${edClass(edib)}">${_esc(edLabel(edib))}</span>${_printSafety(prof)}${SafetyGate.warning(prof && prof.safety)}</div>
+      <div class="ws-edib"><span class="fg-pill ${edClass(edib)}">${_esc(edLabel(edib))}</span>${_printSafety(prof)}</div>
       ${safetyBody}
     </div>`;
-  }
 
   const recipeHtml = (ct.recipes && key)
     ? `<div class="ws-section-h">Recipe</div><div class="ws-recipe">${_mdLite(key.body)}</div>` : '';
@@ -545,8 +549,6 @@ function _workshopPage(name, prof, baseByName, photos, showPhotos, withFieldBloc
   if (withFieldBlock) {
     const fgBits = [];
     if (ct.id_notes && idn) fgBits.push(`<p>${_esc(idn)}</p>`);
-    const look = (cul.look_alike_warnings || '').trim();
-    if (ct.id_notes && look) fgBits.push(`<p class="ws-fl">⚠ ${_esc(look)}</p>`);
     const parts = [ct.culinary && cul.edible_parts, ct.culinary && cul.harvest_stage].filter(Boolean).join(' · ');
     if (parts) fgBits.push(`<p class="ws-fl">Edible parts — ${_esc(parts)}</p>`);
     if (fgBits.length) fieldBlockHtml = `<div class="ws-section-h">Field ID notes</div><div class="ws-forage">${fgBits.join('')}</div>`;
@@ -564,7 +566,7 @@ function _workshopPage(name, prof, baseByName, photos, showPhotos, withFieldBloc
         <div class="ws-sci">${_esc(name)}</div>
         ${common ? `<div class="ws-common">${_esc(common)}</div>` : ''}
       </div>
-      <div class="ws-edib"><span class="fg-pill ${edClass(edib)}">${_esc(edLabel(edib))}</span>${_printSafety(prof)}${SafetyGate.warning(prof && prof.safety)}</div>
+      <div class="ws-edib"><span class="fg-pill ${edClass(edib)}">${_esc(edLabel(edib))}</span>${_printSafety(prof)}</div>
     </div>
     ${safetyHtml}
     ${fieldBlockHtml}${recipeHtml}${medicinalHtml}${forageHtml}${myNotes}
@@ -610,7 +612,7 @@ function _seasonalReturnsHtml(items) {
       ? `<span class="sr-badge sr-badge-now">in season</span>`
       : `<span class="sr-badge sr-badge-soon">coming soon</span>`;
     return `<div class="sr-entry">
-      ${it.common_name ? `<div class="sr-common">${_esc(it.common_name)}</div>` : ''}
+      ${it.common_name ? `<div class="sr-common">${_esc(spCommon(it.common_name))}</div>` : ''}
       <div class="sr-sci">${_esc(it.scientific_name)}</div>
       <div class="sr-row">${badge}${meta ? `<span class="sr-meta">${_esc(meta)}</span>` : ''}</div>
       ${it.reason ? `<div class="sr-reason">${_esc(it.reason)}</div>` : ''}

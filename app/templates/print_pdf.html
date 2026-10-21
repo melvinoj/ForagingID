@@ -305,9 +305,12 @@ body {
     <span class="season"> &nbsp;{{ sp.season_str | safe }}</span>
     {% endif %}
   </div>
-  {% if sp.safety_warning %}<div class="safety-warn">⚠ Caution: {{ sp.safety_warning }}</div>{% endif %}
+  {# Warnings (batch 6, B2-03): every layout, full text, whatever the content toggles say.
+     Server-side handout_warnings — curator-authored only; for a caution species the
+     preparation warning IS its caution reason (safety_warning), so it prints once. #}
+  {% if sp.look_alike %}<div class="entry-look">⚠ Look-alikes: {{ sp.look_alike }}</div>{% endif %}
+  {% if sp.preparation_warnings %}<div class="safety-warn">⚠ {{ 'Caution' if sp.safety_warning else 'Preparation' }}: {{ sp.preparation_warnings }}</div>{% endif %}
   {% if ct.id_notes and sp.id_notes %}<div class="entry-id">{{ sp.id_notes[:220] }}{% if sp.id_notes|length > 220 %}…{% endif %}</div>{% endif %}
-  {% if ct.id_notes and sp.look_alike %}<div class="entry-look">⚠ {{ sp.look_alike[:140] }}{% if sp.look_alike|length > 140 %}…{% endif %}</div>{% endif %}
   {% if sp.parts_text and sp.culinary_allowed %}<div class="entry-note">{{ sp.parts_text }}</div>{% endif %}
 </div>
 
@@ -320,19 +323,27 @@ body {
     {# Safety gate label (batch 5): the server's decision, never the client's severity. #}
     {% if sp.safety_label %}<span class="pill {{ 'pill-toxic' if sp.safety_level in ('deadly', 'toxic') else 'pill-cond' }}">{{ sp.safety_label }}</span>{% endif %}
   </div>
-  {% if sp.safety_warning %}<div class="safety-warn">⚠ Caution: {{ sp.safety_warning }}</div>{% endif %}
+  {# Toxic / deadly: the box holds the warnings — handout_warnings puts
+     app.models.species.TOXIC_FALLBACK_TEXT in preparation_warnings when no
+     curator-authored text exists. Every other verdict: the shared warning lines. #}
   {% if sp.safety_level == 'deadly' %}
   <div class="rb-safety-deadly">
     <div class="rb-safety-h">&#x2620; NOT SAFE &#x2014; DEADLY</div>
-    <p>{{ sp.preparation_warnings or 'Not safe to eat. Please simply appreciate the natural beauty and power of this plant without handling or consuming it.' }}</p>
+    <p>{{ sp.preparation_warnings }}</p>
     {% if sp.look_alike %}<p>Look-alikes: {{ sp.look_alike }}</p>{% endif %}
   </div>
   {% elif sp.safety_level == 'toxic' %}
   <div class="rb-safety-toxic">
     <div class="rb-safety-h">NOT SAFE</div>
-    <p>{{ sp.preparation_warnings or 'Not safe to eat. Please simply appreciate the natural beauty and power of this plant without handling or consuming it.' }}</p>
+    <p>{{ sp.preparation_warnings }}</p>
     {% if sp.look_alike %}<p>Look-alikes: {{ sp.look_alike }}</p>{% endif %}
   </div>
+  {% else %}
+  {# Warnings (batch 6, B2-03): every layout, full text, whatever the content toggles say.
+     Server-side handout_warnings — curator-authored only; for a caution species the
+     preparation warning IS its caution reason (safety_warning), so it prints once. #}
+  {% if sp.look_alike %}<div class="entry-look">⚠ Look-alikes: {{ sp.look_alike }}</div>{% endif %}
+  {% if sp.preparation_warnings %}<div class="safety-warn">⚠ {{ 'Caution' if sp.safety_warning else 'Preparation' }}: {{ sp.preparation_warnings }}</div>{% endif %}
   {% endif %}
   {% if sp.recipe_title and sp.culinary_allowed %}
   <div class="entry-recipe-h">{{ sp.recipe_title }}</div>
@@ -352,10 +363,10 @@ body {
     {# |safe: season_str is built in lists_pdf._season_str from month numbers and fixed initials only — no request text (D1-01). #}
     {% if ct.season and sp.season_str %}<span class="season">&nbsp;{{ sp.season_str | safe }}</span>{% endif %}
   </div>
-  {% if sp.safety_warning %}<div class="safety-warn">⚠ Caution: {{ sp.safety_warning }}</div>{% endif %}
   <div class="entry-safety">
     <div class="entry-safety-h">⚠ Safety &amp; edibility</div>
-    {% if sp.preparation_warnings %}<p>Preparation: {{ sp.preparation_warnings }}</p>{% endif %}
+    {# Batch 6: server-side handout_warnings, full text (caution reason = preparation warning). #}
+    {% if sp.preparation_warnings %}<p>{{ 'Caution' if sp.safety_warning else 'Preparation' }}: {{ sp.preparation_warnings }}</p>{% endif %}
     {% if sp.look_alike %}<p>Look-alikes: {{ sp.look_alike }}</p>{% endif %}
     {% if not sp.preparation_warnings and not sp.look_alike %}
     <p>No specific look-alike warnings on record — always confirm identification before eating.</p>

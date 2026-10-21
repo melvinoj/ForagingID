@@ -3450,7 +3450,7 @@ function _renderNearMe() {
       : '';
     const seasonBadge = sp.in_season ? `<span class="nearme-inseason">✓ In season</span>` : '';
     const count = sp.observation_count || 0;
-    const common = sp.common_name ? `<div class="nearme-common">${_esc(sp.common_name)}</div>` : '';
+    const common = sp.common_name ? `<div class="nearme-common">${_esc(spCommon(sp.common_name))}</div>` : '';
 
     html += `<a class="nearme-card" href="#" onclick="event.preventDefault();_discoverShowSpecies('${encodeURIComponent(sp.scientific_name)}')">
 
@@ -4659,9 +4659,9 @@ function showDetail(p) {
         : `<div style="font-size:0.82rem;color:#888;font-style:italic">No description added yet — edit in review queue</div>`}`;
   } else if (p.species_primary) {
     const commonLine = _allCommon.length
-      ? `<div class="det-common-name">${_esc(_allCommon[0])}</div>` : '';
+      ? `<div class="det-common-name">${_esc(spCommon(_allCommon[0]))}</div>` : '';
     const extraCommon = _allCommon.length > 1
-      ? `<div class="meta-row" style="color:#888">${_allCommon.slice(1).map(_esc).join(' · ')}</div>` : '';
+      ? `<div class="meta-row" style="color:#888">${_esc(spCommonList(_allCommon.slice(1)))}</div>` : '';
     const renameBtn = `<button class="rename-btn" title="Correct species name"
         onclick="openRenameForm(${p.id}, '${_esc(p.species_primary)}')">✎ rename</button>`;
     speciesBlock = `${commonLine}
@@ -4897,21 +4897,15 @@ async function _injectEnrichment(obsId, speciesName) {
   const { ci, aiFields, safety } = result;
   let html = '';
 
-  // Safety gate (batch 5, audit B2-01): the served decision — ☠ / ⚠ label and
-  // the approved caution warning first; edible parts only when allowed.
+  // Safety gate (batch 5, audit B2-01): the served decision — ☠ / ⚠ label
+  // first; edible parts only when allowed.
   const _sgBadge = SafetyGate.badge(safety);
   if (_sgBadge) html += `<div class="map-safety-label" style="margin-bottom:4px">${_sgBadge}</div>`;
-  html += SafetyGate.warning(safety);
 
-  // Safety warnings ALWAYS first
-  if (ci.look_alike_warnings) {
-    html += `<div class="map-safety-warn">
-      <strong>⚠ Look-alike Warning</strong>${_esc(_trunc(ci.look_alike_warnings, 120))}</div>`;
-  }
-  if (ci.preparation_warnings) {
-    html += `<div class="map-safety-warn">
-      <strong>⚠ Preparation Warning</strong>${_esc(_trunc(ci.preparation_warnings, 120))}</div>`;
-  }
+  // Safety warnings ALWAYS first (batch 6, B2-03): look-alike + preparation,
+  // full text (never cut), from the served safety.warnings; text that is not
+  // curator-authored is labelled "Source text — not yet reviewed".
+  html += SafetyGate.warnings(safety);
 
   // Culinary summary — only when the safety gate allows culinary content
   if (!SafetyGate.allowed(safety)) {
@@ -6410,14 +6404,14 @@ function renderWalkPanel(route, enrichMap) {
 
       speciesHtml += `<div class="walk-stop-sp"${speciesHtml ? ' style="border-top:1px dashed #e3ead7;margin-top:6px;padding-top:6px"' : ''}>
         <span class="walk-stop-species">${_esc(spName)}</span>
-        ${commonName ? `<div class="walk-stop-common">${_esc(commonName)}</div>` : ''}
+        ${commonName ? `<div class="walk-stop-common">${_esc(spCommon(commonName))}</div>` : ''}
         <div class="walk-stop-meta">
           ${edibBadge}
           ${_walkMemberChips(_stop, spName)}
           <a href="/species?s=${encodeURIComponent(spName)}"
              style="font-size:0.68rem;color:#2d5016;margin-left:8px">Species profile →</a>
         </div>
-        ${SafetyGate.warning(_gate.safety)}
+        ${SafetyGate.warnings(_gate.safety, { collapse: 'auto' })}
         ${forNotesHtml}
       </div>`;
     }
@@ -6593,7 +6587,7 @@ function _wbsRenderLasso() {
       : '';
     return `<div class="wbs-lasso-item">
       <span class="wbs-lasso-name">${_esc(name)}</span>
-      ${common ? `<span class="wbs-lasso-common">${_esc(common)}</span>` : ''}
+      ${common ? `<span class="wbs-lasso-common">${_esc(spCommon(common))}</span>` : ''}
       ${edibTag}
       <a class="wbs-lasso-link" href="/species?s=${encodeURIComponent(name)}" target="_blank">Profile →</a>
     </div>`;
@@ -7576,9 +7570,13 @@ async function exportWalkSummary() {
     const species = names.map(spName => {
       const ed = _activeWalkEnrich?.[spName];
       const gate = _culinaryGate(ed ? ed._safety : null);
-      const ci = gate.ok ? (ed?.culinary || null) : null;
+      // Outgoing surface (batch 6): a caution species without a curator-authored
+      // warning sends no culinary content. The server re-checks (apply_walk_safety)
+      // and adds the warnings from the DB.
+      const _hOk = SafetyGate.handoutAllowed(gate.safety);
+      const ci = _hOk ? (ed?.culinary || null) : null;
       const spData = ed?.species || null;
-      const recipes = gate.ok ? (ed?.recipes || []) : [];
+      const recipes = _hOk ? (ed?.recipes || []) : [];
       const picked = _summaryRecipe(recipes, _dishesShown);
       // Pin props for this species (new walks); loaded walks have no pins.
       const pinP = (stop.pins || []).map(x => x.p).find(pp => pp.species_primary === spName)
@@ -7781,7 +7779,7 @@ function _renderProxPanel() {
       : (n.species.length ? n.species : [{ name: null }]).map(function (sp, k) {
           const href   = sp.name ? '/species?s=' + encodeURIComponent(sp.name) : '#';
           const common = sp.common_name
-            ? '<div class="walk-prox-common">' + _esc(sp.common_name) + '</div>'
+            ? '<div class="walk-prox-common">' + _esc(spCommon(sp.common_name)) + '</div>'
             : '';
           const gate   = _culinaryGate(sp.safety);
           const edib   = (!gate.ok && gate.label) ? _culinaryGateBadge(gate)
@@ -7794,6 +7792,8 @@ function _renderProxPanel() {
             '<a class="walk-prox-name" href="' + _esc(href) + '">' + _esc(sp.name || '?') + '</a>' +
             common +
             (edib ? '<div class="walk-prox-meta">' + edib + '</div>' : '') +
+            // Batch 6: look-alike + preparation warnings, full text, collapsed.
+            SafetyGate.warnings(sp.safety, { collapse: 'all' }) +
           '</div>';
         }).join('');
     return '<div class="walk-prox-card" data-id="' + n.id + '">' +
@@ -8764,7 +8764,7 @@ function _renderProxPanel() {
         obsWithPhotos.map(function (o) {
           var thumbName = o.thumbnail_path.split('/').pop();
           var sp = _esc(o.species || '');
-          var cn = _esc(o.common_name || '');
+          var cn = _esc(spCommon(o.common_name || ''));
           return '<div class="wd-photo-cell" onclick="_wdOpenPhoto(' + o.observation_id + ',' + JSON.stringify(o.thumbnail_path) + ',' + JSON.stringify(o.species || '') + ',' + JSON.stringify(o.common_name || '') + ')">' +
             '<img src="/thumbnails/' + _esc(thumbName) + '" loading="lazy" alt="">' +
             (sp ? '<div class="wd-photo-species">' + (cn || sp) + '</div>' : '') +
@@ -8801,7 +8801,7 @@ function _renderProxPanel() {
       var thumbName = thumbPath.split('/').pop();
       Lightbox.open({
         src:     '/thumbnails/' + thumbName,
-        caption: commonName || species || '',
+        caption: spCommon(commonName) || species || '',
         obsId:   obsId,
       });
     }
@@ -9011,7 +9011,7 @@ function onMapSearchInput(val) {
   if (hits.length) {
     _showSearchDrop(hits.map(sp => ({
       type: 'species', label: sp.scientific_name,
-      sub: sp.preferred_common_name || (sp.common_names && sp.common_names[0]) || '', data: sp,
+      sub: spCommon(sp.preferred_common_name || (sp.common_names && sp.common_names[0]) || ''), data: sp,
     })));
     return;
   }
@@ -9522,7 +9522,7 @@ async function _findRecipes() {
   for (const sp of data.results) {
     html += `<div style="margin-bottom:10px">`;
     html += `<div style="font-size:0.78rem;font-weight:700;font-style:italic;color:#2d5016;margin-bottom:4px;padding:0 2px">
-      ${_escHtml(sp.scientific_name)}${sp.common_name ? ' <span style="font-style:normal;color:#888;font-weight:400">· ' + _escHtml(sp.common_name) + '</span>' : ''}
+      ${_escHtml(sp.scientific_name)}${sp.common_name ? ' <span style="font-style:normal;color:#888;font-weight:400">· ' + _escHtml(spCommon(sp.common_name)) + '</span>' : ''}
     </div>`;
     for (const rec of sp.recipes) {
       html += `<div class="find-card" onclick="_discoverShowSpecies('${encodeURIComponent(sp.scientific_name)}')">
@@ -9567,7 +9567,7 @@ async function _findMedicinal() {
       html += `<div class="find-card" onclick="_discoverShowSpecies('${encodeURIComponent(sp.scientific_name)}')">
         <div class="find-info">
           <div class="find-name" style="font-style:italic">${_escHtml(sp.scientific_name)}</div>
-          <div class="find-common">${_escHtml(sp.common_name || '')}</div>
+          <div class="find-common">${_escHtml(spCommon(sp.common_name || ''))}</div>
           <div class="find-snippet">${_escHtml(prep.snippet)}</div>
         </div>
       </div>`;
@@ -9587,7 +9587,7 @@ function _findCardHtml(sp, { badge = '', sub = '' } = {}) {
       : '<div class="find-thumb-empty"></div>'}
     <div class="find-info">
       <div class="find-name">${_escHtml(sp.scientific_name)}</div>
-      <div class="find-common">${_escHtml(sp.common_name || '')}</div>
+      <div class="find-common">${_escHtml(spCommon(sp.common_name || ''))}</div>
       <div class="find-meta">
         <span class="find-badge" style="${edibStyle}">${edibLabel}</span>
         ${badge}

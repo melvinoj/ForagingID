@@ -31,6 +31,7 @@ from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
+from app.models.species import sentence_case_name
 
 log = logging.getLogger(__name__)
 
@@ -338,6 +339,10 @@ class WalkSpecies(BaseModel):
     # not trusted.
     toxicity_warning: Optional[str] = None
     safety_warning: Optional[str] = None       # approved caution warning (server-set)
+    # Batch 6 (B2-03): curator-authored warnings from the DB (server-set,
+    # handout_warnings — toxic fallback included); never cut.
+    preparation_warning: Optional[str] = None
+    look_alike_warning: Optional[str] = None
     culinary_notes: Optional[str] = None
     recipe_title: Optional[str] = None
     recipe_body: Optional[str] = None
@@ -387,25 +392,34 @@ async def export_walk(body: WalkExportRequest, db: AsyncSession = Depends(get_db
 
 def apply_walk_safety(body: "WalkExportRequest", safety: dict) -> None:
     """B2-09: re-apply the safety gate server-side (app.models.species.
-    safety_decision, looked up by name). Blocked species lose their culinary
-    notes, recipe and edibility badge and get the label; caution species get
-    "⚠ caution" and the approved warning. A name with no decision fails closed."""
+    safety_decision, looked up by name). The summary is an outgoing surface, so
+    it uses the handout half of the decision (batch 6): blocked species — and
+    caution species without a curator-authored warning — lose their culinary
+    notes and recipe and get the label ("⚠ caution — warning not yet reviewed"
+    for the latter); every species gets its curator-authored preparation and
+    look-alike warnings from the DB, whatever the client sent. A name with no
+    decision fails closed."""
     from app.models.species import safety_decision
     unknown = safety_decision(None, None)
     for st in body.stops:
         for sp in st.species:
             d = safety.get(sp.species_scientific) or unknown
-            sp.toxicity_warning = d["label"] or None
+            allowed = bool(d.get("handout_culinary_allowed"))
+            label = d.get("handout_label", d["label"])
+            hw = d.get("handout_warnings") or {}
+            sp.toxicity_warning = label or None
             sp.safety_warning = d["warning"]
+            sp.preparation_warning = hw.get("preparation") or None
+            sp.look_alike_warning = hw.get("look_alike") or None
             # Verdict badge from the DB, never the client; a ☠ / ⚠ label replaces it.
-            sp.edibility = None if (d["label"] and not d["culinary_allowed"]) else d.get("verdict")
-            if not d["culinary_allowed"]:
+            sp.edibility = None if (label and not allowed) else d.get("verdict")
+            if not allowed:
                 sp.culinary_notes = None
                 sp.recipe_title = sp.recipe_body = sp.recipe_season = None
                 sp.is_medicinal_prep = None
         for r in st.also_here:
             d = safety.get(r.species_scientific) or unknown
-            r.toxicity_warning = d["label"] or None
+            r.toxicity_warning = d.get("handout_label", d["label"]) or None
 
 
 # ---------------------------------------------------------------------------
@@ -510,15 +524,20 @@ def _walk_species_html(s: WalkSpecies, first: bool) -> str:
             f'{_h(s.toxicity_warning)}</span>'
         )
 
-    common_main = s.species_common or (s.all_common[0] if s.all_common else None)
-    extra_common = s.all_common[1:] if (s.all_common and len(s.all_common) > 1) else []
+    # Names rule: each English common name in sentence case (display only).
+    common_main = sentence_case_name(s.species_common or (s.all_common[0] if s.all_common else None)) or None
+    extra_common = [sentence_case_name(c) for c in s.all_common[1:]] if (s.all_common and len(s.all_common) > 1) else []
 
+    # Warnings (batch 6): full text, look-alike first. For a caution species the
+    # preparation warning IS its caution reason (safety_warning), so it shows once.
     culinary_html = ""
-    if s.safety_warning:
-        culinary_html += (
-            f'<div style="font-size:0.77rem;color:#92400e;background:#fffbeb;border-left:3px solid #f59e0b;'
-            f'padding:3px 8px;margin-top:4px">⚠ Caution: {_h(s.safety_warning)}</div>'
-        )
+    for title, text in (("Look-alikes", s.look_alike_warning),
+                        ("Caution" if s.safety_warning else "Preparation", s.preparation_warning)):
+        if text:
+            culinary_html += (
+                f'<div style="font-size:0.77rem;color:#92400e;background:#fffbeb;border-left:3px solid #f59e0b;'
+                f'padding:3px 8px;margin-top:4px;white-space:pre-wrap">⚠ {title}: {_h(text)}</div>'
+            )
     if s.culinary_notes:
         note = s.culinary_notes[:130]
         if len(s.culinary_notes) > 130:
@@ -589,7 +608,7 @@ def _build_walk_html(body: WalkExportRequest) -> str:
                 warn = (f' <span style="font-size:0.66rem;font-weight:700;padding:0 5px;border-radius:4px;'
                         f'background:{w_bg};color:{w_fg}">{_h(r.toxicity_warning)}</span>'
                         if r.toxicity_warning else "")
-                name = (f'{_h(r.species_common)} (<em>{_h(r.species_scientific)}</em>)' if r.species_common
+                name = (f'{_h(sentence_case_name(r.species_common))} (<em>{_h(r.species_scientific)}</em>)' if r.species_common
                         else f'<em>{_h(r.species_scientific)}</em>')             # names rule
                 parts.append(f'{name}{warn} (see stop {_h(r.first_label)})')
             species_html += (

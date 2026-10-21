@@ -452,6 +452,7 @@ window.DATA = {{DATA}};
     var w = "";
     if (s.safety.toxic) w += '<div class="warn toxic"><strong>☠ Not safe to eat</strong>' + esc(s.safety.toxic) + "</div>";
     if (s.safety.caution) w += '<div class="warn caution"><strong>⚠ Caution</strong>' + esc(s.safety.caution) + "</div>";
+    if (s.safety.preparation) w += '<div class="warn caution"><strong>⚠ Preparation</strong>' + esc(s.safety.preparation) + "</div>";
     if (s.safety.look_alike) w += '<div class="warn lookalike"><strong>Look-alikes</strong>' + esc(s.safety.look_alike) + "</div>";
     panelBody.innerHTML =
       (photos.length ? '<img class="sp-main" id="sp-main" src="' + esc(photos[0].photo) + '" data-full="' + esc(photos[0].photo) + '" alt="' + esc(s.en || s.sci) + '">' : "") +

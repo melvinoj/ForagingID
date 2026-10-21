@@ -1945,7 +1945,7 @@ function _makeCardHtml(obs) {
         const score = hasTopScore ? top.score : 0;
         const pct   = (score * 100).toFixed(1);
         const cls   = hasTopScore ? confClass(score) : '';
-        const common = (topIsShown && top.common_names && top.common_names.length) ? top.common_names.join(' · ') : '';
+        const common = (topIsShown && top.common_names && top.common_names.length) ? spCommonList(top.common_names) : '';
         const alts   = candidates.filter(c => _nk(c.scientific_name) !== _nk(shownName)).slice(0, 2)
           .map(c => _esc(c.scientific_name)
           + (c.non_european ? ` <span class="noneu-inline">(${NON_EUROPEAN_LABEL})</span>` : '')).join(', ');
@@ -1990,7 +1990,7 @@ function _makeCardHtml(obs) {
     if (!speciesHtml && !isLandscape && !obs.species_primary && obs.species_suggested) {
       const sugMatch  = candidates.find(c => c.scientific_name === obs.species_suggested);
       const sugCommon = (sugMatch && sugMatch.common_names && sugMatch.common_names.length)
-        ? sugMatch.common_names.join(' · ') : '';
+        ? spCommonList(sugMatch.common_names) : '';
       // A name with no matching entry in candidates[] has no score at all — the
       // pipeline never scored it. Reporting that absence as "0.0%" invents a
       // machine verdict that was never issued, and confClass(0) then paints it
@@ -2480,7 +2480,7 @@ function _renderSOPResults(obsId, data, withRef = false) {
     const confPct = nameOnly ? null : Math.round(r.confidence * 100);
     const confColor = nameOnly ? '#888' : r.confidence >= 0.65 ? '#2d8016' : r.confidence >= 0.35 ? '#b37d00' : '#888';
     const commonHtml = r.common_name
-      ? `<div class="sop-common">${_esc(r.common_name)}</div>` : '';
+      ? `<div class="sop-common">${_esc(spCommon(r.common_name))}</div>` : '';
     const badgesHtml = _sopSourceBadges(r.sources);
     const confLabel = nameOnly ? '<span class="sop-name-only">name match only</span>' : `${confPct}%`;
     const confArg   = nameOnly ? 'null' : r.confidence;
@@ -2655,7 +2655,7 @@ function _renderRetryResults(obsId, data) {
       const confLabel = scored
         ? `${Math.round(c.confidence * 100)}%`
         : (c.observation_count != null ? `${c.observation_count}★` : 'MO');
-      const commonHtml = c.common_name ? `<div class="sop-common">${_esc(c.common_name)}</div>` : '';
+      const commonHtml = c.common_name ? `<div class="sop-common">${_esc(spCommon(c.common_name))}</div>` : '';
       const moLinkHtml = c.mo_url
         ? `<a class="retry-mo-link" href="${_esc(c.mo_url)}" target="_blank" rel="noopener" onclick="event.stopPropagation()">view on MO ↗</a>`
         : '';
@@ -2783,7 +2783,7 @@ async function _corrLookup(id) {
            onclick="_corrSaveFromLookup(${id},'${sciArg}','${comArg}')">
         <div style="flex:1;min-width:0">
           <div class="corr-lookup-sci">${_esc(item.scientific_name)}${visionBadge}${scoreLabel}</div>
-          ${item.common_name ? `<div class="corr-lookup-common">${_esc(item.common_name)}</div>` : ''}
+          ${item.common_name ? `<div class="corr-lookup-common">${_esc(spCommon(item.common_name))}</div>` : ''}
           ${!item.vision ? `<span class="corr-lookup-src">${_esc(item.source || 'gbif')}${item.family ? ' · ' + _esc(item.family) : ''}</span>` : ''}
         </div>
       </div>`;
@@ -2842,7 +2842,7 @@ function _applyCorrectionName(id, sci, common) {
           comEl.className = 'sp-common';
           spNameEl.after(comEl);
         }
-        comEl.textContent = common;
+        comEl.textContent = spCommon(common);
       } else if (comEl) {
         comEl.remove();
       }
@@ -4068,7 +4068,7 @@ function _renderAIDraftCard(sp) {
                onchange="aiDraftToggleSelect('${escName}', this.checked)"
                onclick="event.stopPropagation()">
         <div>
-          ${sp.common_names.length ? `<div style="font-size:0.95rem;font-weight:700;color:#3b0764">${_resc(sp.common_names[0])}</div>` : ''}
+          ${sp.common_names.length ? `<div style="font-size:0.95rem;font-weight:700;color:#3b0764">${_resc(spCommon(sp.common_names[0]))}</div>` : ''}
           <div class="ai-draft-sci"${sp.common_names.length ? ' style="font-size:0.78rem;font-weight:400;color:#6d28d9"' : ''}>${escName}</div>
           <div style="font-size:0.69rem;color:#a78bfa;margin-top:1px">${draftCount} draft${draftCount!==1?'s':''} pending</div>
         </div>
@@ -5764,7 +5764,7 @@ function _renderEdibCard(sp) {
            ${hasSuggestion ? '' : 'style="display:none"'}>
     ${thumbHtml}
     <div class="edib-card-body">
-      ${sp.common_name ? `<div class="edib-common" style="font-weight:700;font-size:0.9rem;color:#2d5016">${_esc(sp.common_name)}</div>` : ''}
+      ${sp.common_name ? `<div class="edib-common" style="font-weight:700;font-size:0.9rem;color:#2d5016">${_esc(spCommon(sp.common_name))}</div>` : ''}
       <div class="edib-sci"${sp.common_name ? ' style="font-size:0.78rem;font-weight:400;color:#777"' : ''}>${_esc(sp.scientific_name)}</div>
       ${sp.family ? `<div class="edib-family">${_esc(sp.family)}</div>` : ''}
       <div class="edib-meta">${pfafBadge}${suggestBadge}${obsBadge}</div>
@@ -6031,7 +6031,7 @@ function _renderLocCard(obs) {
     ${thumbHtml}
     <div class="loc-card-body">
       ${obs.species_primary ? `<div class="loc-sci">${_esc(obs.species_primary)}</div>` : '<div class="loc-sci" style="color:#aaa">Unknown species</div>'}
-      ${obs.common_name ? `<div class="loc-common">${_esc(obs.common_name)}</div>` : ''}
+      ${obs.common_name ? `<div class="loc-common">${_esc(spCommon(obs.common_name))}</div>` : ''}
       <div class="loc-date">${date}</div>
       <div class="loc-badges">${srcBadge}${statusBadge}</div>
       <div class="loc-actions">

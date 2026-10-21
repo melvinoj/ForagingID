@@ -44,6 +44,15 @@ Sessions: 1 (Phases A–B), 2 (C–D), 3 (E–G). Sections 0–9 below were asse
 | 5 | Species merges (11b) | **Merges are allowed again**, but only through a merge that re-keys `species_resources` (and every other species-keyed table) to the kept species, with tests and a snapshot first. The CLAUDE.md rule ("merges orphan these; do not attempt merges") is updated **when batch 11b lands, not before**. | 11b |
 | 6 | Fix order | **Batch 14** (E-03 Second Opinion 500 + Review badge count) **moves to run straight after batch 3.** | 14 → after 3 |
 
+**Decided 21 Oct 2026 (morning)** — Melvin, recorded at the start of batch 3b:
+
+| # | Item | Decision | Done |
+|---|---|---|---|
+| 1 | Obs 15957 (*Taraxacum sect. Taraxacum*, linked to 286 *T. officinale*) | Relink to its own card **530**. Whether 530 merges into 286 is a question for batch 11b. | ✅ edit 21104 |
+| 2 | New cards 848 *Filipendula vulgaris*, 849 *Ganoderma applanatum* | Run enrichment; they stay toxicity unknown until a verdict is approved. Set 21453 / 21454 to fungi once 849 has its kingdom. | ✅ (see batch 3b result) |
+| 3 | Draft 2335 (medicinal notes on junk card 685 'norway spruce') | Reject. | ✅ |
+| 4 | The 381 `person_animal` pre-filter observations | Reject (originals stay on DIGIERA). Leave 'no plant signal' (1,169) and the ~650 unprocessed 2013 files for later — backlog. | Partly: 31 P1 rows done (no file deleted); 347 Takeout rows are Melvin's step; 3 "keep" rows left |
+
 **D3-01 review load** (DB copy 20 Oct 17:01; PFAF text parsed offline from the stored `enrichment_sources` HTML with the app's own `pfaf._parse`, no network):
 
 Of the **111 caution species**:
@@ -270,7 +279,7 @@ Rules for every batch:
 | **2** ✅ done 20 Oct | **E-01 + E-02** snapshot/restore through the backup API; restore accepts only `snapshots/` files and hex hashes. S1, not S0 — placed here because every later batch writes data and relies on it. If strict S0-first is preferred, move it after batch 8 and keep the manual `.backup` step. | `app/api/dev.py` | Code: the scratch reproductions (`waltest`) re-run against the new functions on throw-away DBs. Melvin: Settings snapshot → `integrity_check` ok and row counts equal the live DB. |
 | **3** ✅ done 20 Oct | **B2-02** (decided): `PATCH /api/edibility/status` sets `toxicity_severity` — toxic → 'toxic' unless already 'deadly'; never lowered automatically; relaxing needs an explicit curator severity in the same request. Then **B2-05 data** (decided): 155, 688, 745 → toxic (Melvin in the UI, or the endpoint after a snapshot); reject drafts 2920, 2921 | `app/api/edibility.py`, verdict controls in `frontend/species.html` / `review.html` if a severity choice is added | Code: read back species 155/688/745 (all fields), their history rows, drafts 2920/2921. Melvin: ☠ on those species' pins and walk badges. |
 | **14** ✅ done 20 Oct (moved — ran straight after 3, Melvin 20 Oct evening; part 1 E-03 + Review badge, part 2 the rest + GBIF-only ranking) | Quick S2 bugs: E-03 (Second Opinion 500 — reproduces on *Gentiana verna*, obs 24149), **Review menu badge count = the review queue's count** (shows 2,080 vs the queue's 386; new, Melvin 20 Oct evening), E-04, B1-08 candidate/score, C-03, C-04, D1-03, D2-01 | `reidentify.py`, `dev.py`, `scan.py`/review paths | Read-back + the logged repro (obs 24348). |
-| **3b** | **Verdict sweep** (new, Melvin 20 Oct evening; after 3, which couples verdict and severity): every species whose verdict is NULL/unknown, or whose verdict and severity disagree (e.g. *Atropa bella-donna*: severity deadly, verdict unknown), gets a **proposed verdict + severity from its stored sources as a review draft**. Melvin approves; nothing is set automatically. Needs an approve path for verdict drafts that writes through batch 3's coupled `PATCH /api/edibility/status` (today `edibility_status` drafts can't be approved — B3-04). Proposals are source-derived only, never a family heuristic (no-veto decision; cf. wikidata.py backlog item). | `app/api/edibility.py`, `app/api/culinary.py` (approve path), `frontend/review.html`, a dry-run-first script like batch 1's | Code: dry run lists every proposal with its source; drafts read back by id. Melvin: approve a few; species page and pins show the new verdict/severity. |
+| **3b** ✅ done 21 Oct | **Verdict sweep** (new, Melvin 20 Oct evening; after 3, which couples verdict and severity): every species whose verdict is NULL/unknown, or whose verdict and severity disagree (e.g. *Atropa bella-donna*: severity deadly, verdict unknown), gets a **proposed verdict + severity from its stored sources as a review draft**. Melvin approves; nothing is set automatically. Needs an approve path for verdict drafts that writes through batch 3's coupled `PATCH /api/edibility/status` (today `edibility_status` drafts can't be approved — B3-04). Proposals are source-derived only, never a family heuristic (no-veto decision; cf. wikidata.py backlog item). | `app/api/edibility.py`, `app/api/culinary.py` (approve path), `frontend/review.html`, a dry-run-first script like batch 1's | Code: dry run lists every proposal with its source; drafts read back by id. Melvin: approve a few; species page and pins show the new verdict/severity. |
 | **4** | **A-02** (decided): `/api/settings` returns no secret values (`is_set` only) and refuses guests. **D1-01**: autoescape on, `\| safe` only for `mdlite`/`season_str`, escape the `_mdlite` heading, `url_fetcher` limited to `frontend/static/print` | `app/api/settings.py`, `app/services/settings_service.py`, `frontend/settings.html`, `app/api/lists_pdf.py`, `app/templates/print_pdf.html` | Code: scratch `generate_pdf` with a hostile payload (`<img src=file:///…>`, `<script>`, HTML in a heading) → escaped text, no embedded file (pypdf). Melvin: Settings still shows keys as set; a normal PDF looks the same. |
 | **5** | **B2-01 + B2-04** (decided) **+ "deadly" label everywhere** (batch-3 extension, Melvin 20 Oct evening: verdict stays toxic; severity deadly shows "☠ deadly", plain toxic "☠ toxic" — on the map, walk, species page/grid, review, Lists/print/PDF, Export summary and experience page) via one shared `static/js/safety-gate.js` (and its server twin for PDF / Export summary / experience page): toxic/deadly by `edibility_status` OR severity → no edible parts, ☠ badge | `frontend/index.html` (`_injectEnrichment`, `showDetail`), `frontend/lists.html`, `frontend/print.html`, new `frontend/static/js/safety-gate.js`, `frontend/static/sw.js` (APP_SHELL + version bump) | Code: read-back + the shared-element trace (CLAUDE.md point 4). Melvin: tap a toxic pin; open a list with *Conium* in Lists + browser print → no edible parts, ☠ shown. |
 | **6** | **B2-03** (decided): prep warnings always in printed outputs incl. caution; look-alike uncut for hazardous species; Export summary gains warning fields | `frontend/print.html`, `app/templates/print_pdf.html`, `app/api/lists_pdf.py`, `app/api/sharing.py`, `frontend/index.html` (export payload) | Code: the 9 scratch PDFs re-run with the D1 fixture → `pdftotext` shows *Sambucus* and *Coprinus* warnings in all 3 layouts and *Conium*'s look-alike uncut. Melvin: browser print + Export summary for walk 4. |
@@ -286,6 +295,88 @@ Rules for every batch:
 | 15b | **Walk batch** (new items, Melvin 20 Oct evening; before the index.html split, after batch 5 so `index.html` isn't edited by two batches at once). (1) **Edit walk:** tapping a numbered stop marks the whole stop for removal; tapping a pin marks the pin; a lasso inside Edit walk marks everything inside for add/remove; all pending until Save changes. (2) **Remove the circular / point-to-point toggle**: the walk is labelled Loop when the last stop is within ~300 m of stop 1, else One-way. The stored `loop` flag (PATCH …/loop) and the exports that follow it need a migration path: derive it, don't drop it silently. (3) **Start here on every stop** of any walk; one-way from a middle stop reorders, so it goes through the Re-route preview. (4) **Bug:** route line distorts, then disappears after zooming in and dragging, until the walk is reloaded — **reproduce first** (Melvin), no fix from code reading alone. (5) **Remove in-app GPS walk recording** (decided): inventory the recording code, its IDB stores/outbox entries and endpoints first; unsynced recordings on the phone must be flushed or exported before removal. | `frontend/index.html`, `app/api/walk.py`, `frontend/static/sw.js`, recording endpoints | Read-back + shared-element trace (CLAUDE.md point 4). Melvin: each Edit-walk gesture, the Loop/One-way label on walks 1, 3, 4, Start here from a middle stop, the zoom/drag repro, phone has no recording UI and the outbox still flushes. |
 | 16 | P18 index.html split (after batch 5; after P6 if chosen; after 15b) | `frontend/index.html`, new `static/css` + `static/js/index/*`, `sw.js`, `scripts/experience_export/app_styles.py` | Byte-equal concatenation check + boundary scan; Melvin's 8-point checklist (E-08). |
 | 17 | Tidy: E-07 dead code, E-09 docs, E-12 logs, A-05…A-10, rename group 1 strings, UA contacts | various | Read-back; app starts clean (Melvin). |
+
+### Batch 3b — result (21 Oct 2026): verdict drafts + Melvin's small decisions
+
+Snapshots first: `db_20261021_042731` (before the decisions) and `db_20261021_044236` (before the sweep), both quick_check ok. Tests: 136 in 12 files, all pass (14 new in `tests/test_verdict_drafts.py`). The review UI is browser-unverified.
+
+**Approve path (code):**
+- `edibility._write_verdict()` is now the **one** verdict writer behind `PATCH /api/edibility/status` and the new draft approve, so neither is a bypass. Order: RULE 1/2 gates → `severity_for_verdict` + its history row → verdict + history row (`changed_by='human'`). Both gates refuse before anything is mutated.
+- **`GET /api/edibility/verdict-drafts`** lists pending drafts:
+  - species on saved walks first (live `walk_membership`), then by confirmed map pins, then name;
+  - each card carries the proposal, sources with exact quoted text, context, what was excluded and why, current values, per-verdict default severities, and whether the species changed after drafting.
+- **`POST …/verdict-drafts/{id}/approve`** `{edibility_status, toxicity_severity, note}`:
+  - one species; the curator's verdict/severity (prefilled with the proposal);
+  - `approved` when as proposed, `edited_approved` otherwise;
+  - **409 with nothing written** when the species' verdict, severity, verified flag/by, or verdict history moved after drafting;
+  - 400 for a combination `severity_for_verdict` refuses; 422 for a non-verdict; 400 for a non-verdict draft; 409 if already decided; 403 for guests.
+  - Same loud-fail read-back as PATCH. Edible/caution approvals trigger AI drafts like PATCH does.
+- **`POST …/{id}/reject`:** the species is untouched, and the sweep won't draft it again.
+- **Never in "Approve all":**
+  - `edibility_status` drafts are no longer listed in AI Draft Review or in the species page's pending drafts;
+  - `approve_ai_draft` still refuses the field;
+  - there is no bulk endpoint.
+- **UI:** Review → 🍃 Edibility Review → "⚖ Verdict drafts", above the existing grid. One card per species: Now / Proposed / evidence label / reason / sources with quotes / verdict + severity selects / note / Approve (with confirm) / Reject. A card that changed after drafting shows a warning.
+
+**Proposal rules (`app/services/verdict_drafts.py`, the only definition):**
+- **Stored sources only:**
+  - a recorded toxic/deadly severity → toxic;
+  - the latest human verdict in either history table;
+  - curator edibility conditions → caution;
+  - the stored PFAF page, parsed offline;
+  - stored FAO/MO fungi lookups.
+- **PFAF:**
+  - rating ≥1 + hazards "None known" → edible;
+  - rating ≥1 + hazards without poison/toxic wording → caution;
+  - rating ≥1 + affirmed poison/toxic wording → no verdict ("read the text and decide");
+  - rating 0 + affirmed wording → toxic.
+  - Negated mentions ("No known toxicity", "non-toxic", "No members of this genus are known to be poisonous") don't count; the window is the same clause, ≤10 words.
+  - A genus-level card, or a page stored for another name, gives no verdict.
+- **Combining:**
+  - nothing → unknown (thin);
+  - different verdicts → unknown (conflict), except edible + caution → caution;
+  - 'deadly' is never proposed from text;
+  - severity = `severity_for_verdict(verdict, current)`, so a proposal never lowers a recorded severity.
+- **Excluded, and shown as excluded:** Wikidata (family list — no-veto decision) and culinary link search hits (not species-specific).
+
+**Sweep (`scripts/verdict_sweep_drafts.py`, dry run → `--apply`):**
+- **Scope:** verdict NULL/unknown/unclear, or a severity outside `ALLOWED_SEVERITIES` for its verdict.
+  - No species was out of sync. The example in the plan (*Atropa bella-donna*) has been toxic/deadly, human-verified, since 15 Oct (history 15–17).
+  - 20 orphan-marked cards were left out.
+- **Drafts created: 212** (ids 3240–3451, `model='verdict_sweep'`, `approved_by='system:verdict_sweep'` until decided — B3-03).
+  - **By proposed verdict:** unknown 175 · caution 20 · edible 13 · toxic 4 (*Galeopsis speciosa*, *Coronilla varia*, *Euphorbia corollata*, *Rhododendron ferrugineum*).
+  - **Lacking enough evidence: 175** — thin 166 (Plantae 109, kingdom unknown 32, Fungi 24, Chromista 1), conflict 9.
+  - 37 have a single source (PFAF). 168 have confirmed map pins; 13 are on saved walks (11 unknown; *Solidago virgaurea* and *Oenothera biennis* caution).
+- 18 pending FAO/MO lookup drafts ("no source data", B3-04) were invalidated as superseded; their text is carried into the new draft.
+- Read back by id: 212 OK, 0 mismatches. No species verdict, severity or history row changed (`species_edibility_history` still ends at 379).
+
+**Melvin's decisions (section 0, 21 Oct):**
+- **15957:** `species_id` 286 → 530 (edit 21104, read back).
+- **Draft 2335:** rejected via the app's reject endpoint (read back).
+- **848 / 849:** enriched through the app's own new-card routine (`scan._enrich_new_species_card`: GBIF lineage, then PFAF/Wikidata/iNat/Trompenburg). Both verdicts stay empty, severity unknown.
+  - 848: kingdom Plantae, PFAF page stored (rating 2, hazards "None known"). Its verdict draft proposes edible (single source).
+  - 849: kingdom Fungi, no PFAF; FAO returned 403. Its draft is unknown/thin.
+- **21453 / 21454 → fungi** via `apply_species_category` (edits 21105, 21106).
+- **31 P1 `person_animal` rows rejected** via the app's bulk path (process 195). The provenance veto keeps phone files: all 31 files and thumbnails are still on disk; 31 edit rows.
+- **Not done by Code:**
+  - The **347 Takeout rows**: rejecting them hard-deletes their `uploads/` copies and thumbnails after 30 s. DIGIERA isn't mounted here, so the originals can't be checked; this is Melvin's step.
+  - The **3 rows marked "keep"** (21509, 21949, 22043) conflict with "reject all 381" — left for Melvin.
+
+**New findings during the batch:**
+- **Anthropic API credit balance is empty:** every AI draft call fails ("credit balance is too low").
+- **A5 bug:** `_ensure_medicinal_default` checks only `culinary_info.medicinal_folklore`. PFAF's medicinal text is never stored there (it only feeds the AI drafter), so when AI drafting fails, A5 writes "No known traditional medicinal uses" + marks it AI-approved even when PFAF lists uses.
+  - It did this on 848 (PFAF lists root uses) → undone: field back to NULL, `ai_approved_fields_json` cleared, history row 2829 `system:undo_A5`.
+  - 849 has no medicinal source, so the default is A5's intended behaviour there; left.
+  - Other species enriched while the credit was empty may carry the same false default — not counted.
+- **Unverified verdicts are not in this sweep's scope:** 394 species have a verdict whose `edibility_verified_by` isn't `human` (edible 239, caution 85, inedible 43, toxic 27). CHANGELOG's "covered by 3b sweep" (Aruncus dioicus …) is therefore not true. A second sweep could draft "confirm or change" cards for them.
+- **Junk cards got thin drafts** (Betacoronavirus pandemicum, Maniola jurtina, Arachnocampa otwayensis, Noctiluca scintillans …) — reject them.
+
+**Browser-unverified (Melvin):**
+- **Edibility Review:** the "⚖ Verdict drafts" section shows 212, walk species first (*Solidago virgaurea*, *Agaricus campestris* …), with quotes readable.
+- **Approve as proposed** on one card: confirm dialog, then a toast, and the card disappears (and from the grid below). The species page shows the verdict.
+- **Change the verdict** on a card: the severity options follow it; on a toxic-severity species a relaxing verdict shows the "choose deliberately" note.
+- **Stale card:** edit a species on its page, refresh Edibility Review → the card shows the changed warning, and Approve shows the 409 reason.
+- **AI Draft Review and the species page** no longer list verdict drafts; Approve all is unchanged.
 
 ### Batch 14 (part 2) — result (20 Oct 2026, late evening)
 

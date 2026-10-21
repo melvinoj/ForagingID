@@ -53,6 +53,10 @@ Tests: 122 passing across 11 files (pytest not installed — run as the audit di
 
 ## History
 
+### 2026-10-21 04:27
+**Snapshot** — Before batch 3b decisions: obs 15957 -> card 530, reject draft 2335, enrich 848/849 (+ 21453/21454 fungi), reject 31 P1 person_animal pre-filter rows
+DB: `snapshots/db_20261021_042731.sqlite`
+
 ### 2026-10-20 22:28
 **Snapshot** — End of session — Session ended from Settings page
 DB: `snapshots/db_20261020_222853.sqlite`

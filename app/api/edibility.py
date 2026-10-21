@@ -136,8 +136,20 @@ def _write_verdict(db: AsyncSession, sp: Species, status: str, verified: Optiona
     _apply_verdict_severity(db, sp, status, requested_severity, "human", note)
     sp.edibility_status = status
     if verified is not None:
+        old_verified, old_by = sp.edibility_verified, sp.edibility_verified_by
         sp.edibility_verified = bool(verified) and status != "unknown"
         sp.edibility_verified_by = "human" if sp.edibility_verified else None
+        # A history row for every change (Melvin, 21 Oct 2026) — same shape as
+        # experience.verify_species. Before this, the lock flag changed silently.
+        _old_v = None if old_verified is None else str(int(bool(old_verified)))
+        _new_v = str(int(bool(sp.edibility_verified)))
+        if _old_v != _new_v:
+            db.add(SpeciesEdibilityHistory(species_id=sp.id, field="edibility_verified",
+                                           old_value=_old_v, new_value=_new_v, changed_by="human", note=note))
+        if old_by != sp.edibility_verified_by:
+            db.add(SpeciesEdibilityHistory(species_id=sp.id, field="edibility_verified_by",
+                                           old_value=old_by, new_value=sp.edibility_verified_by,
+                                           changed_by="human", note=note))
     db.add(SpeciesEdibilityHistory(
         species_id=sp.id,
         field="edibility_status",
@@ -707,6 +719,10 @@ async def list_verdict_drafts(db: AsyncSession = Depends(get_db),
             "allowed_severities": {k: list(v) for k, v in ALLOWED_SEVERITIES.items()}}
 
 
+class VerdictDraftRejectIn(BaseModel):
+    reason: Optional[str] = None      # optional; kept in generation_context_json (rejected_reason)
+
+
 class VerdictDraftApproveIn(BaseModel):
     edibility_status: str             # the curator's verdict (prefilled with the proposal)
     toxicity_severity: str            # the curator's severity (prefilled; must fit the verdict)
@@ -789,17 +805,25 @@ async def approve_verdict_draft(
 
 
 @router.post("/api/edibility/verdict-drafts/{draft_id}/reject")
-async def reject_verdict_draft(draft_id: int, db: AsyncSession = Depends(get_db),
+async def reject_verdict_draft(draft_id: int, payload: Optional[VerdictDraftRejectIn] = None,
+                               db: AsyncSession = Depends(get_db),
                                identity: Identity = Depends(get_identity)):
     """Reject one verdict draft. The species is not touched; a rejected draft
-    is a decision, so the sweep does not draft that species again."""
+    is a decision, so the sweep does not draft that species again. An optional
+    reason is kept in generation_context_json (verdict_drafts.record_rejection_reason)."""
     if identity.is_guest:
         raise HTTPException(403, "Curator only")
+    from app.services.verdict_drafts import record_rejection_reason
     d = await _pending_verdict_draft(db, draft_id)
     d.status = "rejected"
+    reason = ((payload.reason if payload else None) or "").strip()
+    if reason:
+        record_rejection_reason(d, reason)
     await db.commit()
     await db.refresh(d)
-    return {"ok": d.status == "rejected", "draft_id": d.id, "draft_status": d.status}
+    import json as _json
+    stored = (_json.loads(d.generation_context_json or "{}") or {}).get("rejected_reason")
+    return {"ok": d.status == "rejected", "draft_id": d.id, "draft_status": d.status, "reason": stored}
 
 
 async def _rescan_unknown_worker(species_ids: list[int]) -> None:

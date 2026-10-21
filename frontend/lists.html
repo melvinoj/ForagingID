@@ -1025,6 +1025,7 @@
 
 </div>
 
+<script src="/static/js/safety-gate.js"></script>
 <script src="/static/js/lists.js"></script>
 <script>
 // ── Helpers ─────────────────────────────────────────────────────────────────
@@ -1183,11 +1184,11 @@ async function enrichCard(name) {
     const seasonPill = sm.size
       ? `<span class="season-pill ${inSeason ? 'season-in' : 'season-out'}">${inSeason ? '● in season now' : 'out of season'}</span>`
       : `<span class="season-pill season-out">season unknown</span>`;
-    const rc = prof.recipe_count || 0;
+    const rc = _printRecipes(prof).length;   // safety gate: 0 for blocked species
     const recipePill = rc ? `<span class="recipe-pill">${rc} recipe${rc !== 1 ? 's' : ''}</span>` : '';
     meta.innerHTML =
       `<span class="ed-pill ${edClass(sp.edibility_status)}">${_esc(edLabel(sp.edibility_status))}</span>`
-      + seasonPill + recipePill;
+      + _printSafety(prof) + seasonPill + recipePill;
   }
   // Photo thumbnail — chosen photo, else first available.
   const thumbs = (prof.observations && prof.observations.thumbnails) || [];
@@ -1226,16 +1227,28 @@ let _sectionPrefs = {};  // scientific_name → { recipes: bool, medicinal: bool
 // prints, as on the public experience page. The profile's pfaf_fallback_fields is
 // the server's shared is_pfaf_fallback() predicate — no rule of its own here.
 function _printCulinary(prof) {
-  const cul = Object.assign({}, (prof && prof.culinary) || {});
+  // Safety gate (batch 5, B2-04): culinary fields dropped unless the server's
+  // decision (prof.safety) allows them — missing profile / decision fails closed.
+  const cul = SafetyGate.culinary((prof && prof.culinary) || {}, prof && prof.safety);
   ((prof && prof.pfaf_fallback_fields) || []).forEach(f => { delete cul[f]; });
   return cul;
+}
+
+// Recipes for print — [] unless the safety gate allows culinary content.
+function _printRecipes(prof) {
+  return SafetyGate.recipes(prof && prof.recipes, prof && prof.safety);
+}
+
+// ☠ / ⚠ label + approved caution warning from the served decision.
+function _printSafety(prof) {
+  return SafetyGate.badge(prof && prof.safety, 'margin-left:4px');
 }
 
 function _isFilled(prof, key) {
   const sp  = (prof && prof.species)  || {};
   const cul = _printCulinary(prof);
   switch (key) {
-    case 'recipes':    return (prof.recipe_count || 0) > 0 || ((prof.recipes || []).length > 0);
+    case 'recipes':    return _printRecipes(prof).length > 0;
     case 'medicinal':  return !!(cul.medicinal_notes || cul.medicinal_folklore || cul.traditional_uses);
     case 'foraging':   return !!(cul.id_notes || cul.edible_parts || cul.harvest_stage);
     case 'lookalikes': return !!(cul.look_alike_warnings || cul.preparation_warnings) || (prof.lookalike_count || 0) > 0;
@@ -1318,7 +1331,7 @@ function toggleExpandFill(name) {
     const mNames = [...sm].sort((a, b) => a - b).map(m => MONTHS[m - 1]);
     rows.push(`<div class="row"><span class="lbl">Season</span>${_esc(mNames.join(', '))}</div>`);
   }
-  const recipes = prof.recipes || [];
+  const recipes = _printRecipes(prof);
   const key = recipes.find(r => r.is_preferred) || recipes[0];
   let recipeHtml = '';
   if (key) {
@@ -1935,7 +1948,7 @@ function _fieldEntry(name) {
   const cul  = _printCulinary(prof);
   const common = (sp.common_names && sp.common_names[0]) || (base.common_names && base.common_names[0]) || '';
   const edib   = sp.edibility_status;
-  const recipes = (prof && prof.recipes) || [];
+  const recipes = _printRecipes(prof);
   const key     = recipes.find(r => r.is_preferred) || recipes[0];
 
   // Section prefs — undefined means no profile yet, show everything.
@@ -1969,7 +1982,7 @@ function _fieldEntry(name) {
     <div class="fg-sci">${_esc(name)}</div>
     ${common ? `<div class="fg-common">${_esc(common)}</div>` : ''}
     <div class="fg-row">
-      <span class="fg-pill ${edClass(edib)}">${_esc(edLabel(edib))}</span>
+      <span class="fg-pill ${edClass(edib)}">${_esc(edLabel(edib))}</span>${_printSafety(prof)}${SafetyGate.warning(prof && prof.safety)}
       ${ct.season ? `<span class="fg-season">${_seasonText(sp)}</span>` : ''}
     </div>
     ${showId       ? `<div class="fg-id-primary">${_esc(idNote)}</div>` : ''}
@@ -1986,7 +1999,7 @@ function _workshopPage(name, withFieldBlock = false, isWorkshopHandout = false) 
   const cul  = _printCulinary(prof);
   const common = (sp.common_names && sp.common_names[0]) || (base.common_names && base.common_names[0]) || '';
   const edib   = sp.edibility_status;
-  const recipes = (prof && prof.recipes) || [];
+  const recipes = _printRecipes(prof);
   const key     = recipes.find(r => r.is_preferred) || recipes[0];
   const ct = _loadContentToggles();
   const file = prof ? _photoFileFor(name, prof) : null;
@@ -2005,7 +2018,7 @@ function _workshopPage(name, withFieldBlock = false, isWorkshopHandout = false) 
     || (ct.id_notes && prefs.lookalikes !== false ? '<p>No specific look-alike warnings on record — always confirm identification before eating.</p>' : '');
   const safety = `<div class="ws-safety">
     <div class="ws-safety-h">⚠ Safety &amp; edibility</div>
-    <div class="ws-edib"><span class="fg-pill ${edClass(edib)}">${_esc(edLabel(edib))}</span></div>
+    <div class="ws-edib"><span class="fg-pill ${edClass(edib)}">${_esc(edLabel(edib))}</span>${_printSafety(prof)}${SafetyGate.warning(prof && prof.safety)}</div>
     ${safetyBody}
   </div>`;
 

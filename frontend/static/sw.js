@@ -13,7 +13,7 @@
 //
 // Writes (POST / PATCH / DELETE) are never intercepted — they always go to the network.
 
-const CACHE_VERSION  = 'foragingid-v7';   // bump → old STATIC/RUNTIME caches evicted on activate
+const CACHE_VERSION  = 'foragingid-v8';   // bump → old STATIC/RUNTIME caches evicted on activate
 const STATIC_CACHE   = CACHE_VERSION + '-static';
 const RUNTIME_CACHE  = CACHE_VERSION + '-runtime';
 // TILE_CACHE and SPECIES_CACHE are deliberately version-independent. Both
@@ -41,6 +41,7 @@ const APP_SHELL = [
   '/static/js/pwa.js',
   '/static/js/guest-mode.js',
   '/static/js/offline.js',
+  '/static/js/safety-gate.js',   // batch 5 safety gate — every map/species/list page needs it offline
   '/static/icons/icon-192.png',
   '/static/icons/icon-512.png',
   '/static/icons/dandelion-icon.svg',

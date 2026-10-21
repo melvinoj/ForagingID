@@ -26,7 +26,7 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine  # no
 import app.main  # noqa: E402,F401  (registers every model on Base.metadata, as create_all needs)
 from app.database import Base  # noqa: E402
 from app.models.species import (  # noqa: E402
-    Species, SpeciesEdibilityHistory, SeverityRuleError, culinary_allowed, severity_for_verdict,
+    Species, SpeciesEdibilityHistory, SeverityRuleError, culinary_allowed, severity_for_verdict, severity_is_none,
 )
 from app.api.edibility import (  # noqa: E402
     BulkEdibilityIn, EdibilityStatusIn, bulk_set_edibility_status, set_edibility_status,
@@ -106,8 +106,12 @@ def test_bad_inputs_refused():
 
 
 def test_unknown_severity_fails_closed():
-    assert culinary_allowed("none") and not culinary_allowed("unknown")
-    assert not culinary_allowed("toxic") and not culinary_allowed("deadly") and not culinary_allowed(None)
+    # Severity half (severity_is_none) + the full rule (culinary_allowed → safety_decision, 21 Oct).
+    assert severity_is_none("none") and not severity_is_none("unknown")
+    assert not severity_is_none("toxic") and not severity_is_none("deadly") and not severity_is_none(None)
+    assert culinary_allowed("none", "edible") and not culinary_allowed("unknown", "edible")
+    assert not culinary_allowed("toxic", "caution") and not culinary_allowed("deadly", "toxic")
+    assert not culinary_allowed(None, "edible") and not culinary_allowed("none", "inedible")
 
 
 # ── endpoints, on a throw-away DB ────────────────────────────────────────────
@@ -242,7 +246,7 @@ def test_new_species_is_born_unassessed():
             s.add(sp)
             await s.commit()
             assert sp.toxicity_severity == "unknown"
-            assert not culinary_allowed(sp.toxicity_severity)
+            assert not culinary_allowed(sp.toxicity_severity, sp.edibility_status)
         await eng.dispose()
     asyncio.run(run())
 

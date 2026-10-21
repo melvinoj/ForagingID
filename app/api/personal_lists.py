@@ -217,14 +217,14 @@ async def get_personal_card(species_id: int, db: AsyncSession = Depends(get_db))
     ci = await db.scalar(select(CulinaryInfo).where(CulinaryInfo.species_id == sp.id))
 
     # Preferred (or most recent) approved recipe — read-only scaffold content.
-    # Toxic guard (culinary_allowed): none unless toxicity_severity is 'none'.
+    # Culinary guard (culinary_allowed → safety_decision): edible/caution + severity 'none'.
     recipe = await db.scalar(
         select(SpeciesRecipe)
         .where(SpeciesRecipe.species_id == sp.id)
         .where(SpeciesRecipe.status == "approved")
         .order_by(SpeciesRecipe.is_preferred.desc(), SpeciesRecipe.created_at.desc())
         .limit(1)
-    ) if culinary_allowed(sp.toxicity_severity) else None
+    ) if culinary_allowed(sp.toxicity_severity, sp.edibility_status) else None
 
     thumb = await _species_thumbnail(db, sp)
 

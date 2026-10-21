@@ -142,6 +142,10 @@ def _build_registry() -> List[Dict]:
             "description": "API key for DeepSeek — the AI backend for every AI feature (drafts, recipes, chat, summaries, encounter extraction).",
             "group": "AI",
             "hidden": True,
+            # Audit A-02 (21 Oct 2026): a secret is never returned by GET
+            # /api/settings — only whether it is set. Entry is write-only via
+            # POST /api/settings/api-key. See is_secret_setting().
+            "secret": True,
         },
         {
             "key": "deepseek_model",
@@ -376,6 +380,12 @@ def _get_registry() -> List[Dict]:
 def get_registry() -> List[Dict]:
     """Return the full settings registry as a list of dicts."""
     return _get_registry()
+
+
+def is_secret_setting(entry: Dict) -> bool:
+    """True for a registry entry whose value must never leave the server (A-02).
+    "hidden" is only a UI rendering hint; "secret" is the redaction rule."""
+    return bool(entry.get("secret"))
 
 
 def get_default(key: str) -> Any:

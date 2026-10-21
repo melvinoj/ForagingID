@@ -111,16 +111,10 @@ async def list_recipes(
     )
     rows = (await db.execute(stmt)).scalars().all()
 
-    # Toxic guard (culinary_allowed): no recipes unless toxicity_severity is 'none'
-    if not culinary_allowed(sp.toxicity_severity):
-        return {"species": sp.scientific_name, "edibility_blocked": True, "recipes": []}
-
-    # Enforce edibility rules: blank for toxic/unknown species
-    edib = (sp.edibility_status or "").lower()
-    if edib in ("toxic", "inedible", "not_edible"):
-        # Return empty recipe bank for toxic species (no auto-delete)
-        return {"species": sp.scientific_name, "edibility_blocked": True, "recipes": []}
-    if edib in ("unknown", "unclear", "") and sp.edibility_status is None:
+    # Culinary guard — one rule (safety_decision via culinary_allowed): recipes
+    # only for an edible/caution verdict with severity 'none'. Blank otherwise
+    # (no auto-delete).
+    if not culinary_allowed(sp.toxicity_severity, sp.edibility_status):
         return {"species": sp.scientific_name, "edibility_blocked": True, "recipes": []}
 
     return {

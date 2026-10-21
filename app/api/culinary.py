@@ -27,10 +27,11 @@ log = logging.getLogger(__name__)
 from app.database import get_db, AsyncSessionLocal
 from app.services.write_lock import db_write_lock
 from app.services.ai_placeholder import is_ai_placeholder, is_only_no_medicinal_uses_claim
+from app.services.safety_gate import safety_for_species
 from app.models.culinary import CulinaryInfo
 from app.models.notes import MapNote
 from app.models.observation import Observation
-from app.models.species import CulinaryInfoHistory, EnrichmentSource, Species, SpeciesAIDraft, SpeciesCandidate, SpeciesRecipe, SpeciesEdibilityCondition, SpeciesLookalike, culinary_allowed, CURATOR_DRAFT_FIELDS, AI_NO_CONTENT_VERDICTS, is_curator_authored
+from app.models.species import CulinaryInfoHistory, EnrichmentSource, Species, SpeciesAIDraft, SpeciesCandidate, SpeciesRecipe, SpeciesEdibilityCondition, SpeciesLookalike, culinary_allowed, safety_decision, CURATOR_DRAFT_FIELDS, AI_NO_CONTENT_VERDICTS, is_curator_authored
 from app.models.encounter import Encounter
 from app.models.foray_session import SessionSpecies
 from app.models.notification import NotificationDismissal
@@ -156,6 +157,9 @@ async def list_species(
             "family": sp.family if sp else None,
             "kingdom": sp.kingdom if sp else None,
             "edibility_status": sp.edibility_status if sp else None,
+            # Safety gate (batch 5) for the species grid badge. List rows carry no
+            # caution warning (no per-row history lookup); the profile serves it.
+            "safety": safety_decision(sp.toxicity_severity if sp else None, sp.edibility_status if sp else None),
             "has_medicinal": bool(ci and (ci.medicinal_folklore or ci.medicinal_notes)) if ci else False,
             "enriched": sp is not None,
             "data_confidence": ci.data_confidence if ci else None,
@@ -1637,9 +1641,8 @@ async def get_culinary_profile(
     ]
 
     # Include recipe bank (current-season + all approved) — for walk panel collation
-    _edib = (sp.edibility_status or "").lower()
-    _edib_blocked = (_edib in ("toxic", "inedible", "not_edible") or sp.edibility_status is None
-                     or not culinary_allowed(sp.toxicity_severity))
+    # One rule (safety_decision via culinary_allowed): edible/caution + severity 'none'.
+    _edib_blocked = not culinary_allowed(sp.toxicity_severity, sp.edibility_status)
     _recipe_rows: list = []
     if not _edib_blocked:
         _recipe_stmt = (
@@ -1669,9 +1672,12 @@ async def get_culinary_profile(
             "genus": sp.genus,
             "edibility_status": sp.edibility_status,
             "edibility_verified": sp.edibility_verified,
-            "toxicity_severity": sp.toxicity_severity,  # none | toxic | deadly — walk panel toxic guard
+            "toxicity_severity": sp.toxicity_severity,  # none | toxic | deadly | unknown
             "foraging_notes": sp.foraging_notes,        # walk stop cards (curator's own notes)
         },
+        # Safety gate (batch 5): the decision every page shows — map pop-up, walk
+        # panel, proximity alerts, Export summary. Read via static/js/safety-gate.js.
+        "safety": await safety_for_species(db, sp, ci),
         "culinary": _culinary_to_dict(ci, sp.scientific_name) if ci else None,
         "ai_generated_fields": ai_fields,
         "enrichment_sources": sources,
@@ -1719,6 +1725,10 @@ async def correct_culinary_field(
         )
 
     old_value = getattr(ci, body.field, None)
+    # Write protocol: a previously empty field is recorded as old_value=NULL,
+    # never '' (Melvin, 21 Oct 2026).
+    if old_value is not None and not str(old_value).strip():
+        old_value = None
     new_value = body.value
 
     # Write audit record BEFORE updating
@@ -1986,9 +1996,8 @@ async def species_profile(
         _common_names_human_locked = _cn_lock_row is not None
 
     # Recipe bank — enforce edibility rules
-    edib = (sp.edibility_status or "").lower()
-    _edibility_blocked = (edib in ("toxic", "inedible", "not_edible") or sp.edibility_status is None
-                          or not culinary_allowed(sp.toxicity_severity))
+    # One rule (safety_decision via culinary_allowed): edible/caution + severity 'none'.
+    _edibility_blocked = not culinary_allowed(sp.toxicity_severity, sp.edibility_status)
     recipes_stmt = (
         select(SpeciesRecipe)
         .where(SpeciesRecipe.species_id == sp.id)
@@ -2048,6 +2057,9 @@ async def species_profile(
             "itis_name_match":    sp.itis_name_match,
             "itis_checked_at":    sp.itis_checked_at.isoformat() if sp.itis_checked_at else None,
         },
+        # Safety gate (batch 5): species page, Lists, browser print. Read via
+        # static/js/safety-gate.js; the PDF re-asks the server (B2-09).
+        "safety": await safety_for_species(db, sp, ci),
         "culinary": culinary_out,
         "ai_generated_fields": ai_fields_out,
         # field_source_tags: {field_name: "PFAF"|"EMA"|"Source: reference data"}.

@@ -1,6 +1,6 @@
 from datetime import datetime
 from typing import Optional
-from sqlalchemy import String, Float, DateTime, Boolean, Text, Integer, ForeignKey, JSON
+from sqlalchemy import String, Float, DateTime, Boolean, Text, Integer, ForeignKey, JSON, and_, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.database import Base
 
@@ -458,25 +458,47 @@ class SpeciesSynonym(Base):
 
 
 # ---------------------------------------------------------------------------
-# Culinary toxic guard — the ONLY backend definition of "may recipes / culinary
-# content be returned for this species?". Same rule as the frontend
-# _culinaryGate (index.html) and print_pdf.html: only when toxicity_severity is
-# 'none'. 'toxic', 'deadly' and anything unrecognised/missing fail closed.
-# Extend these; never copy the comparison into a call site.
+# Severity half — the ONLY definition of "toxicity has been assessed as exactly
+# 'none'". 'toxic', 'deadly', 'unknown' and anything unrecognised/missing are
+# False. It is NOT the culinary rule (that also needs the verdict — below);
+# safety_decision() uses it, and so do the experience gates' "toxicity known
+# safe" checks (badge wording + rule 7), whose edible claims and recipes are
+# gated on the verdict separately (gates.may_claim_edible).
 # ---------------------------------------------------------------------------
-def culinary_allowed(toxicity_severity: Optional[str]) -> bool:
+def severity_is_none(toxicity_severity: Optional[str]) -> bool:
     return toxicity_severity == "none"
 
 
-# SQL form of culinary_allowed() for queries that join Species.
-CULINARY_ALLOWED_SQL = Species.toxicity_severity == "none"
+# Verdicts that may carry culinary content (Melvin, 21 Oct 2026).
+CULINARY_VERDICTS = ("edible", "caution")
+
+
+# ---------------------------------------------------------------------------
+# Culinary guard — "may recipes / culinary content be returned for this
+# species?". ONE rule: it delegates to safety_decision() (verdict edible or
+# caution AND severity exactly 'none'). Extend safety_decision(); never copy
+# the comparison into a call site. The verdict argument is required so a
+# caller that only passes severity fails loudly instead of silently allowing.
+# ---------------------------------------------------------------------------
+def culinary_allowed(toxicity_severity: Optional[str], edibility_status: Optional[str]) -> bool:
+    return safety_decision(toxicity_severity, edibility_status)["culinary_allowed"]
+
+
+# SQL form of culinary_allowed() for queries that join Species — the same rule
+# (verdict lowercased + trimmed, as safety_decision normalises it). Kept equal
+# to the Python rule by tests/test_batch5_safety_gate.py, which compares the two
+# over every severity × verdict combination.
+CULINARY_ALLOWED_SQL = and_(
+    Species.toxicity_severity == "none",
+    func.lower(func.trim(Species.edibility_status)).in_(CULINARY_VERDICTS),
+)
 
 
 # ---------------------------------------------------------------------------
 # Known hazard — the ONLY definition of "toxicity_severity says toxic or
 # deadly". Used by the critical-hazards review list (app/api/experience.py) and
 # the experience export gates (scripts/experience_export/gates.py). Unknown /
-# NULL is NOT a known hazard here (culinary_allowed() is the fail-closed rule
+# NULL is NOT a known hazard here (severity_is_none() is the fail-closed half
 # for that); callers that must fail closed on unknown combine the two.
 # ---------------------------------------------------------------------------
 TOXIC_SEVERITIES = ("toxic", "deadly")
@@ -484,6 +506,60 @@ TOXIC_SEVERITIES = ("toxic", "deadly")
 
 def is_toxic_severity(toxicity_severity: Optional[str]) -> bool:
     return toxicity_severity in TOXIC_SEVERITIES
+
+
+# ---------------------------------------------------------------------------
+# Safety gate (audit P1 / batch 5, 21 Oct 2026) — the ONLY definition of the
+# decision every output shows: may culinary content (edible parts, taste notes,
+# recipes) appear, and which safety label goes with the species.
+#   culinary_allowed — verdict is 'edible' or 'caution' AND severity is exactly
+#                      'none' (Melvin, 21 Oct 2026). Inedible, unknown, NULL,
+#                      toxic or any other verdict → no culinary content.
+#   level / label    — deadly  → "☠ deadly"
+#                      toxic   → "☠ toxic"   (severity toxic, or verdict toxic)
+#                      unknown → "⚠ toxicity unknown" (severity not exactly
+#                                'none': unknown / NULL / unrecognised; or the
+#                                verdict is unknown / NULL — never assessed)
+#                      caution → "⚠ caution", warning = the approved caution
+#                                warning (curator-authored preparation_warnings)
+#                      none    → no label. Culinary content only for 'edible';
+#                                an inedible (or other) verdict is blocked
+#                                without a label — pages show the verdict badge.
+# Served as "safety" by /api/culinary/{name} and /api/species/{name}/profile;
+# the PDF and the walk Export summary re-ask it server-side (B2-09). Pages read
+# it through frontend/static/js/safety-gate.js and never re-derive it.
+# ---------------------------------------------------------------------------
+SAFETY_LABELS = {
+    "deadly":  "☠ deadly",
+    "toxic":   "☠ toxic",
+    "unknown": "⚠ toxicity unknown",
+    "caution": "⚠ caution",
+    "none":    "",
+}
+
+
+def safety_decision(toxicity_severity: Optional[str], edibility_status: Optional[str],
+                    caution_warning: Optional[str] = None) -> dict:
+    verdict = (edibility_status or "").strip().lower()
+    if toxicity_severity == "deadly":
+        level = "deadly"
+    elif toxicity_severity == "toxic" or verdict == "toxic":
+        level = "toxic"
+    elif not severity_is_none(toxicity_severity) or verdict in ("", "unknown"):
+        level = "unknown"
+    elif verdict == "caution":
+        level = "caution"
+    else:
+        level = "none"
+    warning = (caution_warning or "").strip() or None
+    return {
+        # == verdict in CULINARY_VERDICTS and severity_is_none() (levels above)
+        "culinary_allowed": level == "caution" or (level == "none" and verdict == "edible"),
+        "level": level,
+        "label": SAFETY_LABELS[level],
+        "warning": warning if level == "caution" else None,
+        "verdict": verdict or None,     # the DB verdict the decision used (lowercased)
+    }
 
 
 # ---------------------------------------------------------------------------

@@ -1379,6 +1379,7 @@
   <button class="lb-nav" id="lb-next" onclick="event.stopPropagation();_lbNav(+1)">›</button>
 </div>
 
+<script src="/static/js/safety-gate.js"></script>
 <script src="/static/js/lists.js"></script>
 <script src="/static/js/gps.js"></script>
 <script>
@@ -1597,19 +1598,23 @@ function renderList(items) {
     const enrichBadge = sp.enriched ? '' : '<span class="enrich-badge">no culinary data</span>';
     const edib = sp.edibility_status;
     const hasConditions = (sp.condition_count || 0) > 0;
-    // If conditional detail exists: show "conditional" chip instead of flat edible badge
-    const edibBadge = edib === 'toxic'
-      ? '<span class="toxic-badge">✗ toxic</span>'
+    // Safety gate (batch 5): blocked species (deadly / toxic / toxicity unknown)
+    // get the served ☠ / ⚠ label, never an edible badge; caution comes from the
+    // served level. If conditional detail exists: "conditional" chip instead of
+    // the flat edible / caution badge.
+    const _sg = SafetyGate.decision(sp.safety);
+    const edibBadge = (!SafetyGate.allowed(_sg) && _sg.label)
+      ? SafetyGate.badge(_sg)
+      : _sg.level === 'caution' && hasConditions
+        ? '<span class="obs-badge" style="background:#2a2010;color:#d4a840;border:1px solid #4a3a10">⚡ conditional</span>'
+      : _sg.level === 'caution'
+        ? '<span class="obs-badge" style="background:#2a2010;color:#d4a840;border:1px solid #4a3a10">⚠ caution</span>'
       : edib === 'inedible'
         ? '<span class="inedible-badge">✗ not edible</span>'
       : edib === 'edible' && hasConditions
         ? '<span class="obs-badge" style="background:#1e3028;color:#7ac8a0;border:1px solid #3a5e48">⚡ conditional</span>'
       : edib === 'edible'
         ? '<span class="obs-badge" style="background:#1e3828;color:#7ac8a0">✓ edible</span>'
-      : edib === 'caution' && hasConditions
-        ? '<span class="obs-badge" style="background:#2a2010;color:#d4a840;border:1px solid #4a3a10">⚡ conditional</span>'
-      : edib === 'caution'
-        ? '<span class="obs-badge" style="background:#2a2010;color:#d4a840;border:1px solid #4a3a10">⚠ caution</span>'
         : '';
     const kindIcon = (sp.kingdom || '').toLowerCase() === 'fungi' ? '🍄 ' : '';
     const inner = `
@@ -1729,13 +1734,19 @@ function renderProfile(data, observations) {
   const sp = data.species;
   const ci = data.culinary;
   const aiFields = new Set(data.ai_generated_fields || []);
-  const isToxic = (sp.toxicity_severity === 'deadly' || sp.toxicity_severity === 'toxic');
-  // Culinary content only when severity is exactly 'none' — same rule as the
-  // server's culinary_allowed(). 'unknown' (never assessed) fails closed (B2-02).
-  const culinaryBlocked = sp.toxicity_severity !== 'none';
+  // Safety gate (batch 5): the server's decision (data.safety, app/models/
+  // species.py safety_decision) read through static/js/safety-gate.js — never
+  // re-derived here. Missing (old cached payload) fails closed as 'unknown'.
+  const _safety = SafetyGate.decision(data.safety);
+  const isToxic = (_safety.level === 'deadly' || _safety.level === 'toxic');
+  const culinaryBlocked = !SafetyGate.allowed(_safety);
+  // Blocked with no ☠ / ⚠ label = a verdict that is not edible/caution (inedible).
+  const _notForEating = culinaryBlocked && _safety.level === 'none';
   const _CULINARY_HELD_MSG = isToxic
     ? '⚠ Culinary information is suppressed for toxic species.'
-    : '⚠ Culinary information is held back — toxicity not yet assessed. Set the verdict first.';
+    : _notForEating
+      ? 'Culinary information is not shown — verdict is not edible.'
+      : '⚠ Culinary information is held back — toxicity not yet assessed. Set the verdict first.';
 
   // Store full profile data for edit-mode use
   window._lastProfileData = data;
@@ -1873,8 +1884,8 @@ function renderProfile(data, observations) {
 
   // ── Safety section — single safety surface, severity-coloured ─────────────
   // The former separate top red "danger banner" was removed; the SAFETY box
-  // below is now the ONLY safety surface. Severity comes from
-  // species.toxicity_severity (migration 0039): 'deadly' | 'toxic' | 'none'.
+  // below is now the ONLY safety surface. Its level is the served safety
+  // decision (_safety.level): 'deadly' | 'toxic' | 'unknown' | 'caution' | 'none'.
   // ALWAYS FIRST, always visible.
   {
     const _warnBlock = (key, title, val) => {
@@ -1883,7 +1894,7 @@ function renderProfile(data, observations) {
         <br><span data-field-key="${key}" data-field-orig="${_esc(val)}">${_esc(val)}</span>
       </div>`;
     };
-    const severity = sp.toxicity_severity || 'none';
+    const severity = _safety.level;   // deadly | toxic | unknown | caution | none (served)
     const safetyEl = document.getElementById('safety-content');
     const prepRaw  = (ci && ci.preparation_warnings) || '';
     const lookRaw  = (ci && ci.look_alike_warnings)  || '';
@@ -1930,7 +1941,7 @@ function renderProfile(data, observations) {
       }
       if (lookRaw) html += _warnBlock('look_alike_warnings',  'Look-alike Warning',  lookRaw);
       safetyEl.innerHTML = html;
-    } else if (sp.edibility_status === 'caution') {
+    } else if (severity === 'caution') {
       // Caution species with no documented reason: amber placeholder.
       // Green "no known warnings" would be misleading here — caution is not warning-free.
       safetyEl.innerHTML =
@@ -2042,7 +2053,7 @@ function renderProfile(data, observations) {
       // Toxic / never-assessed / unknown-edibility: blank by default
       if (secEl) secEl.style.display = '';
       el.innerHTML = culinaryBlocked
-        ? `<div class="ai-field-empty" style="color:#991b1b">${isToxic ? '⚠ Recipe bank is blank for toxic species. Manual notes can be added via the review queue.' : '⚠ Recipe bank is blank until toxicity is assessed.'}</div>`
+        ? `<div class="ai-field-empty" style="color:#991b1b">${isToxic ? '⚠ Recipe bank is blank for toxic species. Manual notes can be added via the review queue.' : _notForEating ? 'Recipe bank is blank — verdict is not edible.' : '⚠ Recipe bank is blank until toxicity is assessed.'}</div>`
         : `<div class="ai-field-empty">Recipe bank is blank until edibility is confirmed. <a href="/review#ai-draft-review" style="color:#5b21b6" data-guest-hide>Review queue →</a></div>`;
       if (tabsEl) tabsEl.style.display = 'none';
     } else if (!recipes.length) {
@@ -3722,7 +3733,8 @@ function _pdRefreshLiveField(sciName, fieldName, approveResult) {
       if (!ci) return;
       if (fieldName === 'taste_notes') {
         const el = document.getElementById('taste-notes-content');
-        if (el && ci.taste_notes) {
+        // Safety gate: never re-show taste notes for a blocked species.
+        if (el && ci.taste_notes && SafetyGate.allowed(data.safety)) {
           el.innerHTML = `<div style="margin-bottom:6px;font-size:0.78rem;color:#555">
             <span class="ai-approved-badge">AI · Approved</span></div>
             <div class="ai-field-block" data-field-key="taste_notes">${_esc(ci.taste_notes)}</div>`;

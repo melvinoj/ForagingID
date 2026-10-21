@@ -1,54 +1,248 @@
 ## Current State
 
-21 Oct 2026, end of session
+21 Oct 2026, afternoon session end
 
-### Done this session (all read back by id; snapshots taken; no commits until this End Session)
-- Batch 3b verdict-draft approve path + 212 verdict drafts; obs 15957 → card 530; 848/849 enriched; 31 P1 person_animal rows rejected.
-- AI drafting is DeepSeek-only: one ai_backend(); Anthropic and Ollama paths removed (anthropic_api_key kept in config only because .env still has it). scripts/enrich.py now loads DB settings.
-- PFAF fallback (D1–D5 in REPORT.md section 0): pfaf_fallback.py is the only writer; medicinal_notes only; empty + unlocked + non-toxic fields only; history changed_by='pfaf_fallback'; "PFAF text — replace with your own" chip on species page and Review; PFAF "None known" = no data; is_curator_authored() False for pfaf_fallback; print/PDF withhold pfaf_fallback text (keyed on is_pfaf_fallback).
-- Root cause fixed: PFAF Medicinal Uses text now reaches the medicinal drafter; approve refuses an unedited false "no uses" draft where PFAF lists uses (422 + reason).
-- Shared "no uses" predicate (ai_placeholder.py) finds the claim anywhere in the text; the JS copies were removed (server flag instead).
-- Refill live: 443 rows (history 2830–3272; snapshot db_20261021_074733) + 68 field edits (history 3273–3340; snapshot db_20261021_092222). 0 "No known traditional medicinal uses" left; 0 "no uses" claims in medicinal_notes.
-- 106 false drafts invalidated; 93 DeepSeek re-drafts: 92 + Verbena (3544) pending. Only 1 still flagged (Oxalis grandis 3493, needs an edit).
-- Placeholder marker "insufficient" narrowed to refusal phrases (only collision across 1,827 source texts); 0 stored decisions changed. Discard log now names the matched rule.
-- Blusher (Amanita rubescens, 467): curator-authored preparation + look-alike warnings (history 3341/3342), caution verified by human (edibility history 380); snapshot db_20261021_095529.
-- Tests: 155 pass.
+### Done since 10:14 (read back by id; snapshots taken before every write; uncommitted until this End Session)
+- Batch 4 (A-02 + D1-01):
+  - /api/settings never returns secret values (is_set only); guests get 403 on all settings routes.
+  - PDF: autoescape on, _mdlite escapes headings, url_fetcher only allows data: and app folders.
+  - 13 tests.
+- Batch 5 (B2-01/B2-04/B2-09 + P1):
+  - safety_decision() in species.py is the single rule. Culinary content shows only for edible/caution verdicts with severity exactly 'none'.
+  - Labels ☠ deadly / ☠ toxic / ⚠ toxicity unknown / ⚠ caution (curator preparation_warnings).
+  - Every surface reads the served decision via safety-gate.js. PDF and Export summary re-check on the server.
+  - culinary_allowed() delegates to safety_decision(). Species grid uses the served label. SW cache v8.
+- Blusher (467): curator preparation and look-alike warnings, caution verified human.
+- Turkey tail (457): edible_parts "Tea or broth only…", edible verified human.
+- Species-page field path records an empty old value as NULL.
+- Verdict-draft reject path takes an optional reason, stored in generation_context_json.
+- Verdict census (docs/audit/2026-10-20/verdict_census/, 633 species = species page):
+  - Chunks 01, 02, 03, 04–07 and 08–11 decided and written; decisions files are in the folder.
+  - Curator warnings written for: meadow mushroom, Caucasian fir, angelica, both puffballs, honey fungi (3), juniper, parasols (4), fairy ring champignon, both melilots, ramsons, yellow gentian, chicken of the woods, watercress, both Leccinum, St John's wort (187), field horsetail; plus opium poppy edible_parts.
+  - Name fixes: Good King Henry (Fat hen dropped), Suede bolete, Walnut, Peppermint, St John's wort.
+  - 479 Phyllospadix scouleri sent back to Review (implausible ID).
+  - Keck (106) kept Melvin's existing look-alike text.
+- Tests: 179+ pass.
 
 ### Next
-- Batch 4 (A-02 secrets out of /api/settings + guests refused; D1-01 PDF autoescape + restricted file fetching), then 5, 6, 7, 8, 9, 10, 11, 11b, 12, 13, 15, 15b, 16, 17 per REPORT.md section 9.
-- 1b (Melvin): walk 4 (Rümmelsbühl foray) warning drafts (10 of the 61), verify Rosa dumalis, Heracleum sibiricum badge, then republish.
+1. Census chunks 12–16 (last round). Claude's proposal is pending Melvin's answers on:
+   1. Comfrey (S. officinale, S. caucasicum): caution or toxic (Rough Comfrey is toxic).
+   2. Melampyrum pratense → toxic?
+   3. Polygonatum odoratum → toxic?
+   4. Genista sagittalis / G. tinctoria → inedible?
+   5. Minor cautions → edible (hairy lady's mantle, Crataegus rhipidophylla, Erigeron annuus, sour cherry, 2 geraniums).
+   - Also: reject #3063 (Sparassis). Confirming Rosa dumalis removes the block on 1b.
+2. 1b: walk 4 (Rümmelsbühl foray) warning drafts, Heracleum sibiricum now edible, then republish.
+3. Batches 6, 7, 8, 9, 10, 11, 11b, 12, 13, 15, 15b, 16, 17 per REPORT.md section 9.
+
+### Scope added today
+- Batch 6:
+  - Walk stop card shows curator look_alike_warnings for every species.
+  - Map pop-up stops cutting look-alike text at 120 chars.
+  - Keck preparation_warnings placeholder (E-14).
+- Batch 11b (before the GBIF sweep):
+  - Merge/relink pairs:
+    - 704 Polyporus versicolor → 457 Trametes versicolor
+    - 758 Securigera ↔ 757 Coronilla varia
+    - 708 Oreopteris ↔ 412 Thelypteris limbosperma
+    - 608 Anthemis ↔ 589 Cota tinctoria
+    - 103 Epilobium ↔ 531 Chamaenerion angustifolium
+    - 600 Lactuca ↔ 749 Mycelis muralis
+    - 82 Lophiolepis ↔ 200 Cirsium ferox
+  - Relink the Collybia nuda and Conyza canadensis observations.
+  - Check 187 "Hypericum perfoliatum" against GBIF.
+  - Fix cards whose genus/family disagrees with their scientific name (e.g. 494 puffball filed as Caprifoliaceae/Dipsacus) and find the fill that wrote them.
+- Batch 17: scan.html:1795 loadPrefilterThreshold reads .find on the response instead of .settings.
 
 ### Melvin's review queue
-- 212 verdict drafts (13 walk species first; reject junk-card ones: Betacoronavirus, Maniola, Arachnocampa, Noctiluca).
-- 61 caution-warning drafts (3178–3238): 16 "unknown origin" read as edible-use text, so rewrite or reject.
-- 93 medicinal drafts (edit Oxalis grandis 3493); blusher drafts 2939/2940; 64 refusal/placeholder drafts to reject.
-- 347 Takeout person_animal rejects (mount DIGIERA first); keep-rows 21509/21949/22043.
-- Edible parts: Verbascum densiflorum + 11 others with PFAF "None known".
+- 92 + Verbena (3544) medicinal drafts; edit Oxalis grandis 3493.
+- 61 caution-warning drafts (3178–3238).
+- 64 refusal/placeholder drafts to reject.
+- 347 Takeout person_animal rejects (mount DIGIERA first).
+- Edible parts for Verbascum densiflorum + 11 others.
 
-### Open decisions
-- Second verdict sweep for 393 verdicts not confirmed by Melvin (edible 239, caution 84, inedible 43, toxic 27)?
-- 141 hidden pending "no uses" drafts where PFAF has nothing: leave or invalidate?
-- 14 fields with hedged "does not record specific … medicinal" sentences (left in place).
-- Fungi category rule gaps (phone auto-approvals, unapproved rows; lichens file as fungi).
-
-### Known issues / backlog
-- Stage C publish panel UI not built (API exists).
-- Species rename doesn't update stored ID candidates (no % shown); orphan GC misses a card when species name and link disagree.
-- Walk 4 side-stops 21a/26a/26b may need ↻ Re-route; walks 3/4 route-line load guard unconfirmed.
-- scripts/import_caution_warning_drafts.py must be re-run by hand for new caution species.
-- STATUS.md line 13 ("Step 2 waiting for Melvin…") is stale — step is done.
-- Backlog: 1,169 no-plant-signal rows; ~650 unprocessed 2013 Takeout files; junk species cards.
-
-### Live checks owed (Melvin, browser)
-- PFAF chip (Wood Avens, Great Mullein); blusher warnings on species page.
-- Review: verdict drafts section, warning drafts, red flag + refusal on false "no uses" drafts.
-- Print/PDF: no Folklore section for PFAF-filled species.
-- DeepSeek: species chat, About "Regenerate with AI", Settings AI group DeepSeek-only.
-- Walk panel (repeat lines, Reverse / Start here / ← Saved walks, Edit walk → Save → Re-route, Create-from-map), Jobs pop-up drag, ☠ on 155/688/745 pins, Second Opinion obs 24149, caffeinate exits with server.
-
-- Known issue: second-opinion candidate ranking ignores geography — out-of-range species surface despite GPS (e.g. #24149 Männlichen: G. sierrae [Spain], G. pumila [E Alps]; #24442 Gresgen: V. boerhavii [Mediterranean] ranked top). Range-plausibility down-weighting to be scoped; ID-safety relevant (affects review suggestions, not auto-approve).
+### Live checks owed (Melvin, browser) — numbered tally
+- 1–31: earlier list (PFAF chip, Review, print/PDF, DeepSeek, map, walk panel, settings/system, batch 4).
+- 32–39: batch 5 (grid ☠ deadly, map pins, walk panel labels, Conium page, Lists/print, PDF, Export summary, no console errors). On the phone, use Settings → Refresh first.
+- 40–47: census (foxglove deadly; inedible badges; turkey tail; monkshoods deadly; meadow mushroom and fir pages; columbine/marsh marigold toxic; Good King Henry everywhere; surfgrass gone from pins; ramsons/parasol/chicken of the woods caution; white butterbur toxic).
 
 ## History
+
+### 2026-10-21 15:47
+**Snapshot** — End of session — Session ended from Settings page
+DB: `snapshots/db_20261021_154755.sqlite`
+
+### 2026-10-21 15:47
+**Session ended** — Session ended from Settings page
+
+### 2026-10-21 15:38
+**Census chunks 08-11 applied: 179 verdicts (100 DEFAULT keep+verify), curator text for 13 species, 4 common names, obs 10176 (Phyllospadix scouleri) back to Review; 4 merges + GBIF check added to batch 11b**
+
+**Built:**
+- docs/audit/2026-10-20/verdict_census/chunk_08-11_decisions.md
+- REPORT.md s9 batch 11b: 608<->589, 103<->531, 600<->749, 82<->200, 187 GBIF check
+**Fixed:**
+- 9 toxic/toxic, 25 inedible/none, 33 caution->edible, 11 caution+text, 314 edible+text, 100 DEFAULT verified
+- Names: 501 Suede bolete, 390 Walnut, 172 Peppermint, 187 St John's wort (history 3380-3383)
+- Obs 10176 -> needs_review with reason; off species page (632), map, walk 5 membership
+- Snapshot db_20261021_153758.sqlite; edibility history 1358-1886; culinary history 3366-3383; read-back 0 mismatches
+**Files:** `docs/audit/2026-10-20/REPORT.md`, `docs/audit/2026-10-20/verdict_census/chunk_08-11_decisions.md`
+**Pending:**
+- Walk 5 stop 35 now empty (not renumbered) - re-check 10176 in Review or renumber
+- 106 look-alike kept (new text not written); E-14 placeholder batch 6
+- 32 species newly hide culinary content incl. recipes #121, #119, #69
+- Census chunks 12-16
+
+### 2026-10-21 15:37
+**Snapshot** — Before census chunks 08–11 (Melvin's 179 verdict decisions, 21 Oct) + curator text for 13 species + 4 common-name changes + obs 10176 (Phyllospadix scouleri) back to Review; Settings snapshot routine without the git commit — Melvin: End Session commits
+DB: `snapshots/db_20261021_153758.sqlite`
+
+### 2026-10-21 14:54
+**Census chunks 04-07 applied: Melvin's 135 verdicts (+3 skipped), curator text for 8 species, 118 verdict drafts rejected with reason; merges + genus/family audit added to batch 11b**
+
+**Built:**
+- docs/audit/2026-10-20/verdict_census/chunk_04-07_decisions.md
+- REPORT.md s9 batch 11b top of scope: merges 704->457, 758<->757, 708<->412; relink Collybia nuda / Conyza canadensis obs; genus/family audit (e.g. 494 Caprifoliaceae/Dipsacus)
+**Fixed:**
+- 1 toxic/deadly, 20 toxic/toxic, 54 inedible/none, 43 edible/none, 7 caution/none + text, 10 confirmed as-is
+- Curator text history 3356-3365 byte-identical; edibility history 838-1357; snapshot db_20261021_145347.sqlite; read-back 0 mismatches
+- Newly hidden culinary: 230 Aquilegia vulgaris (recipe #63), 280 Caltha palustris (recipe #66), 492 Berula erecta, 124, 503
+**Files:** `docs/audit/2026-10-20/REPORT.md`, `docs/audit/2026-10-20/verdict_census/chunk_04-07_decisions.md`
+**Pending:**
+- 494 family/genus deferred to 11b
+- Cautions with no served warning: 816/821/820 Macrolepiota, 711 Marasmius (look-alike only), 106/590/603 (prep not curator-authored) - batch 6
+- Census chunks 08-16
+
+### 2026-10-21 14:53
+**Snapshot** — Before census chunks 04–07 (Melvin's 135 verdict decisions, 21 Oct) + curator text for 743/494/806/816/821/820/711/783 + verdict-draft rejections with reason; Settings snapshot routine without the git commit — Melvin: End Session commits
+DB: `snapshots/db_20261021_145347.sqlite`
+
+### 2026-10-21 14:49
+**Census chunk_03 applied: Melvin's 45 verdicts, curator warnings for 761/495/832/829, 644 renamed Good King Henry, 44 verdict drafts rejected with reason**
+
+**Built:**
+- docs/audit/2026-10-20/verdict_census/chunk_03_decisions.md
+**Fixed:**
+- 22 -> edible/none, 14 -> inedible/none, 5 -> toxic/toxic, 4 -> caution/none with curator preparation + look-alike warnings
+- 644 Blitum bonus-henricus: preferred Good King Henry, EN [Good King Henry, Allgood] ('Fat hen' dropped), history 3355
+- Snapshot db_20261021_144853.sqlite; edibility history 658-837; culinary history 3347-3355; read-back 0 mismatches, text byte-identical
+**Files:** `docs/audit/2026-10-20/verdict_census/chunk_03_decisions.md`
+**Pending:**
+- Census chunks 04-16
+
+### 2026-10-21 14:48
+**Snapshot** — Before census chunk_03 (Melvin's 45 verdict decisions, 21 Oct) + curator warnings for 761/495/832/829 + 644 common name Good King Henry + verdict-draft rejections with reason; Settings snapshot routine without the git commit — Melvin: End Session commits
+DB: `snapshots/db_20261021_144853.sqlite`
+
+### 2026-10-21 14:32
+**Census chunk_02 applied (Melvin's 45 verdicts + curator text for 793/817) + optional verdict-draft reject reason + batch 6 scope additions**
+
+**Built:**
+- reject_verdict_draft takes an optional {reason}; verdict_drafts.record_rejection_reason stores rejected_reason/rejected_at in generation_context_json (keeps existing context, refuses empty)
+- REPORT.md s9 batch 6: walk stop card shows curator look_alike_warnings; map pop-up look-alike uncut
+- docs/audit/2026-10-20/verdict_census/chunk_02_decisions.md
+**Fixed:**
+- chunk_02: 16 confirmed toxic/toxic; 3 -> toxic/deadly; 4 -> toxic/toxic; 14 -> inedible/none; 7 -> edible/none; 817 -> caution/none
+- Curator text 793 edible_parts + look_alike_warnings, 817 look_alike_warnings (history 3344-3346, byte-identical)
+- Drafts #3240-3251, #3253 rejected with reason; #1685 reason back-filled
+- Snapshot db_20261021_143122.sqlite; edibility history 504-657; read-back 0 mismatches
+**Files:** `app/api/edibility.py`, `app/services/verdict_drafts.py`, `tests/test_verdict_drafts.py`, `docs/audit/2026-10-20/REPORT.md`, `docs/audit/2026-10-20/verdict_census/chunk_02_decisions.md`
+**Pending:**
+- 817 Meadow Mushroom: caution with no reason on the walk card until batch 6
+- Draft #3252 (Amaranthus hybridus) still pending
+- Census chunks 03-16
+
+### 2026-10-21 14:31
+**Snapshot** — Before census chunk_02 (Melvin's 45 verdict decisions, 21 Oct) + curator text for 793/817 + 13 verdict-draft rejections with reason + #1685 reason back-fill; Settings snapshot routine without the git commit — Melvin: End Session commits
+DB: `snapshots/db_20261021_143122.sqlite`
+
+### 2026-10-21 14:18
+**One culinary rule (culinary_allowed + CULINARY_ALLOWED_SQL delegate to safety_decision) + census chunk_01: Melvin's 45 verdict decisions applied**
+
+**Built:**
+- culinary_allowed(severity, verdict) delegates to safety_decision; CULINARY_ALLOWED_SQL = severity 'none' AND lower(trim(verdict)) in (edible, caution); severity_is_none() is the severity half (experience gates' toxicity_known_safe)
+- Callers switched: recipes.py, personal_lists card, find.py (3 queries), experience verify-species, culinary.py recipe bank (x2)
+- _write_verdict logs edibility_verified / edibility_verified_by history rows when they change
+- docs/audit/2026-10-20/verdict_census/chunk_01_decisions.md
+**Fixed:**
+- chunk_01: 22 confirmed as-is + human-verified; 376 Foxglove -> toxic/deadly; 6 -> toxic/toxic; 16 -> inedible/none (B2-06; 137 Astrantia relaxed from toxic on Melvin's confirmation); draft #1685 rejected
+- Snapshot db_20261021_141729.sqlite; history 382-503 (122 rows); read-back 0 mismatches
+**Files:** `app/models/species.py`, `app/api/recipes.py`, `app/api/personal_lists.py`, `app/api/find.py`, `app/api/experience.py`, `app/api/culinary.py`, `app/api/edibility.py`, `scripts/experience_export/gates.py`, `tests/test_verdict_severity.py`, `tests/test_verdict_drafts.py`, `tests/test_batch5_safety_gate.py`, `docs/audit/2026-10-20/verdict_census/chunk_01_decisions.md`
+**Pending:**
+- Census chunks 02-16 review
+- No culinary content changed by chunk_01 (all blocked before and after)
+
+### 2026-10-21 14:17
+**Snapshot** — Before census chunk_01 (Melvin's 45 verdict decisions, 21 Oct): 22 confirmed as-is, 1 → toxic/deadly, 6 → toxic/toxic, 16 → inedible/none; reject verdict draft #1685; Settings snapshot routine without the git commit — Melvin: End Session commits
+DB: `snapshots/db_20261021_141729.sqlite`
+
+### 2026-10-21 13:28
+**Batch 5 follow-up: safety_decision culinary only for edible/caution verdict + severity none; Turkey tail (Trametes versicolor 457) edible_parts + verdict edible verified human**
+
+**Built:**
+- safety_decision(): culinary_allowed only when verdict edible/caution AND severity 'none'; unknown/NULL verdict -> level unknown; inedible/other -> blocked, no label (pages show verdict badge); decision now carries 'verdict'
+- Walk badges, sheet list, proximity, species grid, Export summary fall back to the verdict badge when blocked without a label; species page says 'verdict is not edible'
+- Export summary takes the verdict badge from the DB, never the client
+**Fixed:**
+- correct_culinary_field: a previously empty field is recorded as old_value NULL, not ''
+**Files:** `app/models/species.py`, `app/api/sharing.py`, `app/api/culinary.py`, `frontend/index.html`, `frontend/species.html`, `tests/test_batch5_safety_gate.py`
+**Pending:**
+- 13 inedible/severity-none species now hide culinary content (0 approved recipes; 9 hold only PFAF 'None known' edible_parts)
+- Turkey tail: pending drafts 2953/2954/2955 untouched; no AI drafts triggered
+- Other culinary_allowed() callers (recipes.py, personal_lists, find, experience) still key on severity only
+
+### 2026-10-21 13:28
+**Snapshot** — Before Turkey tail (Trametes versicolor, 457): edible_parts (curator text) + verdict edible verified human; Settings snapshot routine without the git commit — Melvin: End Session commits
+DB: `snapshots/db_20261021_132826.sqlite`
+
+### 2026-10-21 12:34
+**Verdict census (read-only) for the Melvin + Claude review pass: 633 species (= species page count), badge diagnosis after batch 5, census CSV + 16 chunk files**
+
+**Built:**
+- docs/audit/2026-10-20/verdict_census/census_all.csv (633 rows)
+- chunk_01..16.md: group 1 safety-first 273 (chunks 01-07), group 2 not human-verified 292 (08-14), group 3 human-verified 68 (15-16)
+**Files:** `docs/audit/2026-10-20/verdict_census/census_all.csv`, `docs/audit/2026-10-20/verdict_census/chunk_01.md … chunk_16.md`
+**Pending:**
+- Badge mismatches (data, not display): 55 verdict NULL + severity unknown; 37 inedible + severity toxic (B2-06); 2 obs names with no species card (Collybia nuda, Conyza canadensis)
+- Melvin + Claude review pass over the chunks
+
+### 2026-10-21 12:28
+**Batch 5 (REPORT s9): B2-01/B2-04 + P1 shared safety gate + B2-09 (server re-check for PDF and walk Export summary)**
+
+**Built:**
+- safety_decision() in app/models/species.py: the one rule (culinary only when severity=='none' and verdict not toxic) + labels ☠ deadly / ☠ toxic / ⚠ toxicity unknown / ⚠ caution + curator-authored caution warning
+- app/services/safety_gate.py: safety_for_species / safety_by_names (name_key lookup, missing = unknown)
+- 'safety' served by /api/culinary/{name}, /api/species/{name}/profile, /api/species/ list rows (no warning)
+- frontend/static/js/safety-gate.js: only reader of the served decision; fails closed on missing; in sw.js APP_SHELL, CACHE_VERSION v8
+- Map pop-up, walk panel/stop cards/repeat lines/sheet list/proximity, species page + grid badge, Lists, browser print read SafetyGate
+- PDF and walk Export summary re-ask the DB by name (B2-09); client severity/culinary text ignored
+**Fixed:**
+- B2-01: map pop-up no edible parts for deadly/toxic/unknown; label shown
+- B2-04: Lists + browser print drop culinary fields and recipes for blocked species; label shown
+- species page safety box no longer fails open on missing severity
+- species page taste notes re-render after draft approval now gated
+- deadly label is '☠ deadly' (was '☠ DEADLY' in walk flow)
+**Files:** `app/models/species.py`, `app/services/safety_gate.py`, `app/api/culinary.py`, `app/api/lists_pdf.py`, `app/templates/print_pdf.html`, `app/api/sharing.py`, `frontend/static/js/safety-gate.js`, `frontend/static/sw.js`, `frontend/index.html`, `frontend/species.html`, `frontend/lists.html`, `frontend/print.html`, `tests/test_batch5_safety_gate.py`, `tests/test_batch4_a02_d1_01.py`
+**Pending:**
+- Melvin browser checks for batch 5 (map pin Conium/Aconitum; walk panel; species page + grid; Lists + browser print + PDF with Conium/Sambucus/Allium; Export summary)
+- Phone: /api/species/*/profile is cached cache-first 7 days; old cached profiles show '⚠ toxicity unknown' until Settings → Refresh species cache
+- Experience page labels not changed (own gates.py wording)
+
+### 2026-10-21 10:23
+**Batch 4 (REPORT s9): A-02 secrets out of /api/settings + guests refused; D1-01 PDF autoescape + restricted WeasyPrint fetching**
+
+**Built:**
+- settings registry 'secret' flag + is_secret_setting() predicate; GET /api/settings returns is_set only for secrets (current/default/db_raw null); PUT/DELETE never echo a secret
+- Router-level curator-only dependency on every /api/settings route (get_identity: guest host or guest/participant token -> 403)
+- lists_pdf: Jinja autoescape=True; |safe only on season_str and mdlite (justified in template comments); _mdlite heading escaped
+- WeasyPrint url_fetcher: data: URIs + files under frontend/static, media, photos, uploads (resolved, no ../ escape); everything else refused and logged
+**Fixed:**
+- A-02: DeepSeek key no longer readable via /api/settings
+- D1-01: request HTML no longer live in PDF; local files outside app media roots no longer embeddable
+**Files:** `app/services/settings_service.py`, `app/api/settings.py`, `app/api/lists_pdf.py`, `app/templates/print_pdf.html`, `tests/test_batch4_a02_d1_01.py`
+**Pending:**
+- Melvin live check: Settings page loads, AI key shows as set, API dashboard works; a normal PDF in all 3 styles looks the same (botanical corners present)
+- Thunderforest key still in /api/map/config by design (tile keys are browser-visible)
 
 ### 2026-10-21 10:13
 **Snapshot** — End of session — Session ended from Settings page

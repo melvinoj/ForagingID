@@ -4,11 +4,18 @@ import os
 import re
 from pathlib import Path
 from typing import Any, Dict, List, Optional
+from urllib.parse import unquote, urlparse
 
 import jinja2
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
+from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import Response, JSONResponse
 from pydantic import BaseModel
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.database import get_db
+from app.models.species import safety_decision
+from app.services.safety_gate import safety_by_names
 
 log = logging.getLogger(__name__)
 
@@ -16,13 +23,48 @@ os.environ.setdefault("DYLD_LIBRARY_PATH", "/opt/homebrew/lib")
 
 router = APIRouter(prefix="/api/lists", tags=["lists"])
 
-_TEMPLATES_DIR = Path(__file__).resolve().parents[2] / "app" / "templates"
+_PROJECT_ROOT  = Path(__file__).resolve().parents[2]
+_TEMPLATES_DIR = _PROJECT_ROOT / "app" / "templates"
 
-# Jinja2 env — autoescape off (we control all inputs server-side)
+# Audit D1-01 (21 Oct 2026): every field reaches the template from the request
+# body (species[].profile, cover, seasonal_returns), so the template escapes by
+# default. The only |safe outputs are _season_str and _mdlite, both built here
+# from escaped text — see the comments at their use in print_pdf.html.
 _jinja_env = jinja2.Environment(
     loader=jinja2.FileSystemLoader(str(_TEMPLATES_DIR)),
-    autoescape=False,
+    autoescape=True,
 )
+
+# Audit D1-01: the only local files WeasyPrint may read. Resolved, so neither
+# ../ nor a symlink can escape them. data: URIs are also allowed; everything
+# else (http/https, file:// elsewhere, any other scheme) is refused and logged.
+_FETCH_ROOTS = tuple(
+    p.resolve() for p in (
+        _PROJECT_ROOT / "frontend" / "static",
+        _PROJECT_ROOT / "media",
+        _PROJECT_ROOT / "photos",
+        _PROJECT_ROOT / "uploads",
+    )
+)
+
+
+def _safe_url_fetcher(url: str):
+    """WeasyPrint url_fetcher: data: URIs and files under _FETCH_ROOTS only.
+    Raising makes WeasyPrint skip that resource (logged) and render the rest."""
+    from weasyprint import default_url_fetcher
+    parsed = urlparse(url)
+    if parsed.scheme == "data":
+        return default_url_fetcher(url)
+    if parsed.scheme == "file" and parsed.netloc in ("", "localhost"):
+        try:
+            path = Path(unquote(parsed.path)).resolve()
+        except (OSError, RuntimeError):
+            path = None
+        if path is not None and any(path.is_relative_to(root) for root in _FETCH_ROOTS):
+            return default_url_fetcher(url)
+    log.warning("PDF: refused to fetch %r (not a data: URI or an allowed local file)", url[:200])
+    raise ValueError(f"PDF resource not allowed: {url[:200]}")
+
 
 MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
 NOW_MONTH = __import__('datetime').date.today().month
@@ -70,7 +112,8 @@ def _mdlite(text: str) -> str:
             continue
         h = re.match(r'^#{1,6}\s+(.*)', b)
         if h:
-            out.append(f'<h3>{h.group(1)}</h3>')
+            heading = h.group(1).replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
+            out.append(f'<h3>{heading}</h3>')
         else:
             content = b.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
             content = re.sub(r'\*\*(.+?)\*\*', r'<strong>\1</strong>', content)
@@ -82,8 +125,23 @@ def _mdlite(text: str) -> str:
 _jinja_env.filters['mdlite'] = _mdlite
 
 
-def _flatten_species(name: str, profile: Optional[Dict], base_by_name: Dict) -> Dict:
-    """Merge base species record + profile into a flat dict for the template."""
+# Culinary content fields dropped for a blocked species — same list as
+# SafetyGate.CULINARY_FIELDS in frontend/static/js/safety-gate.js.
+CULINARY_FIELDS = frozenset({
+    'edible_parts', 'preparation_methods', 'cooking_techniques', 'preservation_methods',
+    'harvest_stage', 'culinary_traditions', 'flavour_profile', 'pairing_ideas', 'recipe_ideas',
+    'workshop_value_score', 'taste_notes',
+})
+
+
+def _flatten_species(name: str, profile: Optional[Dict], base_by_name: Dict,
+                     safety: Optional[Dict] = None) -> Dict:
+    """Merge base species record + profile into a flat dict for the template.
+    safety = the server's safety_decision() for this species (B2-09: the
+    client's severity / culinary text is never trusted). Missing → fails closed."""
+    if safety is None:
+        safety = safety_decision(None, None)
+    allowed = bool(safety.get('culinary_allowed'))
     base = base_by_name.get(name) or {}
     sp   = (profile or {}).get('species') or base
     cul  = (profile or {}).get('culinary') or {}
@@ -92,7 +150,11 @@ def _flatten_species(name: str, profile: Optional[Dict], base_by_name: Dict) -> 
     # shared is_pfaf_fallback() predicate, served by /api/species/{name}/profile.
     withheld = set((profile or {}).get('pfaf_fallback_fields') or [])
     cul = {k: v for k, v in cul.items() if k not in withheld}
-    recipes = (profile or {}).get('recipes') or []
+    if not allowed:
+        # Safety gate: no edible parts / harvest / taste / recipe for toxic,
+        # deadly or unknown-toxicity species — dropped here, not just in the template.
+        cul = {k: v for k, v in cul.items() if k not in CULINARY_FIELDS}
+    recipes = ((profile or {}).get('recipes') or []) if allowed else []
     key_recipe = next((r for r in recipes if r.get('is_preferred')), recipes[0] if recipes else None)
 
     common_names = sp.get('common_names') or base.get('common_names') or []
@@ -107,8 +169,10 @@ def _flatten_species(name: str, profile: Optional[Dict], base_by_name: Dict) -> 
         'scientific_name': name,
         'common_name':    common_names[0] if common_names else '',
         'edibility_status': sp.get('edibility_status') or '',
-        # Missing = never assessed: fails closed in print_pdf.html (== 'none' only), B2-02.
-        'toxicity_severity': sp.get('toxicity_severity') or 'unknown',
+        'culinary_allowed': allowed,
+        'safety_level':    safety.get('level') or 'unknown',
+        'safety_label':    safety.get('label') or '',
+        'safety_warning':  safety.get('warning') or '',
         'id_notes':        id_notes,
         'look_alike':      (cul.get('look_alike_warnings') or '').strip(),
         'preparation_warnings': (cul.get('preparation_warnings') or '').strip(),
@@ -167,7 +231,13 @@ class PdfRequest(BaseModel):
 
 
 @router.post("/pdf")
-def generate_pdf(body: PdfRequest):
+async def generate_pdf(body: PdfRequest, db: AsyncSession = Depends(get_db)):
+    # B2-09: the safety decision comes from the DB by name, never from the payload.
+    safety = await safety_by_names(db, [s.scientific_name for s in body.species])
+    return await run_in_threadpool(render_pdf, body, safety)
+
+
+def render_pdf(body: PdfRequest, safety: Dict[str, Dict]) -> Response:
     style   = body.style   if body.style   in ('botanical', 'herbalist', 'goethean')           else 'botanical'
     layout  = body.layout  if body.layout  in ('field_guide', 'recipe_booklet', 'workshop')    else 'field_guide'
     margins = body.margins if body.margins in _MARGIN_MAP                                       else 'normal'
@@ -186,7 +256,7 @@ def generate_pdf(body: PdfRequest):
         base_by_name[s['scientific_name']] = s
 
     flat_species = [
-        _flatten_species(s.scientific_name, s.profile, base_by_name)
+        _flatten_species(s.scientific_name, s.profile, base_by_name, safety.get(s.scientific_name))
         for s in body.species
     ]
 
@@ -228,7 +298,7 @@ def generate_pdf(body: PdfRequest):
         log.exception("Template render failed")
         return JSONResponse(status_code=500, content={"detail": f"Template error: {exc}"})
 
-    _frontend_dir = Path(__file__).resolve().parents[2] / "frontend"
+    _frontend_dir = _PROJECT_ROOT / "frontend"
     _base_url = f"file://{_frontend_dir}/"
     log.info("WeasyPrint base_url=%s", _base_url)
     try:
@@ -237,7 +307,9 @@ def generate_pdf(body: PdfRequest):
         log.warning("WeasyPrint import failed: %s", exc)
         return JSONResponse(status_code=503, content={"detail": f"WeasyPrint unavailable: {exc}. Check DYLD_LIBRARY_PATH."})
     try:
-        pdf_bytes = WeasyprintHTML(string=html, base_url=_base_url).write_pdf()
+        pdf_bytes = WeasyprintHTML(
+            string=html, base_url=_base_url, url_fetcher=_safe_url_fetcher,
+        ).write_pdf()
     except Exception as exc:
         log.exception("WeasyPrint failed")
         return JSONResponse(status_code=500, content={"detail": str(exc)})

@@ -16,7 +16,7 @@ Rules (Melvin, 15 Oct 2026; tightened for Publish B1, 18 Oct 2026):
   3. toxic/deadly -> warning only, never a recipe or an edible label.
      Warnings are shown whether or not the verdict is verified (fails safe).
      Toxicity that is not exactly 'none' (NULL / unrecognised) fails closed:
-     no edible label, no recipe, "toxicity unknown" badge (app's culinary_allowed).
+     no edible label, no recipe, "toxicity unknown" badge (app's severity_is_none).
   4. Apiaceae: ALWAYS look-alike / ID cards — no edible label, no recipe,
      whatever the data (was config apiaceae_id_only; now unconditional).
   5. Recipes: status='approved' only; never is_medicinal_prep.
@@ -43,7 +43,7 @@ from __future__ import annotations
 import sqlite3
 
 from app.models.observation import is_human_confirmed
-from app.models.species import culinary_allowed, is_curator_authored, is_toxic_severity
+from app.models.species import is_curator_authored, is_toxic_severity, severity_is_none
 
 APPROVED_REVIEW = ("approved", "manually_verified")
 APIACEAE = "Apiaceae"
@@ -133,8 +133,12 @@ def obs_unconfirmed_hazard(obs: dict, sp) -> bool:
 
 
 def toxicity_known_safe(sp: dict) -> bool:
-    """Rule 3's fail-closed half: culinary content only when toxicity is exactly 'none'."""
-    return culinary_allowed(sp.get("toxicity_severity"))
+    """Rule 3's fail-closed half: toxicity assessed as exactly 'none' (the app's
+    severity_is_none). Severity only, on purpose: it picks the "Toxicity unknown"
+    badge and rule 7's blocker. Edible claims and recipes also need the verdict
+    (may_claim_edible: human-verified edible/caution), which is stricter than the
+    app's culinary_allowed()."""
+    return severity_is_none(sp.get("toxicity_severity"))
 
 
 def human_verified(sp: dict) -> bool:

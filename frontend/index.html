@@ -2635,6 +2635,7 @@
         integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
 <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
 <script src="https://unpkg.com/leaflet.heat@0.2.0/dist/leaflet-heat.js"></script>
+<script src="/static/js/safety-gate.js"></script>
 <script src="/static/js/species-names.js"></script>
 <script src="/static/js/gps.js"></script>
 <script src="/static/js/walk-record.js"></script>
@@ -4598,7 +4599,8 @@ async function _fetchEnrichment(speciesName) {
     const r = await fetch(`/api/culinary/${encodeURIComponent(speciesName)}`);
     if (!r.ok) { _enrichCache.set(speciesName, null); return null; }
     const data = await r.json();
-    const result = { ci: data.culinary, aiFields: new Set(data.ai_generated_fields || []) };
+    const result = { ci: data.culinary, aiFields: new Set(data.ai_generated_fields || []),
+                     safety: data.safety || null };   // batch 5 safety gate (served decision)
     _enrichCache.set(speciesName, result);
     return result;
   } catch (_) {
@@ -4884,15 +4886,22 @@ async function _injectEnrichment(obsId, speciesName) {
   const result = await _fetchEnrichment(speciesName);
 
   if (!result || !result.ci) {
-    slot.innerHTML = `<div class="map-enrich-pending">
+    // Safety gate still shows its label without culinary data (no decision → ⚠ toxicity unknown).
+    slot.innerHTML = SafetyGate.badge(result ? result.safety : null) + `<div class="map-enrich-pending">
       No enrichment data yet —
       <a href="/species?s=${encodeURIComponent(speciesName)}" style="color:#2d5016">view species profile</a>
     </div>`;
     return;
   }
 
-  const { ci, aiFields } = result;
+  const { ci, aiFields, safety } = result;
   let html = '';
+
+  // Safety gate (batch 5, audit B2-01): the served decision — ☠ / ⚠ label and
+  // the approved caution warning first; edible parts only when allowed.
+  const _sgBadge = SafetyGate.badge(safety);
+  if (_sgBadge) html += `<div class="map-safety-label" style="margin-bottom:4px">${_sgBadge}</div>`;
+  html += SafetyGate.warning(safety);
 
   // Safety warnings ALWAYS first
   if (ci.look_alike_warnings) {
@@ -4904,8 +4913,12 @@ async function _injectEnrichment(obsId, speciesName) {
       <strong>⚠ Preparation Warning</strong>${_esc(_trunc(ci.preparation_warnings, 120))}</div>`;
   }
 
-  // Culinary summary
-  if (ci.edible_parts) {
+  // Culinary summary — only when the safety gate allows culinary content
+  if (!SafetyGate.allowed(safety)) {
+    html += `<div class="map-culinary-row">
+      <a href="/species?s=${encodeURIComponent(speciesName)}">View full species profile →</a>
+    </div>`;
+  } else if (ci.edible_parts) {
     const aiMark = aiFields.has('edible_parts')
       ? ' <span style="font-size:0.65rem;background:#f3e8ff;color:#7c3aed;border-radius:3px;padding:1px 4px">✦ AI</span>' : '';
     html += `<div class="map-culinary-row">
@@ -5715,34 +5728,28 @@ async function toggleWalkLoop() {
   if (_lastWalkBounds || _lastWalkCircle) _buildWalkRoute(_lastWalkBounds, _lastWalkCircle, true);
 }
 
-// Toxic guard — the ONLY definition of "may culinary content be shown for this
-// species?" in the walk flow (stop cards, walk sheet list, proximity alerts,
-// summary export). Same rule as print_pdf.html: culinary content (recipes,
-// edible parts, taste notes, edible badge) only when toxicity_severity is
-// 'none'. 'toxic' / 'deadly' → the ☠ warning instead. Anything else (null,
-// undefined, unrecognised — toxicity could not be read) fails closed: culinary
-// content hidden, "toxicity unknown" warning shown.
-// Returns { ok, isToxic, label } — label is the warning text ('' when ok).
-function _culinaryGate(sev) {
-  if (sev === 'none')   return { ok: true,  isToxic: false, label: '' };
-  if (sev === 'deadly') return { ok: false, isToxic: true,  label: '☠ DEADLY' };
-  if (sev === 'toxic')  return { ok: false, isToxic: true,  label: '☠ toxic' };
-  return { ok: false, isToxic: false, label: '⚠ toxicity unknown' };
+// Toxic guard for the walk flow (stop cards, walk sheet list, proximity
+// alerts, summary export). Batch 5: it only READS the server's decision (the
+// `safety` object from /api/culinary/{name}, app/models/species.py
+// safety_decision) through static/js/safety-gate.js — it never re-derives the
+// rule from toxicity_severity. Missing decision → fails closed (⚠ toxicity
+// unknown). Returns { ok, isToxic, label, safety } — label is the safety
+// label ('' for none; '⚠ caution' for caution, where ok is true).
+function _culinaryGate(safety) {
+  const d = SafetyGate.decision(safety);
+  return { ok: SafetyGate.allowed(d), isToxic: d.level === 'deadly' || d.level === 'toxic',
+           label: d.label || '', safety: d };
 }
 
-// Warning badge for a blocked species (inline style, shared by all walk sites).
+// Warning badge for a blocked species (shared by all walk sites).
 function _culinaryGateBadge(gate) {
   if (gate.ok) return '';
-  const bg = gate.isToxic ? '#dc2626' : '#fef3c7';
-  const fg = gate.isToxic ? '#fff'    : '#92400e';
-  return `<span style="font-size:0.68rem;padding:1px 6px;border-radius:4px;font-weight:700;
-    background:${bg};color:${fg}">${_esc(gate.label)}</span>`;
+  return SafetyGate.badge(gate.safety);
 }
 
-// Culinary profile + toxicity for each species on a walk, from one request:
-// /api/culinary/{name} returns species.toxicity_severity, stored on the entry
-// as _toxicity ('none' | 'toxic' | 'deadly', or null when it could not be read
-// — _culinaryGate fails closed on null).
+// Culinary profile + safety decision for each species on a walk, from one
+// request: /api/culinary/{name} serves `safety`, stored on the entry as
+// _safety (null when it could not be read — _culinaryGate fails closed).
 async function _fetchWalkEnrich(names) {
   const enrichMap = {};
   await Promise.allSettled(names.map(async name => {
@@ -5751,7 +5758,7 @@ async function _fetchWalkEnrich(names) {
       const r = await fetch(`/api/culinary/${encodeURIComponent(name)}`);
       if (r.ok) entry = await r.json();
     } catch (_) {}
-    entry._toxicity = (entry && entry.species && entry.species.toxicity_severity) || null;
+    entry._safety = (entry && entry.safety) || null;
     enrichMap[name] = entry;
   }));
   return enrichMap;
@@ -5893,7 +5900,8 @@ function _walkStraightRangesOf(meta, n) {
 // toxic guard → the ☠ / ⚠ toxicity-unknown warning, never an edibility label;
 // otherwise the edibility verdict.
 function _walkEdibBadge(gate, edib) {
-  if (!gate.ok) return _culinaryGateBadge(gate);
+  // Blocked with a ☠ / ⚠ label → the label; blocked without one (inedible) → the verdict badge.
+  if (!gate.ok && gate.label) return _culinaryGateBadge(gate);
   if (!edib) return '';
   return `<span style="font-size:0.68rem;padding:1px 6px;border-radius:4px;font-weight:600;
              background:${edib==='edible'?'#d1f5da':edib==='toxic'?'#dc2626':edib==='inedible'?'#fef3c7':edib==='medicinal'?'#e0e7ff':'#f3f3f3'};
@@ -6382,7 +6390,7 @@ function renderWalkPanel(route, enrichMap) {
 
       // Toxic guard (_culinaryGate): the edibility badge only when toxicity is
       // 'none'; fails closed when it could not be read.
-      const _gate      = _culinaryGate(_enrichData ? _enrichData._toxicity : null);
+      const _gate      = _culinaryGate(_enrichData ? _enrichData._safety : null);
 
       // Stop card = name, common name, badge, profile link, and the curator's
       // own foraging notes (species card) — first ~160 chars, plain text, or
@@ -6409,6 +6417,7 @@ function renderWalkPanel(route, enrichMap) {
           <a href="/species?s=${encodeURIComponent(spName)}"
              style="font-size:0.68rem;color:#2d5016;margin-left:8px">Species profile →</a>
         </div>
+        ${SafetyGate.warning(_gate.safety)}
         ${forNotesHtml}
       </div>`;
     }
@@ -6418,10 +6427,10 @@ function renderWalkPanel(route, enrichMap) {
     let alsoHtml = '';
     for (const rp of _repeatSplit[i].repeats) {
       const _ed   = enrichMap[rp.name];
-      const _g    = _culinaryGate(_ed ? _ed._toxicity : null);
+      const _g    = _culinaryGate(_ed ? _ed._safety : null);
       const _pin  = (_stop.pins || []).map(x => x.p).find(pp => pp.species_primary === rp.name) || {};
       const _edib = _ed?.species?.edibility_status || _pin.edibility_status;   // same source as the full card
-      const _b    = (!_g.ok || _edib === 'caution') ? _walkEdibBadge(_g, _edib) : '';
+      const _b    = _g.label ? _walkEdibBadge(_g, _edib) : '';   // safety signals only (☠ / ⚠ / caution)
       alsoHtml += `<div class="walk-stop-also" style="font-size:0.75rem;color:#556040;margin-top:4px">
         Also here: ${_b} ${spNameHtml(rp.name, _spCommonFor(rp.name))}${_walkMemberChips(_stop, rp.name)} — see stop ${_esc(rp.first_label)}
       </div>`;
@@ -6576,8 +6585,8 @@ function _wbsRenderLasso() {
     const ec = edibColour[edib] || { bg: '#f3f3f3', fg: '#666', label: edib };
     // Toxic guard: toxicity comes from the walk enrichment (map pins carry
     // none); a species not enriched yet fails closed to "toxicity unknown".
-    const gate = _culinaryGate(_activeWalkEnrich?.[name]?._toxicity ?? null);
-    const edibTag = !gate.ok
+    const gate = _culinaryGate(_activeWalkEnrich?.[name]?._safety ?? null);
+    const edibTag = (!gate.ok && gate.label)
       ? _culinaryGateBadge(gate)
       : edib
       ? `<span class="wbs-lasso-edib" style="background:${ec.bg};color:${ec.fg}">${ec.label}</span>`
@@ -7560,13 +7569,13 @@ async function exportWalkSummary() {
     const names = _repeatSplit[i].full;
     const also_here = _repeatSplit[i].repeats.map(rp => {
       const ed = _activeWalkEnrich?.[rp.name];
-      const gate = _culinaryGate(ed ? ed._toxicity : null);
+      const gate = _culinaryGate(ed ? ed._safety : null);
       return { species_scientific: rp.name, species_common: _spCommonFor(rp.name) || null,
-               first_label: rp.first_label, toxicity_warning: gate.ok ? null : gate.label };
+               first_label: rp.first_label, toxicity_warning: gate.ok ? null : (gate.label || null) };
     });
     const species = names.map(spName => {
       const ed = _activeWalkEnrich?.[spName];
-      const gate = _culinaryGate(ed ? ed._toxicity : null);
+      const gate = _culinaryGate(ed ? ed._safety : null);
       const ci = gate.ok ? (ed?.culinary || null) : null;
       const spData = ed?.species || null;
       const recipes = gate.ok ? (ed?.recipes || []) : [];
@@ -7580,8 +7589,8 @@ async function exportWalkSummary() {
         species_scientific: spName,
         species_common: allCommon[0] || null,
         all_common: allCommon,
-        edibility: gate.ok ? (spData?.edibility_status || pinP.edibility_status || null) : null,
-        toxicity_warning: gate.ok ? null : gate.label,
+        edibility: (gate.ok || !gate.label) ? (spData?.edibility_status || pinP.edibility_status || null) : null,
+        toxicity_warning: gate.ok ? null : (gate.label || null),
         culinary_notes: ci ? (ci.edible_parts || ci.taste_notes || ci.preparation_methods || null) : null,
         recipe_title: picked ? (_recipeTitle(picked) || null) : null,
         recipe_body:  picked ? (picked.body  || null) : null,
@@ -7729,7 +7738,7 @@ function _fireProxAlert(stop, distM) {
       common_name:      (pinP.common_names && pinP.common_names[0]) || pinP.common_name ||
                         (ed?.species?.common_names || [])[0] || null,
       edibility_status: ed?.species?.edibility_status || pinP.edibility_status || null,
-      toxicity:         (ed && ed._toxicity) || null,
+      safety:           (ed && ed._safety) || null,
     };
   });
 
@@ -7774,8 +7783,8 @@ function _renderProxPanel() {
           const common = sp.common_name
             ? '<div class="walk-prox-common">' + _esc(sp.common_name) + '</div>'
             : '';
-          const gate   = _culinaryGate(sp.toxicity);
-          const edib   = !gate.ok ? _culinaryGateBadge(gate)
+          const gate   = _culinaryGate(sp.safety);
+          const edib   = (!gate.ok && gate.label) ? _culinaryGateBadge(gate)
             : sp.edibility_status
             ? '<span class="nearme-edib" style="' +
                 _esc(_NEARME_EDIB_STYLE[sp.edibility_status] || _NEARME_EDIB_STYLE.unknown) +

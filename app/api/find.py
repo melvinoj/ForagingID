@@ -76,7 +76,7 @@ async def find_in_season(
         .join(Species, Species.id == SpeciesRecipe.species_id)
         .where(SpeciesRecipe.status == "approved")
         .where(SpeciesRecipe.is_medicinal_prep.is_(False))
-        .where(CULINARY_ALLOWED_SQL)  # toxic guard — no recipe count for toxic/deadly
+        .where(CULINARY_ALLOWED_SQL)  # culinary guard (= culinary_allowed): edible/caution + severity 'none'
         .group_by(SpeciesRecipe.species_id)
     )
     recipe_counts = {r.species_id: r.n for r in (await db.execute(rec_stmt)).all()}
@@ -185,7 +185,7 @@ async def find_recipes(
         .join(Species, Species.id == SpeciesRecipe.species_id)
         .where(SpeciesRecipe.status == "approved")
         .where(SpeciesRecipe.is_medicinal_prep.is_(False))
-        .where(CULINARY_ALLOWED_SQL)  # toxic guard
+        .where(CULINARY_ALLOWED_SQL)  # culinary guard (= culinary_allowed)
         .where(
             or_(
                 SpeciesRecipe.title.ilike(pattern),
@@ -262,7 +262,7 @@ async def find_medicinal(
         .join(Species, Species.id == SpeciesRecipe.species_id)
         .where(SpeciesRecipe.status == "approved")
         .where(SpeciesRecipe.is_medicinal_prep.is_(True))
-        .where(CULINARY_ALLOWED_SQL)  # toxic guard
+        .where(CULINARY_ALLOWED_SQL)  # culinary guard (= culinary_allowed)
         .where(
             or_(
                 SpeciesRecipe.title.ilike(pattern),

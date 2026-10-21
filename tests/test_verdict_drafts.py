@@ -271,6 +271,9 @@ def test_approve_as_proposed_writes_verdict_severity_and_history():
     assert dr[0] == "approved" and dr[1] == "toxic / toxic" and dr[2]
     note = f"verdict draft #{did} (batch 3b sweep)"
     assert hist == [("toxicity_severity", "unknown", "toxic", "human", note),
+                    # 21 Oct 2026: the lock flag change is logged too (a history row for every change)
+                    ("edibility_verified", "0", "1", "human", note),
+                    ("edibility_verified_by", None, "human", "human", note),
                     ("edibility_status", None, "toxic", "human", note)]
 
 
@@ -390,6 +393,81 @@ def test_reject_leaves_the_species_and_is_not_redrafted():
     assert res["draft_status"] == "rejected" and dr[0] == "rejected"
     assert sp[:2] == ("unknown", "unknown") and hist == []
     assert "verdict draft already rejected" in again
+
+
+def test_reject_reason_is_kept_in_generation_context():
+    """21 Oct 2026: optional reason, stored as rejected_reason / rejected_at next
+    to the draft's own context (same place as invalidated_reason)."""
+    async def run():
+        path, eng, S = await _db()
+        _sweep(path)
+        d3 = await _draft_for(S, 3)
+        d1 = await _draft_for(S, 1)
+        async with S() as s:
+            res = await edib.reject_verdict_draft(
+                d3.id, edib.VerdictDraftRejectIn(reason="  superseded by Melvin census verdict "),
+                db=s, identity=CURATOR)
+            res_none = await edib.reject_verdict_draft(d1.id, None, db=s, identity=CURATOR)
+        async with S() as s:
+            r3, r1 = await s.get(SpeciesAIDraft, d3.id), await s.get(SpeciesAIDraft, d1.id)
+            out = (r3.status, json.loads(r3.generation_context_json), r1.status, json.loads(r1.generation_context_json))
+        await eng.dispose()
+        return res, res_none, out
+
+    res, res_none, (st3, ctx3, st1, ctx1) = _run(run())
+    assert st3 == "rejected" and res["reason"] == "superseded by Melvin census verdict"
+    assert ctx3["rejected_reason"] == "superseded by Melvin census verdict" and ctx3["rejected_at"]
+    assert ctx3["kind"] == "verdict" and "proposed" in ctx3          # the draft's own context is kept
+    assert st1 == "rejected" and res_none["reason"] is None
+    assert "rejected_reason" not in ctx1 and "rejected_at" not in ctx1   # Review's button: no reason
+
+
+def test_reject_route_accepts_no_body_and_a_reason():
+    """The real route: Review posts with no body; a JSON {reason} is stored."""
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+    from app.api.identity import get_identity
+    from app.database import get_db
+
+    async def setup():
+        path, eng, S = await _db()
+        _sweep(path)
+        return path, eng, S, (await _draft_for(S, 3)).id, (await _draft_for(S, 1)).id
+    path, eng, S, id3, id1 = _run(setup())
+
+    async def _get_db():
+        async with S() as s:
+            yield s
+
+    api = FastAPI()
+    api.include_router(edib.router)
+    api.dependency_overrides[get_db] = _get_db
+    api.dependency_overrides[get_identity] = lambda: CURATOR
+    c = TestClient(api)
+    r = c.post(f"/api/edibility/verdict-drafts/{id3}/reject")
+    assert r.status_code == 200 and r.json()["reason"] is None, r.text
+    r = c.post(f"/api/edibility/verdict-drafts/{id1}/reject", json={"reason": "superseded by Melvin census verdict"})
+    assert r.status_code == 200 and r.json()["reason"] == "superseded by Melvin census verdict", r.text
+    r = c.post(f"/api/edibility/verdict-drafts/{id1}/reject", json={"reason": "again"})
+    assert r.status_code == 409                                        # already rejected: nothing rewritten
+    _run(eng.dispose())
+
+
+def test_record_rejection_reason_refuses_empty_and_keeps_bad_context():
+    from app.services.verdict_drafts import record_rejection_reason
+
+    class D:
+        generation_context_json = "not json"
+    d = D()
+    try:
+        record_rejection_reason(d, "   ")
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("empty reason must be refused")
+    record_rejection_reason(d, "why")
+    ctx = json.loads(d.generation_context_json)
+    assert ctx["rejected_reason"] == "why" and ctx["original_context"] == "not json"
 
 
 def test_never_in_approve_all():

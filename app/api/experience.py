@@ -232,7 +232,7 @@ async def verify_species(body: VerifySpecies, db: AsyncSession = Depends(get_db)
     if sp.edibility_status not in VERIFIABLE_EDIBILITY:
         raise HTTPException(400, f"{sp.scientific_name}: edibility_status is {sp.edibility_status!r} — "
                                  f"only {list(VERIFIABLE_EDIBILITY)} can be verified here")
-    if not culinary_allowed(sp.toxicity_severity):
+    if not culinary_allowed(sp.toxicity_severity, sp.edibility_status):
         raise HTTPException(400, f"{sp.scientific_name}: toxicity_severity is {sp.toxicity_severity!r} — "
                                  f"only 'none' can be verified here")
     if sp.edibility_verified and sp.edibility_verified_by == "human":

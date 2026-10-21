@@ -38,7 +38,9 @@ approve path applies — so a proposal never lowers a recorded severity.
 """
 from __future__ import annotations
 
+import json
 import re
+from datetime import datetime
 from typing import Iterable, List, Optional
 
 from app.models.species import SeverityRuleError, severity_for_verdict
@@ -47,6 +49,25 @@ MODEL = "verdict_sweep"
 FIELD = "edibility_status"
 VERDICTS = ("edible", "caution", "inedible", "toxic", "unknown")
 NO_VERDICT = (None, "", "unknown", "unclear")
+
+
+def record_rejection_reason(draft, reason: str) -> None:
+    """The ONLY writer of a draft's rejection reason (Melvin, 21 Oct 2026):
+    generation_context_json["rejected_reason"] / ["rejected_at"] — the same
+    place the 21 Oct invalidations keep theirs (invalidated_reason /
+    invalidated_at). Does not change the draft's status; the caller does."""
+    reason = (reason or "").strip()
+    if not reason:
+        raise ValueError("rejection reason is empty")
+    try:
+        ctx = json.loads(draft.generation_context_json or "{}")
+    except ValueError:
+        ctx = {"original_context": draft.generation_context_json}   # never drop what was there
+    if not isinstance(ctx, dict):
+        ctx = {"original_context": ctx}
+    ctx["rejected_reason"] = reason
+    ctx["rejected_at"] = datetime.utcnow().isoformat()
+    draft.generation_context_json = json.dumps(ctx, ensure_ascii=False)
 
 # Poison/toxic wording in a PFAF Known Hazards text, and the negations that
 # cancel it within the same sentence ("No known toxicity", "non-toxic", "No

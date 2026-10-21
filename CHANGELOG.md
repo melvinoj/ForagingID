@@ -1,58 +1,21 @@
 ## Current State
 
-END SESSION — rewrite CHANGELOG Current State via /api/dev/end-session.
-
-_Last updated: 21 Oct 2026 (early morning)_
-
-### Build status
-Server: START_ForagingID.command — uvicorn foreground + tee to logs/server_<ts>.log; port check; cleanup trap. Claude Code never starts the server.
-Launcher: --reload-dir app + absolute --reload-exclude scripts/, migrations/, tests/; --timeout-graceful-shutdown 5 (any app/ edit reloads and cancels background tasks — check background_processes first).
-WAL; busy_timeout 30000; synchronous=NORMAL. Alembic head: 0054.
-Snapshots: SQLite backup API (WAL-safe); restore transactional, refused while jobs run, takes db_<ts>_prerestore first; restart server after a restore. Snapshot endpoint commits the whole working tree (no push). No manual .backup needed.
-Tests: 136 passing (pytest not installed — run as before).
-ANTHROPIC CREDIT EMPTY (21 Oct): every AI draft call fails.
-
-### Completed 20–21 Oct
-- Saved walks: line fixes, dashed legs, load guard, Start here + Reverse, loop display toggle, repeat-species lines, ← Saved walks, ✎ Edit walk (staged edits + Save changes, names on pins, no species cards in walk mode), older-photos highlight, trimmed stop cards, ↻ Re-route (Rümmelsbühl foray id 4: 28 stops, 2,952 m).
-- Names rule "Common (Latin)"; fungi category rule (+84 backfilled); jobs pop-up draggable; caffeinate follows the reloader; is_ai_placeholder() + placeholder clean-up; PFAF "None known" = no data.
-- Deep audit complete: docs/audit/2026-10-20/REPORT.md (0 decisions, 1–8 summary, 9 fix order) + STATUS.md.
-- Batch 1 (D3-01): 61 preparation-warning drafts (3178–3238) for caution species; approval = curator-authored; recipes of caution species withheld from the page until a warning is approved.
-- Batch 2: WAL-safe snapshot + restore.
-- Batch 3: severity_for_verdict on every verdict writer; never-assessed = severity unknown (230 backfilled, fail closed); Amanita muscaria, Heracleum mantegazzianum, Hedera helix → toxic; drafts 2920/2921 rejected.
-- Batch 14: Second Opinion 500 fixed; GBIF-only names last, "name match only", no %, never feed auto-approve; Review badge = queue; confirmed species first in candidates with own score (666 rows); C-03 synonym lookup + cards 848/849; C-04 Approve only promotes recognised names; E-04, D1-03, D2-01.
-- Batch 3b: verdict-draft review (Review → Edibility Review → ⚖ Verdict drafts; one card per species, quoted sources, refused if species changed since drafting, no bulk approve). 212 drafts (3240–3451): 175 unknown, 20 caution, 13 edible, 4 toxic; 13 walk species first. No verdict changed. 18 stale fungi lookup drafts retired. Also: 15957 → card 530; draft 2335 rejected; 848 (Plantae, PFAF) and 849 (Fungi) enriched, no verdict; 21453/21454 → fungi; 31 phone-sourced person_animal rows rejected (files kept).
-
-### Decisions — settled, do not re-raise
-- No family/toxicity auto-approve veto, no app-side Apiaceae rule; threshold stays 0.70. Daucus carota settled.
-- ngrok link = curator by default, but becomes refreshable ("New link": old link + QR die, QR/link update); secret also required for LAN (localhost exempt).
-- Species rename clearing text stays. Merges allowed only via re-keying species_resources etc. (update CLAUDE.md in batch 11b).
-- D3-01: option C with B fallback (built).
-- Deadly = verdict toxic + severity deadly; "☠ deadly"/"☠ toxic" consistent everywhere (batch 5).
-- Close B5-01/02 (batch 8). Remove in-app GPS walk recording. Replace circular toggle with automatic Loop/One-way label.
-- LandMemory: TMview clear; no registration; internals stay ForagingID; rename ~11 user-facing leftovers.
-
-### Pending / next
-1. NEXT FIX (before batch 4): when AI drafting fails, write nothing — never the "No known traditional medicinal uses" default without checking PFAF. Count and revert species that got that text since the credit ran out. Decide: top up Anthropic credit or switch drafting backend.
-2. Melvin (1b): approve/rewrite walk 4 warning drafts (most unknown-origin texts aren't warnings — rewrite or reject); human-verify Rosa dumalis; republish Rümmelsbühl foray (id 4).
-3. Melvin: verdict drafts (walk species first); reject drafts on junk cards (Betacoronavirus, butterfly, glowworm …). Reject the 347 Takeout person_animal rows in Review (Status Pending, Pre-filter person_animal, 96/page, 4 rounds) once DIGIERA originals are confirmed; decide on 21509, 21949, 22043 (marked keep).
-4. Melvin browser checks: batches 1, 2, 3, 14 (list in REPORT.md section 9) + 3b (212 cards, walk first; approve → confirmation → species page shows verdict; severity options follow verdict; "changed" refusal; AI Draft Review no longer lists verdict drafts).
-5. Second verdict sweep (proposed): "confirm or change" cards for the 394 species whose verdict no human has confirmed (incl. Aruncus dioicus 'edible').
-6. Fix order, REPORT.md section 9: batches 4–8 (settings secrets + PDF file-read; shared safety gate incl. map/print + deadly badge; printed warnings; refreshable link + LAN secret; guest data paths), 11b (merges, GBIF synonym sweep e.g. fireweed, common-name backfill), 15b walk batch (stop/pin/lasso editing, Start here everywhere, Loop label, route-line zoom/drag bug), S1 data fixes (C-01 copy 131 Syncthing-only photos, C-02, C-05 register walk-4 page, C-06), tidy.
-7. Older: Alchemilla mollis (cid 129) "None Known"; bulk reject ~100 medicinal refusal drafts; walk 3 hazards (Atropa 22224/22225, Senecio 22231); Stage C publish panel; drafts 94–105; Walk Stage 4/5; PWA on Pixel 8.
-
-### Known issues / backlog
-- Pending pre-filter rows: 1,169 "no plant signal" (re-identify costs PlantNet quota); ~650 unprocessed 2013 Takeout files (needs DIGIERA).
-- Species rename doesn't rename stored candidates (no % shown); orphan rule missed card 685.
-- Implausible regional IDs (Micromeria douglasii, Pyxine albovirens, Carpinus orientalis, Gentiana vernayi near Gresgen).
-- Raw PFAF formatting → one markdown renderer (P4). Jobs widget hidden below 640 px.
-- Walk: Ewden brook circular (id 1) no saved line; too many buttons; on the simmer: stop ordering, OSM fixes / dragging dashed legs, look-alike hint on review cards.
-- wikidata.py family-based "likely edible" heuristic — remove. Recipe regenerate/curator recipe writes not toxicity-gated; no recipe audit table.
-- export.py read-only open fails on WAL DB without -shm (fails safe). GPS accuracy not recorded. Enrichment queue in-memory.
-- Tokens: Anthropic credit empty; iNaturalist expired; Google Drive invalid; Ollama 'mistral' not installed. Disk tight — move exports/old snapshots to DIGIERA.
-- Docs drift: CLAUDE.md (Alembic 0054, PhoneForaging path, card counts); add: report walks by name + ID; "design/diagnose only / wait for OK" = no code edits.
-- Syncthing: laptop folder Receive Only + ignore deletes (correct); set Pixel 8 folder to Send Only.
+Correction to Current State, Pending item 1 (Melvin, 21 Oct) — replace it with:
+1. NEXT FIX (before batch 4):
+   a. AI drafting must use DeepSeek (Anthropic is not used — too expensive). Find every path that still calls Anthropic (the failing calls since the credit ran out), quote them, and route them to DeepSeek. Remove the "top up Anthropic" note.
+   b. When AI text isn't available, fill the field with PFAF's own text, clearly labelled as PFAF-sourced (visible label + changed_by/provenance marker), for Melvin to replace as he goes. If PFAF has nothing for that field, leave it empty. Never write "No known traditional medicinal uses" unless PFAF actually says none.
+   c. Count the species that got that default text since the credit ran out and refill them by rule b (snapshot first, read back by ID).
+   The public experience page still publishes only curator-approved text (D3-01 unchanged).
+Record in REPORT.md section 0.
 
 ## History
+
+### 2026-10-21 04:50
+**Snapshot** — End of session — Session ended from Settings page
+DB: `snapshots/db_20261021_045041.sqlite`
+
+### 2026-10-21 04:50
+**Session ended** — Session ended from Settings page
 
 ### 2026-10-21 04:47
 **Snapshot** — End of session — Session ended from Settings page

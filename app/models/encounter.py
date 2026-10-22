@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import List, Optional
 
-from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, Text, UniqueConstraint
+from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, Text, UniqueConstraint, and_, false, or_
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
 
@@ -69,6 +69,37 @@ class Encounter(Base):
     # Camera filename the encounter is waiting for — set at capture time by
     # online own-naming or offline gallery tap-pick, so p1 can bind on arrival.
     expected_filename:   Mapped[Optional[str]]   = mapped_column(Text, nullable=True)
+    # "Share with guests" (batch 8, migration 0057): a CURATOR encounter is
+    # visible to workshop participants only when this is set. Default off.
+    shared_with_guests:  Mapped[bool]            = mapped_column(Boolean, nullable=False, server_default="0", default=False)
     created_at:          Mapped[datetime]        = mapped_column(DateTime, nullable=False, server_default=func.now())
 
     photos: Mapped[List["EncounterPhoto"]] = relationship("EncounterPhoto", back_populates="encounter", cascade="all, delete-orphan", lazy="selectin")
+
+
+# ---------------------------------------------------------------------------
+# Who may see an encounter (batch 8, Melvin 22 Oct 2026) — the ONLY rule:
+# the curator sees everything; a participant sees their own notes plus curator
+# encounters marked shared_with_guests — never another participant's; an
+# anonymous guest sees nothing. Its media (audio, sketch) follow the same rule
+# (app.services.guest_access). `identity` is app.api.identity.Identity.
+# ---------------------------------------------------------------------------
+CURATOR_USER_ID = 1          # identity.py: localhost / curator devices are user 1
+
+
+def encounter_visible_to(enc, identity) -> bool:
+    if not identity.is_guest:
+        return True
+    if identity.is_anonymous_guest or identity.user_id is None:
+        return False
+    return enc.user_id == identity.user_id or (enc.user_id == CURATOR_USER_ID and bool(enc.shared_with_guests))
+
+
+def encounter_visibility_clause(identity):
+    """SQL twin of encounter_visible_to() for SELECTs on Encounter."""
+    if not identity.is_guest:
+        return Encounter.id.is_not(None)
+    if identity.is_anonymous_guest or identity.user_id is None:
+        return false()
+    return or_(Encounter.user_id == identity.user_id,
+               and_(Encounter.user_id == CURATOR_USER_ID, Encounter.shared_with_guests.is_(True)))

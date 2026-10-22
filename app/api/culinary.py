@@ -26,11 +26,13 @@ import logging
 log = logging.getLogger(__name__)
 from app.database import get_db, AsyncSessionLocal
 from app.services.write_lock import db_write_lock
-from app.services.ai_placeholder import is_ai_placeholder, is_only_no_medicinal_uses_claim
+from app.services.ai_placeholder import is_ai_placeholder, is_only_no_medicinal_uses_claim, medicinal_notes_redraftable
 from app.services.safety_gate import safety_for_species
+from app.services.enrichment_scope import ScopeRequest, scope_params, scope_summary
+from app.services.enrichment_scope import resolve as resolve_scope
 from app.models.culinary import CulinaryInfo
 from app.models.notes import MapNote
-from app.models.observation import Observation
+from app.models.observation import Observation, is_guest_visible_observation
 from app.models.species import CulinaryInfoHistory, EnrichmentSource, Species, SpeciesAIDraft, SpeciesCandidate, SpeciesRecipe, SpeciesEdibilityCondition, SpeciesLookalike, culinary_allowed, safety_decision, CURATOR_DRAFT_FIELDS, AI_NO_CONTENT_VERDICTS, is_curator_authored
 from app.models.encounter import Encounter
 from app.models.foray_session import SessionSpecies
@@ -182,6 +184,8 @@ async def list_species(
 
 @router.post("/api/culinary/backfill-fungi-edibility")
 async def backfill_fungi_edibility(
+    dry_run: bool = Query(False, description="show what it would do; write nothing"),
+    sc: ScopeRequest = Depends(scope_params),
     db: AsyncSession = Depends(get_db),
     identity: Identity = Depends(get_identity),
 ):
@@ -204,6 +208,9 @@ async def backfill_fungi_edibility(
       - Never touches species with edibility_verified = True
       - Never touches species with a human-edited edibility_status history row
         (that guard is already enforced inside _maybe_enrich_fungi_edibility)
+
+    Scoped + capped like every bulk run (22 Oct 2026: a saved walk, Current
+    list or all eligible; no scope = 400), with a dry run first.
     """
     if identity.is_guest:
         raise HTTPException(403, "Curator only")
@@ -257,6 +264,15 @@ async def backfill_fungi_edibility(
         extra_rows = (await db.execute(extra_stmt)).scalars().all()
 
     all_candidates: list[Species] = list(kingdom_rows) + extra_rows
+    res = await resolve_scope(db, sc, [sp.scientific_name for sp in all_candidates])
+    queued = set(res["names"])
+    all_candidates = [sp for sp in all_candidates if sp.scientific_name in queued]
+    if dry_run:
+        return {"dry_run": True, "species_count": len(all_candidates),
+                "drafts_may_create": {"edibility_status": len(all_candidates)} if all_candidates else {},
+                "note": ("Fungi with no verdict: a suggested verdict becomes a Review card — no verdict is "
+                         "written. Verified or human-set verdicts are never touched."),
+                "species_sample": res["names"][:12], **scope_summary(res)}
     total = len(all_candidates)
     log.info("[backfill-fungi-edibility] %d candidate species found", total)
 
@@ -371,6 +387,7 @@ async def backfill_fungi_edibility(
         "failed":        counters["failed"],
         "skipped":       counters["skipped"],
         "process_id":    pid,
+        **scope_summary(res),
     }
 
 
@@ -1928,6 +1945,9 @@ async def species_profile(
         .limit(50)
     )
     obs_rows = (await db.execute(obs_stmt)).all()
+    if identity.is_guest:
+        # Batch 8: a guest never gets pending / in-review / rejected photos.
+        obs_rows = [r for r in obs_rows if is_guest_visible_observation(r)]
 
     confirmed = [
         r for r in obs_rows
@@ -3028,7 +3048,8 @@ async def _run_enrichment_job(job_id: str, re_enrich: bool = True) -> None:
     Progress is written after EVERY completed species, with its name in the
     row's payload ({"resume_after": name}) — a pause, a "paused — no network"
     stop or a server restart resumes after the last completed species
-    (start_enrichment_run → bp_resume_point).
+    (start_enrichment_run → bp_resume_point). The payload also keeps the run's
+    scoped species list (22 Oct 2026), so a resume stays within it.
     """
     import asyncio
     from app.services.background_processes import bp_progress, bp_finish, bp_patch, bp_set_status
@@ -3037,6 +3058,11 @@ async def _run_enrichment_job(job_id: str, re_enrich: bool = True) -> None:
     job = _enrichment_jobs[job_id]
     process_id = job.get("process_id")
     resume_after = job.get("resume_after")
+    species = job.get("species") or []
+    scope = job.get("scope") or {}
+
+    def _payload(after: Optional[str]) -> str:
+        return json.dumps({"resume_after": after, "species": species, "scope": scope})
 
     def _progress(current: int, total: int, name: str, status: str) -> None:
         job["progress"] = {
@@ -3048,7 +3074,7 @@ async def _run_enrichment_job(job_id: str, re_enrich: bool = True) -> None:
         job["log"].append(f"{name} → {status}")
         if process_id:
             asyncio.create_task(bp_progress(process_id, current, total, f"Enriching {name} ({current} of {total})"))
-            asyncio.create_task(bp_patch(process_id, payload=json.dumps({"resume_after": name})))
+            asyncio.create_task(bp_patch(process_id, payload=_payload(name)))
 
     async def _cancel_check() -> Optional[str]:
         """Read current BP status from DB; return 'paused'/'cancelled' or None."""
@@ -3078,10 +3104,13 @@ async def _run_enrichment_job(job_id: str, re_enrich: bool = True) -> None:
             progress_cb=_progress,
             cancel_check_fn=_cancel_check,
             resume_after=resume_after,
+            species_list=species,
         )
         job["summary"] = {k: result.get(k) for k in (
             "enriched", "partial", "not_found", "skipped", "failed", "no_network", "source_failures",
             "drafts_created", "drafts_skipped", "drafts_skipped_total", "review_drafts_queued")}
+        # Scope: species beyond the cap were not queued (22 Oct 2026).
+        job["summary"].update({k: scope.get(k) for k in ("scope_label", "remaining", "cap")})
 
         async with AsyncSessionLocal() as _count_sess:
             from sqlalchemy import func as sqlfunc
@@ -3094,7 +3123,7 @@ async def _run_enrichment_job(job_id: str, re_enrich: bool = True) -> None:
         last = result.get("last_completed")
         total = result.get("total", 0)
         if last and process_id:
-            await bp_patch(process_id, payload=json.dumps({"resume_after": last}))
+            await bp_patch(process_id, payload=_payload(last))
 
         if stopped_at is not None:
             if result.get("stopped_reason") == "no_network":
@@ -3144,12 +3173,23 @@ async def _resume_when_network_returns(process_id: int, every_s: float = 60.0) -
             return
 
 
-async def _start_enrichment_run(background_tasks: Optional[BackgroundTasks] = None) -> dict:
+async def _enrichment_resume_point() -> Optional[dict]:
+    """bp_resume_point for enrichment_run, but only a run that saved its scoped
+    species list (22 Oct 2026). An older unscoped row is never resumed — that
+    would run across all eligible species; a new scoped run supersedes it."""
+    from app.services.background_processes import bp_resume_point
+    point = await bp_resume_point("enrichment_run")
+    return point if point and point.get("species") else None
+
+
+async def _start_enrichment_run(background_tasks: Optional[BackgroundTasks] = None,
+                                scope: Optional[dict] = None) -> dict:
     """Start a run, or resume the most recent paused / interrupted one after its
-    last completed species (bp_resume_point). Shared by the route and the
-    no-network watcher."""
+    last completed species, within its own saved species list. Shared by the
+    route and the no-network watcher. A fresh run needs a resolved scope
+    (enrichment_scope.resolve); without one nothing starts."""
     import asyncio
-    from app.services.background_processes import bp_active_row, bp_resume_point, bp_set_status, bp_start
+    from app.services.background_processes import bp_active_row, bp_patch, bp_set_status, bp_start
 
     for existing in _enrichment_jobs.values():
         if existing.get("status") == "running":
@@ -3165,17 +3205,27 @@ async def _start_enrichment_run(background_tasks: Optional[BackgroundTasks] = No
                 },
             )
 
-    point = await bp_resume_point("enrichment_run")
+    point = await _enrichment_resume_point()
     resume_after = point["resume_after"] if point else None
     if point:
+        species, scope_info = point["species"], point.get("scope") or {}
         process_id = point["process_id"]
         await bp_set_status(process_id, "running", heartbeat=True)
         detail = f"Resuming enrichment after {resume_after}…"
-        log.info("[enrichment] resuming %s run %s after %r", point["status"], process_id, resume_after)
+        log.info("[enrichment] resuming %s run %s after %r (%d species in its scope)",
+                 point["status"], process_id, resume_after, len(species))
     else:
-        process_id = await bp_start("enrichment_run", detail="Starting enrichment…")
+        if scope is None:
+            from app.services.enrichment_scope import NO_SCOPE_DETAIL
+            raise HTTPException(400, NO_SCOPE_DETAIL)
+        species, scope_info = list(scope["names"]), scope_summary(scope)
+        if not species:
+            return {"status": "nothing_to_do", "count": 0, **scope_info}
+        process_id = await bp_start("enrichment_run", progress_total=len(species), detail="Starting enrichment…")
+        await bp_patch(process_id, payload=json.dumps({"resume_after": None, "species": species, "scope": scope_info}))
         detail = "Starting enrichment…"
-        log.info("[enrichment] no paused / interrupted run with a resume point — fresh start")
+        log.info("[enrichment] fresh scoped run: %d species (%s), %d remain beyond the cap",
+                 len(species), scope_info.get("scope_label"), scope_info.get("remaining", 0))
 
     job_id = str(uuid.uuid4())
     _enrichment_jobs[job_id] = {
@@ -3183,6 +3233,8 @@ async def _start_enrichment_run(background_tasks: Optional[BackgroundTasks] = No
         "status":       "running",
         "re_enrich":    True,
         "resume_after": resume_after,
+        "species":      species,
+        "scope":        scope_info,
         "started_at":   datetime.utcnow().isoformat(),
         "finished_at":  None,
         "progress":     {"current": point["progress_current"] if point else 0, "total": 0,
@@ -3197,7 +3249,8 @@ async def _start_enrichment_run(background_tasks: Optional[BackgroundTasks] = No
     else:
         asyncio.create_task(_run_enrichment_job(job_id))
     return {"job_id": job_id, "status": "running", "process_id": process_id, "detail": detail,
-            "resume_after": resume_after, "resume_source": point["status"] if point else "fresh"}
+            "resume_after": resume_after, "resume_source": point["status"] if point else "fresh",
+            "count": len(species), **scope_info}
 
 
 @router.post("/api/enrichment/run")
@@ -3205,12 +3258,15 @@ async def start_enrichment_run(
     body: EnrichmentRunRequest,
     background_tasks: BackgroundTasks,
     dry_run: bool = Query(False, description="show what the run would do; start nothing"),
+    sc: ScopeRequest = Depends(scope_params),
     db: AsyncSession = Depends(get_db),
     identity: Identity = Depends(get_identity),
 ):
     """
-    Start a full enrichment batch run in the background (or resume the most
-    recent paused / interrupted one after its last completed species).
+    Start a scoped enrichment batch run in the background (or resume the most
+    recent paused / interrupted one after its last completed species, within
+    that run's own saved species list — the scope chosen now is then unused).
+    A fresh run needs a scope (walk / list / all) and is capped (default 25).
     Returns immediately with a job_id. Poll /api/enrichment/status/{job_id}.
 
     dry_run=true: the summary only (species count, fields it may fill, drafts
@@ -3220,18 +3276,22 @@ async def start_enrichment_run(
     """
     if identity.is_guest:
         raise HTTPException(403, "Curator only")
+    from app.services.enrichment import batch_species_names
+    from app.services.enrichment_plan import plan
+    point = await _enrichment_resume_point()
+    if point:
+        if not dry_run:
+            return await _start_enrichment_run(background_tasks)
+        names = [n for n in await batch_species_names(species_list=point["species"])
+                 if n > point["resume_after"]]
+        ps = point.get("scope") or {}
+        return await plan(db, names, note=(
+            f"Resumes the {point['status']} run after {point['resume_after']}, within its own "
+            f"{len(point['species'])} species ({ps.get('scope_label') or 'saved scope'}) — the scope chosen now is not used."))
+    res = await resolve_scope(db, sc, await batch_species_names())
     if dry_run:
-        from app.services.background_processes import bp_resume_point
-        from app.services.enrichment import batch_species_names
-        from app.services.enrichment_plan import plan
-        names = await batch_species_names()
-        point = await bp_resume_point("enrichment_run")
-        if point:
-            names = [n for n in names if n > point["resume_after"]]
-        note = (f"Resumes the {point['status']} run after {point['resume_after']}." if point else
-                "Fresh run. Pauses by itself if the network fails.")
-        return await plan(db, names, note=note)
-    return await _start_enrichment_run(background_tasks)
+        return await plan(db, res["names"], scope=res, note="Fresh run. Pauses by itself if the network fails.")
+    return await _start_enrichment_run(background_tasks, scope=res)
 
 
 @router.get("/api/enrichment/status/{job_id}")
@@ -3586,7 +3646,7 @@ async def get_backfill_counts():
 # ---------------------------------------------------------------------------
 
 async def _run_id_notes_backfill_task(
-    jq_id: int, pid: Optional[int], manage_lock: bool = True
+    jq_id: int, pid: Optional[int], manage_lock: bool = True, names: Optional[list] = None
 ) -> None:
     """
     Generate identification notes (CulinaryInfo.id_notes) for species missing them.
@@ -3596,6 +3656,9 @@ async def _run_id_notes_backfill_task(
     - I9: LEFT JOIN + upsert, so species with no culinary_info row are processed
       and a row is created on write (not permanently stuck in 'outstanding').
     - M12: records AI provenance (id_notes_sources_json + ai_generated_fields_json).
+    - names (22 Oct 2026): the run's scoped species (enrichment_scope); only
+      those species are processed. None = every species missing id_notes
+      (kept for older callers — the endpoint always passes a scoped list).
     """
     global _draft_backfill_job
     from app.api.queue_api import _broadcast
@@ -3618,6 +3681,9 @@ async def _run_id_notes_backfill_task(
         ))).fetchall()
 
     targets = [tuple(r) for r in rows]
+    if names is not None:
+        wanted = set(names)
+        targets = [t for t in targets if t[1] in wanted]
     total = len(targets)
     created = 0
     failed = 0
@@ -3761,6 +3827,17 @@ _ID_NOTES_OUTSTANDING_SQL = (
 )
 
 
+async def _id_notes_outstanding_names(db: AsyncSession) -> list[str]:
+    """The species the ID-notes backfill may fill — same rows as
+    _ID_NOTES_OUTSTANDING_SQL — for enrichment_scope.resolve."""
+    from sqlalchemy import text as _t
+    return [r[0] for r in (await db.execute(_t(
+        "SELECT s.scientific_name FROM species s "
+        "LEFT JOIN culinary_info ci ON ci.species_id = s.id "
+        "WHERE (ci.id IS NULL OR ci.id_notes IS NULL OR ci.id_notes = '') "
+        "ORDER BY s.scientific_name"))).fetchall()]
+
+
 async def _create_backfill_job(job_type: str, label: str, total: int) -> tuple[int, Optional[int]]:
     """Insert a running job_queue row and start a background-process record.
 
@@ -3801,27 +3878,23 @@ async def _create_backfill_job(job_type: str, label: str, total: int) -> tuple[i
     return jq_id, pid
 
 
-async def _run_backfill_all_task() -> None:
+async def _run_backfill_all_task(id_names: list, targets: list) -> None:
     """
     Run-all orchestrator (M15): runs each domain sequentially as its OWN job —
     first id_notes, then a single combined draft job (taste/medicinal/recipe) —
     via chained awaits (never concurrently). Holds the global lock for the whole
-    sequence and releases it once, at the end.
+    sequence and releases it once, at the end. id_names / targets: the run's
+    scoped species for each part (22 Oct 2026; one cap across both).
     """
     global _draft_backfill_job
-    from sqlalchemy import text as _t
     try:
         # 1. id_notes
-        async with AsyncSessionLocal() as _db:
-            id_total = (await _db.execute(_t(_ID_NOTES_OUTSTANDING_SQL))).scalar() or 0
-        if id_total:
+        if id_names:
             jq_id, pid = await _create_backfill_job(
-                "ai_draft_backfill_id_notes", f"Backfill ID notes ({id_total} species)", id_total)
-            await _run_id_notes_backfill_task(jq_id, pid, manage_lock=False)
+                "ai_draft_backfill_id_notes", f"Backfill ID notes ({len(id_names)} species)", len(id_names))
+            await _run_id_notes_backfill_task(jq_id, pid, manage_lock=False, names=id_names)
 
         # 2. combined draft fields (taste/medicinal/recipe) — one pass per species
-        async with AsyncSessionLocal() as _db:
-            targets = await _collect_backfill_targets(_db)
         if targets:
             jq_id, pid = await _create_backfill_job(
                 "ai_draft_backfill", f"AI draft backfill ({len(targets)} species)", len(targets))
@@ -3837,10 +3910,13 @@ async def start_draft_backfill(
     background_tasks: BackgroundTasks,
     field: Optional[str] = Query(default=None),
     dry_run: bool = Query(False, description="count what it would do; start nothing"),
+    sc: ScopeRequest = Depends(scope_params),
     identity: Identity = Depends(get_identity),
 ):
     """
-    Backfill AI drafts.
+    Backfill AI drafts — for the chosen scope only (22 Oct 2026: a saved walk,
+    Current list or all eligible; no scope = 400, nothing runs), capped
+    (default 25, walk species first; one cap across both parts of field=all).
 
     ?field=<domain> runs one domain only. Valid domains:
         identification_notes, taste_notes, recipe, medicinal_notes.
@@ -3855,53 +3931,57 @@ async def start_draft_backfill(
     global _draft_backfill_job
     from sqlalchemy import text
 
+    if field not in (None, "all", "identification_notes") and field not in _DRAFT_FIELD_DOMAINS:
+        raise HTTPException(400, detail=f"Unknown backfill field: {field!r}")
+
+    # Eligible species per part, then ONE scope resolve (cap across all parts).
+    domains = sorted(_DRAFT_FIELD_DOMAINS) + ["identification_notes"] if field == "all" else [field]
+    eligible: dict = {}
+    async with AsyncSessionLocal() as _read_db:
+        for dom in domains:
+            if dom == "identification_notes":
+                eligible[dom] = await _id_notes_outstanding_names(_read_db)
+            else:
+                eligible[dom] = await _collect_backfill_targets(_read_db, dom)
+        union = [n for lst in eligible.values() for n in lst]
+        res = await resolve_scope(_read_db, sc, union)
+    queued = set(res["names"])
+    scoped = {dom: [n for n in lst if n in queued] for dom, lst in eligible.items()}
+
     if dry_run:
         # The summary every Backfill button shows first — nothing starts.
-        domains = sorted(_DRAFT_FIELD_DOMAINS) + ["identification_notes"] if field == "all" else [field]
-        out = {"dry_run": True, "fields": {}, "note": "only fields with no pending draft; nothing is replaced"}
-        names = set()
-        async with AsyncSessionLocal() as _read_db:
-            for dom in domains:
-                if dom == "identification_notes":
-                    out["fields"]["identification_notes"] = (await _read_db.execute(text(_ID_NOTES_OUTSTANDING_SQL))).scalar() or 0
-                    continue
-                if dom is not None and dom not in _DRAFT_FIELD_DOMAINS:
-                    raise HTTPException(400, detail=f"Unknown backfill field: {dom!r}")
-                tg = await _collect_backfill_targets(_read_db, dom)
-                out["fields"][dom or "taste/medicinal/recipe"] = len(tg)
-                names |= set(tg)
-        out["species_count"] = len(names) or max(list(out["fields"].values()) or [0])
-        out["species_sample"] = sorted(names)[:12]
-        return out
+        return {"dry_run": True,
+                "fields": {(dom or "taste/medicinal/recipe"): len(v) for dom, v in scoped.items()},
+                "note": "only fields with no pending draft; nothing is replaced",
+                "species_count": len(res["names"]), "species_sample": res["names"][:12],
+                **scope_summary(res)}
 
     if _draft_backfill_job and _draft_backfill_job.get("status") == "running":
         raise HTTPException(409, detail="A backfill job is already running")
+    if not res["names"]:
+        return {"ok": True, "status": "nothing_to_do", "count": 0, **scope_summary(res)}
 
     # Run all → orchestrator (single background task, sequential sub-jobs)
     if field == "all":
         _draft_backfill_job = {"status": "running"}
-        background_tasks.add_task(_run_backfill_all_task)
-        log.info("[draft-backfill] Run-all started")
-        return {"ok": True, "status": "started", "field": "all"}
+        # Combined job = any of taste/medicinal/recipe outstanding (_collect_backfill_targets(db, None)).
+        combined = sorted({n for dom in _DRAFT_FIELD_DOMAINS for n in scoped[dom]})
+        background_tasks.add_task(_run_backfill_all_task, scoped["identification_notes"], combined)
+        log.info("[draft-backfill] Run-all started: %d species (%s)", len(res["names"]), res["scope_label"])
+        return {"ok": True, "status": "started", "field": "all", "count": len(res["names"]), **scope_summary(res)}
 
     if field == "identification_notes":
-        async with AsyncSessionLocal() as _db:
-            total = (await _db.execute(text(_ID_NOTES_OUTSTANDING_SQL))).scalar() or 0
-        if total == 0:
-            return {"ok": True, "status": "nothing_to_do", "count": 0}
+        id_names = scoped["identification_notes"]
+        total = len(id_names)
         jq_id, pid = await _create_backfill_job(
             "ai_draft_backfill_id_notes", f"Backfill ID notes ({total} species)", total)
         _draft_backfill_job = {"status": "running", "jq_id": jq_id, "pid": pid}
-        background_tasks.add_task(_run_id_notes_backfill_task, jq_id, pid)
-        return {"ok": True, "status": "started", "field": field, "count": total, "job_queue_id": jq_id}
+        background_tasks.add_task(_run_id_notes_backfill_task, jq_id, pid, True, id_names)
+        return {"ok": True, "status": "started", "field": field, "count": total, "job_queue_id": jq_id,
+                **scope_summary(res)}
 
     if field in _DRAFT_FIELD_DOMAINS or field is None:
-        async with AsyncSessionLocal() as _read_db:
-            targets = await _collect_backfill_targets(_read_db, field)
-
-        if not targets:
-            return {"ok": True, "status": "nothing_to_do", "count": 0,
-                    "message": "All eligible species already have drafts for this domain"}
+        targets = scoped[field]
 
         total = len(targets)
         lbl   = f"Backfill {field} ({total} species)" if field else f"AI draft backfill ({total} species)"
@@ -3909,7 +3989,8 @@ async def start_draft_backfill(
         _draft_backfill_job = {"status": "running", "jq_id": jq_id, "pid": pid}
         background_tasks.add_task(_run_draft_backfill_task, jq_id, pid, targets, field)
         log.info("[draft-backfill] Started: field=%s %d species, jq_id=%d, pid=%s", field, total, jq_id, pid)
-        return {"ok": True, "status": "started", "field": field, "count": total, "job_queue_id": jq_id}
+        return {"ok": True, "status": "started", "field": field, "count": total, "job_queue_id": jq_id,
+                **scope_summary(res)}
 
     raise HTTPException(400, detail=f"Unknown backfill field: {field!r}")
 
@@ -3924,7 +4005,45 @@ async def start_draft_backfill(
 # ---------------------------------------------------------------------------
 
 class RedraftMedicinalRequest(BaseModel):
-    species_ids: list[int] = Field(..., min_length=1)
+    # Optional since 22 Oct 2026: omitted = every confirmed, non-excluded species
+    # with no pending medicinal_notes draft. Either way the scope applies.
+    species_ids: Optional[list[int]] = None
+
+
+async def _redraft_medicinal_eligible(db: AsyncSession, species_ids: Optional[list]) -> list:
+    """[(id, name)] the re-draft may touch, before the scope (Fix A, Melvin
+    22 Oct 2026): medicinal_notes empty or a placeholder (is_ai_placeholder /
+    is_only_no_medicinal_uses_claim — the shared predicates), not curator-
+    written, no pending medicinal_notes draft, not AI-excluded (toxic). Never
+    drafts over approved or curator text. species_ids (optional) narrows the
+    candidates; the rule applies either way."""
+    from app.services.pfaf_fallback import ai_content_excluded
+    confirmed = (select(Observation.species_primary)
+                 .where(Observation.review_status.in_(["approved", "manually_verified"]))
+                 .where(Observation.species_primary.is_not(None)).distinct().scalar_subquery())
+    pending = (select(SpeciesAIDraft.species_id)
+               .where(SpeciesAIDraft.field_name == "medicinal_notes")
+               .where(SpeciesAIDraft.status == "pending").scalar_subquery())
+    stmt = select(Species).where(Species.id.not_in(pending)).order_by(Species.scientific_name)
+    stmt = stmt.where(Species.id.in_(species_ids)) if species_ids else stmt.where(Species.scientific_name.in_(confirmed))
+    out = []
+    for sp in (await db.execute(stmt)).scalars().all():
+        if ai_content_excluded(sp):
+            continue
+        ci = await db.scalar(select(CulinaryInfo).where(CulinaryInfo.species_id == sp.id))
+        cur = ci.medicinal_notes if ci else None
+        if not medicinal_notes_redraftable(cur):
+            continue
+        if ci and (cur or "").strip():
+            last = (await db.execute(
+                select(CulinaryInfoHistory.changed_by, CulinaryInfoHistory.new_value)
+                .where(CulinaryInfoHistory.culinary_info_id == ci.id,
+                       CulinaryInfoHistory.field_name == "medicinal_notes")
+                .order_by(CulinaryInfoHistory.changed_at.desc(), CulinaryInfoHistory.id.desc()).limit(1))).first()
+            if last and is_curator_authored(last[0], last[1], cur):
+                continue                                   # curator-written placeholder-looking text: never
+        out.append((sp.id, sp.scientific_name))
+    return out
 
 
 async def _run_redraft_medicinal_task(jq_id: int, pid: Optional[int], species_ids: list) -> None:
@@ -4042,21 +4161,36 @@ async def _run_redraft_medicinal_task(jq_id: int, pid: Optional[int], species_id
 async def start_redraft_medicinal(
     body: RedraftMedicinalRequest,
     background_tasks: BackgroundTasks,
+    dry_run: bool = Query(False, description="show what it would do; start nothing"),
+    sc: ScopeRequest = Depends(scope_params),
+    db: AsyncSession = Depends(get_db),
     identity: Identity = Depends(get_identity),
 ):
+    """Scoped + capped like every bulk run (22 Oct 2026); dry run first."""
     if identity.is_guest:
         raise HTTPException(403, "Curator only")
     global _draft_backfill_job
     from app.services.enrich_gate import ingest_busy
+    eligible = await _redraft_medicinal_eligible(db, body.species_ids)
+    res = await resolve_scope(db, sc, [n for _i, n in eligible])
+    if dry_run:
+        from app.services.enrichment_plan import plan
+        return await plan(db, res["names"], sources=False, only_field="medicinal_notes", regenerate=True,
+                          scope=res, note=("One fresh medicinal-notes draft per species whose medicinal notes are "
+                                           "empty or a placeholder, with no pending draft. Approved or curator text "
+                                           "is never drafted over; toxic species excluded."))
     if _draft_backfill_job and _draft_backfill_job.get("status") == "running":
         raise HTTPException(409, detail="A draft job is already running")
     if ingest_busy():
         raise HTTPException(409, detail="An ingest batch / scan is running — start the re-draft when it has finished")
-    ids = list(dict.fromkeys(body.species_ids))
+    queued = set(res["names"])
+    ids = [i for i, n in eligible if n in queued]
+    if not ids:
+        return {"ok": True, "status": "nothing_to_do", "count": 0, **scope_summary(res)}
     total = len(ids)
     jq_id, pid = await _create_backfill_job(
         "ai_draft_redraft_medicinal", f"Re-draft medicinal notes ({total} species)", total)
     _draft_backfill_job = {"status": "running", "jq_id": jq_id, "pid": pid}
     background_tasks.add_task(_run_redraft_medicinal_task, jq_id, pid, ids)
     log.info("[redraft-medicinal] started: %d species, jq_id=%d", total, jq_id)
-    return {"ok": True, "status": "started", "count": total, "job_queue_id": jq_id}
+    return {"ok": True, "status": "started", "count": total, "job_queue_id": jq_id, **scope_summary(res)}

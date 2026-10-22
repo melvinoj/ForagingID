@@ -586,8 +586,10 @@ async def bp_resume_point(process_type: str) -> Optional[dict]:
     after = payload.get("resume_after") if isinstance(payload, dict) else None
     if not after:
         return None
+    # species / scope: the run's scoped list (22 Oct 2026) — a resume stays within it.
     return {"process_id": row[0], "status": row[1], "resume_after": after,
-            "progress_current": row[3], "progress_total": row[4], "detail": row[5]}
+            "progress_current": row[3], "progress_total": row[4], "detail": row[5],
+            "species": payload.get("species") or [], "scope": payload.get("scope") or {}}
 
 
 def _row_to_dict(row) -> dict:

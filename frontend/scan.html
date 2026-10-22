@@ -1039,6 +1039,16 @@
           <button class="wbs-action-btn" id="btn-backfill-run-all" onclick="_backfillRunAll()"
                   style="font-size:0.8rem;padding:5px 14px">▶ Run all</button>
           <span id="backfill-run-all-status" style="margin-left:10px;font-size:0.78rem;color:#9aaa88"></span>
+          <div style="margin-top:8px">
+            <button class="wbs-action-btn" id="btn-backfill-fungi" onclick="_backfillFungiEdibility()"
+                    style="font-size:0.8rem;padding:5px 14px">🍄 Fungi edibility</button>
+            <span id="backfill-fungi-status" style="margin-left:10px;font-size:0.78rem;color:#9aaa88"></span>
+          </div>
+          <div style="margin-top:8px">
+            <button class="wbs-action-btn" id="btn-redraft-medicinal" onclick="_redraftMedicinal()"
+                    style="font-size:0.8rem;padding:5px 14px">💊 Re-draft medicinal notes</button>
+            <span id="redraft-medicinal-status" style="margin-left:10px;font-size:0.78rem;color:#9aaa88"></span>
+          </div>
         </div>
       </div>
       <!-- ── end Backfill ── -->
@@ -4624,7 +4634,9 @@ let _enrichLogSeen = 0;
 
 async function runEnrich() {
   // Dry run first, before any UI change (Melvin, 22 Oct 2026) — nothing runs until confirmed.
-  if (!(await lmDryRunCheck('/api/enrich/run', { method: 'POST' }, 'Run enrichment?'))) return;
+  // Scope first (a saved walk / Current list / All eligible), then the dry run.
+  const runUrl = await lmScopedDryRunCheck('/api/enrich/run', { method: 'POST' }, 'Run enrichment?');
+  if (!runUrl) return;
   const btn = document.getElementById('btn-enrich');
   btn.disabled = true;
   document.getElementById('enrich-summary').classList.remove('visible');
@@ -4635,7 +4647,7 @@ async function runEnrich() {
   document.getElementById('enrich-progress-pct').textContent = '';
   _enrichLogSeen = 0;
   try {
-    const r = await fetch('/api/enrich/run', { method: 'POST' });
+    const r = await fetch(runUrl, { method: 'POST' });
     const d = await r.json();
     if (d.status === 'already_running') {
       // Just start polling — it's already in progress
@@ -4714,6 +4726,8 @@ async function _pollEnrich() {
       if (c.skipped)  parts.push(`${c.skipped} skipped`);
       if (c.not_found)parts.push(`${c.not_found} not found`);
       if (c.failed)   parts.push(`<span style="color:#b91c1c">${c.failed} failed</span>`);
+      // Scope (22 Oct 2026): species beyond the per-run cap were not queued.
+      if (d.scope && d.scope.remaining) parts.push(`${d.scope.remaining} not queued (cap ${d.scope.cap}, ${_esc(d.scope.scope_label)})`);
       summary.innerHTML = parts.length ? parts.join(' · ') : 'No species to enrich.';
       summary.classList.add('visible');
     }
@@ -4749,7 +4763,8 @@ function _updateEmptyCounts(d) {
 
 async function runReEnrichEmpty() {
   // Dry run first, before any UI change (Melvin, 22 Oct 2026) — nothing runs until confirmed.
-  if (!(await lmDryRunCheck('/api/enrich/re-enrich-empty', { method: 'POST' }, 'Re-enrich species with no edible parts?'))) return;
+  const runUrl = await lmScopedDryRunCheck('/api/enrich/re-enrich-empty', { method: 'POST' }, 'Re-enrich species with no edible parts?');
+  if (!runUrl) return;
   const btn = document.getElementById('btn-re-enrich-empty');
   btn.disabled = true;
   document.getElementById('enrich-summary').classList.remove('visible');
@@ -4760,7 +4775,7 @@ async function runReEnrichEmpty() {
   document.getElementById('enrich-progress-pct').textContent = '';
   _enrichLogSeen = 0;
   try {
-    const r = await fetch('/api/enrich/re-enrich-empty', { method: 'POST' });
+    const r = await fetch(runUrl, { method: 'POST' });
     const d = await r.json();
     if (d.status === 'nothing_to_do') {
       document.getElementById('enrich-progress-label').textContent = 'Nothing to re-enrich — all confirmed species have edible_parts data.';
@@ -4943,11 +4958,12 @@ async function _backfillLoadCounts() {
 
 async function _backfillRunDomain(field, btn) {
   // Dry run first, before any UI change (Melvin, 22 Oct 2026) — nothing runs until confirmed.
-  if (!(await lmDryRunCheck('/api/drafts/backfill?field=' + encodeURIComponent(field), { method: 'POST' }, 'Backfill ' + field + '?'))) return;
+  const runUrl = await lmScopedDryRunCheck('/api/drafts/backfill?field=' + encodeURIComponent(field), { method: 'POST' }, 'Backfill ' + field + '?');
+  if (!runUrl) return;
   if (btn) btn.disabled = true;
   _caffArm();
   try {
-    const r = await fetch('/api/drafts/backfill?field=' + encodeURIComponent(field), { method: 'POST' });
+    const r = await fetch(runUrl, { method: 'POST' });
     const d = await r.json().catch(() => ({}));
     if (!r.ok) {
       _showToast('✗ ' + (d.detail || 'Failed to start ' + field), true);
@@ -4967,9 +4983,50 @@ async function _backfillRunDomain(field, btn) {
   }
 }
 
+// Fungi edibility backfill (22 Oct 2026): scope + dry run like the others.
+// Suggestions only become Review cards; it runs inline and returns its summary.
+// Re-draft medicinal notes (22 Oct 2026): scope + dry run like the others. One
+// fresh medicinal-notes draft per species (toxic excluded) — a queued job; its
+// progress shows in the job list below.
+async function _redraftMedicinal() {
+  const btn = document.getElementById('btn-redraft-medicinal');
+  const status = document.getElementById('redraft-medicinal-status');
+  const r = await lmScopedDryRunConfirm('/api/drafts/redraft-medicinal', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({}),
+  }, 'Re-draft medicinal notes?');
+  if (!r) return;
+  if (btn) btn.disabled = true;
+  try {
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) { if (status) status.textContent = '✗ ' + (d.detail || ('HTTP ' + r.status)); return; }
+    if (status) status.textContent = d.status === 'nothing_to_do' ? '✓ nothing to do'
+      : '✓ started — ' + d.count + ' species' + (d.remaining ? ' · ' + d.remaining + ' not queued (cap ' + d.cap + ')' : '');
+    _jqLoadList();
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+
+async function _backfillFungiEdibility() {
+  const btn = document.getElementById('btn-backfill-fungi');
+  const status = document.getElementById('backfill-fungi-status');
+  const r = await lmScopedDryRunConfirm('/api/culinary/backfill-fungi-edibility', { method: 'POST' }, 'Backfill fungi edibility?');
+  if (!r) return;
+  if (btn) btn.disabled = true;
+  try {
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) { if (status) status.textContent = '✗ ' + (d.detail || ('HTTP ' + r.status)); return; }
+    if (status) status.textContent = '✓ ' + (d.message || 'done') +
+      (d.remaining ? ' · ' + d.remaining + ' not queued (cap ' + d.cap + ')' : '');
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+
 async function _backfillRunAll() {
   // Dry run first, before any UI change (Melvin, 22 Oct 2026) — nothing runs until confirmed.
-  if (!(await lmDryRunCheck('/api/drafts/backfill?field=all', { method: 'POST' }, 'Backfill all domains?'))) return;
+  const runUrl = await lmScopedDryRunCheck('/api/drafts/backfill?field=all', { method: 'POST' }, 'Backfill all domains?');
+  if (!runUrl) return;
   // M15: one request to the backend orchestrator, which runs each domain
   // sequentially as its own job. No client-side fan-out / setTimeout pseudo-sequencing.
   const btn = document.getElementById('btn-backfill-run-all');
@@ -4978,7 +5035,7 @@ async function _backfillRunAll() {
   if (status) status.textContent = 'Starting…';
   _caffArm();
   try {
-    const r = await fetch('/api/drafts/backfill?field=all', { method: 'POST' });
+    const r = await fetch(runUrl, { method: 'POST' });
     const d = await r.json().catch(() => ({}));
     if (!r.ok) {
       if (status) status.textContent = '✗ ' + (d.detail || 'Failed');
@@ -5760,10 +5817,11 @@ async function _jqResumeJob(id) {
   // the job FAILED. Mirror _jqRerunJob: cancel the stuck job and POST /api/drafts/backfill
   // which resumes from in-memory resume_from.
   if (job && job.job_type === 'ai_draft_backfill') {
-    if (!(await lmDryRunCheck('/api/drafts/backfill', { method: 'POST' }, 'Resume the AI draft backfill?'))) return;
+    const runUrl = await lmScopedDryRunCheck('/api/drafts/backfill', { method: 'POST' }, 'Resume the AI draft backfill?');
+    if (!runUrl) return;
     await fetch(`/api/queue/${id}/cancel`, { method: 'POST' }).catch(() => {});
     _jqDismissed.add(id);
-    await fetch('/api/drafts/backfill', { method: 'POST' }).catch(() => null);
+    await fetch(runUrl, { method: 'POST' }).catch(() => null);
     await _jqLoadList();
     return;
   }
@@ -5801,10 +5859,11 @@ async function _jqRerunJob(id) {
   if (!job) return;
   // Server-driven jobs need their own restart endpoints
   if (job.job_type === 'ai_draft_backfill') {
-    if (!(await lmDryRunCheck('/api/drafts/backfill', { method: 'POST' }, 'Re-run the AI draft backfill?'))) return;
+    const runUrl = await lmScopedDryRunCheck('/api/drafts/backfill', { method: 'POST' }, 'Re-run the AI draft backfill?');
+    if (!runUrl) return;
     await fetch(`/api/queue/${id}/cancel`, { method: 'POST' }).catch(() => {});
     _jqDismissed.add(id);
-    await fetch('/api/drafts/backfill', { method: 'POST' }).catch(() => null);
+    await fetch(runUrl, { method: 'POST' }).catch(() => null);
     await _jqLoadList();
     return;
   }
@@ -6051,6 +6110,7 @@ async function _jqRunEnrich(job) {
 </div>
 
 <script src="/static/js/pwa.js"></script>
+<script src="/static/js/lists.js"></script>
 <script src="/static/js/dry-run.js"></script>
 <script src="/static/js/offline.js"></script>
 <script src="/static/js/guest-mode.js"></script>

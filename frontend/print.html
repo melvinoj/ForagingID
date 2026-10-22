@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>LandMemory — Print</title>
   <script src="/static/js/safety-gate.js"></script>
+<script src="/static/js/guest-notes.js"></script>
   <script src="/static/js/species-names.js"></script>
   <script src="/static/js/lists.js"></script>
   <style>
@@ -462,6 +463,23 @@ function _printWarnings(prof, tag, cls) {
   return SafetyGate.handoutWarningsHtml(prof && prof.safety, tag, cls);
 }
 
+// Look-alike + preparation warnings printed with culinary content where no
+// warning block sits directly beside it (Fix B, 22 Oct 2026): curator text, uncut.
+function _printCulinaryWarnings(prof) {
+  return SafetyGate.culinaryWarnings(prof && prof.safety, { handout: true });
+}
+
+// Batch 8: a participant's own notes print under their species (loaded once
+// from /api/encounters by GuestNotes; {} for the curator — handouts unchanged).
+// Guest text: always escaped.
+let _guestNotes = {};
+function _guestNotesHtml(name) {
+  const notes = _guestNotes[name] || [];
+  if (!notes.length) return '';
+  return '<div class="guest-print-notes"><div class="ws-section-h">Your notes</div>' +
+    notes.map(t => '<p style="white-space:pre-wrap">' + _esc(t) + '</p>').join('') + '</div>';
+}
+
 // ── Field entry HTML ────────────────────────────────────────────────────────
 function _fieldEntry(name, prof, baseByName, photos, showPhotos, ct) {
   const base   = baseByName[name] || {};
@@ -496,6 +514,7 @@ function _fieldEntry(name, prof, baseByName, photos, showPhotos, ct) {
     ${warningsHtml}
     ${partsText  ? `<div class="fg-note">${_esc(partsText)}</div>` : ''}
     ${ct.recipes && key ? `<div class="fg-recipe"><div class="rt">${_esc(key.title)}</div>${_mdLite(key.body)}</div>` : ''}
+    ${_guestNotesHtml(name)}
   </div>`;
 }
 
@@ -529,7 +548,7 @@ function _workshopPage(name, prof, baseByName, photos, showPhotos, withFieldBloc
     </div>`;
 
   const recipeHtml = (ct.recipes && key)
-    ? `<div class="ws-section-h">Recipe</div><div class="ws-recipe">${_mdLite(key.body)}</div>` : '';
+    ? `<div class="ws-section-h">Recipe</div>${_printCulinaryWarnings(prof)}<div class="ws-recipe">${_mdLite(key.body)}</div>` : '';
 
   const medBits = [_esc(cul.medicinal_notes), _esc(cul.medicinal_folklore),
     cul.traditional_uses ? '<span class="ws-fl">Traditional uses —</span> ' + _esc(cul.traditional_uses) : '']
@@ -554,7 +573,7 @@ function _workshopPage(name, prof, baseByName, photos, showPhotos, withFieldBloc
     if (fgBits.length) fieldBlockHtml = `<div class="ws-section-h">Field ID notes</div><div class="ws-forage">${fgBits.join('')}</div>`;
   }
 
-  const myNotes = `<div class="ws-mynotes">
+  const myNotes = `${_guestNotesHtml(name)}<div class="ws-mynotes">
     <div class="ws-section-h">My notes</div>
     ${'<div class="ws-rule"></div>'.repeat(5)}
   </div>`;
@@ -569,7 +588,7 @@ function _workshopPage(name, prof, baseByName, photos, showPhotos, withFieldBloc
       <div class="ws-edib"><span class="fg-pill ${edClass(edib)}">${_esc(edLabel(edib))}</span>${_printSafety(prof)}</div>
     </div>
     ${safetyHtml}
-    ${fieldBlockHtml}${recipeHtml}${medicinalHtml}${forageHtml}${myNotes}
+    ${fieldBlockHtml}${recipeHtml}${medicinalHtml}${forageHtml ? _printCulinaryWarnings(prof) + forageHtml : ''}${myNotes}
     <div class="ws-credit">Melvin Jarman</div>
   </div>`;
 }
@@ -779,6 +798,8 @@ ${borderHTML}
     const base = await (await fetch('/api/species/')).json();
     base.forEach(s => { baseByName[s.scientific_name] = s; });
   } catch(_) {}
+
+  _guestNotes = (await GuestNotes.isParticipant()) ? await GuestNotes.mineBySpecies() : {};
 
   const profiles = {};
   await Promise.all(names.map(async name => {

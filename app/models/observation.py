@@ -104,6 +104,21 @@ def is_confirmed_observation(obs) -> bool:
     )
 
 
+def is_guest_visible_observation(obs) -> bool:
+    """Batch 8 (Melvin, 22 Oct 2026): may a workshop participant (guest) see this
+    observation — its pin, thumbnail, photo, lightbox, walk stop? Confirmed only
+    (approved / manually_verified), scenes included (a landscape row is approved
+    with no species). Never pending, needs_review or rejected. The ONLY
+    definition: guest endpoints, the guest media gate (app.services.guest_access)
+    and their tests all use it or its SQL twin below."""
+    return _field(obs, "review_status") in CONFIRMED_REVIEW_STATUSES
+
+
+def guest_visible_observation_sql(review_status_col):
+    """SQL twin of is_guest_visible_observation() for a review_status column."""
+    return review_status_col.in_(sorted(CONFIRMED_REVIEW_STATUSES))
+
+
 def is_human_confirmed(obs) -> bool:
     """
     Confirmed AND a human made the decision — the "human-confirmed only" walk

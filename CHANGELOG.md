@@ -1,5 +1,60 @@
 ## Current State
 
+## Current State — 22 Oct 2026, evening
+
+### Build
+- Alembic head 0057 (encounters.shared_with_guests) — applied to the live DB after snapshot db_20261022_162240. CLAUDE.md still says 0050 (fix in batch 17).
+- Tests: 25 files, 303 counted + test_taxonomy, all pass. Service worker foragingid-v13 (hard refresh once).
+- Uncommitted until this End Session: enrichment scope, handout rule, batch 8, Fix A, Fix B.
+
+### Done this session (22 Oct)
+- Tidy route order on walk 5 "Morning sunshine Gresgen to Adelsberg": crossings 3→0, 13 legs changed, 11,499→7,609 m / 93 min, members unchanged (108). Snapshot db_20261022_132801, commit 45c81a9. Straight dashed legs: 38→12, 32→27.
+- Removed CHANGELOG placeholder line in the older 22 Oct block.
+- Enrichment scope (app/services/enrichment_scope.py): one resolver; scope = saved walk (walk_membership) / Current list (Foraging List) / all eligible; no default; no scope = 400. Cap 25 per run, walk species first, remainder reported. dry-run.js scope picker on every bulk button. Scoped on enrich/run, re-enrich-empty, enrichment/run, drafts/backfill (incl. ID notes), redraft-medicinal, backfill-fungi-edibility (both now have a dry run + button on Scan → Backfill). enrichment_run saves its species list with the paused/interrupted run record; resume stays within it; old unscoped bp 203 is never resumed.
+- Handout rule (safety_decision): a caution species prints culinary content with a curator prep OR look-alike warning. Withheld→shown: 817 Agaricus campestris, 295 Allium ursinum, 98 Artemisia vulgaris, 363 Gentiana lutea, 816/821/405/820 Macrolepiota, 711 Marasmius oreades, 590 Pimpinella major, 603 Pimpinella saxifraga.
+- Fix A: redraft-medicinal eligible only when medicinal_notes is empty or a placeholder (medicinal_notes_redraftable), not curator-written, no pending draft; toxic skipped.
+- Fix B: SafetyGate.culinaryWarnings / culinary_warnings (look-alike + preparation) with all culinary content — species page culinary/taste/recipes/field recipes, Lists panel, workshop foraging + recipe (Lists, print, PDF), experience Recipes tab, Find, encounter field recipes, personal card. Not repeated where the species block sits beside (map pop-up, Export summary, field-guide entries, PDF booklet, experience plant panel).
+- Batch 8: guest access deny-by-default (app/services/guest_access.py in the middleware); media gate (thumbnails/uploads: confirmed only; encounter audio: visible encounters only; recorded-walk audio: never). is_guest_visible_observation predicate. Encounters: shared_with_guests + encounter_visible_to; curator "Share with guests" toggle; Participant notes tab. Guest notes (guest-notes.js) on species page + walk stops, text only (audio/photo refused), escaped; own notes print in Lists/print/PDF (guest PDF now allowed). Record tab hides audio for participants.
+- Recon files: RECON_enrichment_scope_22oct.md, RECON_batch8_22oct.md.
+
+### Next (order)
+1. Browser walkthroughs for this session's work (A, B, C, E, F, G additions below).
+2. Decide: Pimpinella major/saxifraga (Apiaceae) now print culinary content on Lists/print/PDF via curator look-alike — keep?
+3. Small follow-ups: Record tab Photo button still shown to participants (server refuses participant photos); POST /api/recorded-walks still open to guests (table has no owner column).
+4. Stage C publish panel.
+5. Batches 9, 10, 11, 11b, 12, 13, 15, 15b, 16, 17 per REPORT.md section 9.
+
+### Settled (Melvin, 22 Oct)
+- "Enrich selected" = scope "Current list" (Foraging List). Encounter field recipes carry the warnings.
+- Handout rule: curator prep OR look-alike warning. All cautionary text travels with culinary content; no duplicate where the species block sits beside it.
+- Redraft-medicinal button on Scan → Backfill. Participant devices: text notes only, no audio.
+
+### Open decisions (Melvin)
+- Pimpinella major/saxifraga on handouts (Next #2).
+
+### Rules learned
+- Don't run a full enrichment; use a scope + the 25 cap.
+- Auto-enrichment after an ID correction has no dry run but goes through the same guards.
+- Renaming a helper used under app/ crashes the uvicorn reload until all callers are updated — make such edits in one pass.
+- Tests that start the redraft task write logs/redraft_medicinal_jq*.json into the real logs/ (not gitignored) — the test now removes what it wrote.
+
+### Scope added (keep)
+- 11b, 15b, 17 as in the previous Current State (merges, genus/family sweep, non-European card sweep, G3-held drafts, English common-name backfill; empty saved walk stops; Lists lookalike toggle, reload banner, thumbnail field, CLAUDE.md Alembic head, scan.html:1795, curator-device list refresh).
+
+### Melvin's review queue
+- Warning review cards (all verdicts, walk species first). Edit Oxalis grandis 3493. Text tidy-up (352 edible_parts / 689 id_notes with no history). 347 Takeout person_animal rejects (mount DIGIERA). Draft #3252 Amaranthus hybridus.
+
+### Browser checks: walkthroughs
+Test species: Conium maculatum, Oenanthe crocata, Sambucus nigra, 229 St John's wort, 295 Ramsons, 97 Aspen, Pineapple weed.
+- A. Species page: three views, safety sort, filters kept, capitalised names, test species pages; species resources load. NEW: Culinary section, Taste notes, every recipe card and field recipe show look-alike + preparation warnings (uncurated labelled "Source text — not yet reviewed"); a species with none looks unchanged.
+- B. Map + walks: Conium pin full look-alike; Ramsons labelled; ☠ on 155/688/745; walk stop cards; Edit walk → Save → Re-route; Tidy route order; Export summary; published Rümmelsbühl page; Discover/Find cards, ✎ rename, Enrich, note tags. NEW: walk 5 shows the tidied order, 7.6 km, dashed 38→12 and 32→27; map pop-up warnings once; Export summary species block once (none inside the recipe box); Find → Make? cards carry both warnings; participant phone: walk stops show "📝 Add a note" and it saves.
+- C. Handouts: Lists → print (field guide, workshop) + PDF in 3 layouts: Conium uncut, 229 withheld label, no PFAF Folklore, corners present. NEW: field-guide entries show warnings once; workshop pages show warnings before Foraging and Recipe; booklet PDF warnings once; Ramsons and a Macrolepiota print culinary content, 229 still withheld; a participant's PDF/print shows only their own notes under the right species, yours shows none.
+- D. Review: Critical section; verdict queue; warning cards (Approve / Edit / Remove); Regenerate side by side; Run now dry run + Cancel; AI-draft card buttons; reviewer notes.
+- E. Phone: pair via Add device; installed app signed in; used link → "Link already used"; bare URL → "Ask Melvin"; Revoke works; unpaired shows "not signed in", not "offline"; List view at 390px; proximity alert folds; airplane-mode short walk (outbox). NEW (participant phone): species page note box with "Type, or dictate using the mic on your keyboard." and keyboard dictation works; a pending/rejected photo URL gives 404; species gallery shows confirmed photos only; Record tab has no 🎙 button and a typed note saves; on your laptop the 🎙 button still records.
+- F. Settings/system: "Your devices & sharing"; no guest toggle; device list (no Add device on phone); every enrichment button asks first; paused run shows "paused — no network"; run summary skip counts; DeepSeek key; Jobs pop-up; caffeinate exits. NEW: every bulk button opens the scope dialog first; Continue disabled until a scope is chosen; walk dropdown lists saved walks; dry run shows "Scope: … queued (cap 25); N not queued"; 🍄 Fungi edibility and 💊 Re-draft medicinal notes buttons work (Cancel writes nothing); Review run summary shows "Not queued (cap 25)".
+- G. Workshops: participant link uses the ngrok address; guest view loads on a second phone; used link refused; revoke works; works on mobile data. NEW: tick "Share with guests" on one of your encounters — a participant sees its text, transcript, confirmed photos and audio; your unshared encounters and other participants' notes stay hidden; Participant notes tab groups by session and person, names with <b> show as plain text.
+Rule: Code tests whatever it can; new browser checks go into a walkthrough, not numbered.
+
 ## Current State — 22 Oct 2026, afternoon
 
 ### Build
@@ -89,7 +144,6 @@ Rule: Code tests whatever it can; new browser checks go into a walkthrough, not 
 - 347 Takeout person_animal rejects (mount DIGIERA). Draft #3252 Amaranthus hybridus.
 
 ### Browser checks: walkthroughs
-(unchanged A–G from the previous Current State; keep as is)
 Rule: Code tests whatever it can; new browser checks go into a walkthrough, not numbered.
 
 ## Current State — 21 Oct 2026, evening
@@ -144,6 +198,76 @@ Test species: Conium maculatum, Oenanthe crocata, Sambucus nigra, 229 St John's 
 Rule: Code tests whatever it can (real JS via jsc, real PDFs); new browser checks are added to a walkthrough, not numbered.
 
 ## History
+
+### 2026-10-22 17:27
+**Snapshot** — End of session — Session ended from Settings page
+DB: `snapshots/db_20261022_172648.sqlite`
+
+### 2026-10-22 17:26
+**Session ended** — Session ended from Settings page
+
+### 2026-10-22 17:13
+**Encounters Record tab: audio recording hidden for participant devices (curator keeps it)**
+
+**Built:**
+- encounters.html: voice row data-guest-hide (rec-voice-row)
+- encounters-main.js: recToggle returns on guest-mode
+**Fixed:**
+- Participants no longer offered audio the server refuses
+**Files:** `frontend/encounters.html`, `frontend/static/js/encounters-main.js`, `tests/test_batch8_guest_and_culinary_warnings.py`
+**Pending:**
+- Browser check walkthrough E
+- Record tab Photo button still shown to participants (server refuses participant photo binding)
+- No commit (Melvin)
+
+### 2026-10-22 16:46
+**Batch 8: guest visibility + guest notes; Fix A (redraft eligibility); Fix B (look-alike + prep warnings with all culinary content)**
+
+**Built:**
+- Fix A: redraft-medicinal only for empty/placeholder medicinal_notes (medicinal_notes_redraftable), never curator text, no pending draft
+- Fix B: SafetyGate.culinaryWarnings / culinary_warnings (look-alike + preparation) on species culinary/taste/recipes/field recipes, Lists panel, workshop foraging+recipe (Lists, print, PDF), experience Recipes tab, Find, encounter field recipes, personal card; no repeat where the species block sits beside (map pop-up, Export summary, field-guide entries, PDF booklet, experience plant panel)
+- Guest access: deny-by-default guest API allowlist + media gate (app/services/guest_access.py, middleware); is_guest_visible_observation predicate; observation detail/photo, profile thumbnails, recorded walks, timeline, encounter photos filtered
+- Encounters: shared_with_guests (Alembic 0057, default off), encounter_visible_to rule, curator Share with guests toggle, participant-notes curator tab
+- Guest notes: guest-notes.js on species page + walk stops; text only (audio/photo refused for participants); own notes in Lists/print/PDF
+**Fixed:**
+- Guest GET to curator APIs and unconfirmed photo/audio files closed
+- Guest PDF was refused by the middleware — now allowed
+**Files:** `app/main.py`, `app/services/guest_access.py`, `app/models/observation.py`, `app/models/encounter.py`, `app/models/species.py`, `app/services/ai_placeholder.py`, `app/api/culinary.py`, `app/api/encounters.py`, `app/api/observations.py`, `app/api/personal_lists.py`, `app/api/recorded_walks.py`, `app/api/timeline.py`, `app/api/lists_pdf.py`, `app/api/sharing.py`, `app/api/find.py`, `app/templates/print_pdf.html`, `migrations/versions/0057_encounter_shared_with_guests.py`, `frontend/static/js/safety-gate.js`, `frontend/static/js/guest-notes.js`, `frontend/static/js/encounters-main.js`, `frontend/static/sw.js`, `frontend/species.html`, `frontend/index.html`, `frontend/lists.html`, `frontend/print.html`, `frontend/encounters.html`, `scripts/experience_export/gates.py`, `scripts/experience_export/export.py`, `scripts/experience_export/templates/index.html`, `tests/test_batch8_guest_and_culinary_warnings.py`, `tests/test_enrichment_scope_and_recipe_warnings.py`, `tests/test_batch5_safety_gate.py`, `RECON_batch8_22oct.md`
+**Pending:**
+- Browser checks (walkthroughs A, B, C, E, G)
+- Encounters Record tab still offers audio to participants (server refuses)
+- POST /api/recorded-walks still open to guests (no owner column)
+- No commit (Melvin)
+
+### 2026-10-22 16:01
+**Re-draft medicinal notes button on Scan → Backfill, beside Fungi edibility, through the scope picker + dry run**
+
+**Built:**
+- scan.html: 💊 Re-draft medicinal notes button + _redraftMedicinal() (lmScopedDryRunConfirm, JSON body {}, status shows count / not queued, refreshes job list)
+**Files:** `frontend/scan.html`, `tests/test_enrichment_scope_and_recipe_warnings.py`
+**Pending:**
+- Browser check (walkthrough F)
+- No commit (Melvin)
+
+### 2026-10-22 15:57
+**Walk 5 tidy applied (crossings 3→0, 11.5→7.6 km); enrichment scope picker + per-run cap + scoped resume; handout rule accepts curator look-alike; prep warning travels with every recipe**
+
+**Built:**
+- Tidy route order on Morning sunshine walk (id 5): 13 legs changed, crossings 3→0, 11499→7609 m, members unchanged (snapshot db_20261022_132801)
+- app/services/enrichment_scope.py: one scope resolver (walk / Current list / all, no default, no scope = 400), cap 25 walk species first, remaining reported
+- Scope on /api/enrich/run, re-enrich-empty, /api/enrichment/run, /api/drafts/backfill (all fields incl. id_notes names filter, one cap across field=all), redraft-medicinal (dry run added, species_ids optional), backfill-fungi-edibility (dry run + button)
+- enrichment_run saves its scoped species list in the bp payload; resume stays within it; old unscoped resume rows are never resumed
+- dry-run.js scope picker modal (lmScopedDryRunCheck / lmScopedDryRunConfirm) on every bulk button; dry run shows scope + queued + remaining
+- safety_decision: caution species prints culinary content on handouts with curator prep OR look-alike warning (11 species move withheld→shown)
+- SafetyGate.recipeWarning + recipe_prep_warning (Python twin): prep warning next to recipes on species recipe bank, species + encounter field recipes, Lists panel/print, browser print, PDF (booklet + workshop), Export summary, experience page, Find → What can I make? (find.py now serves safety)
+**Fixed:**
+- Removed CHANGELOG placeholder line in the older 22 Oct block
+**Files:** `app/services/enrichment_scope.py`, `app/services/enrichment_plan.py`, `app/services/background_processes.py`, `app/services/safety_gate.py`, `app/api/enrich.py`, `app/api/culinary.py`, `app/api/encounters.py`, `app/api/find.py`, `app/api/lists_pdf.py`, `app/api/sharing.py`, `app/models/species.py`, `app/templates/print_pdf.html`, `frontend/static/js/dry-run.js`, `frontend/static/js/safety-gate.js`, `frontend/static/js/encounters-main.js`, `frontend/static/sw.js`, `frontend/scan.html`, `frontend/review.html`, `frontend/settings.html`, `frontend/species.html`, `frontend/index.html`, `frontend/lists.html`, `frontend/print.html`, `frontend/encounters.html`, `scripts/experience_export/gates.py`, `scripts/experience_export/export.py`, `scripts/experience_export/templates/index.html`, `tests/test_enrichment_scope_and_recipe_warnings.py`, `tests/test_enrichment_safety.py`, `tests/test_batch5_safety_gate.py`, `CHANGELOG.md`
+**Pending:**
+- Browser checks (walkthrough A, B, C, F additions)
+- Decide: redraft-medicinal button (endpoint scoped, no button yet)
+- Pimpinella major/saxifraga (Apiaceae) now print culinary content on Lists/print/PDF via curator look-alike — confirm
+- No commit (Melvin)
 
 ### 2026-10-22 13:28
 **Snapshot** — before re-route of saved walk 5

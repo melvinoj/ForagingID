@@ -405,13 +405,15 @@
     <button class="tab-btn" id="tab-new" onclick="switchTab('new')">📝 New Encounter</button>
     <button class="tab-btn" id="tab-season" onclick="switchTab('season')">🌿 My Season</button>
     <button class="tab-btn" id="tab-reading" onclick="switchTab('reading')">📖 Reading note</button>
+    <button class="tab-btn" id="tab-participants" data-guest-hide onclick="switchTab('participants')">👥 Participant notes</button>
   </div>
 
   <!-- -- Tab: Record (landing, minimal) ------------------------ -->
   <div class="tab-panel" id="panel-record">
     <div class="section" style="padding:16px">
-      <!-- Voice -->
-      <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
+      <!-- Voice — curator only: participant devices write text notes (batch 8;
+           the server refuses participant audio). Hidden by guest-mode.js. -->
+      <div id="rec-voice-row" data-guest-hide style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
         <button id="rec-btn" onclick="recToggle()" style="width:56px;height:56px;border-radius:50%;border:none;
                 background:#c0392b;color:#fff;font-size:1.5rem;cursor:pointer;flex-shrink:0"
                 title="Tap to record">🎙</button>
@@ -510,6 +512,11 @@
   </div><!-- /panel-season -->
 
   <!-- -- Tab: Reading note ----------------------------------- -->
+  <!-- -- Tab: Participant notes (curator, batch 8) ----------------- -->
+  <div class="tab-panel" id="panel-participants" style="display:none" data-guest-hide>
+    <div id="participant-notes-content" style="padding:4px 0"></div>
+  </div>
+
   <div class="tab-panel" id="panel-reading" style="display:none">
 
     <div class="section">
@@ -571,6 +578,7 @@
 <script src="/static/js/seasonal-returns.js"></script>
 <script src="/static/js/gps.js"></script>
 <script src="/static/js/encounter-queue.js"></script>
+<script src="/static/js/safety-gate.js"></script>
 <script src="/static/js/encounters-main.js"></script>
 <script src="/static/js/site-header.js"></script>
 </body>

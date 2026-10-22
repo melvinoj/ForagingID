@@ -1026,6 +1026,7 @@
 </div>
 
 <script src="/static/js/safety-gate.js"></script>
+<script src="/static/js/guest-notes.js"></script>
 <script src="/static/js/species-names.js"></script>
 <script src="/static/js/lists.js"></script>
 <script>
@@ -1253,6 +1254,12 @@ function _printWarnings(prof, tag, cls) {
   return SafetyGate.handoutWarningsHtml(prof && prof.safety, tag, cls);
 }
 
+// Look-alike + preparation warnings printed with culinary content where no
+// warning block sits directly beside it (Fix B, 22 Oct 2026): curator text, uncut.
+function _printCulinaryWarnings(prof) {
+  return SafetyGate.culinaryWarnings(prof && prof.safety, { handout: true });
+}
+
 function _isFilled(prof, key) {
   const sp  = (prof && prof.species)  || {};
   const cul = _printCulinary(prof);
@@ -1345,7 +1352,8 @@ function toggleExpandFill(name) {
   let recipeHtml = '';
   if (key) {
     const snippet = (key.body || '').replace(/[#*]/g, '').trim().slice(0, 240);
-    recipeHtml = `<div class="recipe-snip"><div class="rtitle">${_esc(key.title)}</div>${_esc(snippet)}…</div>`;
+    // In-app panel: the batch 6 rule (uncurated text labelled) beside the recipe.
+    recipeHtml = `<div class="recipe-snip"><div class="rtitle">${_esc(key.title)}</div>${SafetyGate.culinaryWarnings(prof && prof.safety)}${_esc(snippet)}…</div>`;
   }
 
   detail.innerHTML = enrichTable + rows.join('') + recipeHtml
@@ -1949,6 +1957,17 @@ function _fieldGuideBlock(cul) {
   return `<div class="ws-section-h">Field ID notes</div><div class="ws-forage">${bits.join('')}</div>`;
 }
 
+// Batch 8: a participant's own notes print under their species (loaded once
+// from /api/encounters by GuestNotes; {} for the curator — handouts unchanged).
+// Guest text: always escaped.
+let _guestNotes = {};
+function _guestNotesHtml(name) {
+  const notes = _guestNotes[name] || [];
+  if (!notes.length) return '';
+  return '<div class="guest-print-notes"><div class="ws-section-h">Your notes</div>' +
+    notes.map(t => '<p style="white-space:pre-wrap">' + _esc(t) + '</p>').join('') + '</div>';
+}
+
 function _fieldEntry(name) {
   const prof = _profileCache[name];
   const base = _baseByName[name] || {};
@@ -1996,6 +2015,7 @@ function _fieldEntry(name) {
     ${warningsHtml}
     ${partsText    ? `<div class="fg-note">${_esc(partsText)}</div>` : ''}
     ${showRecipe   ? `<div class="fg-recipe"><div class="rt">${_esc(key.title)}</div>${_mdLite(key.body)}</div>` : ''}
+    ${_guestNotesHtml(name)}
   </div>`;
 }
 
@@ -2029,7 +2049,7 @@ function _workshopPage(name, withFieldBlock = false, isWorkshopHandout = false) 
 
   // Recipe section.
   const recipeHtml = (ct.recipes && key && prefs.recipes !== false)
-    ? `<div class="ws-section-h">Recipe</div><div class="ws-recipe">${_mdLite(key.body)}</div>`
+    ? `<div class="ws-section-h">Recipe</div>${_printCulinaryWarnings(prof)}<div class="ws-recipe">${_mdLite(key.body)}</div>`
     : '';
 
   // Medicinal section — strip bracket citations from all fields.
@@ -2103,12 +2123,14 @@ function _workshopPage(name, withFieldBlock = false, isWorkshopHandout = false) 
     ${fieldBlockHtml}
     ${idNotesHtml}
     ${medicinalHtml}
+    ${(forageHtml || culinaryHtml) ? _printCulinaryWarnings(prof) : ''}
     ${forageHtml}
     ${culinaryHtml}
     ${seasonHtml}
     ${recipeHtml}
     ${exercisePlaceholder}
     ${personalInputPlaceholder}
+    ${_guestNotesHtml(name)}
     ${myNotes}
     <div class="ws-credit">Melvin Jarman</div>
   </div>`;
@@ -2119,6 +2141,7 @@ async function refreshPreview() {
   const req = ++_previewReq;
   renderPreview();                 // immediate paint with whatever's cached
   await loadAllProfiles();
+  _guestNotes = (await GuestNotes.isParticipant()) ? await GuestNotes.mineBySpecies() : {};
   if (req !== _previewReq) return; // a newer refresh superseded this one
   renderPreview();                 // repaint with full data
 }

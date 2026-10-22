@@ -55,6 +55,55 @@
     document.querySelectorAll('.tab-btn').forEach(function (b) { b.classList.remove('active'); });
     document.getElementById('tab-' + tab).classList.add('active');
     if (tab === 'browse') loadBrowseTab();
+    if (tab === 'participants') loadParticipantNotes();
+  };
+
+  // -- Participant notes (curator, batch 8): grouped by workshop session, then
+  // participant. Participant text is escaped (batch 7 rule).
+  async function loadParticipantNotes() {
+    var el = document.getElementById('participant-notes-content');
+    if (!el) return;
+    el.innerHTML = '<div style="color:#888;font-size:0.85rem;padding:12px">Loading...</div>';
+    try {
+      var r = await fetch('/api/encounters/participant-notes');
+      var d = await r.json();
+      if (!r.ok) throw new Error(d.detail || r.status);
+      if (!d.sessions.length) { el.innerHTML = '<div style="color:#888;padding:12px">No participant notes yet.</div>'; return; }
+      el.innerHTML = d.sessions.map(function (s) {
+        return '<div class="pn-session" style="margin-bottom:16px"><h3 style="margin:6px 0">' + _esc(s.session_name) + '</h3>' +
+          s.participants.map(function (p) {
+            return '<div class="pn-participant" style="margin:6px 0 10px 8px"><div style="font-weight:600">' + _esc(p.name) +
+              ' <span style="color:#888;font-weight:400">(' + p.notes.length + ')</span></div>' +
+              p.notes.map(function (n) {
+                var when = n.encounter_date ? new Date(n.encounter_date).toLocaleString() : '';
+                return '<div class="pn-note" style="border-left:3px solid #6aab3a;padding:4px 8px;margin:4px 0">' +
+                  '<div style="font-size:0.78rem;color:#aaa">' + _esc(n.species_name || '--') + (when ? ' · ' + _esc(when) : '') + '</div>' +
+                  '<div style="white-space:pre-wrap">' + _esc(n.text_note || n.transcript || '') + '</div></div>';
+              }).join('') + '</div>';
+          }).join('') + '</div>';
+      }).join('');
+    } catch (e) {
+      el.innerHTML = '<div style="color:#c0392b;padding:12px">Could not load: ' + _esc(e.message) + '</div>';
+    }
+  }
+
+  // "Share with guests" (batch 8) — curator encounters only.
+  window.toggleEncounterShared = async function (encId, cb) {
+    cb.disabled = true;
+    try {
+      var r = await fetch('/api/encounters/' + encId + '/share', {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ shared: cb.checked }),
+      });
+      var d = await r.json().catch(function () { return {}; });
+      if (!r.ok || d.shared_with_guests !== cb.checked) throw new Error(d.detail || r.status);
+      if (_encById[encId]) _encById[encId].shared_with_guests = d.shared_with_guests;
+    } catch (e) {
+      cb.checked = !cb.checked;
+      alert('Could not change sharing: ' + e.message);
+    } finally {
+      cb.disabled = false;
+    }
   };
 
   // -- Browse tab: reverse-chron, walk-grouped ----------------
@@ -293,6 +342,9 @@
   var _recIsOnline = function () { return navigator.onLine !== false; };
 
   window.recToggle = function () {
+    // Participant devices never record audio (batch 8) — the row is hidden by
+    // guest-mode; this guard also stops a stray tap before guest-mode applies.
+    if (document.body.classList.contains('guest-mode')) return;
     if (_recRecorder && _recRecorder.state === 'recording') { _recStop(); return; }
     _recStart();
   };
@@ -976,6 +1028,10 @@
       '</div>' +
       '<div class="enc-actions">' +
         '<button class="btn-del" data-guest-hide onclick="deleteEncounter(' + enc.id + ')">✕</button>' +
+        // Batch 8: curator encounters only; participants never see this control.
+        (enc.user_id === 1 ? '<label class="enc-share" data-guest-hide style="display:block;font-size:0.72rem;margin-top:6px;white-space:nowrap">' +
+          '<input type="checkbox"' + (enc.shared_with_guests ? ' checked' : '') +
+          ' onchange="toggleEncounterShared(' + enc.id + ', this)"> Share with guests</label>' : '') +
       '</div>' +
     '</div>';
   }
@@ -1069,6 +1125,8 @@
     return '<div class="field-recipe-block" id="fr-block-' + enc.id + '">' +
       '<div class="fr-header"><span class="fr-title">🍲 ' + _esc(fr.title || 'Field recipe') + '</span>' + meta + '</div>' +
       (ings ? '<div class="fr-ings">' + ings + '</div>' : '') +
+      // That species' look-alike + preparation warnings beside the recipe (Fix B).
+      SafetyGate.culinaryWarnings(enc.field_recipe_safety) +
       body +
       '<div class="fr-actions" data-guest-hide>' +
         '<button class="btn-fr-edit" onclick="editFieldRecipe(' + enc.id + ')">✎ Edit</button>' +
@@ -1359,12 +1417,14 @@
         (meta.length ? '<div class="pc-meta">' + meta.join(' ') + '</div>' : '') +
       '</div></div>';
 
+    var notes = d.notes || {};
+    // Fix B: look-alike + preparation warnings with the card's culinary content.
+    if ((d.recipe && d.recipe.body) || notes.taste_notes) html += SafetyGate.culinaryWarnings(d.safety);
     if (d.recipe && d.recipe.body) {
       html += '<div class="pc-section"><h4>Recipe</h4>' +
         (d.recipe.title ? '<div class="pc-recipe-title">' + _esc(d.recipe.title) + '</div>' : '') +
         '<div class="pc-text">' + _esc(d.recipe.body) + '</div></div>';
     }
-    var notes = d.notes || {};
     if (notes.id_notes)    html += '<div class="pc-section"><h4>Identification notes</h4><div class="pc-text">' + _esc(notes.id_notes) + '</div></div>';
     if (notes.taste_notes) html += '<div class="pc-section"><h4>Taste &amp; texture</h4><div class="pc-text">' + _esc(notes.taste_notes) + '</div></div>';
 

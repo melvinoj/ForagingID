@@ -29,6 +29,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import AsyncSessionLocal, get_db
 from app.models.recorded_walk import RecordedWalk, RecordedWalkObservation
 from app.api.identity import Identity, get_identity
+from app.models.observation import is_guest_visible_observation
 
 log = logging.getLogger(__name__)
 
@@ -241,7 +242,7 @@ async def create_recorded_walk(
 # ---------------------------------------------------------------------------
 
 @router.get("")
-async def list_recorded_walks(db: AsyncSession = Depends(get_db)):
+async def list_recorded_walks(db: AsyncSession = Depends(get_db), identity: Identity = Depends(get_identity)):
     rows = await db.execute(
         select(RecordedWalk).order_by(RecordedWalk.started_at.desc())
     )
@@ -256,7 +257,8 @@ async def list_recorded_walks(db: AsyncSession = Depends(get_db)):
             "duration_s":       w.duration_s,
             "elevation_gain_m": w.elevation_gain_m,
             "elevation_loss_m": w.elevation_loss_m,
-            "audio_note_path":  w.audio_note_path,
+            # Batch 8: curator recordings — guests never get the audio note.
+            "audio_note_path":  None if identity.is_guest else w.audio_note_path,
             "created_at":       w.created_at.isoformat() if w.created_at else None,
         }
         for w in walks
@@ -268,7 +270,8 @@ async def list_recorded_walks(db: AsyncSession = Depends(get_db)):
 # ---------------------------------------------------------------------------
 
 @router.get("/{walk_id}")
-async def get_recorded_walk(walk_id: int, db: AsyncSession = Depends(get_db)):
+async def get_recorded_walk(walk_id: int, db: AsyncSession = Depends(get_db),
+                            identity: Identity = Depends(get_identity)):
     walk = await db.get(RecordedWalk, walk_id)
     if not walk:
         raise HTTPException(404, detail="Walk not found")
@@ -287,13 +290,15 @@ async def get_recorded_walk(walk_id: int, db: AsyncSession = Depends(get_db)):
         obs_rows = await db.execute(
             text("""
                 SELECT id, latitude, longitude, thumbnail_path,
-                       species_primary, common_name
+                       species_primary, common_name, review_status
                 FROM observations
                 WHERE id IN :ids
             """),
             {"ids": tuple(obs_ids) if len(obs_ids) > 1 else (obs_ids[0], obs_ids[0])},
         )
         for row in obs_rows:
+            if identity.is_guest and not is_guest_visible_observation(row):
+                continue                       # batch 8: confirmed photos only for guests
             obs_detail[row.id] = {
                 "latitude":       row.latitude,
                 "longitude":      row.longitude,
@@ -304,6 +309,8 @@ async def get_recorded_walk(walk_id: int, db: AsyncSession = Depends(get_db)):
 
     observations_out = []
     for lnk in links:
+        if identity.is_guest and lnk.observation_id not in obs_detail:
+            continue
         detail = obs_detail.get(lnk.observation_id, {})
         observations_out.append({
             "observation_id": lnk.observation_id,
@@ -325,7 +332,7 @@ async def get_recorded_walk(walk_id: int, db: AsyncSession = Depends(get_db)):
         "elevation_gain_m": walk.elevation_gain_m,
         "elevation_loss_m": walk.elevation_loss_m,
         "track_points":     json.loads(walk.track_points_json or "[]"),
-        "audio_note_path":  walk.audio_note_path,
+        "audio_note_path":  None if identity.is_guest else walk.audio_note_path,
         "created_at":       walk.created_at.isoformat() if walk.created_at else None,
         "observations":     observations_out,
     }

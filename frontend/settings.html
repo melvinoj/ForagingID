@@ -1493,14 +1493,15 @@ async function synSrcRemove(domain) {
 
 async function runDraftBackfill() {
   // Dry run first, before any UI change (Melvin, 22 Oct 2026) — nothing runs until confirmed.
-  if (!(await lmDryRunCheck('/api/drafts/backfill', { method: 'POST' }, 'Run the AI draft backfill?'))) return;
+  const runUrl = await lmScopedDryRunCheck('/api/drafts/backfill', { method: 'POST' }, 'Run the AI draft backfill?');
+  if (!runUrl) return;
   const btn      = document.getElementById('btn-draft-backfill');
   const statusEl = document.getElementById('draft-backfill-status');
   if (btn) { btn.disabled = true; btn.textContent = '⏳ Starting…'; }
   if (statusEl) { statusEl.textContent = ''; statusEl.style.color = '#666'; }
 
   try {
-    const r = await fetch('/api/drafts/backfill', { method: 'POST' });
+    const r = await fetch(runUrl, { method: 'POST' });
     const d = await r.json().catch(() => ({}));
 
     if (r.status === 409) {
@@ -2325,6 +2326,7 @@ function _restoreDynSecState() {
 }
 </script>
 <script src="/static/js/pwa.js"></script>
+<script src="/static/js/lists.js"></script>
 <script src="/static/js/dry-run.js"></script>
 <script src="/static/js/offline.js"></script>
 <script src="/static/js/guest-mode.js"></script>

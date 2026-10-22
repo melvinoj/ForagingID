@@ -21,7 +21,11 @@ AI_FIELDS = ("taste_notes", "medicinal_notes", "recipe", "medicinal_folklore")
 
 
 async def plan(db: AsyncSession, names: Iterable[str], *, sources: bool = True, drafts: bool = True,
-               regenerate: bool = False, only_field: Optional[str] = None, note: str = "") -> dict:
+               regenerate: bool = False, only_field: Optional[str] = None, note: str = "",
+               scope: Optional[dict] = None) -> dict:
+    """scope: an enrichment_scope.resolve() result — names must be its queued
+    list; the summary then also says which scope, how many are queued and how
+    many remain beyond the cap."""
     names = list(dict.fromkeys(n for n in names if n))
     fill, review, update, draft_fields = Counter(), Counter(), Counter(), Counter()
     new_species = 0
@@ -52,7 +56,7 @@ async def plan(db: AsyncSession, names: Iterable[str], *, sources: bool = True, 
             for f in wanted:
                 if f not in covered:
                     draft_fields[f] += 1
-    return {
+    out = {
         "dry_run": True,
         "species_count": len(names),
         "new_species": new_species,
@@ -65,3 +69,7 @@ async def plan(db: AsyncSession, names: Iterable[str], *, sources: bool = True, 
         "note": note,
         "species_sample": names[:12],
     }
+    if scope is not None:
+        from app.services.enrichment_scope import scope_summary
+        out.update(scope_summary(scope))
+    return out

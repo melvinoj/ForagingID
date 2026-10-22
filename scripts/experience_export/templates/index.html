@@ -246,6 +246,15 @@ window.DATA = {{DATA}};
     });
   }
   function badge(s) { return '<span class="badge ' + esc(s.badge.kind) + '">' + esc(s.badge.text) + "</span>"; }
+  // Cautionary text that travels with a recipe (Fix B, 22 Oct 2026; export.py
+  // recipe "warnings" = culinary_warnings: look-alike + preparation, curator
+  // text, uncut). Used where no species warning block sits beside the recipe.
+  function recipeWarn(r) {
+    return (r && r.warnings || []).map(function (w) {
+      return '<div class="warn ' + (w.kind === "look_alike" ? "lookalike" : "caution") + ' culinary-warning"><strong>⚠ ' +
+        esc(w.heading) + "</strong>" + esc(w.text) + "</div>";
+    }).join("");
+  }
   function img(src, alt) {
     return src ? '<img src="' + esc(src) + '" alt="' + esc(alt) + '" loading="lazy">' : '<div class="noimg"></div>';
   }
@@ -467,6 +476,7 @@ window.DATA = {{DATA}};
       (s.family ? '<div class="family">' + esc(s.family) + "</div>" : "") +
       (s.months && s.months.length ? '<div class="family">Seen on this walk: ' + s.months.map(function (m) { return MONTHS[m - 1]; }).join(", ") + "</div>" : "") +
       badge(s) +
+      // Fix B: the species warnings (w) sit right after the recipe in this panel — not repeated.
       (r ? '<div class="walk-stop-recipe"><strong>' + esc(r.dish) + '</strong><div class="line">' + esc(r.line) + "</div></div>" : "") +
       w + "</div>";
     lastFocus = document.activeElement;
@@ -508,7 +518,7 @@ window.DATA = {{DATA}};
       (s.photo ? '<img class="photo" src="' + esc(s.thumb) + '" data-full="' + esc(s.photo) + '" alt="' + esc(s.en || s.sci) + '" loading="lazy">' : "") +
       '<div class="body"><div class="common">' + esc(s.en || s.sci) + "</div>" +
       (s.de ? '<div class="common-de">' + esc(s.de) + "</div>" : "") + badge(s) +
-      '<div class="walk-stop-recipe"><strong>' + esc(r.dish) + '</strong><div class="line">' + esc(r.line) + "</div></div>" +
+      '<div class="walk-stop-recipe"><strong>' + esc(r.dish) + '</strong>' + recipeWarn(r) + '<div class="line">' + esc(r.line) + "</div></div>" +
       "</div></article>";
   }).join("") : '<p class="subtitle">Recipes to follow.</p>';
 

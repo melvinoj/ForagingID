@@ -29,10 +29,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.models.culinary import CulinaryInfo
-from app.models.encounter import Encounter
+from app.api.identity import Identity, get_identity
+from app.models.encounter import Encounter, encounter_visibility_clause
 from app.models.observation import Observation
 from app.models.personal_list import PersonalList, PersonalListSpecies
 from app.models.species import Species, SpeciesRecipe, culinary_allowed
+from app.services.safety_gate import safety_for_species
 
 log = logging.getLogger(__name__)
 
@@ -209,7 +211,8 @@ def _audio_url(audio_path: Optional[str]) -> Optional[str]:
 
 
 @router.get("/card/{species_id}")
-async def get_personal_card(species_id: int, db: AsyncSession = Depends(get_db)):
+async def get_personal_card(species_id: int, db: AsyncSession = Depends(get_db),
+                            identity: Identity = Depends(get_identity)):
     sp = await db.scalar(select(Species).where(Species.id == species_id))
     if not sp:
         raise HTTPException(404, detail="Species not found")
@@ -232,7 +235,9 @@ async def get_personal_card(species_id: int, db: AsyncSession = Depends(get_db))
     enc_rows = (
         await db.execute(
             select(Encounter)
-            .where(Encounter.user_id == USER_ID)
+            # Curator: their own (USER_ID). Participant (batch 8): their own notes
+            # + curator encounters shared with guests — never another participant's.
+            .where(encounter_visibility_clause(identity) if identity.is_guest else Encounter.user_id == USER_ID)
             .where(Encounter.species_id == sp.id)
             .order_by(Encounter.encounter_date.desc())
         )
@@ -276,6 +281,9 @@ async def get_personal_card(species_id: int, db: AsyncSession = Depends(get_db))
             "thumbnail":        thumb,
         },
         "recipe": {"title": recipe.title, "body": recipe.body} if recipe else None,
+        # Fix B: the served decision, so the card prints look-alike + preparation
+        # warnings with its recipe / taste notes (SafetyGate.culinaryWarnings).
+        "safety":  await safety_for_species(db, sp, ci),
         "notes": {
             "taste_notes":     ci.taste_notes if ci else None,
             "id_notes":        ci.id_notes if ci else None,

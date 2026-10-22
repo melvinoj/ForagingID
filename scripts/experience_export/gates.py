@@ -51,7 +51,7 @@ import sqlite3
 from app.models.observation import is_human_confirmed
 from app.models.observation import is_confirmed_observation
 from app.models.species import (CAUTION_UNREVIEWED_LABEL, WARNING_FIELDS, handout_warnings, is_curator_authored, is_toxic_severity,
-                                safety_decision, severity_is_none, species_warnings)
+                                culinary_warnings, safety_decision, severity_is_none, species_warnings)
 
 APPROVED_REVIEW = ("approved", "manually_verified")
 APIACEAE = "Apiaceae"
@@ -196,6 +196,15 @@ def caution_warning(sp: dict, ci: dict, conn: sqlite3.Connection):
     return prep["text"] if prep and prep["reviewed"] else None
 
 
+def caution_lookalike(sp: dict, ci: dict, conn: sqlite3.Connection):
+    """Rule 8, second input (22 Oct 2026): the curator-authored look-alike
+    warning of a caution species, or None — enough on its own to print."""
+    if not is_caution(sp) or is_toxic(sp):
+        return None
+    look = species_warnings(_latest_rows(conn, ci))["look_alike"]
+    return look["text"] if look and look["reviewed"] else None
+
+
 def may_claim_edible(sp: dict, ci: dict, conn: sqlite3.Connection, cfg: dict) -> bool:
     """May the page call this species edible (or edible-with-caution)?"""
     if is_apiaceae(sp):
@@ -268,6 +277,15 @@ def safety_texts(sp: dict, ci: dict, conn: sqlite3.Connection) -> dict:
     return out
 
 
+def recipe_warnings(sp: dict, ci: dict, conn: sqlite3.Connection) -> list:
+    """Cautionary text printed with this species' recipe (Fix B, Melvin 22 Oct
+    2026) — the app's culinary_warnings, handout view: look-alike + preparation,
+    curator text only, uncut ([{kind, heading, text}]), or []."""
+    level = "toxic" if is_toxic(sp) else safety_decision(sp.get("toxicity_severity"), sp.get("edibility_status"))["level"]
+    hw = handout_warnings(level, species_warnings(_latest_rows(conn, ci)))
+    return culinary_warnings({"level": level, "handout_warnings": hw}, handout=True)
+
+
 # ── repeat lines (species already shown at an earlier stop) ──────────────────
 
 # Badges a compact "Also here" line must keep — every safety signal: ☠ deadly /
@@ -305,7 +323,8 @@ def recipe_allowed(sp: dict, ci: dict, recipe: dict, conn: sqlite3.Connection, c
         return False, "no edible claim (not human-verified edible/caution)"
     # Rule 8 = the app's outgoing-surface rule (safety_decision's
     # handout_culinary_allowed, batch 6) — one predicate for every handout.
-    d = safety_decision(sp.get("toxicity_severity"), sp.get("edibility_status"), caution_warning(sp, ci, conn))
+    d = safety_decision(sp.get("toxicity_severity"), sp.get("edibility_status"),
+                        caution_warning(sp, ci, conn), caution_lookalike(sp, ci, conn))
     if d["level"] == "caution" and not d["handout_culinary_allowed"]:
         return False, CAUTION_WITHHELD                       # rule 8
     return True, ""

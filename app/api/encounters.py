@@ -30,7 +30,9 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.models.encounter import Encounter, EncounterPhoto
+from app.models.encounter import (CURATOR_USER_ID, Encounter, EncounterPhoto, encounter_visibility_clause,
+                                  encounter_visible_to)
+from app.models.observation import is_guest_visible_observation
 from app.models.species import CulinaryInfoHistory, Species, SpeciesAIDraft
 from app.api.identity import Identity, get_identity
 
@@ -82,10 +84,14 @@ def _parse_field_recipe(raw: Optional[str]) -> Optional[dict]:
         return None
 
 
-def _enc_to_dict(enc: Encounter, species_name: Optional[str]) -> dict:
+def _enc_to_dict(enc: Encounter, species_name: Optional[str], guest: bool = False) -> dict:
+    """guest=True (batch 8): bound photos only when the observation is guest-
+    visible (confirmed) — a shared encounter never leaks a pending photo."""
     photos = []
     for p in (enc.photos or []):
         obs = p.observation
+        if guest and not (obs is not None and is_guest_visible_observation(obs)):
+            continue
         thumb = None
         if obs and obs.thumbnail_path:
             thumb = "/thumbnails/" + obs.thumbnail_path.rsplit("/", 1)[-1]
@@ -119,11 +125,28 @@ def _enc_to_dict(enc: Encounter, species_name: Optional[str]) -> dict:
         "suggestions":         _parse_suggestions(enc.encounter_suggestions),
         "field_recipe":        _parse_field_recipe(enc.field_recipes),
         "research_visible":    enc.research_visible,
+        "shared_with_guests":  bool(enc.shared_with_guests),
         "client_uuid":         enc.client_uuid,
         "expected_filename":   enc.expected_filename,
         "photos":              photos,
         "created_at":          enc.created_at.isoformat() if enc.created_at else None,
     }
+
+
+async def _with_recipe_safety(db: AsyncSession, out: dict) -> dict:
+    """field_recipe_safety (22 Oct 2026): the served safety decision of the
+    recipe's species — the encounter's species, else its first matched
+    ingredient — so the page puts that species' preparation warning next to
+    the recipe (SafetyGate.culinaryWarnings). None when no species is known."""
+    fr = out.get("field_recipe")
+    if not fr:
+        return out
+    from app.services.safety_gate import safety_for_species
+    sid = out.get("species_id") or next(
+        (i.get("species_id") for i in (fr.get("ingredients") or []) if isinstance(i, dict) and i.get("species_id")), None)
+    sp = await db.get(Species, sid) if sid else None
+    out["field_recipe_safety"] = await safety_for_species(db, sp) if sp else None
+    return out
 
 
 async def _species_name_for(db: AsyncSession, species_id: Optional[int]) -> Optional[str]:
@@ -156,6 +179,13 @@ async def create_encounter(
 ):
     if identity.is_anonymous_guest:
         raise HTTPException(403, detail="Token required")
+    # Batch 8: participant notes are text only — no audio upload, no photo
+    # binding (a participant could otherwise attach any observation).
+    if identity.is_guest:
+        if audio is not None and audio.filename:
+            raise HTTPException(403, detail="Audio upload is not available for workshop participants — type or dictate your note")
+        if (photo_observation_ids or "").strip() not in ("", "[]"):
+            raise HTTPException(403, detail="Photo binding is not available for workshop participants")
 
     # Idempotency (offline write queue, 13.10b): the client generates client_uuid at
     # capture time and replays the POST until it gets a 2xx. If flaky cellular dropped
@@ -208,7 +238,7 @@ async def create_encounter(
         text_note=text_note or None,
         prompt_stage="1" if _prompt_response else None,
         prompt_response=_prompt_response,
-        encounter_type=(encounter_type if encounter_type in ("field", "season", "foraging_note") else "field"),
+        encounter_type=(encounter_type if encounter_type in ("field", "season", "foraging_note", "guest_note") else "field"),
         research_visible=research_visible,
         workshop_session_id=identity.workshop_session_id,
         client_uuid=client_uuid,
@@ -275,6 +305,7 @@ async def pending_transcripts(db: AsyncSession = Depends(get_db)):
 async def list_field_recipes(
     species_id: Optional[int] = None,
     db: AsyncSession = Depends(get_db),
+    identity: Identity = Depends(get_identity),
 ):
     """Return encounters that have a field_recipe containing the given species_id.
     If species_id is omitted, returns all encounters with any field_recipe."""
@@ -282,6 +313,7 @@ async def list_field_recipes(
         select(Encounter, Species.scientific_name)
         .outerjoin(Species, Encounter.species_id == Species.id)
         .where(Encounter.field_recipes.isnot(None))
+        .where(encounter_visibility_clause(identity))         # batch 8
         .order_by(Encounter.encounter_date.desc())
     )
     rows = await db.execute(stmt)
@@ -294,8 +326,41 @@ async def list_field_recipes(
             ings = fr.get("ingredients") or []
             if not any(ing.get("species_id") == species_id for ing in ings):
                 continue
-        results.append(_enc_to_dict(enc, sp_name))
+        results.append(_enc_to_dict(enc, sp_name, guest=identity.is_guest))
     return {"encounters": results}
+
+
+# ---------------------------------------------------------------------------
+# Participant notes — curator view (batch 8). MUST be before /{encounter_id}.
+# ---------------------------------------------------------------------------
+
+@router.get("/participant-notes")
+async def participant_notes(db: AsyncSession = Depends(get_db), identity: Identity = Depends(get_identity)):
+    """Every participant encounter (user_id ≠ curator), grouped by workshop
+    session, then participant. Curator only."""
+    if identity.is_guest:
+        raise HTTPException(403, "Curator only")
+    from app.models.foray_session import ForagingSession
+    from app.models.workshop import WorkshopParticipant
+    rows = (await db.execute(
+        select(Encounter, Species.scientific_name, WorkshopParticipant.name, ForagingSession.name)
+        .outerjoin(Species, Encounter.species_id == Species.id)
+        .outerjoin(WorkshopParticipant, Encounter.user_id == WorkshopParticipant.id)
+        .outerjoin(ForagingSession, Encounter.workshop_session_id == ForagingSession.id)
+        .where(Encounter.user_id != CURATOR_USER_ID)
+        .order_by(Encounter.workshop_session_id, Encounter.user_id, Encounter.encounter_date.desc())
+    )).all()
+    sessions: dict = {}
+    for enc, sp_name, p_name, s_name in rows:
+        s = sessions.setdefault(enc.workshop_session_id, {
+            "workshop_session_id": enc.workshop_session_id,
+            "session_name": s_name or ("No workshop session" if enc.workshop_session_id is None
+                                       else f"Session {enc.workshop_session_id}"),
+            "participants": {}})
+        p = s["participants"].setdefault(enc.user_id, {"participant_id": enc.user_id,
+                                                       "name": p_name or f"Participant {enc.user_id}", "notes": []})
+        p["notes"].append(_enc_to_dict(enc, sp_name))
+    return {"sessions": [dict(s, participants=list(s["participants"].values())) for s in sessions.values()]}
 
 
 # ---------------------------------------------------------------------------
@@ -326,7 +391,8 @@ async def list_encounters(
         .outerjoin(Species, Encounter.species_id == Species.id)
     )
     if identity.is_guest:
-        stmt = stmt.where(Encounter.user_id == identity.user_id)
+        # Batch 8: own notes + curator encounters marked "Share with guests".
+        stmt = stmt.where(encounter_visibility_clause(identity))
     elif user_id is not None:
         stmt = stmt.where(Encounter.user_id == user_id)
     if species_id is not None:
@@ -345,7 +411,7 @@ async def list_encounters(
     rows = await db.execute(stmt.order_by(Encounter.encounter_date.desc()))
     return {
         "encounters": [
-            _enc_to_dict(enc, sp_name)
+            await _with_recipe_safety(db, _enc_to_dict(enc, sp_name, guest=identity.is_guest))
             for enc, sp_name in rows.all()
         ]
     }
@@ -464,7 +530,8 @@ async def backfill_photo_bindings():
 # ---------------------------------------------------------------------------
 
 @router.get("/{encounter_id}")
-async def get_encounter(encounter_id: int, db: AsyncSession = Depends(get_db)):
+async def get_encounter(encounter_id: int, db: AsyncSession = Depends(get_db),
+                        identity: Identity = Depends(get_identity)):
     row = await db.execute(
         select(Encounter, Species.scientific_name)
         .outerjoin(Species, Encounter.species_id == Species.id)
@@ -474,7 +541,9 @@ async def get_encounter(encounter_id: int, db: AsyncSession = Depends(get_db)):
     if not result:
         raise HTTPException(404, detail="Encounter not found")
     enc, sp_name = result
-    return _enc_to_dict(enc, sp_name)
+    if not encounter_visible_to(enc, identity):          # batch 8: never another participant's
+        raise HTTPException(404, detail="Encounter not found")
+    return _enc_to_dict(enc, sp_name, guest=identity.is_guest)
 
 
 # ---------------------------------------------------------------------------
@@ -485,6 +554,32 @@ class EncounterCoordinates(BaseModel):
     latitude:  float = Field(..., ge=-90.0,  le=90.0)
     longitude: float = Field(..., ge=-180.0, le=180.0)
     force:     bool  = Field(False, description="Overwrite an existing location if True")
+
+
+class EncounterShare(BaseModel):
+    shared: bool
+
+
+@router.patch("/{encounter_id}/share")
+async def set_encounter_shared(encounter_id: int, body: EncounterShare,
+                               db: AsyncSession = Depends(get_db), identity: Identity = Depends(get_identity)):
+    """"Share with guests" (batch 8): a curator encounter becomes visible to
+    workshop participants — text, transcript, confirmed photos and audio.
+    Curator only; only curator encounters can be shared."""
+    if identity.is_guest:
+        raise HTTPException(403, "Curator only")
+    enc = await db.scalar(select(Encounter).where(Encounter.id == encounter_id))
+    if not enc:
+        raise HTTPException(404, detail="Encounter not found")
+    if enc.user_id != CURATOR_USER_ID:
+        raise HTTPException(409, detail="Only curator encounters can be shared — participant notes stay private")
+    enc.shared_with_guests = body.shared
+    await db.commit()
+    back = await db.scalar(select(Encounter.shared_with_guests).where(Encounter.id == encounter_id))
+    if bool(back) != body.shared:
+        raise HTTPException(500, detail="share flag did not persist")
+    await db.refresh(enc)
+    return _enc_to_dict(enc, await _species_name_for(db, enc.species_id))
 
 
 @router.patch("/{encounter_id}/coordinates")
@@ -756,7 +851,7 @@ async def save_field_recipe(
     sp_name = None
     if enc.species_id:
         sp_name = await db.scalar(select(Species.scientific_name).where(Species.id == enc.species_id))
-    return _enc_to_dict(enc, sp_name)
+    return await _with_recipe_safety(db, _enc_to_dict(enc, sp_name))
 
 
 @router.delete("/{encounter_id}/field-recipe")

@@ -1232,6 +1232,7 @@
               title="Edit taste notes">✎ Edit</button>
       <span id="tn-lock-badge" class="tn-lock-badge" title="Human-edited — protected from AI overwrite">🔒 Human-locked</span>
     </h3>
+    <div id="taste-notes-warnings"></div>
     <div id="taste-notes-content">
       <div class="ai-field-empty">Not yet enriched.</div>
     </div>
@@ -1300,6 +1301,9 @@
   </div>
 
   <!-- Field Recipes — from encounters (hidden when empty) -->
+  <!-- Guest notes (batch 8): participants only — filled by GuestNotes.mount. -->
+  <div class="section" id="sec-guest-notes" style="display:none"><div id="guest-notes-slot"></div></div>
+
   <div class="section" id="sec-field-recipes">
     <h3 style="margin-bottom:8px">🌿 Field Recipes
       <span style="font-size:0.72rem;font-weight:400;color:#9a8060;margin-left:6px">from your encounters</span>
@@ -1451,6 +1455,7 @@
 <script src="/static/js/species-names.js"></script>
 <script src="/static/js/lists.js"></script>
 <script src="/static/js/gps.js"></script>
+<script src="/static/js/guest-notes.js"></script>
 <script>
 // ── Router ────────────────────────────────────────────────────────────────
 
@@ -1960,6 +1965,11 @@ async function loadProfile(name) {
     if (data.species && data.species.id) {
       loadEdibilitySummary(data.species.id);
       initForagingNotes(data.species.id, data.species.foraging_notes);
+      // Participant devices: "Your note" box + their own notes (batch 8).
+      GuestNotes.mount(document.getElementById('guest-notes-slot'), data.species.id,
+                       data.species.scientific_name).then(shown => {
+        if (shown) document.getElementById('sec-guest-notes').style.display = '';
+      });
     }
 
   } catch (e) {
@@ -1989,6 +1999,7 @@ function renderProfile(data, observations) {
   // species.py safety_decision) read through static/js/safety-gate.js — never
   // re-derived here. Missing (old cached payload) fails closed as 'unknown'.
   const _safety = SafetyGate.decision(data.safety);
+  window._speciesSafety = data.safety;   // recipe bank + field recipes: prep warning beside each recipe (22 Oct 2026)
   const isToxic = (_safety.level === 'deadly' || _safety.level === 'toxic');
   const culinaryBlocked = !SafetyGate.allowed(_safety);
   // Blocked with no ☠ / ⚠ label = a verdict that is not edible/caution (inedible).
@@ -2258,8 +2269,9 @@ function renderProfile(data, observations) {
     document.getElementById('culinary-content').innerHTML =
       `<div class="ai-field-empty" style="color:#991b1b">${_CULINARY_HELD_MSG}</div>`;
   } else {
+    // Fix B: look-alike + preparation warnings travel with culinary content.
     const culHtml = ci
-      ? _renderFields(ci, culFields, aiFields, sp.scientific_name) + _renderConfidence(ci.data_confidence)
+      ? SafetyGate.culinaryWarnings(data.safety) + _renderFields(ci, culFields, aiFields, sp.scientific_name) + _renderConfidence(ci.data_confidence)
       : '<div class="ai-field-empty">Culinary data not yet available for this species.</div>';
     document.getElementById('culinary-content').innerHTML = culHtml;
 
@@ -2283,6 +2295,9 @@ function renderProfile(data, observations) {
       if (secEl) secEl.style.display = 'none';
     } else {
       if (secEl) secEl.style.display = '';
+      // Fix B: own container, so re-renders of the taste text (edit/save) keep it.
+      const twEl = document.getElementById('taste-notes-warnings');
+      if (twEl) twEl.innerHTML = SafetyGate.culinaryWarnings(data.safety);
       if (ci && ci.taste_notes && approvedAiFields.has('taste_notes')) {
         el.innerHTML = `<div style="margin-bottom:6px;font-size:0.78rem;color:#555">
           <span class="ai-approved-badge">AI · Approved</span></div>
@@ -3385,6 +3400,7 @@ function _renderFieldRecipeCard(enc) {
       ${meta ? `<span class="field-recipe-meta">${_esc(meta)}</span>` : ''}
     </div>
     ${ingChips ? `<div class="field-recipe-ings">${ingChips}</div>` : ''}
+    ${SafetyGate.culinaryWarnings(window._speciesSafety)}
     ${body}
     <a class="field-recipe-link" href="/encounters">↗ View encounter record</a>
   </div>`;
@@ -4722,6 +4738,8 @@ function _renderRecipeBank(recipes, season, container) {
   }
 
   const single = filtered.length === 1;
+  // Look-alike + preparation warnings beside every recipe (Fix B, SafetyGate.culinaryWarnings).
+  const prepWarn = SafetyGate.culinaryWarnings(window._speciesSafety);
 
   container.innerHTML = filtered.map((r, idx) => {
     const seasonIcon = _SEASON_ICON[r.season] || '🔄';
@@ -4737,6 +4755,7 @@ function _renderRecipeBank(recipes, season, container) {
         <span class="recipe-pref-star" title="${r.is_preferred ? 'Preferred recipe' : 'Mark as preferred'}"
               onclick="setPreferredRecipe(${r.id})">${r.is_preferred ? '★' : '☆'}</span>
       </div>
+      ${prepWarn}
       <div class="recipe-bank-body" id="recipe-body-${r.id}">${_renderMd(r.body)}</div>
       ${!single ? `<button class="recipe-expand-btn" id="recipe-expand-${r.id}"
         onclick="toggleRecipeExpand(${r.id}, '${cardId}')">▼ Show full recipe</button>` : ''}

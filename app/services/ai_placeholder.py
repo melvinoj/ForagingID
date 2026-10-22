@@ -186,6 +186,15 @@ def is_only_no_medicinal_uses_claim(text: Optional[str]) -> bool:
     return _PREAMBLE.fullmatch(before) is not None
 
 
+def medicinal_notes_redraftable(text: Optional[str]) -> bool:
+    """medicinal_notes a re-draft may replace (Fix A, 22 Oct 2026): empty, an AI
+    placeholder / refusal, or only a "no medicinal uses" claim. Real text —
+    approved or curator-written — is never drafted over (the caller also checks
+    curator authorship and pending drafts)."""
+    return not (text or "").strip() or is_ai_placeholder("medicinal_notes", text) \
+        or is_only_no_medicinal_uses_claim(text)
+
+
 def _join_at_cut(out: str, chunk: str) -> str:
     """Append `chunk` after a cut, collapsing the blank lines the cut left behind."""
     if out:

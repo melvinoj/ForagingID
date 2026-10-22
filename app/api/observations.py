@@ -10,7 +10,8 @@ from pydantic import BaseModel, Field
 from datetime import datetime
 
 from app.database import get_db
-from app.models.observation import Observation, ObservationEdit, is_phone_origin
+from app.models.observation import Observation, ObservationEdit, is_guest_visible_observation, is_phone_origin
+from app.api.identity import Identity, get_identity
 from app.models.species import Species
 from app.services.species_link import set_observation_species
 from app.models.processing import ProcessingLog
@@ -447,9 +448,11 @@ async def list_prefilter_categories(
 
 
 @router.get("/{observation_id}", response_model=ObservationOut)
-async def get_observation(observation_id: int, db: AsyncSession = Depends(get_db)):
+async def get_observation(observation_id: int, db: AsyncSession = Depends(get_db),
+                          identity: Identity = Depends(get_identity)):
     obs = await db.get(Observation, observation_id)
-    if not obs:
+    # Batch 8: a guest sees confirmed observations only (scenes included).
+    if not obs or (identity.is_guest and not is_guest_visible_observation(obs)):
         raise HTTPException(status_code=404, detail="Observation not found")
     return obs
 
@@ -739,10 +742,12 @@ async def set_coordinates(
 async def serve_observation_photo(
     observation_id: int,
     db: AsyncSession = Depends(get_db),
+    identity: Identity = Depends(get_identity),
 ):
-    """Serve the original full-size photo for lightbox display."""
+    """Serve the original full-size photo for lightbox display. A guest gets
+    confirmed observations only (batch 8, is_guest_visible_observation)."""
     obs = await db.get(Observation, observation_id)
-    if not obs or not obs.file_path:
+    if not obs or not obs.file_path or (identity.is_guest and not is_guest_visible_observation(obs)):
         raise HTTPException(status_code=404, detail="Observation not found")
     p = Path(obs.file_path)
     if not p.exists():

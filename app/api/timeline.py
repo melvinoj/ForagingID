@@ -19,8 +19,9 @@ from sqlalchemy import func, select, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.models.observation import Observation
-from app.models.encounter import Encounter
+from app.models.observation import Observation, guest_visible_observation_sql
+from app.models.encounter import Encounter, encounter_visibility_clause
+from app.api.identity import Identity, get_identity
 from app.models.species import Species
 
 log = logging.getLogger(__name__)
@@ -323,6 +324,7 @@ async def timeline_at(
     day: int = Query(..., ge=1, le=366),
     lens: str = Query("edibility"),
     db: AsyncSession = Depends(get_db),
+    identity: Identity = Depends(get_identity),
 ):
     lens_fn = _get_lens(lens)
 
@@ -377,6 +379,7 @@ async def timeline_at(
             Encounter.text_note, Encounter.location_name,
         ).where(
             Encounter.species_id.in_(sp_ids),
+            encounter_visibility_clause(identity),       # batch 8: guests — own + shared only
         ).order_by(Encounter.encounter_date.desc())
     )).all()
 
@@ -390,6 +393,7 @@ async def timeline_at(
             ).where(
                 EncounterPhoto.encounter_id.in_(enc_ids),
                 Observation.thumbnail_path.isnot(None),
+                *([guest_visible_observation_sql(Observation.review_status)] if identity.is_guest else []),
             )
         )).all()
     enc_thumbs: Dict[int, str] = {}

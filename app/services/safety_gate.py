@@ -54,10 +54,12 @@ async def safety_for_species(db: AsyncSession, sp: Optional[Species],
     if ci is None:
         ci = await db.scalar(select(CulinaryInfo).where(CulinaryInfo.species_id == sp.id))
     warnings = species_warnings(await _warning_fields(db, ci))
-    prep = warnings["preparation"]
-    caution_warning = prep["text"] if (prep and prep["reviewed"]
-                                       and (sp.edibility_status or "").strip().lower() == "caution") else None
-    return _with_warnings(safety_decision(sp.toxicity_severity, sp.edibility_status, caution_warning), warnings)
+    is_caution = (sp.edibility_status or "").strip().lower() == "caution"
+    prep, look = warnings["preparation"], warnings["look_alike"]
+    caution_warning = prep["text"] if (prep and prep["reviewed"] and is_caution) else None
+    caution_lookalike = look["text"] if (look and look["reviewed"] and is_caution) else None
+    return _with_warnings(safety_decision(sp.toxicity_severity, sp.edibility_status,
+                                          caution_warning, caution_lookalike), warnings)
 
 
 async def safety_by_names(db: AsyncSession, names: Iterable[str]) -> Dict[str, dict]:

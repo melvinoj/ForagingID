@@ -301,19 +301,24 @@ async def _access_middleware(request: Request, call_next) -> Response:
         if path in _GUEST_BLOCKED_PATHS:
             from fastapi.responses import RedirectResponse
             return RedirectResponse(url="/", status_code=302)
-        # Block all write operations except the walk export, encounter creation,
-        # and recorded-walk sync
-        if request.method not in ("GET", "HEAD", "OPTIONS"):
-            if path not in (
-                "/api/sharing/export-walk",
-                "/api/encounters",
-                "/api/recorded-walks",
-                "/api/recorded-walks/audio-upload",
-            ):
-                return JSONResponse(
-                    status_code=403,
-                    content={"detail": "Guest mode — read-only access"},
-                )
+        # Batch 8 (app.services.guest_access): API reads are deny-by-default —
+        # only the paths guest pages use; writes only the guest write list
+        # (walk export, encounter / note creation, recorded-walk sync, Lists PDF).
+        from app.api.identity import get_identity
+        from app.services.guest_access import GUEST_MEDIA_PREFIXES, guest_api_allowed, guest_media_allowed
+        if path.startswith("/api/") and not guest_api_allowed(request.method, path):
+            detail = ("Guest mode — read-only access" if request.method not in ("GET", "HEAD", "OPTIONS")
+                      else "Not available in guest mode")
+            return JSONResponse(status_code=403, content={"detail": detail})
+        # Media files: confirmed observations' photos only; encounter audio /
+        # sketches only when that encounter is visible to this participant.
+        media_ok = None
+        if path.startswith(GUEST_MEDIA_PREFIXES):
+            async with AsyncSessionLocal() as db:
+                media_ok = await guest_media_allowed(db, path, await get_identity(request, db))
+        if media_ok is False:
+            return JSONResponse(status_code=404, content={"detail": "Not found"},
+                                headers={"Cache-Control": "no-store", "X-Guest-Gate": "refused"})
 
     response = await call_next(request)
 

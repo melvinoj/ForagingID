@@ -2641,6 +2641,7 @@
 <script src="/static/js/safety-gate.js"></script>
 <script src="/static/js/species-names.js"></script>
 <script src="/static/js/gps.js"></script>
+<script src="/static/js/guest-notes.js"></script>
 <script src="/static/js/walk-record.js"></script>
 <script src="/static/js/reidentify.js"></script>
 <script src="/static/js/lists.js"></script>
@@ -6444,6 +6445,7 @@ function renderWalkPanel(route, enrichMap) {
         </div>
         ${SafetyGate.warnings(_gate.safety, { collapse: 'auto' })}
         ${forNotesHtml}
+        ${spData && spData.id ? `<div class="walk-guest-note" data-guest-note-sid="${spData.id}" data-guest-note-name="${_esc(spName)}"></div>` : ''}
       </div>`;
     }
 
@@ -6483,6 +6485,15 @@ function renderWalkPanel(route, enrichMap) {
     </div>`;
   }
   document.getElementById('walk-stops-scroll').innerHTML = html;
+  // Guest notes (batch 8): a participant gets "📝 Add a note" on each species.
+  GuestNotes.isParticipant().then(ok => {
+    if (!ok) return;
+    document.querySelectorAll('#walk-stops-scroll .walk-guest-note').forEach(el => {
+      el.innerHTML = '<button type="button" style="font-size:0.75rem;margin-top:4px">📝 Add a note</button>';
+      el.querySelector('button').onclick = () =>
+        GuestNotes.mount(el, Number(el.dataset.guestNoteSid), el.dataset.guestNoteName);
+    });
+  });
   _syncWalkSaveBtn();          // loaded walk: "Save changes (N)"; new walk: "Save walk"
 
   // Bottom sheet summary (phone only — mirrors walk-title / walk-sub for the sheet)
@@ -9600,6 +9611,7 @@ async function _findRecipes() {
       html += `<div class="find-card" onclick="_discoverShowSpecies('${encodeURIComponent(sp.scientific_name).replace(/'/g, "\\'")}')">
         <div class="find-info">
           <div class="find-name">${_escHtml(rec.title || 'Recipe')}</div>
+          ${SafetyGate.culinaryWarnings(sp.safety)}
           <div class="find-snippet">${_escHtml(rec.snippet)}</div>
         </div>
       </div>`;

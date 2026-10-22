@@ -432,7 +432,10 @@ def test_interrupted_run_with_a_resume_point_is_resumed():
                 await s.execute(text(
                     "INSERT INTO background_processes (process_id, process_type, status, started_at, updated_at, "
                     "progress_current, progress_total, payload) VALUES (1, 'enrichment_run', 'interrupted', "
-                    "'2026-10-22 01:00', '2026-10-22 02:00', 1, 3, :p)"), {"p": json.dumps({"resume_after": "Allium ursinum"})})
+                    "'2026-10-22 01:00', '2026-10-22 02:00', 1, 3, :p)"), {"p": json.dumps({
+                        "resume_after": "Allium ursinum",
+                        # the run's scoped list (22 Oct 2026) — a resume stays within it
+                        "species": ["Allium ursinum", "Rumex acetosa", "Urtica dioica"]})})
                 await s.commit()
         _run(rows())
         pt = _run(bp_mod.bp_resume_point("enrichment_run"))
@@ -525,15 +528,18 @@ def test_every_dry_run_writes_nothing():
         before = env.snapshot()
         with Fakes("ok", draft=_draft(taste="x" * 80)) as f:
             calls = [
-                ("/api/enrichment/run?dry_run=true", {}),
+                ("/api/enrichment/run?dry_run=true&scope=all", {}),
                 ("/api/drafts/generate?dry_run=true", {"scientific_name": "Allium ursinum", "re_enrich": True}),
                 ("/api/drafts/bulk-generate?dry_run=true", {"species": ["Allium ursinum", "Urtica dioica"]}),
-                ("/api/drafts/backfill?dry_run=true", None),
-                ("/api/drafts/backfill?field=all&dry_run=true", None),
+                ("/api/drafts/backfill?dry_run=true&scope=all", None),
+                ("/api/drafts/backfill?field=all&dry_run=true&scope=all", None),
+                ("/api/drafts/backfill?field=identification_notes&dry_run=true&scope=all", None),
+                ("/api/drafts/redraft-medicinal?dry_run=true&scope=all", {}),
+                ("/api/culinary/backfill-fungi-edibility?dry_run=true&scope=all", None),
                 ("/api/culinary/Allium ursinum/enrich?dry_run=true", None),
                 ("/api/culinary/Allium ursinum/enrich?section=taste&dry_run=true", None),
-                ("/api/enrich/run?dry_run=true", None),
-                ("/api/enrich/re-enrich-empty?dry_run=true", None),
+                ("/api/enrich/run?dry_run=true&scope=all", None),
+                ("/api/enrich/re-enrich-empty?dry_run=true&scope=all", None),
             ]
             for url, body in calls:
                 r = c.post(url, json=body) if body is not None else c.post(url)
@@ -545,7 +551,8 @@ def test_every_dry_run_writes_nothing():
         env.close()
 
 
-BUTTON_ENDPOINTS = re.compile(r"/api/(enrichment/run|enrich/run|enrich/re-enrich-empty|drafts/(generate|bulk-generate|backfill)(?![\w-])"
+BUTTON_ENDPOINTS = re.compile(r"/api/(enrichment/run|enrich/run|enrich/re-enrich-empty|drafts/(generate|bulk-generate|backfill|redraft-medicinal)(?![\w-])"
+                              r"|culinary/backfill-fungi-edibility"
                               r"|culinary/\$\{[^}]+\}/enrich|species/\$\{[^}]+\}/recipes/regenerate)")
 
 
@@ -558,7 +565,7 @@ def test_every_frontend_button_asks_the_dry_run_first():
         src = open(os.path.join(ROOT, "frontend", page), encoding="utf-8").read()
         assert '<script src="/static/js/dry-run.js"></script>' in src, page
         unguarded = []
-        for m in re.finditer(r"(?:await\s+)?(fetch|lmDryRunConfirm|lmDryRunCheck)\(\s*[`'\"]([^`'\"]+)", src):
+        for m in re.finditer(r"(?:await\s+)?(fetch|lmDryRunConfirm|lmDryRunCheck|lmScopedDryRunConfirm|lmScopedDryRunCheck)\(\s*[`'\"]([^`'\"]+)", src):
             kind, url = m.group(1), m.group(2)
             if not BUTTON_ENDPOINTS.search(url) or "dry_run=true" in url or "/status" in url:
                 continue
@@ -566,7 +573,8 @@ def test_every_frontend_button_asks_the_dry_run_first():
                 continue
             fn_start = src.rfind("function ", 0, m.start())
             body = src[fn_start:m.start()]
-            if "lmDryRunCheck(" in body or "lmDryRunConfirm(" in body or "lmDryRunSummaryText(" in body:
+            if any(h in body for h in ("lmDryRunCheck(", "lmDryRunConfirm(", "lmDryRunSummaryText(",
+                                       "lmScopedDryRunCheck(", "lmScopedDryRunConfirm(")):
                 continue
             unguarded.append((src.count("\n", 0, m.start()) + 1, url))
         assert len(unguarded) == AUTO.get(page, 0), (page, unguarded)

@@ -11,10 +11,13 @@ from fastapi import APIRouter, Depends
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import Response, JSONResponse
 from pydantic import BaseModel
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.identity import Identity, get_identity
 from app.database import get_db
-from app.models.species import safety_decision, sentence_case_name
+from app.services.taxonomy import normalize_taxon_key
+from app.models.species import culinary_warnings, safety_decision, sentence_case_name
 from app.services.safety_gate import safety_by_names
 
 log = logging.getLogger(__name__)
@@ -188,6 +191,9 @@ def _flatten_species(name: str, profile: Optional[Dict], base_by_name: Dict,
         'parts_text':      ' · '.join(parts_bits),
         'recipe_title':    key_recipe['title'] if key_recipe else '',
         'recipe_body':     key_recipe['body']  if key_recipe else '',
+        # Cautionary text printed with culinary content (Fix B, 22 Oct 2026):
+        # look-alike + preparation, curator text only, uncut. [] = nothing added.
+        'culinary_warnings': culinary_warnings(safety, handout=True) if allowed else [],
         'season_str':      _season_str(sp),
         'phenology':       sp.get('phenology') or {},
     }
@@ -235,14 +241,40 @@ class PdfRequest(BaseModel):
     seasonal_returns: Optional[List[Dict[str, Any]]] = None
 
 
+async def participant_notes_by_name(db: AsyncSession, identity, names) -> Dict[str, List[str]]:
+    """Batch 8: {requested name: [note text]} — the participant's OWN text notes
+    for those species (looked up by name_key), oldest first. {} for the curator
+    and anonymous guests: curator handouts are unchanged."""
+    if not identity.is_guest or identity.is_anonymous_guest or identity.user_id is None:
+        return {}
+    from app.models.encounter import Encounter
+    from app.models.species import Species
+    keys = {normalize_taxon_key(n): n for n in names if n}
+    rows = (await db.execute(
+        select(Species.name_key, Encounter.text_note)
+        .join(Species, Encounter.species_id == Species.id)
+        .where(Encounter.user_id == identity.user_id)            # their own — never another participant's
+        .where(Encounter.text_note.is_not(None))
+        .where(Species.name_key.in_(list(keys)))
+        .order_by(Encounter.encounter_date, Encounter.id))).all()
+    out: Dict[str, List[str]] = {}
+    for key, txt in rows:
+        if (txt or "").strip():
+            out.setdefault(keys[key], []).append(txt.strip())
+    return out
+
+
 @router.post("/pdf")
-async def generate_pdf(body: PdfRequest, db: AsyncSession = Depends(get_db)):
+async def generate_pdf(body: PdfRequest, db: AsyncSession = Depends(get_db),
+                       identity: Identity = Depends(get_identity)):
     # B2-09: the safety decision comes from the DB by name, never from the payload.
-    safety = await safety_by_names(db, [s.scientific_name for s in body.species])
-    return await run_in_threadpool(render_pdf, body, safety)
+    names = [s.scientific_name for s in body.species]
+    safety = await safety_by_names(db, names)
+    my_notes = await participant_notes_by_name(db, identity, names)
+    return await run_in_threadpool(render_pdf, body, safety, my_notes)
 
 
-def render_pdf(body: PdfRequest, safety: Dict[str, Dict]) -> Response:
+def render_pdf(body: PdfRequest, safety: Dict[str, Dict], my_notes: Optional[Dict[str, List[str]]] = None) -> Response:
     style   = body.style   if body.style   in ('botanical', 'herbalist', 'goethean')           else 'botanical'
     layout  = body.layout  if body.layout  in ('field_guide', 'recipe_booklet', 'workshop')    else 'field_guide'
     margins = body.margins if body.margins in _MARGIN_MAP                                       else 'normal'
@@ -261,7 +293,8 @@ def render_pdf(body: PdfRequest, safety: Dict[str, Dict]) -> Response:
         base_by_name[s['scientific_name']] = s
 
     flat_species = [
-        _flatten_species(s.scientific_name, s.profile, base_by_name, safety.get(s.scientific_name))
+        dict(_flatten_species(s.scientific_name, s.profile, base_by_name, safety.get(s.scientific_name)),
+             my_notes=(my_notes or {}).get(s.scientific_name, []))
         for s in body.species
     ]
 

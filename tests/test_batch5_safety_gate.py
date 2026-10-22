@@ -266,7 +266,7 @@ def test_pdf_every_layout_gates_on_the_server_decision():
 def test_pdf_route_takes_decisions_from_the_db():
     captured = {}
 
-    def fake_render(body, safety):
+    def fake_render(body, safety, my_notes=None):
         captured.update(safety)
         return "ok"
 
@@ -278,7 +278,7 @@ def test_pdf_route_takes_decisions_from_the_db():
             async with S() as s:
                 body = lp.PdfRequest(species=[lp.SpeciesData(scientific_name=n, profile=_client_profile(n))
                                               for n in EXPECT])
-                await lp.generate_pdf(body, db=s)
+                await lp.generate_pdf(body, db=s, identity=CURATOR)
         finally:
             lp.render_pdf = real
         await eng.dispose()
@@ -351,7 +351,7 @@ def test_every_page_loads_the_helper_and_sw_caches_it():
         assert '<script src="/static/js/safety-gate.js"></script>' in _src(p), p
     sw = _src("frontend/static/sw.js")
     # v11: dry-run.js joined the app shell (22 Oct 2026, enrichment safety).
-    assert "'/static/js/safety-gate.js'" in sw and "foragingid-v11" in sw
+    assert "'/static/js/safety-gate.js'" in sw and "foragingid-v13" in sw
 
 
 def test_no_page_rederives_the_rule():

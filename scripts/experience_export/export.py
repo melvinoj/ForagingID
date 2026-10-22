@@ -718,7 +718,9 @@ def main(argv=None):
                     continue
                 dishes_shown.add(title.lower())
                 picked = {"recipe_id": r["id"], "species_id": sid, "dish": title, "line": teaser,
-                          "source": r["source"]}
+                          "source": r["source"],
+                          # look-alike + prep beside the recipe (Fix B, 22 Oct 2026): curator text, uncut
+                          "warnings": gates.recipe_warnings(sp, ci_by_sp[sid], conn)}
             else:
                 recipe_excluded.append((r["id"], sp["scientific_name"], "another recipe already shown for this species"))
         if picked:

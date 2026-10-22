@@ -4731,7 +4731,9 @@ async function startEnrichmentRun() {
   resultDiv.style.display    = 'none';
   errorDiv.style.display     = 'none';
   try {
-    const r = await lmDryRunConfirm('/api/enrichment/run', {
+    // Scope first (a saved walk / Current list / All eligible), then the dry run.
+    // A paused / interrupted run resumes within its own saved list instead.
+    const r = await lmScopedDryRunConfirm('/api/enrichment/run', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({}),
@@ -4829,6 +4831,8 @@ function _enrichRunComplete(result) {
         + (r.drafts_skipped_total ? ' (' + Object.entries(r.drafts_skipped || {}).map(([k, v]) => k.replace(/_/g, ' ') + ' ' + v).join(', ') + ')' : ''), cls: '' },
     { n: Object.values(r.review_drafts_queued || {}).reduce((a, b) => a + b, 0), lbl: 'Source changes → Review', cls: '' },
     { n: r.source_failures || 0, lbl: 'Source fetch failures', cls: r.source_failures ? 'er-fail' : '' },
+    // Scope (22 Oct 2026): species beyond the per-run cap were not queued.
+    { n: r.remaining || 0, lbl: 'Not queued (cap ' + (r.cap || '–') + ')' + (r.scope_label ? ' — ' + r.scope_label : ''), cls: '' },
   ].map(s => `
     <div class="er-stat ${s.cls}">
       <div class="er-n">${s.n}</div>
@@ -6446,6 +6450,7 @@ document.getElementById('delete-dialog').addEventListener('show', () => {
 #delete-dialog.show { display: flex !important; }
 </style>
 <script src="/static/js/pwa.js"></script>
+<script src="/static/js/lists.js"></script>
 <script src="/static/js/dry-run.js"></script>
 <script src="/static/js/offline.js"></script>
 <script src="/static/js/guest-mode.js"></script>

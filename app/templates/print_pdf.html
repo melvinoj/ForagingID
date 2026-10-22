@@ -312,6 +312,8 @@ body {
   {% if sp.preparation_warnings %}<div class="safety-warn">⚠ {{ 'Caution' if sp.safety_warning else 'Preparation' }}: {{ sp.preparation_warnings }}</div>{% endif %}
   {% if ct.id_notes and sp.id_notes %}<div class="entry-id">{{ sp.id_notes[:220] }}{% if sp.id_notes|length > 220 %}…{% endif %}</div>{% endif %}
   {% if sp.parts_text and sp.culinary_allowed %}<div class="entry-note">{{ sp.parts_text }}</div>{% endif %}
+  {# Batch 8: a participant's own notes, under their species (autoescaped; guest text never |safe). #}
+  {% if sp.my_notes %}<div class="entry-my-notes"><div class="entry-section-h">Your notes</div>{% for n in sp.my_notes %}<p style="white-space:pre-wrap">{{ n }}</p>{% endfor %}</div>{% endif %}
 </div>
 
 {% elif layout == 'recipe_booklet' %}
@@ -347,9 +349,12 @@ body {
   {% endif %}
   {% if sp.recipe_title and sp.culinary_allowed %}
   <div class="entry-recipe-h">{{ sp.recipe_title }}</div>
+  {# Fix B: the look-alike + preparation lines directly above are this recipe's cautionary text — not repeated. #}
   {# |safe: _mdlite escapes &, <, > in every block and heading before adding its own <h3>/<p>/<strong>/<br> (D1-01). #}
   <div class="entry-recipe">{{ sp.recipe_body | mdlite | safe }}</div>
   {% endif %}
+  {# Batch 8: a participant's own notes, under their species (autoescaped; guest text never |safe). #}
+  {% if sp.my_notes %}<div class="entry-my-notes"><div class="entry-section-h">Your notes</div>{% for n in sp.my_notes %}<p style="white-space:pre-wrap">{{ n }}</p>{% endfor %}</div>{% endif %}
 </div>
 
 {% elif layout == 'workshop' %}
@@ -378,6 +383,8 @@ body {
   {% endif %}
   {% if ct.foraging and (sp.edible_parts or sp.harvest_stage) and sp.culinary_allowed %}
   <div class="entry-section-h">Foraging notes</div>
+  {# Fix B: cautionary text travels with culinary content (curator text, uncut). #}
+  {% for w in sp.culinary_warnings %}<div class="safety-warn culinary-warning">⚠ {{ w.heading }}: {{ w.text }}</div>{% endfor %}
   <div class="entry-body">
     {% if sp.edible_parts %}<p><strong>Edible parts —</strong> {{ sp.edible_parts }}</p>{% endif %}
     {% if sp.harvest_stage %}<p><strong>Harvest —</strong> {{ sp.harvest_stage }}</p>{% endif %}
@@ -403,11 +410,14 @@ body {
   {% endif %}
   {% if ct.recipes and sp.recipe_title and sp.culinary_allowed %}
   <div class="entry-section-h">Recipe</div>
+  {% for w in sp.culinary_warnings %}<div class="safety-warn culinary-warning">⚠ {{ w.heading }}: {{ w.text }}</div>{% endfor %}
   {# |safe: _mdlite escapes &, <, > in every block and heading before adding its own <h3>/<p>/<strong>/<br> (D1-01). #}
   <div class="entry-body">{{ sp.recipe_body | mdlite | safe }}</div>
   {% endif %}
   <div class="entry-notes">
     <div class="entry-section-h">My notes</div>
+    {# Batch 8: a participant's own notes print here, above the blank lines (autoescaped). #}
+    {% for n in sp.my_notes or [] %}<p style="white-space:pre-wrap">{{ n }}</p>{% endfor %}
     {% for _ in range(5) %}<div class="rule"></div>{% endfor %}
   </div>
   <div class="credit">Melvin Jarman</div>

@@ -11,13 +11,15 @@ import logging
 from datetime import datetime
 from typing import Optional
 
-from fastapi import APIRouter, BackgroundTasks, HTTPException, Query
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
 from sqlalchemy import func, select, text
 
 from app.database import AsyncSessionLocal
 from app.models.culinary import CulinaryInfo
 from app.models.observation import Observation
 from app.models.species import EnrichmentSource, Species
+from app.services.enrichment_scope import ScopeRequest, scope_params, scope_summary
+from app.services.enrichment_scope import resolve as resolve_scope
 
 router = APIRouter(prefix="/api/enrich", tags=["enrich"])
 
@@ -104,6 +106,7 @@ async def enrich_status():
         "last_trigger":      _state["last_trigger"],
         "empty_pfaf_fillable": empty["fillable"],
         "empty_permanently":   empty["permanent"],
+        "scope":             _state.get("scope"),   # last run: queued / remaining (22 Oct 2026)
     }
 
 
@@ -218,17 +221,26 @@ async def last_run_table():
 
 @router.post("/run")
 async def enrich_run(background_tasks: BackgroundTasks,
-                     dry_run: bool = Query(False, description="show what it would do; start nothing")):
-    if dry_run:
-        from app.services.enrichment import batch_species_names
-        from app.services.enrichment_plan import plan
-        async with AsyncSessionLocal() as session:
-            return await plan(session, await batch_species_names(),
+                     dry_run: bool = Query(False, description="show what it would do; start nothing"),
+                     sc: ScopeRequest = Depends(scope_params)):
+    """Scoped (22 Oct 2026): a saved walk, Current list or all eligible —
+    enrichment_scope.resolve; no scope = 400, nothing runs. Capped (default 25,
+    walk species first); the rest are not queued and the response says how
+    many remain."""
+    from app.services.enrichment import batch_species_names
+    async with AsyncSessionLocal() as session:
+        res = await resolve_scope(session, sc, await batch_species_names())
+        if dry_run:
+            from app.services.enrichment_plan import plan
+            return await plan(session, res["names"], scope=res,
                               note="Only fills empty fields; changed source text goes to Review. Pauses if the network fails.")
     if _state["running"]:
         return {"status": "already_running"}
-    background_tasks.add_task(_run_enrichment_task, None, "manual")
-    return {"status": "started"}
+    if not res["names"]:
+        return {"status": "nothing_to_do", "count": 0, **scope_summary(res)}
+    _state["scope"] = scope_summary(res)
+    background_tasks.add_task(_run_enrichment_task, res["names"], "manual")
+    return {"status": "started", "count": len(res["names"]), **scope_summary(res)}
 
 
 @router.post("/resume")
@@ -306,12 +318,13 @@ async def enrich_resume(background_tasks: BackgroundTasks):
 
 @router.post("/re-enrich-empty")
 async def re_enrich_empty(background_tasks: BackgroundTasks,
-                          dry_run: bool = Query(False, description="show what it would do; start nothing")):
+                          dry_run: bool = Query(False, description="show what it would do; start nothing"),
+                          sc: ScopeRequest = Depends(scope_params)):
     """
     Re-fetch PFAF + Wikidata for all confirmed species that already have a
     culinary_info row but whose edible_parts field is NULL (i.e. the original
     enrichment run found nothing).  Uses fill_empty_only=True so manually-set
-    or already-present fields are never overwritten.
+    or already-present fields are never overwritten. Scoped + capped like /run.
     """
     if _state["running"]:
         return {"status": "already_running"}
@@ -335,19 +348,21 @@ async def re_enrich_empty(background_tasks: BackgroundTasks,
             .order_by(Species.scientific_name)
         )).scalars().all()
 
-    target = list(rows)
-    if dry_run:
-        from app.services.enrichment_plan import plan
-        async with AsyncSessionLocal() as session:
-            return await plan(session, target, note="Species with no edible parts yet; only empty fields are filled.")
+        res = await resolve_scope(session, sc, list(rows))
+        if dry_run:
+            from app.services.enrichment_plan import plan
+            return await plan(session, res["names"], scope=res,
+                              note="Species with no edible parts yet; only empty fields are filled.")
+    target = res["names"]
     if not target:
-        return {"status": "nothing_to_do", "count": 0}
+        return {"status": "nothing_to_do", "count": 0, **scope_summary(res)}
 
+    _state["scope"] = scope_summary(res)
     background_tasks.add_task(
         _run_enrichment_task, target, "re-enrich-empty",
         re_enrich=True, fill_empty_only=True,
     )
-    return {"status": "started", "count": len(target), "species": target}
+    return {"status": "started", "count": len(target), "species": target, **scope_summary(res)}
 
 
 async def _run_enrichment_task(

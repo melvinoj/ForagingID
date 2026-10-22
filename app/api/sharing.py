@@ -271,6 +271,8 @@ async def me(request: Request, identity: Identity = Depends(get_identity)):
     guest = identity.is_guest
     resp = {
         "is_guest": guest,
+        # Batch 8: a workshop participant device (may add text notes).
+        "is_participant": guest and not identity.is_anonymous_guest,
         # Only localhost may add curator devices (Settings hides the button elsewhere).
         "is_local": is_local_request(request),
         "ngrok_active": _tunnel_url is not None,
@@ -615,6 +617,9 @@ def _walk_species_html(s: WalkSpecies, first: bool) -> str:
 
     # Warnings (batch 6): full text, look-alike first. For a caution species the
     # preparation warning IS its caution reason (safety_warning), so it shows once.
+    # Fix B (22 Oct 2026): this block sits directly above the culinary notes and
+    # the recipe in the same species block, so it is their cautionary text —
+    # never repeated inside the recipe box.
     culinary_html = ""
     for title, text in (("Look-alikes", s.look_alike_warning),
                         ("Caution" if s.safety_warning else "Preparation", s.preparation_warning)):

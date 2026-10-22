@@ -224,6 +224,12 @@ async def find_recipes(
             "snippet": _snippet(r.body, q, 120),
         })
 
+    # The served safety decision per species (22 Oct 2026) — the page puts the
+    # look-alike + preparation warnings next to each recipe (SafetyGate.culinaryWarnings).
+    from app.services.safety_gate import safety_for_species
+    for g in grouped.values():
+        g["safety"] = await safety_for_species(db, await db.get(Species, g["species_id"]))
+
     return {
         "query": q,
         "species_count": len(grouped),

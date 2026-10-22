@@ -135,6 +135,38 @@
     return out.join('');
   }
 
+  // Cautionary text that travels with culinary content (Melvin, 22 Oct 2026 —
+  // Fix B): look-alike AND preparation warnings, wherever a recipe, edible
+  // parts, taste notes or a culinary hint is shown or printed — unless the
+  // species-level warning block already sits directly beside it on the same
+  // card (then that block is the warning; never print it twice).
+  // In-app: safety.warnings, full text; uncurated text labelled "Source text —
+  // not yet reviewed" (batch 6). opts.handout: curator text only, uncut
+  // (safety.handout_warnings); opts.tag / opts.cls let a printer lay the lines
+  // out like its others. No warning text → ''.
+  // Python twin: app/models/species.py culinary_warnings().
+  function culinaryWarnings(safety, opts) {
+    const d = decision(safety);
+    const o = opts || {};
+    if (o.handout) {
+      const hw = handoutWarnings(d);
+      const tag = o.tag || 'div';
+      const st = o.cls ? '' : ' style="font-size:0.85em;color:#7a2000;border-left:3px solid #ea580c;padding:2px 6px;margin:4px 0;white-space:pre-wrap"';
+      const line = (head, t) => '<' + tag + ' class="culinary-warning' + (o.cls ? ' ' + o.cls : '') + '"' + st + '>⚠ ' +
+        head + ': ' + _h(t) + '</' + tag + '>';
+      const out = [];
+      if (hw.look_alike) out.push(line('Look-alikes', hw.look_alike));
+      if (hw.preparation) out.push(line(d.level === 'caution' ? 'Caution' : 'Preparation', hw.preparation));
+      return out.length ? '<div class="culinary-warnings">' + out.join('') + '</div>' : '';
+    }
+    const w = (d && d.warnings) || {};
+    const boxes = ['look_alike', 'preparation'].map(function (k) {
+      const x = w[k];
+      return x && x.text ? _warnBox(WARN_TITLES[k], x.text, x.reviewed ? '' : UNREVIEWED, false) : '';
+    }).join('');
+    return boxes ? '<div class="culinary-warnings">' + boxes + '</div>' : '';
+  }
+
   // Culinary content fields (species page "Culinary" section + taste notes).
   // Keep in step with CULINARY_FIELDS in app/api/lists_pdf.py's gate.
   const CULINARY_FIELDS = ['edible_parts', 'preparation_methods', 'cooking_techniques', 'preservation_methods',
@@ -158,5 +190,5 @@
                         warnings: warnings, handoutWarnings: handoutWarnings, handoutWarningsHtml: handoutWarningsHtml,
                         handoutAllowed: handoutAllowed,
                         handoutCulinary: handoutCulinary, handoutRecipes: handoutRecipes,
-                        handoutBadge: handoutBadge, UNREVIEWED: UNREVIEWED };
+                        handoutBadge: handoutBadge, culinaryWarnings: culinaryWarnings, UNREVIEWED: UNREVIEWED };
 })();

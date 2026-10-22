@@ -542,11 +542,18 @@ SAFETY_LABELS = {
 # preparation warning withholds its culinary content there and carries this
 # label instead of "⚠ caution" — experience-gates rule 8, applied to every
 # outgoing surface. In-app surfaces keep "⚠ caution" and the culinary content.
+# Since 22 Oct 2026 (Melvin): a curator-authored preparation_warnings OR
+# look_alike_warnings is enough to print the culinary content.
 CAUTION_UNREVIEWED_LABEL = "⚠ caution — warning not yet reviewed"
 
 
 def safety_decision(toxicity_severity: Optional[str], edibility_status: Optional[str],
-                    caution_warning: Optional[str] = None) -> dict:
+                    caution_warning: Optional[str] = None,
+                    caution_lookalike: Optional[str] = None) -> dict:
+    """caution_warning / caution_lookalike: the CURATOR-AUTHORED preparation /
+    look-alike warning text (callers pass None for uncurated text). Either one
+    lets a caution species print culinary content on handouts; "warning" stays
+    the preparation text only."""
     verdict = (edibility_status or "").strip().lower()
     if toxicity_severity == "deadly":
         level = "deadly"
@@ -560,7 +567,8 @@ def safety_decision(toxicity_severity: Optional[str], edibility_status: Optional
         level = "none"
     warning = (caution_warning or "").strip() or None
     culinary = level == "caution" or (level == "none" and verdict == "edible")
-    caution_unreviewed = level == "caution" and warning is None
+    lookalike = (caution_lookalike or "").strip() or None
+    caution_unreviewed = level == "caution" and warning is None and lookalike is None
     return {
         # == verdict in CULINARY_VERDICTS and severity_is_none() (levels above)
         "culinary_allowed": culinary,
@@ -649,6 +657,33 @@ def handout_warnings(level: str, warnings: dict) -> dict:
         "preparation_is_fallback": fallback,
         "look_alike": reviewed((warnings or {}).get("look_alike")),
     }
+
+
+def culinary_warnings(decision: Optional[dict], handout: bool) -> list:
+    """Cautionary text that travels with culinary content (Melvin, 22 Oct 2026
+    — Fix B): look-alike then preparation warning, each {kind, heading, text,
+    reviewed}. Python twin of SafetyGate.culinaryWarnings (static/js/
+    safety-gate.js), for the PDF and the experience page. decision: a served
+    safety decision (safety_gate.safety_for_species). handout=True: curator
+    text only, uncut; handout=False: in-app text with reviewed (False =
+    "Source text — not yet reviewed"). [] when there is no warning text."""
+    d = decision or {}
+    out = []
+    if handout:
+        hw = d.get("handout_warnings") or {}
+        look, prep = (hw.get("look_alike") or "").strip(), (hw.get("preparation") or "").strip()
+        if look:
+            out.append({"kind": "look_alike", "heading": "Look-alikes", "text": look, "reviewed": True})
+        if prep:
+            out.append({"kind": "preparation", "heading": "Caution" if d.get("level") == "caution" else "Preparation",
+                        "text": prep, "reviewed": True})
+        return out
+    w = d.get("warnings") or {}
+    for kind, heading in (("look_alike", "Look-alike warning"), ("preparation", "Preparation warning")):
+        x = w.get(kind)
+        if x and x.get("text"):
+            out.append({"kind": kind, "heading": heading, "text": x["text"], "reviewed": bool(x.get("reviewed"))})
+    return out
 
 
 # ---------------------------------------------------------------------------

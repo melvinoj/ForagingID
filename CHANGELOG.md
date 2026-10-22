@@ -145,6 +145,10 @@ Rule: Code tests whatever it can (real JS via jsc, real PDFs); new browser check
 
 ## History
 
+### 2026-10-22 13:28
+**Snapshot** — before re-route of saved walk 5
+DB: `snapshots/db_20261022_132801.sqlite`
+
 ### 2026-10-22 13:18
 **Snapshot** — End of session — Context-warning hook + ctx status line (config only; thresholds 400k/500k); CLAUDE.md context + End Session block rules; Step 1 recon for enrichment scope / handout rule / prep warnings with recipes (RECON_enrichment_scope_22oct.md). Settled: 'Current list' scope; encounter field recipes carry prep warnings. No app/ changes.
 DB: `snapshots/db_20261022_131852.sqlite`

@@ -251,6 +251,10 @@ Rule: Code tests whatever it can (real JS via jsc, real PDFs); new browser check
 
 ## History
 
+### 2026-10-22 22:14
+**Snapshot** — Manual snapshot
+DB: `snapshots/db_20261022_221455.sqlite`
+
 ### 2026-10-22 22:09
 **Snapshot** — End of session — Session ended from Settings page
 DB: `snapshots/db_20261022_220927.sqlite`

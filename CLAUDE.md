@@ -17,6 +17,8 @@ When the user says **"Continue on ForagingID"**, always start with this protocol
 pwd check → Read CHANGELOG.md → report Current State → confirm next step
 ```
 
+If a CONTEXT WARNING or CONTEXT LIMIT note appears, follow it before anything else.
+
 ---
 
 ## Git Protocol (Code has full git access as of 25 June 2026)

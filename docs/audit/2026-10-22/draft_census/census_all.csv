@@ -1,0 +1,489 @@
+draft_id,species_id,common_latin,verdict,field,length,suggested_action,reason,on_walk
+638,142,English Wild Thyme (Thymus polytrichus),edible,medicinal_notes,336,APPROVE,no flag,
+648,159,Druce's Crane's-bill (Geranium × oxonianum),edible,medicinal_notes,586,REJECT,placeholder/refusal text; chat phrasing: “I'd”,
+1657,550,Snowball (Viburnum trilobum),edible,taste_notes,337,APPROVE,no flag,
+1659,550,Snowball (Viburnum trilobum),edible,recipe,2136,APPROVE,no flag,
+1660,552,David’s elm (Ulmus davidiana),edible,taste_notes,704,APPROVE,no flag,
+1661,552,David’s elm (Ulmus davidiana),edible,medicinal_notes,403,APPROVE,no flag,
+1662,552,David’s elm (Ulmus davidiana),edible,recipe,2016,APPROVE,no flag,
+1670,258,Curled dock (Rumex crispus),edible,taste_notes,423,APPROVE,no flag,
+1671,258,Curled dock (Rumex crispus),edible,recipe,1838,APPROVE,no flag,
+1695,556,Tall Cotton-Grass (Eriophorum angustifolium),edible,taste_notes,656,APPROVE,no flag,
+1696,556,Tall Cotton-Grass (Eriophorum angustifolium),edible,medicinal_notes,304,APPROVE,no flag,
+1697,556,Tall Cotton-Grass (Eriophorum angustifolium),edible,recipe,1632,APPROVE,no flag,
+1700,560,Pale oyster (Pleurotus pulmonarius),edible,medicinal_notes,707,LOOK,fungi,
+1707,564,Trailing bellflower (Campanula poscharskyana),edible,medicinal_notes,561,APPROVE,no flag,
+1716,568,Oregano (Origanum vulgare),edible,taste_notes,674,APPROVE,no flag,
+1718,568,Oregano (Origanum vulgare),edible,recipe,2220,APPROVE,no flag,
+1729,573,Basswood (Tilia americana),edible,taste_notes,619,APPROVE,no flag,
+1731,573,Basswood (Tilia americana),edible,recipe,2014,REJECT,off-region phrasing: “North America”,
+1732,574,Fuchsia (Fuchsia magellanica),edible,taste_notes,303,APPROVE,no flag,
+1734,574,Fuchsia (Fuchsia magellanica),edible,recipe,2092,APPROVE,no flag,
+1735,578,Grape (Vitis vinifera),edible,taste_notes,843,APPROVE,no flag,
+1737,578,Grape (Vitis vinifera),edible,recipe,2268,APPROVE,no flag,
+1777,390,Walnut (Juglans regia),edible,taste_notes,597,APPROVE,no flag,
+1778,390,Walnut (Juglans regia),edible,medicinal_notes,962,APPROVE,no flag,
+1779,390,Walnut (Juglans regia),edible,recipe,2104,APPROVE,no flag,
+1807,299,Five-seeded Hawthorn (Crataegus pentagyna),edible,taste_notes,616,APPROVE,no flag,
+1811,339,Beaked Hawksbeard (Crepis vesicaria),edible,taste_notes,539,APPROVE,no flag,
+1812,339,Beaked Hawksbeard (Crepis vesicaria),edible,medicinal_notes,465,APPROVE,no flag,
+1813,339,Beaked Hawksbeard (Crepis vesicaria),edible,recipe,2565,APPROVE,no flag,
+1832,482,Marsh willowherb (Epilobium palustre),edible,medicinal_notes,400,APPROVE,no flag,
+1837,527,Field horsetail (Equisetum arvense),caution,medicinal_notes,2330,LOOK,caution species,
+1848,527,Field horsetail (Equisetum arvense),caution,taste_notes,851,LOOK,caution species,
+1849,527,Field horsetail (Equisetum arvense),caution,recipe,3177,LOOK,caution species; recipe uses raw parts of a caution species,
+1859,363,Yellow gentian (Gentiana lutea),caution,taste_notes,629,LOOK,caution species,
+1860,363,Yellow gentian (Gentiana lutea),caution,medicinal_notes,918,LOOK,caution species,
+1861,363,Yellow gentian (Gentiana lutea),caution,recipe,3509,LOOK,caution species,
+1869,538,Hydrocotyle sibthorpioides,edible,taste_notes,413,APPROVE,no flag,
+1870,538,Hydrocotyle sibthorpioides,edible,medicinal_notes,400,APPROVE,no flag,
+1871,538,Hydrocotyle sibthorpioides,edible,recipe,3028,APPROVE,no flag,
+1875,208,Bluebuttons (Knautia arvensis),edible,taste_notes,385,APPROVE,no flag,yes
+1876,208,Bluebuttons (Knautia arvensis),edible,recipe,3449,APPROVE,no flag,yes
+1881,216,Daisy (Leucanthemum ircutianum),edible,taste_notes,462,APPROVE,no flag,yes
+1883,216,Daisy (Leucanthemum ircutianum),edible,recipe,2560,APPROVE,no flag,yes
+1903,393,Lucky-clover (Oxalis tetraphylla),edible,taste_notes,710,APPROVE,no flag,
+1904,393,Lucky-clover (Oxalis tetraphylla),edible,medicinal_notes,852,APPROVE,no flag,
+1905,393,Lucky-clover (Oxalis tetraphylla),edible,recipe,2199,APPROVE,no flag,
+1909,314,Opium Poppy (Papaver somniferum),edible,medicinal_notes,830,APPROVE,no flag,
+1927,438,Black pine (Pinus nigra),edible,taste_notes,397,APPROVE,no flag,
+1929,438,Black pine (Pinus nigra),edible,recipe,3504,APPROVE,no flag,
+1931,508,Monterey pine (Pinus radiata),edible,taste_notes,514,APPROVE,no flag,
+1933,508,Monterey pine (Pinus radiata),edible,recipe,2980,APPROVE,no flag,
+1950,212,Sour cherry (Prunus cerasus),edible,taste_notes,655,APPROVE,no flag,yes
+1952,212,Sour cherry (Prunus cerasus),edible,recipe,3133,APPROVE,no flag,yes
+1953,437,Bird cherry (Prunus padus),edible,taste_notes,658,APPROVE,no flag,
+1954,437,Bird cherry (Prunus padus),edible,medicinal_notes,863,APPROVE,no flag,
+1955,437,Bird cherry (Prunus padus),edible,recipe,3442,APPROVE,no flag,
+1956,488,Douglas-fir (Pseudotsuga menziesii),edible,taste_notes,674,APPROVE,no flag,yes
+1957,488,Douglas-fir (Pseudotsuga menziesii),edible,medicinal_notes,965,APPROVE,no flag,yes
+1958,488,Douglas-fir (Pseudotsuga menziesii),edible,recipe,3082,APPROVE,no flag,yes
+1962,433,Pear (Pyrus communis),edible,taste_notes,629,APPROVE,no flag,yes
+1964,433,Pear (Pyrus communis),edible,recipe,2534,APPROVE,no flag,yes
+1968,388,Black oak (Quercus velutina),edible,taste_notes,486,APPROVE,no flag,
+1969,388,Black oak (Quercus velutina),edible,medicinal_notes,642,APPROVE,no flag,
+1970,388,Black oak (Quercus velutina),edible,recipe,3558,APPROVE,no flag,
+1974,419,Mexican-bamboo (Reynoutria japonica),edible,taste_notes,461,APPROVE,no flag,yes
+1975,419,Mexican-bamboo (Reynoutria japonica),edible,medicinal_notes,1002,APPROVE,no flag,yes
+1976,419,Mexican-bamboo (Reynoutria japonica),edible,recipe,2662,APPROVE,no flag,yes
+1977,391,Blackcurrant (Ribes nigrum),edible,taste_notes,513,APPROVE,no flag,
+1979,391,Blackcurrant (Ribes nigrum),edible,recipe,3115,APPROVE,no flag,
+1981,277,Glaucous Dog Rose (Rosa dumalis),edible,medicinal_notes,836,APPROVE,no flag,yes
+1982,396,Smallflower sweetbrier (Rosa micrantha),edible,taste_notes,683,APPROVE,no flag,
+1983,396,Smallflower sweetbrier (Rosa micrantha),edible,medicinal_notes,738,APPROVE,no flag,
+1984,396,Smallflower sweetbrier (Rosa micrantha),edible,recipe,3581,APPROVE,no flag,
+1985,536,Rambler rose (Rosa multiflora),edible,taste_notes,674,APPROVE,no flag,
+1987,536,Rambler rose (Rosa multiflora),edible,recipe,3709,APPROVE,no flag,
+1991,293,Shrubby blackberry (Rubus fruticosus),edible,taste_notes,579,APPROVE,no flag,yes
+1992,293,Shrubby blackberry (Rubus fruticosus),edible,medicinal_notes,1072,APPROVE,no flag,yes
+1993,293,Shrubby blackberry (Rubus fruticosus),edible,recipe,3428,APPROVE,no flag,yes
+2000,305,Broad-leaved dock (Rumex obtusifolius),edible,taste_notes,703,APPROVE,no flag,
+2002,305,Broad-leaved dock (Rumex obtusifolius),edible,recipe,2942,APPROVE,no flag,
+2008,402,Red-berried elder (Sambucus racemosa),caution,taste_notes,463,LOOK,caution species,
+2010,402,Red-berried elder (Sambucus racemosa),caution,recipe,3676,LOOK,caution species; recipe uses raw parts of a caution species,
+2018,301,White campion (Silene latifolia),edible,taste_notes,406,APPROVE,no flag,
+2019,301,White campion (Silene latifolia),edible,medicinal_notes,769,APPROVE,no flag,
+2020,301,White campion (Silene latifolia),edible,recipe,3225,REJECT,chat phrasing: “I'd”,
+2022,347,Hedge Mustard (Sisymbrium officinale),edible,taste_notes,529,APPROVE,no flag,
+2027,207,Sowthistle (Sonchus arvensis),edible,medicinal_notes,744,APPROVE,no flag,
+2029,350,Common sowthistle (Sonchus oleraceus),edible,taste_notes,531,APPROVE,no flag,
+2031,350,Common sowthistle (Sonchus oleraceus),edible,recipe,3007,APPROVE,no flag,
+2032,296,Hedge woundwort (Stachys sylvatica),edible,taste_notes,419,APPROVE,no flag,
+2033,296,Hedge woundwort (Stachys sylvatica),edible,recipe,3572,APPROVE,no flag,
+2041,395,Feverfew (Tanacetum parthenium),edible,taste_notes,498,APPROVE,no flag,
+2043,395,Feverfew (Tanacetum parthenium),edible,recipe,3678,APPROVE,no flag,
+2050,513,Field penny-cress (Thlaspi arvense),edible,taste_notes,423,APPROVE,no flag,
+2052,513,Field penny-cress (Thlaspi arvense),edible,recipe,2589,APPROVE,no flag,
+2056,532,Small-leaved Lime (Tilia cordata),edible,taste_notes,589,APPROVE,no flag,
+2057,532,Small-leaved Lime (Tilia cordata),edible,medicinal_notes,828,APPROVE,no flag,
+2058,532,Small-leaved Lime (Tilia cordata),edible,recipe,2772,APPROVE,no flag,
+2060,487,White Clover (Trifolium repens),edible,taste_notes,570,APPROVE,no flag,
+2062,487,White Clover (Trifolium repens),edible,recipe,2961,APPROVE,no flag,
+2063,262,Tower Mustard (Turritis glabra),edible,taste_notes,700,APPROVE,no flag,
+2065,262,Tower Mustard (Turritis glabra),edible,recipe,2726,APPROVE,no flag,
+2067,369,Mullein (Verbascum densiflorum),edible,taste_notes,464,APPROVE,no flag,yes
+2068,369,Mullein (Verbascum densiflorum),edible,medicinal_notes,1251,LOOK,dosage/treatment claim (“treating”),yes
+2069,369,Mullein (Verbascum densiflorum),edible,recipe,2904,APPROVE,no flag,yes
+2082,384,Speedwell (Veronica officinalis),edible,taste_notes,486,APPROVE,no flag,
+2083,384,Speedwell (Veronica officinalis),edible,medicinal_notes,579,APPROVE,no flag,
+2084,384,Speedwell (Veronica officinalis),edible,recipe,3848,APPROVE,no flag,
+2085,372,Cow Vetch (Vicia cracca),edible,taste_notes,1000,APPROVE,no flag,
+2086,372,Cow Vetch (Vicia cracca),edible,medicinal_notes,640,APPROVE,no flag,
+2087,372,Cow Vetch (Vicia cracca),edible,recipe,2609,APPROVE,no flag,
+2088,300,Hairy tare (Vicia hirsuta),edible,medicinal_notes,620,APPROVE,no flag,
+2097,587,Crab apple (Malus sylvestris),edible,taste_notes,638,APPROVE,no flag,yes
+2098,587,Crab apple (Malus sylvestris),edible,medicinal_notes,1014,APPROVE,no flag,yes
+2099,587,Crab apple (Malus sylvestris),edible,recipe,3673,APPROVE,no flag,yes
+2116,591,Loosestrife (Lysimachia vulgaris),edible,recipe,3271,APPROVE,no flag,yes
+2117,591,Loosestrife (Lysimachia vulgaris),edible,taste_notes,251,APPROVE,no flag,yes
+2122,342,Horseweed (Erigeron canadensis),edible,taste_notes,633,APPROVE,no flag,
+2123,342,Horseweed (Erigeron canadensis),edible,recipe,3749,APPROVE,no flag,
+2127,593,Rumex thyrsiflorus,edible,medicinal_notes,205,REJECT,placeholder/refusal text,
+2141,370,Bog spruce (Picea mariana),edible,taste_notes,501,APPROVE,no flag,
+2143,370,Bog spruce (Picea mariana),edible,recipe,3303,APPROVE,no flag,
+2180,598,American watermat (Chrysosplenium americanum),edible,medicinal_notes,241,REJECT,placeholder/refusal text,
+2184,599,Bramble Vetch (Vicia tenuifolia),edible,medicinal_notes,184,REJECT,placeholder/refusal text,
+2190,553,Carpinus caroliniana,edible,recipe,3538,APPROVE,no flag,
+2193,553,Carpinus caroliniana,edible,taste_notes,286,APPROVE,no flag,
+2194,606,Dianthus carthusianorum,edible,medicinal_notes,189,REJECT,placeholder/refusal text,
+2197,607,Fraxinus angustifolia,edible,medicinal_notes,186,REJECT,placeholder/refusal text,
+2229,632,Picea obovata,edible,medicinal_notes,161,REJECT,placeholder/refusal text,
+2231,634,Water Thistle (Cirsium oleraceum),edible,medicinal_notes,184,REJECT,placeholder/refusal text,
+2236,640,Yellow Fieldcress (Rorippa sylvestris),edible,medicinal_notes,195,REJECT,placeholder/refusal text,yes
+2237,641,Alpine currant (Ribes alpinum),edible,medicinal_notes,226,REJECT,placeholder/refusal text,
+2240,644,Good King Henry (Blitum bonus-henricus),edible,medicinal_notes,188,REJECT,placeholder/refusal text,
+2245,654,Great Maple (Acer platanoides),edible,medicinal_notes,237,REJECT,placeholder/refusal text,
+2267,659,Rock thyme (Clinopodium alpinum),edible,medicinal_notes,186,APPROVE,no flag,
+2268,661,Spiniest Thistle (Cirsium spinosissimum),edible,medicinal_notes,322,REJECT,placeholder/refusal text,
+2270,663,Mugwort (Artemisia verlotiorum),edible,medicinal_notes,391,REJECT,placeholder/refusal text,
+2271,664,Catmint (Nepeta racemosa),edible,medicinal_notes,180,REJECT,placeholder/refusal text,
+2275,383,Wood Sage (Teucrium scorodonia),edible,taste_notes,332,APPROVE,no flag,
+2321,681,Mock strawberry (Potentilla indica),edible,medicinal_notes,272,REJECT,placeholder/refusal text,
+2323,228,Mayweed (Matricaria chamomilla),edible,taste_notes,389,APPROVE,no flag,
+2324,228,Mayweed (Matricaria chamomilla),edible,recipe,3815,APPROVE,no flag,
+2326,612,Vitrapunkel (Phyteuma spicatum),edible,medicinal_notes,243,REJECT,placeholder/refusal text,
+2343,687,Willowherb (Epilobium montanum),edible,medicinal_notes,153,REJECT,placeholder/refusal text,
+2351,692,Evening primrose (Oenothera parviflora),edible,medicinal_notes,248,REJECT,placeholder/refusal text,
+2357,694,Eltrot (Heracleum sibiricum),edible,medicinal_notes,435,LOOK,Apiaceae; dosage/treatment claim (“remedy for”),yes
+2360,371,Heal-all (Prunella vulgaris),edible,taste_notes,339,APPROVE,no flag,yes
+2361,371,Heal-all (Prunella vulgaris),edible,medicinal_notes,698,LOOK,dosage/treatment claim (“treating”),yes
+2362,371,Heal-all (Prunella vulgaris),edible,recipe,3931,APPROVE,no flag,yes
+2363,371,Heal-all (Prunella vulgaris),edible,medicinal_folklore,759,APPROVE,no flag,yes
+2432,166,Red sorrel (Rumex acetosella),edible,medicinal_folklore,600,LOOK,dosage/treatment claim (“treatment”),yes
+2586,625,Betony (Stachys officinalis),edible,taste_notes,272,APPROVE,no flag,
+2587,625,Betony (Stachys officinalis),edible,recipe,3481,APPROVE,no flag,
+2640,682,Yellow archangel (Lamium galeobdolon),edible,taste_notes,401,APPROVE,no flag,
+2641,682,Yellow archangel (Lamium galeobdolon),edible,recipe,2440,APPROVE,no flag,
+2649,618,Water Avens (Geum rivale),edible,taste_notes,382,APPROVE,no flag,
+2650,618,Water Avens (Geum rivale),edible,recipe,2021,APPROVE,no flag,
+2663,600,Wall Lettuce (Lactuca muralis),edible,taste_notes,196,APPROVE,no flag,
+2664,600,Wall Lettuce (Lactuca muralis),edible,medicinal_notes,148,APPROVE,no flag,
+2665,600,Wall Lettuce (Lactuca muralis),edible,recipe,2270,APPROVE,no flag,
+2671,596,Jewelweed (Impatiens noli-tangere),edible,taste_notes,380,APPROVE,no flag,
+2672,596,Jewelweed (Impatiens noli-tangere),edible,medicinal_notes,293,APPROVE,no flag,
+2673,596,Jewelweed (Impatiens noli-tangere),edible,recipe,3367,APPROVE,no flag,
+2678,699,Pearly Everlasting (Anaphalis margaritacea),edible,medicinal_notes,217,APPROVE,no flag,
+2679,672,Fig leaf goosefoot (Chenopodium ficifolium),caution,taste_notes,310,LOOK,caution species,yes
+2680,672,Fig leaf goosefoot (Chenopodium ficifolium),caution,medicinal_notes,294,LOOK,caution species,yes
+2681,672,Fig leaf goosefoot (Chenopodium ficifolium),caution,recipe,3271,LOOK,caution species; recipe uses raw parts of a caution species,yes
+2716,622,Tormentil (Potentilla erecta),edible,taste_notes,356,APPROVE,no flag,
+2717,622,Tormentil (Potentilla erecta),edible,recipe,3662,APPROVE,no flag,
+2718,667,Eyebright (Euphrasia officinalis),edible,taste_notes,99,APPROVE,no flag,
+2719,667,Eyebright (Euphrasia officinalis),edible,recipe,2435,APPROVE,no flag,
+2723,677,Spotted St. Johnswort (Hypericum maculatum),caution,medicinal_notes,268,LOOK,caution species; dosage/treatment claim (“treating”),yes
+2726,706,Suillus grevillei,edible,medicinal_notes,143,REJECT,placeholder/refusal text,
+2727,707,Oxalis triangularis,edible,medicinal_notes,249,APPROVE,no flag,
+2743,710,Rosa villosa,edible,medicinal_notes,317,APPROVE,no flag,yes
+2745,711,Marasmius oreades,caution,medicinal_notes,164,LOOK,caution species,yes
+2752,715,Agrimony (Agrimonia eupatoria),edible,medicinal_notes,529,APPROVE,no flag,
+2753,716,Fragant Agrimony (Agrimonia procera),edible,medicinal_notes,460,APPROVE,no flag,
+2754,717,Cluster mallow (Malva verticillata),edible,medicinal_notes,363,APPROVE,no flag,
+2761,617,Great Burnet (Sanguisorba officinalis),edible,taste_notes,345,APPROVE,no flag,
+2762,617,Great Burnet (Sanguisorba officinalis),edible,recipe,3117,APPROVE,no flag,
+2766,366,Norway Spruce (Picea abies),edible,taste_notes,460,APPROVE,no flag,yes
+2767,366,Norway Spruce (Picea abies),edible,medicinal_notes,331,APPROVE,no flag,yes
+2768,366,Norway Spruce (Picea abies),edible,recipe,2880,APPROVE,no flag,yes
+2769,723,Smooth hawksbeard (Crepis capillaris),edible,medicinal_notes,209,APPROVE,no flag,
+2775,273,Annual fleabane (Erigeron annuus),edible,taste_notes,348,APPROVE,no flag,yes
+2776,273,Annual fleabane (Erigeron annuus),edible,medicinal_notes,112,APPROVE,no flag,yes
+2777,273,Annual fleabane (Erigeron annuus),edible,recipe,2930,APPROVE,no flag,yes
+2778,666,Mountain Dock (Rumex arifolius),edible,taste_notes,364,APPROVE,no flag,
+2779,666,Mountain Dock (Rumex arifolius),edible,medicinal_notes,204,APPROVE,no flag,
+2780,666,Mountain Dock (Rumex arifolius),edible,recipe,2741,APPROVE,no flag,
+2782,727,Lambs quarters (Chenopodium album),edible,medicinal_notes,285,LOOK,dosage/treatment claim (“treatment”),
+2784,730,Sneezewort (Achillea ptarmica),edible,medicinal_notes,210,APPROVE,no flag,
+2785,731,Hawk's beard (Crepis pulchra),edible,medicinal_notes,186,APPROVE,no flag,
+2787,733,Opposite leaved Golden Saxifrage (Chrysosplenium oppositifolium),edible,medicinal_notes,225,APPROVE,no flag,
+2788,456,Common poppy (Papaver rhoeas),edible,taste_notes,375,APPROVE,no flag,
+2789,456,Common poppy (Papaver rhoeas),edible,medicinal_notes,473,APPROVE,no flag,
+2790,456,Common poppy (Papaver rhoeas),edible,recipe,3065,APPROVE,no flag,
+2792,735,Common salsify (Tragopogon dubius),edible,medicinal_notes,205,APPROVE,no flag,
+2793,294,Dark mullein (Verbascum nigrum),edible,taste_notes,397,APPROVE,no flag,
+2794,294,Dark mullein (Verbascum nigrum),edible,medicinal_notes,370,APPROVE,no flag,
+2795,294,Dark mullein (Verbascum nigrum),edible,recipe,3686,APPROVE,no flag,
+2798,732,Goat's beard (Tragopogon pratensis),edible,medicinal_notes,207,APPROVE,no flag,
+2799,736,Alfalfa (Medicago sativa),edible,medicinal_notes,237,APPROVE,no flag,
+2803,743,Bitter Vetch (Lathyrus linifolius),edible,medicinal_notes,144,APPROVE,no flag,
+2804,634,Water Thistle (Cirsium oleraceum),edible,taste_notes,291,APPROVE,no flag,
+2805,634,Water Thistle (Cirsium oleraceum),edible,recipe,2634,APPROVE,no flag,
+2812,749,Wall lettuce (Mycelis muralis),edible,medicinal_notes,108,APPROVE,no flag,
+2828,590,Greater Burnet saxifrage (Pimpinella major),caution,taste_notes,393,LOOK,Apiaceae; caution species,yes
+2829,590,Greater Burnet saxifrage (Pimpinella major),caution,medicinal_notes,396,LOOK,Apiaceae; caution species,yes
+2830,590,Greater Burnet saxifrage (Pimpinella major),caution,recipe,3006,LOOK,Apiaceae; caution species; recipe uses raw parts of a caution species,yes
+2907,104,Hop Clover (Medicago lupulina),edible,taste_notes,377,APPROVE,no flag,
+2908,336,Wood Hedgehog (Hydnum repandum),edible,taste_notes,608,APPROVE,no flag,
+2909,336,Wood Hedgehog (Hydnum repandum),edible,medicinal_notes,212,REJECT,placeholder/refusal text,
+2910,336,Wood Hedgehog (Hydnum repandum),edible,recipe,3738,APPROVE,no flag,
+2911,223,Giant Polypore (Meripilus giganteus),edible,taste_notes,399,APPROVE,no flag,yes
+2912,223,Giant Polypore (Meripilus giganteus),edible,recipe,3592,APPROVE,no flag,yes
+2917,495,Pear-shaped Puffball (Apioperdon pyriforme),caution,medicinal_notes,201,LOOK,caution species; fungi,
+2918,323,Porcelain mushroom (Oudemansiella mucida),edible,taste_notes,411,APPROVE,no flag,
+2919,323,Porcelain mushroom (Oudemansiella mucida),edible,recipe,2758,APPROVE,no flag,
+2923,160,Cep (Boletus edulis),edible,taste_notes,500,APPROVE,no flag,
+2924,160,Cep (Boletus edulis),edible,medicinal_notes,223,LOOK,dosage/treatment claim (“treat”),
+2925,160,Cep (Boletus edulis),edible,recipe,3191,APPROVE,no flag,
+2926,497,Brown Birch-bolete (Leccinum scabrum),caution,taste_notes,595,LOOK,caution species; fungi,
+2927,497,Brown Birch-bolete (Leccinum scabrum),caution,medicinal_notes,447,LOOK,caution species; fungi,
+2928,497,Brown Birch-bolete (Leccinum scabrum),caution,recipe,3842,LOOK,caution species; fungi,
+2930,156,Shaggy Mane (Coprinus comatus),edible,taste_notes,473,LOOK,fungi,
+2931,156,Shaggy Mane (Coprinus comatus),edible,medicinal_notes,244,LOOK,fungi,
+2932,156,Shaggy Mane (Coprinus comatus),edible,recipe,2802,LOOK,fungi,
+2933,157,Beefsteak Polypore (Fistulina hepatica),edible,taste_notes,568,APPROVE,no flag,
+2934,157,Beefsteak Polypore (Fistulina hepatica),edible,medicinal_notes,168,APPROVE,no flag,
+2935,157,Beefsteak Polypore (Fistulina hepatica),edible,recipe,3378,APPROVE,no flag,
+2936,489,Orange Birch Bolete (Leccinum versipelle),caution,taste_notes,424,LOOK,caution species; fungi,
+2937,489,Orange Birch Bolete (Leccinum versipelle),caution,medicinal_notes,360,LOOK,caution species; fungi,
+2938,489,Orange Birch Bolete (Leccinum versipelle),caution,recipe,3235,LOOK,caution species; fungi,
+2939,467,Blusher (Amanita rubescens),caution,taste_notes,414,LOOK,caution species,
+2940,467,Blusher (Amanita rubescens),caution,medicinal_notes,263,LOOK,caution species,
+2941,225,Bay Bolete (Imleria badia),edible,taste_notes,472,APPROVE,no flag,
+2942,225,Bay Bolete (Imleria badia),edible,medicinal_notes,172,APPROVE,no flag,
+2943,225,Bay Bolete (Imleria badia),edible,recipe,3277,APPROVE,no flag,
+2944,324,Red-cracking Bolete (Xerocomellus chrysenteron),edible,taste_notes,356,APPROVE,no flag,
+2945,324,Red-cracking Bolete (Xerocomellus chrysenteron),edible,medicinal_notes,251,LOOK,dosage/treatment claim (“treat”),
+2946,324,Red-cracking Bolete (Xerocomellus chrysenteron),edible,recipe,3301,APPROVE,no flag,
+2953,457,Turkey-tail (Trametes versicolor),edible,taste_notes,337,LOOK,fungi,
+2954,457,Turkey-tail (Trametes versicolor),edible,medicinal_notes,313,LOOK,fungi,
+2955,457,Turkey-tail (Trametes versicolor),edible,recipe,3343,LOOK,fungi,
+2959,505,Blewit (Lepista nuda),edible,taste_notes,428,LOOK,fungi,
+2960,505,Blewit (Lepista nuda),edible,medicinal_notes,329,LOOK,fungi,
+2961,505,Blewit (Lepista nuda),edible,recipe,2801,LOOK,fungi,
+2962,506,Summer Bolete (Boletus reticulatus),edible,taste_notes,389,LOOK,fungi,
+2963,506,Summer Bolete (Boletus reticulatus),edible,medicinal_notes,141,LOOK,fungi,
+2964,506,Summer Bolete (Boletus reticulatus),edible,recipe,3208,LOOK,fungi,
+2966,424,Rose Mallow (Malva trimestris),edible,taste_notes,438,APPROVE,no flag,
+2967,424,Rose Mallow (Malva trimestris),edible,medicinal_notes,238,APPROVE,no flag,
+2968,424,Rose Mallow (Malva trimestris),edible,recipe,3781,APPROVE,no flag,
+2969,476,Armenian Blackberry (Rubus armeniacus),edible,taste_notes,352,APPROVE,no flag,
+2970,476,Armenian Blackberry (Rubus armeniacus),edible,medicinal_notes,410,LOOK,dosage/treatment claim (“remedy for”),
+2971,476,Armenian Blackberry (Rubus armeniacus),edible,recipe,2694,APPROVE,no flag,
+2972,168,Hedgerow Geranium (Geranium pyrenaicum),edible,taste_notes,311,APPROVE,no flag,yes
+2973,168,Hedgerow Geranium (Geranium pyrenaicum),edible,medicinal_notes,270,REJECT,placeholder/refusal text,yes
+2974,168,Hedgerow Geranium (Geranium pyrenaicum),edible,recipe,2717,APPROVE,no flag,yes
+2975,217,Nodding catchfly (Silene pendula),edible,taste_notes,439,APPROVE,no flag,yes
+2976,217,Nodding catchfly (Silene pendula),edible,medicinal_notes,181,LOOK,dosage/treatment claim (“treat”),yes
+2977,217,Nodding catchfly (Silene pendula),edible,recipe,2989,APPROVE,no flag,yes
+2978,172,Peppermint (Mentha × piperita),edible,taste_notes,356,APPROVE,no flag,
+2979,172,Peppermint (Mentha × piperita),edible,medicinal_notes,401,APPROVE,no flag,
+2980,172,Peppermint (Mentha × piperita),edible,recipe,3528,APPROVE,no flag,
+2981,173,Horehound (Marrubium vulgare),edible,taste_notes,408,APPROVE,no flag,
+2982,173,Horehound (Marrubium vulgare),edible,recipe,3337,APPROVE,no flag,
+2983,175,Red clover (Trifolium pratense),edible,medicinal_notes,217,APPROVE,no flag,yes
+2984,226,Red Clover (Trifolium medium),edible,taste_notes,262,APPROVE,no flag,
+2985,226,Red Clover (Trifolium medium),edible,medicinal_notes,315,APPROVE,no flag,
+2986,226,Red Clover (Trifolium medium),edible,recipe,3671,APPROVE,no flag,
+2987,177,Common Lime (Tilia × europaea),edible,taste_notes,416,APPROVE,no flag,
+2988,177,Common Lime (Tilia × europaea),edible,medicinal_notes,612,APPROVE,no flag,
+2989,177,Common Lime (Tilia × europaea),edible,recipe,3643,APPROVE,no flag,
+2990,184,Brooklime (Veronica beccabunga),edible,taste_notes,356,APPROVE,no flag,
+2991,184,Brooklime (Veronica beccabunga),edible,recipe,2502,APPROVE,no flag,
+2995,181,Wild Strawberry (Fragaria vesca),edible,medicinal_notes,162,APPROVE,no flag,yes
+2996,183,Hedge Bedstraw (Galium album),edible,taste_notes,284,APPROVE,no flag,yes
+2997,183,Hedge Bedstraw (Galium album),edible,medicinal_notes,228,REJECT,placeholder/refusal text,yes
+2998,183,Hedge Bedstraw (Galium album),edible,recipe,2356,APPROVE,no flag,yes
+2999,349,Hylotelephium telephium,edible,taste_notes,535,APPROVE,no flag,
+3000,349,Hylotelephium telephium,edible,medicinal_notes,307,LOOK,dosage/treatment claim (“treatment”),
+3001,349,Hylotelephium telephium,edible,recipe,2736,APPROVE,no flag,
+3003,233,Hairy cat's ear (Hypochaeris radicata),edible,taste_notes,337,APPROVE,no flag,yes
+3004,233,Hairy cat's ear (Hypochaeris radicata),edible,medicinal_notes,297,LOOK,dosage/treatment claim (“treatment”),yes
+3005,233,Hairy cat's ear (Hypochaeris radicata),edible,recipe,3355,APPROVE,no flag,yes
+3012,190,Hairy lady's mantle (Alchemilla monticola),edible,taste_notes,425,APPROVE,no flag,yes
+3013,190,Hairy lady's mantle (Alchemilla monticola),edible,medicinal_notes,139,APPROVE,no flag,yes
+3014,190,Hairy lady's mantle (Alchemilla monticola),edible,recipe,3759,APPROVE,no flag,yes
+3015,189,Scots Pine (Pinus sylvestris),edible,medicinal_notes,468,APPROVE,no flag,yes
+3016,341,Musk mallow (Malva moschata),edible,medicinal_notes,478,APPROVE,no flag,yes
+3017,353,Canada goldenrod (Solidago canadensis),edible,taste_notes,341,APPROVE,no flag,
+3018,353,Canada goldenrod (Solidago canadensis),edible,medicinal_notes,454,APPROVE,no flag,
+3019,353,Canada goldenrod (Solidago canadensis),edible,recipe,3162,APPROVE,no flag,
+3020,193,Lesser Stitchwort (Stellaria graminea),edible,taste_notes,372,APPROVE,no flag,yes
+3021,193,Lesser Stitchwort (Stellaria graminea),edible,medicinal_notes,155,APPROVE,no flag,yes
+3022,199,Salad Burnet (Sanguisorba minor),edible,medicinal_notes,193,APPROVE,no flag,
+3023,344,Narrow-leaved hawksbeard (Crepis tectorum),edible,taste_notes,255,APPROVE,no flag,
+3024,344,Narrow-leaved hawksbeard (Crepis tectorum),edible,medicinal_notes,117,APPROVE,no flag,
+3025,344,Narrow-leaved hawksbeard (Crepis tectorum),edible,recipe,3303,APPROVE,no flag,
+3026,201,Yarrow (Achillea nobilis),edible,medicinal_notes,325,LOOK,dosage/treatment claim (“treat”),yes
+3056,778,Bearded bellflower (Campanula barbata),edible,medicinal_notes,250,APPROVE,no flag,
+3058,780,Marsh hawk's beard (Crepis paludosa),edible,medicinal_notes,214,APPROVE,no flag,
+3061,783,Sweetclover (Melilotus officinalis),caution,medicinal_notes,535,LOOK,caution species,
+3068,804,Sticky Bolete (Suillus viscidus),edible,medicinal_notes,153,LOOK,fungi,
+3069,806,Common juniper (Juniperus communis),caution,medicinal_notes,753,REJECT,off-region phrasing: “North America”,
+3083,790,Bog bilberry (Vaccinium uliginosum),edible,medicinal_notes,357,APPROVE,no flag,
+3084,788,Chicory (Cichorium intybus),edible,medicinal_notes,811,LOOK,dosage/treatment claim (“treat”),
+3085,615,Silver Thistle (Carlina acaulis),edible,taste_notes,340,APPROVE,no flag,
+3086,615,Silver Thistle (Carlina acaulis),edible,recipe,3468,APPROVE,no flag,
+3087,800,Mountain pansy (Viola lutea),edible,medicinal_notes,256,APPROVE,no flag,
+3088,799,Cowberry (Vaccinium vitis-idaea),edible,medicinal_notes,355,APPROVE,no flag,
+3096,816,Frayed Parasol (Macrolepiota excoriata),caution,medicinal_notes,215,LOOK,caution species; fungi,yes
+3098,817,Meadow Mushroom (Agaricus campestris),caution,medicinal_notes,257,LOOK,caution species; fungi,yes
+3100,819,Rock dandelion (Taraxacum erythrospermum),edible,medicinal_notes,280,APPROVE,no flag,yes
+3102,405,Parasol (Macrolepiota procera),caution,taste_notes,436,LOOK,caution species; fungi,yes
+3103,405,Parasol (Macrolepiota procera),caution,medicinal_notes,304,LOOK,caution species; fungi,yes
+3104,405,Parasol (Macrolepiota procera),caution,recipe,1885,LOOK,caution species; fungi,yes
+3105,399,Great Mullein (Verbascum thapsus),caution,taste_notes,405,LOOK,caution species,yes
+3106,399,Great Mullein (Verbascum thapsus),caution,recipe,2267,LOOK,caution species,yes
+3109,822,Smooth cat's ear (Hypochaeris glabra),edible,medicinal_notes,218,APPROVE,no flag,yes
+3110,823,Evening primrose (Oenothera biennis),edible,medicinal_notes,323,APPROVE,no flag,yes
+3111,793,Caucasian fir (Abies nordmanniana),edible,medicinal_notes,217,APPROVE,no flag,
+3112,824,White thistle (Cirsium hookerianum),edible,medicinal_notes,292,APPROVE,no flag,
+3115,827,American Winter Cress (Barbarea verna),edible,medicinal_notes,479,APPROVE,no flag,
+3118,829,Honey Mushroom (Armillaria ostoyae),caution,medicinal_notes,263,LOOK,caution species; fungi,
+3123,832,Mullet honey fungus (Armillaria cepistipes),caution,medicinal_notes,294,LOOK,caution species; fungi,
+3131,502,Honey Mushroom (Armillaria mellea),caution,taste_notes,268,LOOK,caution species; fungi,
+3132,502,Honey Mushroom (Armillaria mellea),caution,medicinal_notes,479,LOOK,caution species; fungi,
+3133,502,Honey Mushroom (Armillaria mellea),caution,recipe,3076,LOOK,caution species; fungi,
+3136,839,Spotted dead nettle (Lamium maculatum),edible,medicinal_notes,148,APPROVE,no flag,
+3143,791,Subalpine larch (Larix lyallii),edible,medicinal_notes,441,APPROVE,no flag,
+3145,704,Polyporus versicolor,edible,medicinal_notes,237,APPROVE,no flag,yes
+3149,842,Orange peel fungus (Aleuria aurantia),edible,medicinal_notes,208,APPROVE,no flag,
+3151,358,Ash (Fraxinus excelsior),edible,taste_notes,541,APPROVE,no flag,yes
+3152,358,Ash (Fraxinus excelsior),edible,medicinal_notes,286,APPROVE,no flag,yes
+3153,358,Ash (Fraxinus excelsior),edible,recipe,2239,APPROVE,no flag,yes
+3156,836,Shaggy soldier (Galinsoga quadriradiata),edible,medicinal_notes,247,APPROVE,no flag,yes
+3157,144,Hogweed (Heracleum sphondylium),edible,medicinal_notes,452,LOOK,Apiaceae; dosage/treatment claim (“remedy for”),yes
+3160,765,Desert Goosefoot (Chenopodium pratericola),edible,medicinal_notes,384,REJECT,off-region phrasing: “Southwest”,
+3168,368,Hazel (Corylus avellana),edible,taste_notes,381,APPROVE,no flag,
+3169,368,Hazel (Corylus avellana),edible,medicinal_notes,335,APPROVE,no flag,
+3170,368,Hazel (Corylus avellana),edible,recipe,2773,APPROVE,no flag,
+3172,845,Taraxacum campylodes,edible,medicinal_notes,212,APPROVE,no flag,
+3174,802,Swiss pine (Pinus cembra),edible,medicinal_notes,293,APPROVE,no flag,
+3176,186,Large thyme (Thymus pulegioides),edible,medicinal_notes,363,APPROVE,no flag,yes
+3177,847,Clinopodium nepeta,edible,medicinal_notes,252,APPROVE,no flag,
+3452,486,Acer ser. Acer (Acer pseudoplatanus),edible,medicinal_notes,255,APPROVE,no flag,yes
+3453,567,Lady's Mantle (Alchemilla xanthochlora),edible,medicinal_notes,692,APPROVE,no flag,
+3455,844,Common Amaranth (Amaranthus retroflexus),edible,medicinal_notes,292,LOOK,dosage/treatment claim (“treat”),
+3456,278,Goatsbeard (Aruncus dioicus),edible,medicinal_notes,583,LOOK,dosage/treatment claim (“treat”),
+3457,646,Narrowleaf Bittercress (Cardamine impatiens),edible,medicinal_notes,235,APPROVE,no flag,
+3458,615,Silver Thistle (Carlina acaulis),edible,medicinal_notes,593,LOOK,dosage/treatment claim (“doses”),
+3459,416,Hornbeam (Carpinus betulus),edible,medicinal_notes,250,LOOK,dosage/treatment claim (“treat”),
+3460,553,Carpinus caroliniana,edible,medicinal_notes,279,LOOK,dosage/treatment claim (“treat”),
+3461,693,Centaury (Centaurium erythraea),edible,medicinal_notes,983,APPROVE,no flag,
+3463,738,Endive (Cichorium endivia),edible,medicinal_notes,511,LOOK,dosage/treatment claim (“treatment”),
+3465,551,Field thistle (Cirsium arvense),edible,medicinal_notes,491,LOOK,dosage/treatment claim (“remedy for”),
+3466,375,Bull Thistle (Cirsium vulgare),edible,medicinal_notes,322,APPROVE,no flag,
+3467,639,Dogwood (Cornus sanguinea),caution,medicinal_notes,212,LOOK,caution species; dosage/treatment claim (“treat”),
+3475,667,Eyebright (Euphrasia officinalis),edible,medicinal_notes,1048,LOOK,dosage/treatment claim (“remedy for”),
+3476,574,Fuchsia (Fuchsia magellanica),edible,medicinal_notes,316,APPROVE,no flag,
+3478,618,Water Avens (Geum rivale),edible,medicinal_notes,642,APPROVE,no flag,
+3479,638,Dames rocket (Hesperis matronalis),edible,medicinal_notes,343,APPROVE,no flag,
+3481,378,Indian Balsam (Impatiens glandulifera),edible,medicinal_notes,400,LOOK,dosage/treatment claim (“prescrib”),
+3482,682,Yellow archangel (Lamium galeobdolon),edible,medicinal_notes,272,APPROVE,no flag,
+3484,216,Daisy (Leucanthemum ircutianum),edible,medicinal_notes,635,LOOK,dosage/treatment claim (“treatment”),yes
+3488,591,Loosestrife (Lysimachia vulgaris),edible,medicinal_notes,437,APPROVE,no flag,yes
+3489,340,Lemon balm (Melissa officinalis),edible,medicinal_notes,930,LOOK,dosage/treatment claim (“treats”),
+3491,747,Nymphoides peltata,edible,medicinal_notes,365,LOOK,dosage/treatment claim (“treatment”),
+3492,568,Oregano (Origanum vulgare),edible,medicinal_notes,698,LOOK,dosage/treatment claim (“doses”),
+3493,691,Oxalis grandis,edible,medicinal_notes,638,APPROVE,no flag,
+3498,370,Bog spruce (Picea mariana),edible,medicinal_notes,370,LOOK,dosage/treatment claim (“treat”),
+3499,438,Black pine (Pinus nigra),edible,medicinal_notes,611,LOOK,dosage/treatment claim (“treating”),
+3500,289,Stone Pine (Pinus pinea),edible,medicinal_notes,587,APPROVE,no flag,
+3501,508,Monterey pine (Pinus radiata),edible,medicinal_notes,588,APPROVE,no flag,
+3506,622,Tormentil (Potentilla erecta),edible,medicinal_notes,609,LOOK,dosage/treatment claim (“treat”),
+3507,756,Nepalese cinquefoil (Potentilla nepalensis),edible,medicinal_notes,216,APPROVE,no flag,
+3508,212,Sour cherry (Prunus cerasus),edible,medicinal_notes,553,LOOK,dosage/treatment claim (“treat”),yes
+3510,433,Pear (Pyrus communis),edible,medicinal_notes,317,APPROVE,no flag,yes
+3514,391,Blackcurrant (Ribes nigrum),edible,medicinal_notes,875,APPROVE,no flag,
+3515,536,Rambler rose (Rosa multiflora),edible,medicinal_notes,632,APPROVE,no flag,
+3516,812,Monk's rhubarb (Rumex alpinus),edible,medicinal_notes,359,LOOK,dosage/treatment claim (“dosage”),
+3518,305,Broad-leaved dock (Rumex obtusifolius),edible,medicinal_notes,464,LOOK,dosage/treatment claim (“remedy for”),
+3519,348,Wood Dock (Rumex sanguineus),edible,medicinal_notes,367,LOOK,dosage/treatment claim (“treat”),
+3522,402,Red-berried elder (Sambucus racemosa),caution,medicinal_notes,332,LOOK,caution species; dosage/treatment claim (“treatment”),
+3523,617,Great Burnet (Sanguisorba officinalis),edible,medicinal_notes,817,LOOK,dosage/treatment claim (“treatment”),
+3525,164,Bladder campion (Silene vulgaris),edible,medicinal_notes,279,LOOK,dosage/treatment claim (“treatment”),yes
+3526,347,Hedge Mustard (Sisymbrium officinale),edible,medicinal_notes,453,LOOK,dosage/treatment claim (“treating”),
+3528,713,Goldenrod (Solidago virgaurea),edible,medicinal_notes,938,LOOK,dosage/treatment claim (“treat”),yes
+3529,327,Spiny sowthistle (Sonchus asper),edible,medicinal_notes,207,APPROVE,no flag,
+3530,350,Common sowthistle (Sonchus oleraceus),edible,medicinal_notes,592,LOOK,dosage/treatment claim (“treat”),
+3533,395,Feverfew (Tanacetum parthenium),edible,medicinal_notes,739,APPROVE,no flag,
+3534,383,Wood Sage (Teucrium scorodonia),edible,medicinal_notes,439,APPROVE,no flag,
+3535,513,Field penny-cress (Thlaspi arvense),edible,medicinal_notes,673,LOOK,dosage/treatment claim (“doses”),
+3536,594,Thymus vulgaris,edible,medicinal_notes,913,LOOK,dosage/treatment claim (“prescrib”),
+3537,573,Basswood (Tilia americana),edible,medicinal_notes,1051,APPROVE,no flag,
+3538,487,White Clover (Trifolium repens),edible,medicinal_notes,329,APPROVE,no flag,
+3539,262,Tower Mustard (Turritis glabra),edible,medicinal_notes,369,APPROVE,no flag,
+3541,550,Snowball (Viburnum trilobum),edible,medicinal_notes,480,LOOK,dosage/treatment claim (“treat”),
+3542,645,Wood Vetch (Vicia sylvatica),edible,medicinal_notes,377,APPROVE,no flag,
+3543,578,Grape (Vitis vinifera),edible,medicinal_notes,908,APPROVE,no flag,
+3544,737,Common vervain (Verbena officinalis),edible,medicinal_notes,1040,LOOK,dosage/treatment claim (“remedy for”),
+3549,785,Green amaranth (Amaranthus hybridus),caution,taste_notes,503,LOOK,caution species,
+3550,785,Green amaranth (Amaranthus hybridus),caution,medicinal_notes,203,LOOK,caution species; dosage/treatment claim (“treat”),
+3551,785,Green amaranth (Amaranthus hybridus),caution,recipe,3218,LOOK,caution species; recipe uses raw parts of a caution species,
+3556,791,Subalpine larch (Larix lyallii),edible,taste_notes,361,APPROVE,no flag,
+3557,791,Subalpine larch (Larix lyallii),edible,recipe,2847,REJECT,chat phrasing: “I'd”; chat phrasing: “I would”,
+3712,855,Filbert (Corylus maxima),,medicinal_notes,484,APPROVE,no flag,
+3713,143,Caucasian Spruce (Picea orientalis),edible,taste_notes,488,APPROVE,no flag,
+3714,143,Caucasian Spruce (Picea orientalis),edible,medicinal_notes,305,APPROVE,no flag,
+3715,128,Orange Mullein (Verbascum phlomoides),edible,taste_notes,277,APPROVE,no flag,
+3716,128,Orange Mullein (Verbascum phlomoides),edible,recipe,2433,APPROVE,no flag,
+3717,134,Knotgrass (Polygonum aviculare),edible,taste_notes,620,APPROVE,no flag,yes
+3718,134,Knotgrass (Polygonum aviculare),edible,medicinal_notes,1017,LOOK,dosage/treatment claim (“treat”),yes
+3719,134,Knotgrass (Polygonum aviculare),edible,recipe,3633,APPROVE,no flag,yes
+3720,15,Apetalous sandwort (Moehringia trinervia),edible,taste_notes,317,REJECT,off-region phrasing: “North America”,
+3721,15,Apetalous sandwort (Moehringia trinervia),edible,recipe,2367,APPROVE,no flag,
+3722,121,Common dog-violet (Viola riviniana),edible,taste_notes,353,APPROVE,no flag,
+3723,209,Purple Lettuce (Prenanthes purpurea),edible,taste_notes,412,APPROVE,no flag,
+3724,209,Purple Lettuce (Prenanthes purpurea),edible,medicinal_notes,217,APPROVE,no flag,
+3725,209,Purple Lettuce (Prenanthes purpurea),edible,recipe,1820,APPROVE,no flag,
+3726,59,Spade Vine (Stellaria apetala),edible,taste_notes,604,APPROVE,no flag,
+3727,59,Spade Vine (Stellaria apetala),edible,recipe,3842,APPROVE,no flag,
+3728,60,Valerian (Valeriana officinalis),edible,taste_notes,494,APPROVE,no flag,
+3729,64,Common Oak (Quercus robur),edible,taste_notes,785,APPROVE,no flag,yes
+3730,64,Common Oak (Quercus robur),edible,medicinal_notes,919,LOOK,dosage/treatment claim (“treats”),yes
+3731,64,Common Oak (Quercus robur),edible,recipe,3200,APPROVE,no flag,yes
+3732,355,Chicken of the woods (Laetiporus sulphureus),caution,taste_notes,454,LOOK,caution species,yes
+3733,355,Chicken of the woods (Laetiporus sulphureus),caution,medicinal_notes,283,REJECT,off-region phrasing: “North America”,yes
+3734,355,Chicken of the woods (Laetiporus sulphureus),caution,recipe,2475,LOOK,caution species,yes
+3735,63,Lamb's lettuce (Valeriana locusta),edible,taste_notes,272,APPROVE,no flag,
+3736,63,Lamb's lettuce (Valeriana locusta),edible,medicinal_notes,250,APPROVE,no flag,
+3737,63,Lamb's lettuce (Valeriana locusta),edible,recipe,2821,APPROVE,no flag,
+3738,68,Lilac (Syringa vulgaris),edible,taste_notes,248,APPROVE,no flag,
+3739,68,Lilac (Syringa vulgaris),edible,medicinal_notes,227,LOOK,dosage/treatment claim (“treatment”),
+3740,68,Lilac (Syringa vulgaris),edible,recipe,3139,APPROVE,no flag,
+3741,69,Birdseye Speedwell (Veronica chamaedrys),edible,taste_notes,237,APPROVE,no flag,
+3742,69,Birdseye Speedwell (Veronica chamaedrys),edible,recipe,2567,APPROVE,no flag,
+3743,73,Green dock (Rumex conglomeratus),edible,taste_notes,574,APPROVE,no flag,
+3744,73,Green dock (Rumex conglomeratus),edible,medicinal_notes,443,LOOK,dosage/treatment claim (“treat”),
+3745,73,Green dock (Rumex conglomeratus),edible,recipe,3771,APPROVE,no flag,
+3746,77,Wall pellitory (Parietaria judaica),edible,medicinal_notes,747,APPROVE,no flag,
+3747,236,European Larch (Larix decidua),edible,taste_notes,410,APPROVE,no flag,
+3748,90,Red Campion (Silene dioica),edible,taste_notes,622,APPROVE,no flag,
+3749,90,Red Campion (Silene dioica),edible,medicinal_notes,319,APPROVE,no flag,
+3750,90,Red Campion (Silene dioica),edible,recipe,3881,APPROVE,no flag,
+3751,97,Aspen (Populus tremula),edible,taste_notes,490,APPROVE,no flag,
+3752,100,Dog Rose (Rosa canina),edible,taste_notes,623,APPROVE,no flag,
+3753,101,Tare (Vicia sativa),edible,taste_notes,561,APPROVE,no flag,yes
+3754,102,Bush Vetch (Vicia sepium),edible,taste_notes,543,APPROVE,no flag,
+3755,102,Bush Vetch (Vicia sepium),edible,medicinal_notes,357,APPROVE,no flag,
+3756,102,Bush Vetch (Vicia sepium),edible,recipe,2841,REJECT,chat phrasing: “I'd”,
+3757,162,Square-stemmed willowherb (Epilobium tetragonum),edible,medicinal_notes,233,APPROVE,no flag,
+3758,520,Common Sorrel (Rumex acetosa),edible,taste_notes,698,APPROVE,no flag,
+3759,520,Common Sorrel (Rumex acetosa),edible,medicinal_notes,634,APPROVE,no flag,
+3760,520,Common Sorrel (Rumex acetosa),edible,recipe,3113,APPROVE,no flag,
+3761,562,Ivy-leaved toadflax (Cymbalaria muralis),edible,medicinal_notes,341,LOOK,dosage/treatment claim (“treatment”),
+3762,406,White stonecrop (Sedum album),edible,taste_notes,390,APPROVE,no flag,
+3763,406,White stonecrop (Sedum album),edible,medicinal_notes,260,LOOK,dosage/treatment claim (“treat”),
+3764,406,White stonecrop (Sedum album),edible,recipe,2406,APPROVE,no flag,
+3765,351,Honesty (Lunaria annua),edible,taste_notes,489,APPROVE,no flag,
+3766,351,Honesty (Lunaria annua),edible,medicinal_notes,285,APPROVE,no flag,
+3767,351,Honesty (Lunaria annua),edible,recipe,2854,APPROVE,no flag,
+3768,431,Azarole (Crataegus azarolus),edible,taste_notes,506,APPROVE,no flag,
+3769,431,Azarole (Crataegus azarolus),edible,medicinal_notes,442,APPROVE,no flag,
+3770,431,Azarole (Crataegus azarolus),edible,recipe,2563,APPROVE,no flag,
+3771,603,Pimpinella (Pimpinella saxifraga),caution,taste_notes,372,LOOK,Apiaceae; caution species,
+3772,603,Pimpinella (Pimpinella saxifraga),caution,medicinal_notes,644,LOOK,Apiaceae; caution species,
+3773,603,Pimpinella (Pimpinella saxifraga),caution,recipe,2884,LOOK,Apiaceae; caution species,
+3774,604,Brambles (Rubus canescens),edible,taste_notes,320,APPROVE,no flag,
+3775,604,Brambles (Rubus canescens),edible,medicinal_notes,227,APPROVE,no flag,
+3776,604,Brambles (Rubus canescens),edible,recipe,2714,APPROVE,no flag,
+3777,605,Restharrow (Ononis spinosa),edible,medicinal_notes,664,APPROVE,no flag,
+3778,605,Restharrow (Ononis spinosa),edible,recipe,2696,APPROVE,no flag,
+3779,759,Yellow wood sorrel (Oxalis stricta),edible,taste_notes,628,APPROVE,no flag,
+3780,759,Yellow wood sorrel (Oxalis stricta),edible,medicinal_notes,292,LOOK,dosage/treatment claim (“treat”),
+3781,759,Yellow wood sorrel (Oxalis stricta),edible,recipe,3496,APPROVE,no flag,
+3782,761,Wild angelica (Angelica sylvestris),caution,taste_notes,544,LOOK,Apiaceae; caution species,
+3783,761,Wild angelica (Angelica sylvestris),caution,medicinal_notes,779,LOOK,Apiaceae; caution species; dosage/treatment claim (“doses”),
+3784,764,Wormwood (Artemisia absinthium),caution,taste_notes,504,LOOK,caution species,yes
+3785,764,Wormwood (Artemisia absinthium),caution,medicinal_notes,936,LOOK,caution species; dosage/treatment claim (“treat”),yes
+3786,764,Wormwood (Artemisia absinthium),caution,recipe,3672,LOOK,caution species,yes
+3787,768,Herb Robert (Geranium robertianum),edible,taste_notes,581,APPROVE,no flag,
+3788,768,Herb Robert (Geranium robertianum),edible,medicinal_notes,740,LOOK,dosage/treatment claim (“treat”),
+3789,768,Herb Robert (Geranium robertianum),edible,recipe,3993,APPROVE,no flag,

@@ -747,9 +747,15 @@ AI_NO_CONTENT_VERDICTS = frozenset({"toxic", "inedible", "not_edible"})
 # unknown origin, queued in species_ai_drafts for the curator to approve as-is
 # or rewrite. Approval IS the curator authoring the text (history
 # changed_by='human'). AI regenerate never invalidates these drafts, and the
-# review queue's "Approve all" never includes them.
+# review queue's "Approve all" never includes them. Both warning fields since
+# 21 Oct 2026 (scripts/import_warning_review_drafts.py, every verdict); Review
+# can also Remove the field (curator decision, history row changed_by='human').
+# edible_parts / id_notes / seasonal_peak since 22 Oct 2026: enrichment fills
+# them only when empty; changed source text for a filled one comes here as a
+# review draft (model 'source_update:<source>', enrichment._queue_source_review_drafts).
 # ---------------------------------------------------------------------------
-CURATOR_DRAFT_FIELDS = frozenset({"preparation_warnings"})
+CURATOR_DRAFT_FIELDS = frozenset({"preparation_warnings", "look_alike_warnings",
+                                  "edible_parts", "id_notes", "seasonal_peak"})
 
 
 # ---------------------------------------------------------------------------

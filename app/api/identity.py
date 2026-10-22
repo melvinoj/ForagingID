@@ -3,19 +3,22 @@ identity.py — Token-based identity resolver for ForagingID.
 
 Provides get_identity() as a FastAPI dependency returning an Identity dataclass.
 Used by encounter scoping, curator-only guards, and the workshop token endpoints.
+
+Batch 7: identity comes from app.services.access.resolve_access() — the same
+decision the access middleware made for this request — never from the Host
+header or a ?token= / Bearer value. A link token is only good for its one-time
+/join; after that the device is identified by its session cookie.
 """
 import logging
 from dataclasses import dataclass
-from datetime import datetime
 from typing import Optional
 
 from fastapi import Depends, Request
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.api.sharing import is_guest_request
-from app.models.workshop import GuestToken, WorkshopParticipant
+from app.models.workshop import WorkshopParticipant
+from app.services.access import resolve_access
 
 log = logging.getLogger(__name__)
 
@@ -28,17 +31,7 @@ class Identity:
     workshop_session_id: Optional[int]
 
 
-def _extract_token(request: Request) -> Optional[str]:
-    """Pull token from ?token= query param or Authorization: Bearer header."""
-    t = request.query_params.get("token")
-    if t:
-        return t.strip()
-    auth = request.headers.get("authorization", "")
-    if auth.lower().startswith("bearer "):
-        t = auth[7:].strip()
-        if t:
-            return t
-    return None
+_ANON = dict(user_id=None, is_guest=True, is_anonymous_guest=True, workshop_session_id=None)
 
 
 async def get_identity(
@@ -46,49 +39,24 @@ async def get_identity(
     db: AsyncSession = Depends(get_db),
 ) -> Identity:
     """
-    Resolution order (fail-closed — any lookup error returns anonymous guest):
+    Resolution (fail-closed — any lookup error returns anonymous guest):
 
-    1. Valid token (is_active=True, not expired):
-       - participant_id NULL  → curator token: user_id=1, is_guest=False
-       - participant_id set   → participant:   user_id=participant.id, is_guest=True
-       Invalid/expired/missing token when a token string IS present → anonymous guest.
-
-    2. No token + ngrok host → anonymous guest.
-    3. No token + not ngrok  → curator (localhost): user_id=1, is_guest=False.
+    1. Localhost or a curator device → curator: user_id=1, is_guest=False.
+    2. A participant device → participant: user_id=participant.id, is_guest=True
+       (participant id 1 is the reserved tombstone → anonymous guest).
+    3. Anything else → anonymous guest. (The middleware already refused it, so
+       only routers mounted without the middleware, e.g. in tests, see this.)
     """
-    raw_token = _extract_token(request)
-    if raw_token:
+    acc = await resolve_access(request, db)
+    if acc.tier == "curator":
+        return Identity(user_id=1, is_guest=False, is_anonymous_guest=False,
+                        workshop_session_id=acc.token.workshop_session_id if acc.token else None)
+    if acc.tier == "guest" and acc.token is not None:
         try:
-            row = await db.scalar(
-                select(GuestToken).where(
-                    GuestToken.token == raw_token,
-                    GuestToken.is_active.is_(True),
-                    GuestToken.expires_at > datetime.utcnow(),
-                )
-            )
-            if row is not None:
-                if row.participant_id is None:
-                    return Identity(
-                        user_id=1,
-                        is_guest=False,
-                        is_anonymous_guest=False,
-                        workshop_session_id=row.workshop_session_id,
-                    )
-                participant = await db.get(WorkshopParticipant, row.participant_id)
-                if participant is not None and participant.id >= 2:
-                    return Identity(
-                        user_id=participant.id,
-                        is_guest=True,
-                        is_anonymous_guest=False,
-                        workshop_session_id=row.workshop_session_id,
-                    )
-                # participant_id=1 (tombstone) or missing → treat as anonymous guest
+            participant = await db.get(WorkshopParticipant, acc.token.participant_id)
+            if participant is not None and participant.id >= 2:
+                return Identity(user_id=participant.id, is_guest=True, is_anonymous_guest=False,
+                                workshop_session_id=acc.token.workshop_session_id)
         except Exception:
-            log.exception("Token lookup error — falling back to anonymous guest")
-        # Token present but not valid (expired, inactive, not found, or lookup error).
-        return Identity(user_id=None, is_guest=True, is_anonymous_guest=True, workshop_session_id=None)
-
-    if is_guest_request(request):
-        return Identity(user_id=None, is_guest=True, is_anonymous_guest=True, workshop_session_id=None)
-
-    return Identity(user_id=1, is_guest=False, is_anonymous_guest=False, workshop_session_id=None)
+            log.exception("Participant lookup error — falling back to anonymous guest")
+    return Identity(**_ANON)

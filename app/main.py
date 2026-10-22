@@ -9,12 +9,16 @@ _T_MAIN_IMPORT_START = _time.perf_counter()
 
 from fastapi import FastAPI, Request
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse, JSONResponse, Response
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response
 from starlette.types import Scope, Receive, Send
 
 from app.config import settings
 from app.database import AsyncSessionLocal, init_db
 from app.services.settings_service import load_settings_from_db
+from app.services.access import ASK_PAGE, COOKIE_NAME, SIGNED_OUT_TEXT, cookie_kwargs, needs_last_used_update, resolve_access
+from app.models.workshop import GuestToken
+from sqlalchemy import update
+from datetime import datetime
 from app.api import observations, map, ingest, identify, culinary, scan, reidentify, syncthing, connections, audit, settings as settings_api, recipes, sharing, notes as notes_api, enrich as enrich_api, dev as dev_api, trust as trust_api
 from app.api import resources as resources_api
 from app.api import walk as walk_api
@@ -244,40 +248,63 @@ app.include_router(timeline_api.router)
 
 
 # ---------------------------------------------------------------------------
-# Guest mode middleware — runs before route handlers.
-# Detects ngrok-origin requests and enforces read-only restrictions.
+# Access middleware — runs before every route and mount (batch 7, A-01/A-03).
+# One check for the whole app: localhost, a curator device, or a participant
+# device (app.services.access.resolve_access). No valid device → the "Ask
+# Melvin for a link" page, no data, no API.
 # ---------------------------------------------------------------------------
 _GUEST_BLOCKED_PATHS = {"/scan", "/review", "/settings", "/workshops"}
 
+# Reachable without a device: the one-time link itself, and what a browser
+# needs to show/install the refusal page (no data in any of these).
+_NO_TOKEN_PREFIXES = ("/join/", "/static/icons/")
+_NO_TOKEN_PATHS = {"/static/manifest.json"}
+
+
+def _refused(request: Request) -> Response:
+    # 401, never cached: the service worker stores only ok responses, and
+    # no-store keeps the browser cache out of it too.
+    headers = {"Cache-Control": "no-store"}
+    # A browser navigation gets the page; fetch() (/api, the /health ping,
+    # images) gets JSON whose detail offline.js and the outbox show.
+    if "text/html" in request.headers.get("accept", "") and not request.url.path.startswith("/api/"):
+        return HTMLResponse(ASK_PAGE, status_code=401, headers=headers)
+    return JSONResponse(status_code=401, content={"detail": SIGNED_OUT_TEXT}, headers=headers)
+
 
 @app.middleware("http")
-async def _guest_middleware(request: Request, call_next) -> Response:
-    tier = sharing.classify_host(request)
-    if tier == "denied":
-        # Unrecognised host: not localhost/LAN (curator) and not the ngrok tunnel
-        # (guest). Block outright so a custom domain / stray tunnel can't reach the app.
+async def _access_middleware(request: Request, call_next) -> Response:
+    if not sharing.host_is_known(request):
+        # Not localhost / LAN / the ngrok tunnel: block outright so a custom
+        # domain / stray tunnel can't reach the app.
         log.warning(
             "Denied request from unrecognised host %r (%s %s)",
             request.headers.get("host"), request.method, request.url.path,
         )
         return JSONResponse(status_code=403, content={"detail": "Forbidden host"})
-    if tier == "guest":
+
+    path = request.url.path
+    if path in _NO_TOKEN_PATHS or path.startswith(_NO_TOKEN_PREFIXES):
+        return await call_next(request)
+
+    async with AsyncSessionLocal() as db:
+        acc = await resolve_access(request, db)
+    if acc.tier is None:
+        return _refused(request)
+
+    if acc.tier == "guest":
         # Bare root → guest landing page (deep links like /?species=… keep their
         # query string and fall through to the map so guests can still follow them).
-        if (
-            request.url.path == "/"
-            and not request.url.query
-            and request.method in ("GET", "HEAD")
-        ):
+        if path == "/" and not request.url.query and request.method in ("GET", "HEAD"):
             return FileResponse("frontend/landing.html", headers={"Cache-Control": "no-store"})
         # Redirect restricted pages to the landing page
-        if request.url.path in _GUEST_BLOCKED_PATHS:
+        if path in _GUEST_BLOCKED_PATHS:
             from fastapi.responses import RedirectResponse
             return RedirectResponse(url="/", status_code=302)
         # Block all write operations except the walk export, encounter creation,
-        # and recorded-walk sync (owner's device syncing pending walks via tunnel)
+        # and recorded-walk sync
         if request.method not in ("GET", "HEAD", "OPTIONS"):
-            if request.url.path not in (
+            if path not in (
                 "/api/sharing/export-walk",
                 "/api/encounters",
                 "/api/recorded-walks",
@@ -287,7 +314,25 @@ async def _guest_middleware(request: Request, call_next) -> Response:
                     status_code=403,
                     content={"detail": "Guest mode — read-only access"},
                 )
-    return await call_next(request)
+
+    response = await call_next(request)
+
+    # Device seen: refresh last_used_at (at most every 5 min) and the cookie's
+    # Max-Age with it, so a device in use never times out.
+    tok = acc.token
+    if tok is not None and needs_last_used_update(tok):
+        now = datetime.utcnow()
+        try:
+            async with AsyncSessionLocal() as db:
+                await db.execute(update(GuestToken).where(GuestToken.id == tok.id).values(last_used_at=now))
+                await db.commit()
+            tok.last_used_at = now
+            secret = request.cookies.get(COOKIE_NAME)
+            if secret:
+                response.set_cookie(value=secret, **cookie_kwargs(request, tok))
+        except Exception:
+            log.exception("last_used_at update failed for token id %s", tok.id)
+    return response
 
 # Serve thumbnails — NoCacheStaticFiles ensures browsers revalidate after regen
 thumbnails_dir = Path(settings.thumbnails_dir)

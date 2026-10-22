@@ -69,9 +69,25 @@ async def enrich_species(
     fill_empty_only: bool = False,
     protected_fields: Optional[set] = None,
     wikidata_cache: Optional[Dict[str, Optional[WikidataResult]]] = None,
+    regenerate_drafts: bool = False,
 ) -> str:
     """
     Fetch and store enrichment data for one species.
+
+    Safety rules (Melvin, 22 Oct 2026 — after the 21 Oct offline run bp 203):
+      - Every fetch reports to net_health. If every fetch this species
+        attempted failed (DNS / timeout / 5xx), nothing is written and
+        "no_network" is returned — the batch circuit breaker counts it.
+      - A source that failed writes nothing: no "no data" source row, no field,
+        and data_confidence / sources_json are never lowered or replaced while
+        any source failed.
+      - REVIEW_FIELDS (edible_parts, seasonal_peak, id_notes, preparation_warnings,
+        look_alike_warnings) are only ever filled when empty. Different source
+        text for a field that already has text becomes a review draft
+        (CURATOR_DRAFT_FIELDS — approve / edit / remove in Review).
+      - regenerate_drafts (single-species Repopulate only): new AI drafts sit
+        beside the pending ones; nothing is invalidated here. Bulk runs leave it
+        False, so they only draft fields with none pending.
 
     Args:
         fill_empty_only:  When True, only populate fields that are currently None/empty.
@@ -85,6 +101,7 @@ async def enrich_species(
       "not_found"  — neither source had data
       "failed"     — unexpected error during fetch/store
       "skipped"    — already enriched and re_enrich=False
+      "no_network" — every fetch failed; nothing written
     """
     protected_fields = protected_fields or set()
 
@@ -146,42 +163,56 @@ async def enrich_species(
             _lookup_name, species.scientific_name,
         )
 
-    try:
-        if wikidata_cache is not None:
-            # Wikidata was pre-fetched in a single batch request — no extra network call needed
-            wikidata_result = wikidata_cache.get(species.scientific_name)
-            (
-                pfaf_result,
-                inat_result,
-                trompenburg_result,
-            ) = await asyncio.gather(
-                fetch_pfaf(_lookup_name, kingdom=species.kingdom),
-                fetch_taxon_description(_lookup_name),
-                fetch_trompenburg(_lookup_name),
-                return_exceptions=False,
-            )
-        else:
-            # Individual Wikidata call — not pre-batched. Apply the configured delay
-            # BEFORE fetching to respect Wikidata's strict IP-based rate limits
-            # (Retry-After: 1000 on violation). This path is hit when enrich_species
-            # is called outside the batch runner (e.g. trigger_ai_drafts_for_species).
-            from app.services.settings_service import get_setting as _gs_wd
-            await asyncio.sleep(_gs_wd("wikidata_delay_s"))
-            (
-                wikidata_result,
-                pfaf_result,
-                inat_result,
-                trompenburg_result,
-            ) = await asyncio.gather(
-                fetch_wikidata(_lookup_name),
-                fetch_pfaf(_lookup_name, kingdom=species.kingdom),
-                fetch_taxon_description(_lookup_name),
-                fetch_trompenburg(_lookup_name),
-                return_exceptions=False,
-            )
-    except Exception as e:
-        log.error("Enrichment fetch failed for %r: %s", species.scientific_name, e)
-        return "failed"
+    from app.services import net_health
+    from app.integrations.wikidata import WIKIDATA_FAILED
+    with net_health.track() as _fetch:
+        try:
+            if wikidata_cache is not None:
+                # Wikidata was pre-fetched in batch requests — no extra network call needed
+                wikidata_result = wikidata_cache.get(species.scientific_name)
+                (
+                    pfaf_result,
+                    inat_result,
+                    trompenburg_result,
+                ) = await asyncio.gather(
+                    fetch_pfaf(_lookup_name, kingdom=species.kingdom),
+                    fetch_taxon_description(_lookup_name),
+                    fetch_trompenburg(_lookup_name),
+                    return_exceptions=False,
+                )
+            else:
+                # Individual Wikidata call — not pre-batched. Apply the configured delay
+                # BEFORE fetching to respect Wikidata's strict IP-based rate limits
+                # (Retry-After: 1000 on violation). This path is hit when enrich_species
+                # is called outside the batch runner (e.g. trigger_ai_drafts_for_species).
+                from app.services.settings_service import get_setting as _gs_wd
+                await asyncio.sleep(_gs_wd("wikidata_delay_s"))
+                (
+                    wikidata_result,
+                    pfaf_result,
+                    inat_result,
+                    trompenburg_result,
+                ) = await asyncio.gather(
+                    fetch_wikidata(_lookup_name),
+                    fetch_pfaf(_lookup_name, kingdom=species.kingdom),
+                    fetch_taxon_description(_lookup_name),
+                    fetch_trompenburg(_lookup_name),
+                    return_exceptions=False,
+                )
+        except Exception as e:
+            log.error("Enrichment fetch failed for %r: %s", species.scientific_name, e)
+            return "failed"
+
+    failed = set(_fetch.failed_sources)
+    if wikidata_result is WIKIDATA_FAILED:          # its batch request failed — not "no entry"
+        failed.add("wikidata")
+        wikidata_result = None
+    if _fetch.failures and not _fetch.successes:
+        log.warning("[enrich] %r: every source fetch failed (%s) — nothing written",
+                    species.scientific_name, "; ".join(f"{a}: {b}" for a, b in _fetch.failures[:4]))
+        return "no_network"
+    if failed:
+        log.warning("[enrich] %r: source(s) failed, left as they were: %s", species.scientific_name, sorted(failed))
 
     # Culinary links — run separately to avoid slowing the main batch on heavy scraping
     culinary_link_results = await _fetch_culinary_links_if_needed(
@@ -189,10 +220,16 @@ async def enrich_species(
     )
 
     # ── Store raw source data immediately — before any parsing ─────────────
-    await _store_raw_source(session, species.id, "wikidata", wikidata_result)
-    await _store_raw_source(session, species.id, "pfaf", pfaf_result)
-    await _store_raw_source_inat(session, species.id, inat_result)
-    await _store_raw_source_trompenburg(session, species.id, trompenburg_result)
+    # A failed source stores nothing — an empty row would read as "no data"
+    # and become the latest stored page (21 Oct: 575 empty pages).
+    if "wikidata" not in failed:
+        await _store_raw_source(session, species.id, "wikidata", wikidata_result)
+    if "pfaf" not in failed:
+        await _store_raw_source(session, species.id, "pfaf", pfaf_result)
+    if "inaturalist" not in failed:
+        await _store_raw_source_inat(session, species.id, inat_result)
+    if "trompenburg" not in failed:
+        await _store_raw_source_trompenburg(session, species.id, trompenburg_result)
 
     # ── Update species taxonomy from Wikidata ─────────────────────────────
     if wikidata_result:
@@ -211,11 +248,13 @@ async def enrich_species(
         session.add(ci)
 
     sources_built = []
+    review: list = []           # (field, new source text, source) for REVIEW_FIELDS with text already
 
     if pfaf_result:
         _apply_pfaf_to_culinary(ci, pfaf_result,
                                 fill_empty_only=fill_empty_only,
-                                protected_fields=protected_fields)
+                                protected_fields=protected_fields,
+                                review=review)
         # Edibility verdict is NO LONGER auto-resolved from PFAF (safety doctrine):
         # _apply_pfaf_to_species_edibility is now a no-op. The species keeps an
         # empty/'unknown' edibility_status and surfaces in Edibility Review for
@@ -238,8 +277,8 @@ async def enrich_species(
         sources_built.append({"name": "Wikidata", "url": wd_url})
 
     # ── ID notes from iNaturalist + Trompenburg ───────────────────────────
-    if "id_notes" not in protected_fields:
-        _apply_id_notes(ci, inat_result, trompenburg_result, fill_empty_only=fill_empty_only)
+    if "id_notes" not in protected_fields and not ({"inaturalist", "trompenburg"} & failed):
+        _apply_id_notes(ci, inat_result, trompenburg_result, fill_empty_only=fill_empty_only, review=review)
 
     if inat_result:
         ci.inat_retrieved_at = datetime.utcnow()
@@ -258,14 +297,24 @@ async def enrich_species(
     ci.ai_generated_fields_json = json.dumps(_AI_GENERATED_FIELDS)
 
     # ── Source provenance ─────────────────────────────────────────────────
-    if sources_built:
+    # Only a run where every source answered may replace the list: a partial
+    # outage would otherwise shrink it to the sources that happened to answer.
+    if sources_built and (not failed or not ci.sources_json):
         ci.sources_json = json.dumps(sources_built)
         if "primary_source_url" not in protected_fields:
             ci.primary_source_url = sources_built[0]["url"]
 
     # ── Confidence score (factual sources only — not AI) ──────────────────
+    # A failed source never lowers it (it is unknown, not absent).
     found_count = sum(1 for r in [wikidata_result, pfaf_result] if r is not None)
-    ci.data_confidence = 1.0 if found_count == 2 else (0.6 if found_count == 1 else 0.0)
+    _conf = 1.0 if found_count == 2 else (0.6 if found_count == 1 else 0.0)
+    if failed and ci.data_confidence is not None:
+        ci.data_confidence = max(ci.data_confidence, _conf)
+    else:
+        ci.data_confidence = _conf
+
+    # ── Changed source text for fields that already have text → review drafts
+    await _queue_source_review_drafts(session, species, ci, review)
 
     # ── Transaction A: source data + culinary_info, committed now ─────────
     # Everything above is written and committed BEFORE any further network
@@ -299,13 +348,13 @@ async def enrich_species(
         await _maybe_enrich_fungi_edibility(session, species, ci)
 
         # ── AI draft generation ───────────────────────────────────────────
-        # Only generate if we have some source data to work from, and only if
-        # there are no current pending/approved drafts (unless re_enrich=True)
+        # Only generate if we have some source data to work from, and only for
+        # fields with no pending/approved draft (regenerate_drafts: beside them)
         await _maybe_generate_ai_drafts(
             session=session,
             species=species,
             ci=ci,
-            re_enrich=re_enrich,
+            re_enrich=regenerate_drafts,
             inat_result=inat_result,
             trompenburg_result=trompenburg_result,
             common_names=common_names_raw,
@@ -478,30 +527,10 @@ async def handle_species_rename(
 # Batch runner
 # ---------------------------------------------------------------------------
 
-async def run_enrichment_batch(
-    session: Optional[AsyncSession] = None,
-    dry_run: bool = False,
-    re_enrich: bool = False,
-    fill_empty_only: bool = False,
-    species_filter: Optional[str] = None,
-    species_list: Optional[list] = None,
-    progress_cb: Optional[Callable] = None,
-    cancel_check_fn: Optional[Callable] = None,
-    start_from: int = 0,
-) -> dict:
-    """
-    Enrich all species derived from identified observations.
-
-    The ``session`` parameter is accepted for backward compatibility but IGNORED —
-    this function creates its own short-lived sessions (one per species) so that
-    no write-lock is held across the full duration of a long batch.
-
-    species_list:    if provided, only these exact names are enriched (auto-enrich path).
-    cancel_check_fn: optional async callable() → str | None; called each iteration.
-                     If it returns 'paused' or 'cancelled', the loop exits cleanly.
-    start_from:      resume index — skip the first N species (used after a pause/resume).
-    Returns summary dict: {total, enriched, partial, not_found, skipped, failed, stopped_at}
-    """
+async def batch_species_names(species_list: Optional[list] = None,
+                              species_filter: Optional[str] = None) -> list:
+    """The species a batch run enriches, in its stable (sorted) order. Shared by
+    run_enrichment_batch and the dry-run summaries, so both count the same set."""
     from app.database import AsyncSessionLocal
 
     # Collect distinct species_primary names — short-lived read session, closed immediately.
@@ -522,95 +551,190 @@ async def run_enrichment_batch(
             .distinct()
         )
         rows = (await _read_session.execute(stmt)).all()
-    species_names = [r[0] for r in rows if r[0]]
+    # Sorted — a stable order, so a resume continues where the run stopped
+    # (SELECT DISTINCT has no order; before 22 Oct 2026 the list could differ
+    # between runs and a resume index pointed at different species).
+    species_names = sorted({r[0] for r in rows if r[0]})
 
     if species_list is not None:
         allowed = set(species_list)
         species_names = [n for n in species_names if n in allowed]
     elif species_filter:
         species_names = [n for n in species_names if species_filter.lower() in n.lower()]
+    return species_names
 
-    log.info("Found %d distinct species to enrich (start_from=%d)", len(species_names), start_from)
 
-    # Resume support: skip already-processed items
-    if start_from > 0:
+async def run_enrichment_batch(
+    session: Optional[AsyncSession] = None,
+    dry_run: bool = False,
+    re_enrich: bool = False,
+    fill_empty_only: bool = False,
+    species_filter: Optional[str] = None,
+    species_list: Optional[list] = None,
+    progress_cb: Optional[Callable] = None,
+    cancel_check_fn: Optional[Callable] = None,
+    start_from: int = 0,
+    resume_after: Optional[str] = None,
+    net_fail_threshold: int = 6,
+) -> dict:
+    """
+    Enrich all species derived from identified observations.
+
+    The ``session`` parameter is accepted for backward compatibility but IGNORED —
+    this function creates its own short-lived sessions (one per species) so that
+    no write-lock is held across the full duration of a long batch.
+
+    species_list:    if provided, only these exact names are enriched (auto-enrich path).
+    cancel_check_fn: optional async callable() → str | None; called each iteration.
+                     If it returns 'paused' or 'cancelled', the loop exits cleanly.
+    start_from:      resume index — skip the first N species (used after a pause/resume).
+    resume_after:    resume by NAME — continue with the species after this one in the
+                     sorted list (preferred: survives species being added).
+    net_fail_threshold: network failures in a row (DNS / timeout / 5xx across sources)
+                     after which the run pauses — "paused — no network" — before the
+                     next species while the network is still down.
+    Returns summary dict: {total, enriched, partial, not_found, skipped, failed,
+    no_network, stopped_at, stopped_reason, last_completed, source_failures,
+    drafts_created, drafts_skipped, drafts_skipped_total, review_drafts_queued}
+    """
+    from app.database import AsyncSessionLocal
+
+    species_names = await batch_species_names(species_list=species_list, species_filter=species_filter)
+
+    log.info("Found %d distinct species to enrich (start_from=%d, resume_after=%r)",
+             len(species_names), start_from, resume_after)
+
+    # Resume support: skip already-processed items — by the last completed
+    # name (preferred, survives new species being added) or by index.
+    total_all = len(species_names)
+    if resume_after:
+        done_n = sum(1 for n in species_names if n <= resume_after)
+        species_names = [n for n in species_names if n > resume_after]
+        start_from = done_n
+    elif start_from > 0:
         species_names = species_names[start_from:]
 
     counters = dict(
-        total=len(species_names) + start_from,
-        enriched=0, partial=0, not_found=0, skipped=0, failed=0,
-        stopped_at=None,
+        total=total_all if resume_after else len(species_names) + start_from,
+        enriched=0, partial=0, not_found=0, skipped=0, failed=0, no_network=0,
+        stopped_at=None, stopped_reason=None, last_completed=resume_after,
+        source_failures=0,
     )
 
-    # ── Pre-fetch all Wikidata in ONE batch request ───────────────────────────
-    # This replaces 62 individual SPARQL calls with a single VALUES query,
-    # completely eliminating the per-species rate-limit problem.
+    from app.services import net_health
+    from app.services.draft_gate import summary_scope
+
+    # ── Pre-fetch Wikidata in batches (BATCH_SIZE names per request) ─────────
     if dry_run:
         wikidata_cache: Optional[Dict[str, Optional[WikidataResult]]] = None
     else:
-        log.info("Fetching Wikidata for %d species in one batch request…", len(species_names))
+        log.info("Fetching Wikidata for %d species in batches…", len(species_names))
         wikidata_cache = await fetch_wikidata_batch(species_names)
-        found_wd = sum(1 for v in wikidata_cache.values() if v is not None)
+        found_wd = sum(1 for v in wikidata_cache.values() if isinstance(v, WikidataResult))
         log.info("Wikidata batch complete: %d/%d species found", found_wd, len(species_names))
 
-    for i, name in enumerate(species_names):
-        # Check for pause/cancel signal before each item
-        if cancel_check_fn is not None:
-            signal = await cancel_check_fn()
-            if signal in ("paused", "cancelled"):
-                counters["stopped_at"] = start_from + i
-                log.info(
-                    "run_enrichment_batch: %s signal received at item %d — exiting cleanly",
-                    signal, start_from + i,
-                )
-                return counters
+    consecutive_net_failures = 0
+    with summary_scope() as draft_summary:
+        for i, name in enumerate(species_names):
+            # Check for pause/cancel signal before each item
+            if cancel_check_fn is not None:
+                signal = await cancel_check_fn()
+                if signal in ("paused", "cancelled"):
+                    counters["stopped_at"] = start_from + i
+                    counters["stopped_reason"] = signal
+                    log.info(
+                        "run_enrichment_batch: %s signal received at item %d — exiting cleanly",
+                        signal, start_from + i,
+                    )
+                    counters.update(draft_summary.as_dict())
+                    return counters
 
-        # Short-lived session per species — released immediately after commit so no
-        # write-lock accumulates across the full batch duration.
-        try:
-            async with AsyncSessionLocal() as _sess:
-                # Upsert into species table
-                sp = await _get_or_create_species(_sess, name)
+            # Circuit breaker (22 Oct 2026): after net_fail_threshold network
+            # failures in a row, stop before the next species if the network is
+            # still down — "paused — no network". Nothing is written for it.
+            if not dry_run and consecutive_net_failures >= net_fail_threshold:
+                if not await net_health.network_up():
+                    counters["stopped_at"] = start_from + i
+                    counters["stopped_reason"] = "no_network"
+                    log.warning("run_enrichment_batch: %d network failures in a row — paused before %r "
+                                "(item %d of %d)", consecutive_net_failures, name, start_from + i + 1,
+                                counters["total"])
+                    counters.update(draft_summary.as_dict())
+                    return counters
+                consecutive_net_failures = 0
 
-                # Pull taxonomy from stored PlantNet candidates if species row is sparse
-                await _backfill_taxonomy_from_observations(_sess, sp)
+            # Short-lived session per species — released immediately after commit so no
+            # write-lock accumulates across the full batch duration.
+            with net_health.track() as fetch_log:
+                try:
+                    async with AsyncSessionLocal() as _sess:
+                        # Upsert into species table
+                        sp = await _get_or_create_species(_sess, name)
 
-                # Determine which culinary fields have human edits — never overwrite those.
-                protected_fields: set = set()
-                ci_for_sp = await _sess.scalar(
-                    select(CulinaryInfo).where(CulinaryInfo.species_id == sp.id)
-                )
-                if ci_for_sp:
-                    history_rows = (await _sess.execute(
-                        select(CulinaryInfoHistory.field_name)
-                        .where(CulinaryInfoHistory.culinary_info_id == ci_for_sp.id)
-                        .where(CulinaryInfoHistory.changed_by == "human")
-                    )).scalars().all()
-                    protected_fields = set(history_rows)
+                        # Pull taxonomy from stored PlantNet candidates if species row is sparse
+                        await _backfill_taxonomy_from_observations(_sess, sp)
 
-                # Enrich — pass pre-fetched Wikidata so no further SPARQL calls are made
-                status = await enrich_species(
-                    _sess, sp, dry_run=dry_run, re_enrich=re_enrich,
-                    fill_empty_only=fill_empty_only,
-                    protected_fields=protected_fields,
-                    wikidata_cache=wikidata_cache,
-                )
-                counters[status] = counters.get(status, 0) + 1
-                await _sess.commit()
-                # _sess closes here — connection returned to pool
-        except Exception as _item_exc:
-            log.warning("run_enrichment_batch: error enriching %r: %s", name, _item_exc)
-            counters["failed"] = counters.get("failed", 0) + 1
-            status = "failed"
+                        # Determine which culinary fields have human edits — never overwrite those.
+                        protected_fields: set = set()
+                        ci_for_sp = await _sess.scalar(
+                            select(CulinaryInfo).where(CulinaryInfo.species_id == sp.id)
+                        )
+                        if ci_for_sp:
+                            history_rows = (await _sess.execute(
+                                select(CulinaryInfoHistory.field_name)
+                                .where(CulinaryInfoHistory.culinary_info_id == ci_for_sp.id)
+                                .where(CulinaryInfoHistory.changed_by == "human")
+                            )).scalars().all()
+                            protected_fields = set(history_rows)
 
-        if progress_cb:
-            progress_cb(start_from + i + 1, counters["total"], name, status)
+                        # Enrich — pass pre-fetched Wikidata so no further SPARQL calls are made.
+                        # Bulk: never regenerate drafts (only fields with none pending).
+                        status = await enrich_species(
+                            _sess, sp, dry_run=dry_run, re_enrich=re_enrich,
+                            fill_empty_only=fill_empty_only,
+                            protected_fields=protected_fields,
+                            wikidata_cache=wikidata_cache,
+                            regenerate_drafts=False,
+                        )
+                        counters[status] = counters.get(status, 0) + 1
+                        if status == "no_network":
+                            await _sess.rollback()     # nothing for this species
+                        else:
+                            await _sess.commit()
+                        # _sess closes here — connection returned to pool
+                except Exception as _item_exc:
+                    log.warning("run_enrichment_batch: error enriching %r: %s", name, _item_exc)
+                    counters["failed"] = counters.get("failed", 0) + 1
+                    status = "failed"
 
-        # Rate-limit between species for PFAF only (Wikidata is now batched).
-        if not dry_run and status != "skipped":
-            from app.services.settings_service import get_setting as _gs
-            await asyncio.sleep(_gs("pfaf_delay_s"))
+            counters["source_failures"] += len(fetch_log.failures)
+            if fetch_log.failures and not fetch_log.successes:
+                consecutive_net_failures += len(fetch_log.failures)
+            elif fetch_log.successes:
+                consecutive_net_failures = 0
 
+            if status == "no_network":
+                # Not completed: a resume retries this species. Trip the breaker
+                # now if the network is gone.
+                if consecutive_net_failures >= net_fail_threshold and not await net_health.network_up():
+                    counters["stopped_at"] = start_from + i
+                    counters["stopped_reason"] = "no_network"
+                    log.warning("run_enrichment_batch: network down — paused at %r (item %d of %d)",
+                                name, start_from + i + 1, counters["total"])
+                    counters.update(draft_summary.as_dict())
+                    return counters
+                continue
+
+            counters["last_completed"] = name
+            if progress_cb:
+                progress_cb(start_from + i + 1, counters["total"], name, status)
+
+            # Rate-limit between species for PFAF only (Wikidata is batched).
+            if not dry_run and status != "skipped":
+                from app.services.settings_service import get_setting as _gs
+                await asyncio.sleep(_gs("pfaf_delay_s"))
+
+        counters.update(draft_summary.as_dict())
     return counters
 
 
@@ -815,19 +939,48 @@ def _apply_pfaf_to_species_edibility(species: Species, r: PFAFResult) -> None:
     return
 
 
+# Fields enrichment may only FILL WHEN EMPTY (Melvin, 22 Oct 2026). Different
+# source text for one that already has text becomes a review draft — never a
+# silent overwrite (21 Oct: Ononis spinosa's warning became "None known").
+REVIEW_FIELDS = ("edible_parts", "seasonal_peak", "id_notes", "preparation_warnings", "look_alike_warnings")
+
+
+def _norm_text(t: Optional[str]) -> str:
+    return " ".join((t or "").split())
+
+
+def _fill_or_review(ci: CulinaryInfo, field: str, value: Optional[str], source: str,
+                    review: Optional[list]) -> bool:
+    """REVIEW_FIELDS rule. Returns True when the field was filled."""
+    if not (value or "").strip():
+        return False
+    cur = getattr(ci, field, None)
+    if not (cur or "").strip():
+        setattr(ci, field, value)
+        return True
+    if _norm_text(cur) != _norm_text(value) and review is not None:
+        review.append((field, value, source))
+    return False
+
+
 def _apply_pfaf_to_culinary(
     ci: CulinaryInfo,
     r: PFAFResult,
     fill_empty_only: bool = False,
     protected_fields: Optional[set] = None,
+    review: Optional[list] = None,
 ) -> None:
-    """Apply PFAF result to CulinaryInfo — PFAF wins on culinary/safety fields."""
+    """Apply PFAF result to CulinaryInfo. REVIEW_FIELDS are filled only when
+    empty (changed text → review); the other fields as before."""
     protected_fields = protected_fields or set()
 
     def _set(field: str, value: Optional[str]) -> None:
         if not value:
             return
         if field in protected_fields:
+            return
+        if field in REVIEW_FIELDS:
+            _fill_or_review(ci, field, value, "pfaf", review)
             return
         if fill_empty_only and getattr(ci, field, None):
             return
@@ -869,9 +1022,11 @@ def _apply_id_notes(
     inat: Optional[INatTaxonDescription],
     trompenburg: Optional[TrompenburgResult],
     fill_empty_only: bool = False,
+    review: Optional[list] = None,
 ) -> None:
-    """Combine iNaturalist + Trompenburg descriptions into id_notes."""
-    if fill_empty_only and ci.id_notes:
+    """Combine iNaturalist + Trompenburg descriptions into id_notes — only when
+    id_notes is empty; different text for a filled field goes to review."""
+    if fill_empty_only and ci.id_notes and review is None:
         return
 
     parts = []
@@ -894,8 +1049,46 @@ def _apply_id_notes(
         sources.append({"source": "TrompenburgPlants", "url": trompenburg.source_url})
 
     if parts:
-        ci.id_notes = "\n\n".join(parts)
-        ci.id_notes_sources_json = json.dumps(sources)
+        if _fill_or_review(ci, "id_notes", "\n\n".join(parts), "inaturalist+trompenburg", review):
+            ci.id_notes_sources_json = json.dumps(sources)
+
+
+async def _queue_source_review_drafts(session: AsyncSession, species: Species, ci: CulinaryInfo,
+                                      review: list) -> None:
+    """Changed source text for a field that already has text → a pending review
+    draft (the warning-queue draft type: approve / edit then approve / remove).
+    Never proposes replacing text with nothing ("None known"), never a second
+    pending draft for the field, never one Melvin already decided on."""
+    from app.services.draft_gate import current_summary
+    for field, text, source in review:
+        if _norm_text(text).lower().rstrip(".") in ("", "none known", "none"):
+            continue
+        pending = await session.scalar(
+            select(SpeciesAIDraft.id).where(SpeciesAIDraft.species_id == species.id,
+                                            SpeciesAIDraft.field_name == field,
+                                            SpeciesAIDraft.status == "pending").limit(1))
+        if pending:
+            log.info("[enrich] %r %s: source text changed, a review draft is already pending (%s)",
+                     species.scientific_name, field, pending)
+            continue
+        decided = await session.scalar(
+            select(SpeciesAIDraft.id).where(SpeciesAIDraft.species_id == species.id,
+                                            SpeciesAIDraft.field_name == field,
+                                            SpeciesAIDraft.draft_text == text,
+                                            SpeciesAIDraft.status.in_(("approved", "edited_approved", "rejected"))).limit(1))
+        if decided:
+            continue
+        session.add(SpeciesAIDraft(
+            species_id=species.id, field_name=field, draft_text=text, status="pending",
+            generated_at=datetime.utcnow(), model=f"source_update:{source}",
+            generation_context_json=json.dumps({
+                "origin": "source_update", "source": source, "queued_by": "enrichment",
+                "field_text_at_import": getattr(ci, field, None),
+            }, ensure_ascii=False)))
+        summ = current_summary()
+        if summ is not None:
+            summ.review_queued[field] += 1
+        log.info("[enrich] %r %s: source text changed → review draft (%s)", species.scientific_name, field, source)
 
 
 def _apply_culinary_links(ci: CulinaryInfo, links: list) -> None:
@@ -1193,7 +1386,12 @@ async def _maybe_generate_ai_drafts(
     Conditions:
       - Drafts come from the one AI backend (DeepSeek — generate_deepseek_drafts).
       - Sufficient source context must exist (at least edible_parts or traditional_uses)
-      - No existing pending drafts, unless re_enrich=True (which invalidates them first)
+      - Fields with a pending / approved draft are skipped, unless re_enrich=True
+        (single-species Repopulate / Regenerate): then the new version is saved
+        BESIDE the pending one. Nothing is invalidated here (22 Oct 2026) — the
+        old version goes only when Melvin keeps the new one in Review
+        (culinary.approve_ai_draft). A failed generation changes nothing.
+      - Every draft is saved through draft_gate.save_ai_draft (the shared check).
 
     only_field: when set (one of the draft fields), restrict generation to that
         single field — used by the per-domain backfill so "Run" on one domain
@@ -1239,34 +1437,6 @@ async def _maybe_generate_ai_drafts(
         log.info("[AI drafts] Skipping generation for toxic species: %r", species.scientific_name)
         return
 
-    # If re_enrich: invalidate any existing pending drafts.
-    #
-    # WHEN, not WHAT: this UPDATE used to run here, before the LLM calls below,
-    # which opened a write transaction and held the SQLite write lock across
-    # every synonym / Ollama / DeepSeek / Claude call. It now runs at the end
-    # (_apply_invalidation), at every exit point that previously came after it,
-    # so the same rows end up invalidated. The "covered" query below excludes
-    # 'pending' when re_enrich is set — exactly the set it saw before, when
-    # those pending rows had already been flipped to 'invalidated'.
-    async def _apply_invalidation() -> None:
-        if not re_enrich:
-            return
-        from sqlalchemy import update as _upd
-        # Flush first so the UPDATE sees the same rows it did when it ran
-        # after enrich_species' flush (e.g. a pending draft just queued by the
-        # fungi edibility lookup).
-        await session.flush()
-        # Curator-review drafts (CURATOR_DRAFT_FIELDS) are not model output —
-        # regenerate never invalidates them.
-        await session.execute(
-            _upd(SpeciesAIDraft)
-            .where(SpeciesAIDraft.species_id == species.id)
-            .where(SpeciesAIDraft.status == "pending")
-            .where(SpeciesAIDraft.field_name.notin_(CURATOR_DRAFT_FIELDS))
-            .values(status="invalidated")
-        )
-        await session.flush()
-
     # Check which fields already have a draft. A "covered" field is one that
     # already has a draft in a status we should not overwrite. By default that
     # includes 'rejected'; when reprocess_rejected=True (backfill), a rejected
@@ -1274,8 +1444,8 @@ async def _maybe_generate_ai_drafts(
     _DRAFT_FIELDS = ["taste_notes", "medicinal_notes", "recipe", "medicinal_folklore"]
     _covered_statuses = ["approved", "edited_approved"]
     if not re_enrich:
-        # Pending drafts are about to be invalidated when re_enrich is set, so
-        # they do not cover a field (see _apply_invalidation above).
+        # Bulk / backfill: a pending draft covers its field. Regenerate (re_enrich)
+        # makes a new version beside it instead.
         _covered_statuses.insert(0, "pending")
     if not reprocess_rejected:
         _covered_statuses.append("rejected")
@@ -1308,7 +1478,6 @@ async def _maybe_generate_ai_drafts(
 
     if not fields_needed:
         log.info("[AI drafts] All 3 draft fields already exist for %r — skipping", species.scientific_name)
-        await _apply_invalidation()
         return
 
     log.info("Generating AI drafts for %r: %s", species.scientific_name, fields_needed)
@@ -1415,12 +1584,10 @@ async def _maybe_generate_ai_drafts(
 
     if not draft_result:
         log.warning("AI draft generation returned no result for %r", species.scientific_name)
-        await _apply_invalidation()
         return
 
     # All network calls are done — from here on, only writes (transaction B).
-    await _apply_invalidation()
-
+    from app.services.draft_gate import save_ai_draft
     ctx_json = json.dumps(draft_result.context_used)
 
     field_map = {
@@ -1434,24 +1601,11 @@ async def _maybe_generate_ai_drafts(
         text = field_map.get(field_name)
         if not text:
             continue
-        # Reject placeholder / refusal responses (shared predicate — medicinal
-        # fields check only the opening, so the standard default still passes).
-        if is_ai_placeholder(field_name, text):
-            log.warning(
-                "  Discarding placeholder draft for %r → %s (starts: %r)",
-                species.scientific_name, field_name, text[:60],
-            )
-            continue
-        session.add(SpeciesAIDraft(
-            species_id=species.id,
-            field_name=field_name,
-            draft_text=text,
-            status="pending",
-            generated_at=datetime.utcnow(),
-            generation_context_json=ctx_json,
-            model=draft_result.model,
-        ))
-        log.info("  Created pending draft: %r → %s", species.scientific_name, field_name)
+        # The shared pre-save check (placeholder, no-use, chat phrasing, edible
+        # parts, toxic / deadly) — refused drafts are logged and counted there.
+        if save_ai_draft(session, species, ci, field_name, text,
+                         model=draft_result.model, context_json=ctx_json) is not None:
+            log.info("  Created pending draft: %r → %s", species.scientific_name, field_name)
 
 
 # ---------------------------------------------------------------------------
@@ -1466,15 +1620,15 @@ async def _section_ai_draft(
     """
     Generate (or regenerate) a single AI draft field for a species.
 
-    - Invalidates any existing pending draft for that field.
     - Calls the AI backend (DeepSeek) for just the one field.
-    - Saves the result as a new pending SpeciesAIDraft.
+    - Saves the result as a new pending SpeciesAIDraft BESIDE any pending one
+      (22 Oct 2026: never invalidates — the old version goes only when Melvin
+      keeps the new one in Review). Saved through draft_gate.save_ai_draft.
     - Returns True if a draft was queued, False if generation failed or was
       suppressed by the edibility gate.
 
     Does NOT fetch PFAF / Wikidata — uses whatever is already in culinary_info.
     """
-    from sqlalchemy import update as _upd
 
     if field_name not in ("taste_notes", "recipe", "medicinal_notes"):
         log.warning("[_section_ai_draft] unknown field_name %r — skipping", field_name)
@@ -1581,32 +1735,11 @@ async def _section_ai_draft(
     if not text:
         log.info("[_section_ai_draft] backend returned no text for field %r species %r", field_name, species.scientific_name)
         return False
-    if is_ai_placeholder(field_name, text):
-        from app.services.ai_placeholder import _opening, ai_placeholder_reason
-        log.warning("[_section_ai_draft] discarding placeholder draft for %r → %s — %s; opening: %r",
-                    species.scientific_name, field_name, ai_placeholder_reason(field_name, text), _opening(text))
-        return False
-
-    # Invalidate any existing pending draft for this field
-    await session.execute(
-        _upd(SpeciesAIDraft)
-        .where(SpeciesAIDraft.species_id == species.id)
-        .where(SpeciesAIDraft.field_name == field_name)
-        .where(SpeciesAIDraft.status == "pending")
-        .values(status="invalidated")
-    )
-    await session.flush()
-
     import json as _json
-    session.add(SpeciesAIDraft(
-        species_id=species.id,
-        field_name=field_name,
-        draft_text=text,
-        status="pending",
-        generated_at=datetime.utcnow(),
-        generation_context_json=_json.dumps(draft_result.context_used),
-        model=draft_result.model,
-    ))
+    from app.services.draft_gate import save_ai_draft
+    if save_ai_draft(session, species, ci, field_name, text, model=draft_result.model,
+                     context_json=_json.dumps(draft_result.context_used)) is None:
+        return False
     log.info("[_section_ai_draft] queued pending draft  species=%r  field=%r", species.scientific_name, field_name)
     return True
 

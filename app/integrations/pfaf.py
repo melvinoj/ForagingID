@@ -116,13 +116,21 @@ async def _fetch_pfaf_single(
     Single HTTP fetch attempt for PFAF. scientific_name is the canonical name
     to store; lookup_name is what goes into the URL (may differ for × retries).
     """
+    from app.services import net_health
     url = PFAF_BASE.format(name=quote(lookup_name))
     try:
         async with httpx.AsyncClient(timeout=REQUEST_TIMEOUT_S, headers=_HEADERS) as client:
             resp = await client.get(url, follow_redirects=True)
     except Exception as e:
         log.warning("PFAF request failed for %r: %s", lookup_name, e)
+        net_health.note_failure("pfaf", e)          # could not ask — not "no entry"
         return None
+
+    if net_health.is_gateway_failure(resp.status_code):
+        log.warning("PFAF returned HTTP %d for %r", resp.status_code, lookup_name)
+        net_health.note_failure("pfaf", f"HTTP {resp.status_code}")
+        return None
+    net_health.note_success("pfaf")
 
     if resp.status_code == 404:
         log.debug("PFAF: no page for %r", lookup_name)

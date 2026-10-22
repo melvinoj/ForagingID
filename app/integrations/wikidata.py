@@ -83,66 +83,99 @@ LIMIT 5000
 """.format(values=values, p225=_P225, p171=_P171, p105=_P105, q35409=_Q35409, p1843=_P1843)
 
 
+# Names per SPARQL request. One request for all 638 species ran into HTTP 414
+# (URI too long) on 21 Oct 2026; 50 keeps the GET URL near 6 kB even for long
+# hybrid names (tests/test_enrichment_safety.py checks the worst case).
+BATCH_SIZE = 50
+MAX_URL_LEN = 7500
+
+
+class _Failed:
+    """Sentinel: Wikidata could not be asked for this name (network / 5xx / 429 /
+    414) — NOT "no entry". enrich_species() treats it as a failed source."""
+    def __repr__(self):
+        return "WIKIDATA_FAILED"
+
+
+WIKIDATA_FAILED = _Failed()
+
+
+def batch_url_length(names: List[str]) -> int:
+    """Length of the GET URL fetch_wikidata_batch sends for these names."""
+    req = httpx.Request("GET", WIKIDATA_SPARQL, params={"query": _build_batch_query(names), "format": "json"})
+    return len(str(req.url))
+
+
+def _chunks(names: List[str]) -> List[List[str]]:
+    """BATCH_SIZE names per request, split further if a chunk's URL is still too long."""
+    out = []
+    for i in range(0, len(names), BATCH_SIZE):
+        stack = [names[i:i + BATCH_SIZE]]
+        while stack:
+            c = stack.pop(0)
+            if len(c) > 1 and batch_url_length(c) > MAX_URL_LEN:
+                stack[:0] = [c[:len(c) // 2], c[len(c) // 2:]]
+            else:
+                out.append(c)
+    return out
+
+
 async def fetch_wikidata_batch(
     scientific_names: List[str],
-) -> Dict[str, Optional[WikidataResult]]:
+) -> Dict[str, object]:
     """
-    Fetch Wikidata data for many species in a **single** SPARQL request.
+    Fetch Wikidata data for many species, BATCH_SIZE names per SPARQL request.
 
-    Returns a mapping {scientific_name: WikidataResult | None}.
-    A None value means Wikidata had no entry for that species.
+    Returns a mapping {scientific_name: WikidataResult | None | WIKIDATA_FAILED}.
+    None = Wikidata has no entry; WIKIDATA_FAILED = that name's request failed
+    (network error, 5xx, 429, 414) — the caller must not treat it as "no data".
 
     Use this for batch enrichment to avoid per-species rate limiting.
     `fetch_wikidata()` is still available for single-species use.
     """
-    results: Dict[str, Optional[WikidataResult]] = {n: None for n in scientific_names}
-
+    results: Dict[str, object] = {n: None for n in scientific_names}
     if not scientific_names:
         return results
 
-    query = _build_batch_query(scientific_names)
-    try:
-        async with httpx.AsyncClient(timeout=REQUEST_TIMEOUT_S, headers=_HEADERS) as client:
-            resp = await client.get(
-                WIKIDATA_SPARQL,
-                params={"query": query, "format": "json"},
-            )
-    except Exception as e:
-        log.warning("Wikidata batch request failed: %s", e)
-        return results
+    import asyncio as _asyncio
+    from app.services.settings_service import get_setting as _gs
+    chunks = _chunks(list(scientific_names))
+    failed_chunks = 0
+    for k, chunk in enumerate(chunks):
+        if k:
+            await _asyncio.sleep(_gs("wikidata_delay_s"))      # polite between requests
+        query = _build_batch_query(chunk)
+        reason = None
+        try:
+            async with httpx.AsyncClient(timeout=REQUEST_TIMEOUT_S, headers=_HEADERS) as client:
+                resp = await client.get(WIKIDATA_SPARQL, params={"query": query, "format": "json"})
+            if resp.status_code == 429:
+                reason = f"HTTP 429 (Retry-After: {resp.headers.get('Retry-After', 'unknown')})"
+            elif resp.status_code != 200:
+                reason = f"HTTP {resp.status_code}"
+            else:
+                data = resp.json()
+        except Exception as e:
+            reason = f"{type(e).__name__}: {e}"
+        if reason:
+            failed_chunks += 1
+            log.warning("Wikidata batch %d/%d (%d names) failed: %s", k + 1, len(chunks), len(chunk), reason)
+            for n in chunk:
+                results[n] = WIKIDATA_FAILED
+            continue
 
-    if resp.status_code == 429:
-        retry_after = resp.headers.get("Retry-After", "unknown")
-        log.warning(
-            "Wikidata batch request rate-limited — Retry-After: %s seconds.",
-            retry_after,
-        )
-        return results
+        bindings_by_name: Dict[str, list] = {n: [] for n in chunk}
+        for b_ in data.get("results", {}).get("bindings", []):
+            taxon_val = b_.get("taxonName", {}).get("value")
+            if taxon_val and taxon_val in bindings_by_name:
+                bindings_by_name[taxon_val].append(b_)
+        for name, bindings in bindings_by_name.items():
+            if bindings:
+                results[name] = _parse(name, {"results": {"bindings": bindings}})
 
-    if resp.status_code != 200:
-        log.warning("Wikidata batch returned HTTP %d", resp.status_code)
-        return results
-
-    try:
-        data = resp.json()
-    except Exception as e:
-        log.warning("Wikidata batch non-JSON response: %s", e)
-        return results
-
-    # Group bindings by taxon name so we can parse each species separately
-    bindings_by_name: Dict[str, list] = {n: [] for n in scientific_names}
-    for b in data.get("results", {}).get("bindings", []):
-        taxon_val = b.get("taxonName", {}).get("value")
-        if taxon_val and taxon_val in bindings_by_name:
-            bindings_by_name[taxon_val].append(b)
-
-    for name, bindings in bindings_by_name.items():
-        if bindings:
-            species_data = {"results": {"bindings": bindings}}
-            results[name] = _parse(name, species_data)
-
-    found = sum(1 for v in results.values() if v is not None)
-    log.info("Wikidata batch: %d species queried, %d found", len(scientific_names), found)
+    found = sum(1 for v in results.values() if v is not None and v is not WIKIDATA_FAILED)
+    log.info("Wikidata batch: %d species in %d request(s), %d found, %d request(s) failed",
+             len(scientific_names), len(chunks), found, failed_chunks)
     return results
 
 
@@ -180,16 +213,17 @@ async def fetch_wikidata(scientific_name: str) -> Optional[WikidataResult]:
             )
     except Exception as e:
         log.warning("Wikidata request failed for %r: %s", scientific_name, e)
+        from app.services import net_health
+        net_health.note_failure("wikidata", e)
         return None
 
-    if resp.status_code == 429:
-        retry_after = resp.headers.get("Retry-After", "unknown")
-        log.warning(
-            "Wikidata rate-limited for %r — Retry-After: %s seconds. "
-            "Run `python scripts/enrich.py --re-enrich` after the ban clears.",
-            scientific_name, retry_after,
-        )
+    from app.services import net_health
+    if net_health.is_gateway_failure(resp.status_code):
+        log.warning("Wikidata returned HTTP %d for %r (Retry-After: %s)", resp.status_code, scientific_name,
+                    resp.headers.get("Retry-After", "-"))
+        net_health.note_failure("wikidata", f"HTTP {resp.status_code}")
         return None
+    net_health.note_success("wikidata")
 
     if resp.status_code != 200:
         log.warning("Wikidata returned HTTP %d for %r", resp.status_code, scientific_name)

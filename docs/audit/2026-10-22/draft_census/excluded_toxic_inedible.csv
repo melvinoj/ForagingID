@@ -1,0 +1,179 @@
+draft_id,species_id,common_latin,verdict,severity,field,length
+633,136,Bryonia syriaca,toxic,toxic,medicinal_notes,372
+802,292,Psilocybe semilanceata,inedible,none,medicinal_notes,464
+1663,547,Dutch elm (Ulmus × hollandica),inedible,none,recipe,2184
+1664,547,Dutch elm (Ulmus × hollandica),inedible,none,taste_notes,496
+1705,563,Purple Toadflax (Linaria purpurea),inedible,none,medicinal_notes,663
+1738,576,Lawson Cypress (Chamaecyparis lawsoniana),inedible,none,medicinal_notes,664
+1746,585,Genista tinctoria,inedible,none,taste_notes,500
+1747,585,Genista tinctoria,inedible,none,medicinal_notes,579
+1748,585,Genista tinctoria,inedible,none,recipe,2521
+1774,413,Hard Fern (Blechnum spicant),inedible,none,taste_notes,542
+1775,413,Hard Fern (Blechnum spicant),inedible,none,medicinal_notes,542
+1776,413,Hard Fern (Blechnum spicant),inedible,none,recipe,1714
+1820,360,Spotted Orchis (Dactylorhiza maculata),inedible,none,taste_notes,626
+1822,360,Spotted Orchis (Dactylorhiza maculata),inedible,none,recipe,2100
+1823,477,Thick-stemmed woodfern (Dryopteris crassirhizoma),toxic,toxic,taste_notes,513
+1824,477,Thick-stemmed woodfern (Dryopteris crassirhizoma),toxic,toxic,medicinal_notes,419
+1825,477,Thick-stemmed woodfern (Dryopteris crassirhizoma),toxic,toxic,recipe,2072
+1838,364,Wood horsetail (Equisetum sylvaticum),inedible,none,taste_notes,474
+1839,364,Wood horsetail (Equisetum sylvaticum),inedible,none,medicinal_notes,683
+1840,364,Wood horsetail (Equisetum sylvaticum),inedible,none,recipe,2241
+1866,485,Canada hawkweed (Hieracium umbellatum),inedible,none,taste_notes,539
+1868,485,Canada hawkweed (Hieracium umbellatum),inedible,none,recipe,3123
+1878,311,Meadow pea (Lathyrus pratensis),inedible,none,taste_notes,622
+1880,311,Meadow pea (Lathyrus pratensis),inedible,none,recipe,2510
+1884,240,Woodbine (Lonicera periclymenum),toxic,toxic,taste_notes,594
+1886,240,Woodbine (Lonicera periclymenum),toxic,toxic,recipe,3475
+1887,304,Bird's-foot trefoil (Lotus corniculatus),toxic,toxic,taste_notes,538
+1888,304,Bird's-foot trefoil (Lotus corniculatus),toxic,toxic,recipe,2958
+1900,377,Forget-me-not (Myosotis scorpioides),inedible,none,taste_notes,435
+1901,377,Forget-me-not (Myosotis scorpioides),inedible,none,medicinal_notes,1271
+1902,377,Forget-me-not (Myosotis scorpioides),inedible,none,recipe,2935
+1913,334,Common Butterbur (Petasites hybridus),toxic,toxic,taste_notes,588
+1914,334,Common Butterbur (Petasites hybridus),toxic,toxic,medicinal_notes,1092
+1915,334,Common Butterbur (Petasites hybridus),toxic,toxic,recipe,3069
+1935,221,Milkwort (Polygala vulgaris),inedible,none,taste_notes,391
+1936,221,Milkwort (Polygala vulgaris),inedible,none,medicinal_notes,621
+1937,221,Milkwort (Polygala vulgaris),inedible,none,recipe,3550
+1959,385,Mountain pyrola (Pyrola minor),inedible,none,taste_notes,798
+1961,385,Mountain pyrola (Pyrola minor),inedible,none,recipe,2928
+1971,123,Fig buttercup (Ranunculus ficaria),toxic,toxic,taste_notes,592
+1972,123,Fig buttercup (Ranunculus ficaria),toxic,toxic,medicinal_notes,712
+1973,123,Fig buttercup (Ranunculus ficaria),toxic,toxic,recipe,2252
+2004,586,Tall fleabane (Erigeron sumatrensis),inedible,none,medicinal_notes,1165
+2005,409,Goat willow (Salix caprea),inedible,none,taste_notes,519
+2006,409,Goat willow (Salix caprea),inedible,none,medicinal_notes,794
+2007,409,Goat willow (Salix caprea),inedible,none,recipe,3220
+2102,432,White willow (Salix alba),inedible,none,recipe,2851
+2107,432,White willow (Salix alba),inedible,none,medicinal_notes,372
+2111,589,Dyer's Chamomile (Cota tinctoria),inedible,none,medicinal_notes,228
+2172,432,White willow (Salix alba),inedible,none,taste_notes,553
+2187,602,Brown knapweed (Centaurea jacea),inedible,none,medicinal_notes,236
+2205,610,White Crowfoot (Ranunculus aconitifolius),toxic,toxic,medicinal_notes,216
+2208,614,Round leaf saxifrage (Saxifraga rotundifolia),inedible,none,medicinal_notes,185
+2214,621,Ragged robin (Silene flos-cuculi),inedible,none,medicinal_notes,188
+2216,623,Thistle (Carduus personata),inedible,none,medicinal_notes,324
+2217,624,Red rattle (Pedicularis palustris),toxic,toxic,medicinal_notes,118
+2219,626,Hieracium lachenalii,inedible,none,medicinal_notes,315
+2222,629,Rough Comfrey (Symphytum asperum),toxic,toxic,medicinal_notes,514
+2225,447,Red-banded Polypore (Fomitopsis pinicola),inedible,none,taste_notes,468
+2226,447,Red-banded Polypore (Fomitopsis pinicola),inedible,none,medicinal_notes,260
+2227,447,Red-banded Polypore (Fomitopsis pinicola),inedible,none,recipe,3586
+2228,631,Arceuthobium douglasii,inedible,none,medicinal_notes,202
+2238,642,Meadow Thistle (Cirsium dissectum),inedible,none,medicinal_notes,114
+2239,643,Honeysuckle (Lonicera xylosteum),toxic,toxic,medicinal_notes,111
+2249,518,Broom (Cytisus scoparius),toxic,toxic,taste_notes,347
+2251,518,Broom (Cytisus scoparius),toxic,toxic,recipe,3413
+2264,655,Sheepsbit (Jasione laevis),inedible,none,medicinal_notes,169
+2266,657,Alpine balsam (Erinus alpinus),inedible,none,medicinal_notes,240
+2269,662,Large White Buttercup (Ranunculus platanifolius),toxic,toxic,medicinal_notes,117
+2277,669,Jasione montana,inedible,none,medicinal_notes,238
+2281,671,Helianthus silphioides,inedible,none,medicinal_notes,182
+2302,675,Round leaved bedstraw (Galium rotundifolium),inedible,none,medicinal_notes,117
+2309,215,Hemp-nettle (Galeopsis tetrahit),toxic,toxic,taste_notes,366
+2311,215,Hemp-nettle (Galeopsis tetrahit),toxic,toxic,recipe,2721
+2317,678,Dark-leaved willow (Salix myrsinifolia),inedible,none,medicinal_notes,323
+2319,679,Hard shield fern (Polystichum aculeatum),inedible,none,medicinal_notes,232
+2320,680,Great wood rush (Luzula sylvatica),inedible,none,medicinal_notes,299
+2342,686,Rhododendron albiflorum,toxic,toxic,medicinal_notes,328
+2344,688,Hogweed (Heracleum mantegazzianum),toxic,toxic,medicinal_notes,405
+2418,123,Fig buttercup (Ranunculus ficaria),toxic,toxic,medicinal_folklore,538
+2460,215,Hemp-nettle (Galeopsis tetrahit),toxic,toxic,medicinal_folklore,160
+2643,696,Alpen Kreuzblume (Polygala alpestris),inedible,none,medicinal_notes,138
+2648,698,Greater butterfly orchid (Platanthera chlorantha),inedible,none,medicinal_notes,168
+2714,703,Heath cudweed (Omalotheca sylvatica),inedible,none,medicinal_notes,114
+2725,705,Parmotrema perlatum,inedible,none,medicinal_notes,296
+2728,708,Lemon-scented fern (Oreopteris limbosperma),inedible,none,medicinal_notes,148
+2751,714,Atlas Poppy (Papaver atlanticum),inedible,none,medicinal_notes,113
+2755,696,Alpen Kreuzblume (Polygala alpestris),inedible,none,recipe,2312
+2756,718,Butter and-eggs (Linaria vulgaris),inedible,none,medicinal_notes,198
+2758,720,Whorled Solomon's seal (Polygonatum verticillatum),toxic,toxic,medicinal_notes,120
+2760,722,Small Cow wheat (Melampyrum sylvaticum),toxic,toxic,medicinal_notes,186
+2781,725,Purple loosestrife (Lythrum virgatum),inedible,none,medicinal_notes,235
+2791,734,Oreomecon crocea,inedible,none,medicinal_notes,214
+2797,697,Broadleaf helleborine (Epipactis helleborine),inedible,none,medicinal_notes,317
+2810,728,Nettle leaved Mullein (Verbascum chaixii),inedible,none,medicinal_notes,262
+2813,719,Wood Ragwort (Senecio ovatus),toxic,toxic,medicinal_notes,387
+2821,745,Common Ivy (Hedera helix),toxic,toxic,medicinal_notes,281
+2831,750,Manchurian monkshood (Aconitum variegatum),toxic,deadly,medicinal_notes,227
+2837,757,Crownvetch (Coronilla varia),toxic,toxic,medicinal_notes,255
+2838,758,Crownvetch (Securigera varia),toxic,toxic,medicinal_notes,108
+2867,48,Myrtle (Vinca minor),toxic,toxic,taste_notes,292
+2868,48,Myrtle (Vinca minor),toxic,toxic,medicinal_notes,438
+2869,48,Myrtle (Vinca minor),toxic,toxic,recipe,2378
+2882,66,Bedstraw broomrape (Orobanche caryophyllacea),inedible,none,taste_notes,319
+2883,66,Bedstraw broomrape (Orobanche caryophyllacea),inedible,none,medicinal_notes,153
+2884,66,Bedstraw broomrape (Orobanche caryophyllacea),inedible,none,recipe,3356
+2893,492,Cutleaf waterparsnip (Berula erecta),toxic,toxic,taste_notes,278
+2894,492,Cutleaf waterparsnip (Berula erecta),toxic,toxic,medicinal_notes,205
+2895,492,Cutleaf waterparsnip (Berula erecta),toxic,toxic,recipe,2474
+2922,496,Plums-and-Custard (Tricholomopsis rutilans),inedible,none,medicinal_notes,216
+2929,498,Pompon Mustard-rosette (Pyxine albovirens),inedible,none,medicinal_notes,113
+2950,503,False Death-cap (Amanita citrina),toxic,toxic,taste_notes,303
+2951,503,False Death-cap (Amanita citrina),toxic,toxic,medicinal_notes,294
+2952,503,False Death-cap (Amanita citrina),toxic,toxic,recipe,2686
+2956,504,Quaking aspen (Populus tremuloides),inedible,none,taste_notes,347
+2957,504,Quaking aspen (Populus tremuloides),inedible,none,medicinal_notes,533
+2958,504,Quaking aspen (Populus tremuloides),inedible,none,recipe,3250
+2992,182,Fox-and-cubs (Pilosella aurantiaca),inedible,none,taste_notes,363
+2993,182,Fox-and-cubs (Pilosella aurantiaca),inedible,none,medicinal_notes,146
+2994,182,Fox-and-cubs (Pilosella aurantiaca),inedible,none,recipe,2888
+3007,188,Winged Broom (Genista sagittalis),inedible,none,taste_notes,96
+3008,188,Winged Broom (Genista sagittalis),inedible,none,medicinal_notes,254
+3009,188,Winged Broom (Genista sagittalis),inedible,none,recipe,2388
+3029,354,Crocus (Crocus),toxic,toxic,medicinal_notes,192
+3032,124,Blackish Columbine (Aquilegia nigricans),toxic,toxic,taste_notes,422
+3033,124,Blackish Columbine (Aquilegia nigricans),toxic,toxic,recipe,3690
+3034,132,Wood Bedstraw (Galium sylvaticum),inedible,none,taste_notes,538
+3035,132,Wood Bedstraw (Galium sylvaticum),inedible,none,medicinal_notes,143
+3036,132,Wood Bedstraw (Galium sylvaticum),inedible,none,recipe,2877
+3043,19,White Butterbur (Petasites albus),toxic,toxic,taste_notes,373
+3047,767,Hoary Ragwort (Jacobaea erucifolia),toxic,toxic,medicinal_notes,117
+3048,769,Bank Haircap Moss (Polytrichum formosum),inedible,none,medicinal_notes,113
+3049,770,Bell heather (Erica cinerea),inedible,none,medicinal_notes,263
+3050,771,Horn Calcareous Moss (Mnium hornum),inedible,none,medicinal_notes,211
+3052,773,Desert rose (Adenium obesum),toxic,deadly,medicinal_notes,138
+3055,777,Stinking aposeris (Aposeris foetida),inedible,none,medicinal_notes,142
+3057,779,Dwarf Thistle (Cirsium acaulon),inedible,none,medicinal_notes,162
+3060,782,Aconite (Aconitum plicatum),toxic,deadly,medicinal_notes,438
+3071,808,Slimleaf bursage (Ambrosia confertiflora),inedible,unknown,medicinal_notes,347
+3075,811,Alpine Eyebright (Euphrasia alpina),inedible,none,medicinal_notes,288
+3077,813,Purple Coltsfoot (Homogyne alpina),inedible,none,medicinal_notes,191
+3080,797,Green alder (Alnus alnobetula),inedible,none,medicinal_notes,145
+3099,818,White Dapperling (Leucocoprinus leucothites),toxic,toxic,medicinal_notes,125
+3120,830,Trooping Crumble Cap (Coprinellus disseminatus),inedible,none,medicinal_notes,180
+3127,837,Princess tree (Paulownia tomentosa),inedible,none,medicinal_notes,424
+3137,840,Paxillus involutus,toxic,deadly,medicinal_notes,365
+3141,633,Populus nigra,inedible,none,taste_notes,369
+3142,633,Populus nigra,inedible,none,recipe,3039
+3147,841,Ramaria stricta,inedible,none,medicinal_notes,257
+3166,809,Conifer Mazegill (Gloeophyllum sepiarium),inedible,none,medicinal_notes,165
+3167,787,Wood Cow wheat (Melampyrum nemorosum),toxic,toxic,medicinal_notes,217
+3175,846,Barclay's willow (Salix barclayi),inedible,none,medicinal_notes,352
+3464,748,Broadleaf enchanter's nightshade (Circaea lutetiana),inedible,none,medicinal_notes,196
+3471,518,Broom (Cytisus scoparius),toxic,toxic,medicinal_notes,667
+3472,360,Spotted Orchis (Dactylorhiza maculata),inedible,none,medicinal_notes,501
+3474,843,Flowering spurge (Euphorbia corollata),toxic,toxic,medicinal_notes,595
+3480,485,Canada hawkweed (Hieracium umbellatum),inedible,none,medicinal_notes,300
+3483,311,Meadow pea (Lathyrus pratensis),inedible,none,medicinal_notes,254
+3485,637,Turk's cap (Lilium martagon),inedible,none,medicinal_notes,335
+3486,240,Woodbine (Lonicera periclymenum),toxic,toxic,medicinal_notes,833
+3487,834,Gypsywort (Lycopus europaeus),inedible,none,medicinal_notes,659
+3490,684,Nymphaea alba,inedible,none,medicinal_notes,573
+3496,781,Grass of Parnassus (Parnassia palustris),inedible,none,medicinal_notes,436
+3497,19,White Butterbur (Petasites albus),toxic,toxic,medicinal_notes,415
+3502,670,Polygonatum odoratum,toxic,toxic,medicinal_notes,728
+3504,633,Populus nigra,inedible,none,medicinal_notes,831
+3505,742,Carolina poplar (Populus × canadensis),inedible,none,medicinal_notes,266
+3509,385,Mountain pyrola (Pyrola minor),inedible,none,medicinal_notes,229
+3513,801,Alpenrose (Rhododendron ferrugineum),toxic,toxic,medicinal_notes,496
+3521,795,Eared willow (Salix aurita),inedible,none,medicinal_notes,332
+3527,814,Alpine Snowbell (Soldanella alpina),inedible,none,medicinal_notes,246
+3531,689,Bridewort (Spiraea salicifolia),inedible,none,medicinal_notes,302
+3545,789,Spring gentian (Gentiana verna),inedible,none,medicinal_notes,346
+3546,796,Club Foot (Ampulloclitocybe clavipes),toxic,toxic,medicinal_notes,374
+3559,851,Rhytisma acerinum,inedible,unknown,medicinal_notes,239
+3561,852,Downy milk cap (Lactarius pubescens),toxic,toxic,medicinal_notes,222
+3563,853,Birch webcap (Phlegmacium triumphans),toxic,toxic,medicinal_notes,270
+3711,854,Trametopsis cervina,inedible,unknown,medicinal_notes,196

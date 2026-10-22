@@ -1,0 +1,5996 @@
+{
+ "633": {
+  "action": "hold",
+  "reason": null,
+  "rule": "excluded: medicinal — later round",
+  "edited_text": null,
+  "species_id": 136,
+  "species": "Bryonia syriaca",
+  "field": "medicinal_notes"
+ },
+ "638": {
+  "action": "reject",
+  "reason": "Melvin census 22 Oct: placeholder — no medicinal content",
+  "rule": "G1 (extra match)",
+  "edited_text": null,
+  "species_id": 142,
+  "species": "Thymus polytrichus",
+  "field": "medicinal_notes"
+ },
+ "648": {
+  "action": "reject",
+  "reason": "Melvin census 22 Oct: placeholder — no medicinal content",
+  "rule": "G1 (extra match)",
+  "edited_text": null,
+  "species_id": 159,
+  "species": "Geranium × oxonianum",
+  "field": "medicinal_notes"
+ },
+ "802": {
+  "action": "hold",
+  "reason": null,
+  "rule": "excluded: medicinal — later round",
+  "edited_text": null,
+  "species_id": 292,
+  "species": "Psilocybe semilanceata",
+  "field": "medicinal_notes"
+ },
+ "1657": {
+  "action": "hold",
+  "reason": null,
+  "rule": "G3 non-European — hold",
+  "edited_text": null,
+  "species_id": 550,
+  "species": "Viburnum trilobum",
+  "field": "taste_notes"
+ },
+ "1659": {
+  "action": "reject",
+  "reason": "Melvin census 22 Oct: early draft — low quality",
+  "rule": "G2a (listed)",
+  "edited_text": null,
+  "species_id": 550,
+  "species": "Viburnum trilobum",
+  "field": "recipe"
+ },
+ "1660": {
+  "action": "hold",
+  "reason": null,
+  "rule": "G3 non-European — hold",
+  "edited_text": null,
+  "species_id": 552,
+  "species": "Ulmus davidiana",
+  "field": "taste_notes"
+ },
+ "1661": {
+  "action": "reject",
+  "reason": "Melvin census 22 Oct: early draft — low quality",
+  "rule": "G2b (listed)",
+  "edited_text": null,
+  "species_id": 552,
+  "species": "Ulmus davidiana",
+  "field": "medicinal_notes"
+ },
+ "1662": {
+  "action": "reject",
+  "reason": "Melvin census 22 Oct: early draft — low quality",
+  "rule": "G2a (listed)",
+  "edited_text": null,
+  "species_id": 552,
+  "species": "Ulmus davidiana",
+  "field": "recipe"
+ },
+ "1663": {
+  "action": "reject",
+  "reason": "Melvin census 22 Oct: culinary content on toxic/inedible species",
+  "rule": "excluded: culinary",
+  "edited_text": null,
+  "species_id": 547,
+  "species": "Ulmus × hollandica",
+  "field": "recipe"
+ },
+ "1664": {
+  "action": "reject",
+  "reason": "Melvin census 22 Oct: culinary content on toxic/inedible species",
+  "rule": "excluded: culinary",
+  "edited_text": null,
+  "species_id": 547,
+  "species": "Ulmus × hollandica",
+  "field": "taste_notes"
+ },
+ "1670": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census APPROVE)",
+  "edited_text": null,
+  "species_id": 258,
+  "species": "Rumex crispus",
+  "field": "taste_notes"
+ },
+ "1671": {
+  "action": "reject",
+  "reason": "Melvin census 22 Oct: early draft — low quality",
+  "rule": "G2a (listed)",
+  "edited_text": null,
+  "species_id": 258,
+  "species": "Rumex crispus",
+  "field": "recipe"
+ },
+ "1695": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census APPROVE)",
+  "edited_text": null,
+  "species_id": 556,
+  "species": "Eriophorum angustifolium",
+  "field": "taste_notes"
+ },
+ "1696": {
+  "action": "reject",
+  "reason": "Melvin census 22 Oct: early draft — low quality",
+  "rule": "G2b (listed)",
+  "edited_text": null,
+  "species_id": 556,
+  "species": "Eriophorum angustifolium",
+  "field": "medicinal_notes"
+ },
+ "1697": {
+  "action": "reject",
+  "reason": "Melvin census 22 Oct: early draft — low quality",
+  "rule": "G2a (listed)",
+  "edited_text": null,
+  "species_id": 556,
+  "species": "Eriophorum angustifolium",
+  "field": "recipe"
+ },
+ "1700": {
+  "action": "reject",
+  "reason": "Melvin census 22 Oct: pale oyster medicinal",
+  "rule": "override reject",
+  "edited_text": null,
+  "species_id": 560,
+  "species": "Pleurotus pulmonarius",
+  "field": "medicinal_notes"
+ },
+ "1705": {
+  "action": "hold",
+  "reason": null,
+  "rule": "excluded: medicinal — later round",
+  "edited_text": null,
+  "species_id": 563,
+  "species": "Linaria purpurea",
+  "field": "medicinal_notes"
+ },
+ "1707": {
+  "action": "reject",
+  "reason": "Melvin census 22 Oct: early draft — low quality",
+  "rule": "G2b (listed)",
+  "edited_text": null,
+  "species_id": 564,
+  "species": "Campanula poscharskyana",
+  "field": "medicinal_notes"
+ },
+ "1716": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census APPROVE)",
+  "edited_text": null,
+  "species_id": 568,
+  "species": "Origanum vulgare",
+  "field": "taste_notes"
+ },
+ "1718": {
+  "action": "reject",
+  "reason": "Melvin census 22 Oct: early draft — low quality",
+  "rule": "G2a (listed)",
+  "edited_text": null,
+  "species_id": 568,
+  "species": "Origanum vulgare",
+  "field": "recipe"
+ },
+ "1729": {
+  "action": "hold",
+  "reason": null,
+  "rule": "G3 non-European — hold",
+  "edited_text": null,
+  "species_id": 573,
+  "species": "Tilia americana",
+  "field": "taste_notes"
+ },
+ "1731": {
+  "action": "reject",
+  "reason": "Melvin census 22 Oct: early draft — low quality",
+  "rule": "G2a (extra match)",
+  "edited_text": null,
+  "species_id": 573,
+  "species": "Tilia americana",
+  "field": "recipe"
+ },
+ "1732": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census APPROVE)",
+  "edited_text": null,
+  "species_id": 574,
+  "species": "Fuchsia magellanica",
+  "field": "taste_notes"
+ },
+ "1734": {
+  "action": "reject",
+  "reason": "Melvin census 22 Oct: early draft — low quality",
+  "rule": "G2a (listed)",
+  "edited_text": null,
+  "species_id": 574,
+  "species": "Fuchsia magellanica",
+  "field": "recipe"
+ },
+ "1735": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census APPROVE)",
+  "edited_text": null,
+  "species_id": 578,
+  "species": "Vitis vinifera",
+  "field": "taste_notes"
+ },
+ "1737": {
+  "action": "reject",
+  "reason": "Melvin census 22 Oct: early draft — low quality",
+  "rule": "G2a (listed)",
+  "edited_text": null,
+  "species_id": 578,
+  "species": "Vitis vinifera",
+  "field": "recipe"
+ },
+ "1738": {
+  "action": "hold",
+  "reason": null,
+  "rule": "excluded: medicinal — later round",
+  "edited_text": null,
+  "species_id": 576,
+  "species": "Chamaecyparis lawsoniana",
+  "field": "medicinal_notes"
+ },
+ "1746": {
+  "action": "reject",
+  "reason": "Melvin census 22 Oct: culinary content on toxic/inedible species",
+  "rule": "excluded: culinary",
+  "edited_text": null,
+  "species_id": 585,
+  "species": "Genista tinctoria",
+  "field": "taste_notes"
+ },
+ "1747": {
+  "action": "hold",
+  "reason": null,
+  "rule": "excluded: medicinal — later round",
+  "edited_text": null,
+  "species_id": 585,
+  "species": "Genista tinctoria",
+  "field": "medicinal_notes"
+ },
+ "1748": {
+  "action": "reject",
+  "reason": "Melvin census 22 Oct: culinary content on toxic/inedible species",
+  "rule": "excluded: culinary",
+  "edited_text": null,
+  "species_id": 585,
+  "species": "Genista tinctoria",
+  "field": "recipe"
+ },
+ "1774": {
+  "action": "reject",
+  "reason": "Melvin census 22 Oct: culinary content on toxic/inedible species",
+  "rule": "excluded: culinary",
+  "edited_text": null,
+  "species_id": 413,
+  "species": "Blechnum spicant",
+  "field": "taste_notes"
+ },
+ "1775": {
+  "action": "hold",
+  "reason": null,
+  "rule": "excluded: medicinal — later round",
+  "edited_text": null,
+  "species_id": 413,
+  "species": "Blechnum spicant",
+  "field": "medicinal_notes"
+ },
+ "1776": {
+  "action": "reject",
+  "reason": "Melvin census 22 Oct: culinary content on toxic/inedible species",
+  "rule": "excluded: culinary",
+  "edited_text": null,
+  "species_id": 413,
+  "species": "Blechnum spicant",
+  "field": "recipe"
+ },
+ "1777": {
+  "action": "reject",
+  "reason": "Melvin census 22 Oct: describes black walnut — wrong species",
+  "rule": "override reject",
+  "edited_text": null,
+  "species_id": 390,
+  "species": "Juglans regia",
+  "field": "taste_notes"
+ },
+ "1778": {
+  "action": "reject",
+  "reason": "Melvin census 22 Oct: describes black walnut — wrong species",
+  "rule": "override reject",
+  "edited_text": null,
+  "species_id": 390,
+  "species": "Juglans regia",
+  "field": "medicinal_notes"
+ },
+ "1779": {
+  "action": "reject",
+  "reason": "Melvin census 22 Oct: early draft — low quality",
+  "rule": "G2a (listed)",
+  "edited_text": null,
+  "species_id": 390,
+  "species": "Juglans regia",
+  "field": "recipe"
+ },
+ "1807": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census APPROVE)",
+  "edited_text": null,
+  "species_id": 299,
+  "species": "Crataegus pentagyna",
+  "field": "taste_notes"
+ },
+ "1811": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census APPROVE)",
+  "edited_text": null,
+  "species_id": 339,
+  "species": "Crepis vesicaria",
+  "field": "taste_notes"
+ },
+ "1812": {
+  "action": "reject",
+  "reason": "Melvin census 22 Oct: early draft — low quality",
+  "rule": "G2b (listed)",
+  "edited_text": null,
+  "species_id": 339,
+  "species": "Crepis vesicaria",
+  "field": "medicinal_notes"
+ },
+ "1813": {
+  "action": "reject",
+  "reason": "Melvin census 22 Oct: early draft — low quality",
+  "rule": "G2a (listed)",
+  "edited_text": null,
+  "species_id": 339,
+  "species": "Crepis vesicaria",
+  "field": "recipe"
+ },
+ "1820": {
+  "action": "reject",
+  "reason": "Melvin census 22 Oct: culinary content on toxic/inedible species",
+  "rule": "excluded: culinary",
+  "edited_text": null,
+  "species_id": 360,
+  "species": "Dactylorhiza maculata",
+  "field": "taste_notes"
+ },
+ "1822": {
+  "action": "reject",
+  "reason": "Melvin census 22 Oct: culinary content on toxic/inedible species",
+  "rule": "excluded: culinary",
+  "edited_text": null,
+  "species_id": 360,
+  "species": "Dactylorhiza maculata",
+  "field": "recipe"
+ },
+ "1823": {
+  "action": "reject",
+  "reason": "Melvin census 22 Oct: culinary content on toxic/inedible species",
+  "rule": "excluded: culinary",
+  "edited_text": null,
+  "species_id": 477,
+  "species": "Dryopteris crassirhizoma",
+  "field": "taste_notes"
+ },
+ "1824": {
+  "action": "hold",
+  "reason": null,
+  "rule": "excluded: medicinal — later round",
+  "edited_text": null,
+  "species_id": 477,
+  "species": "Dryopteris crassirhizoma",
+  "field": "medicinal_notes"
+ },
+ "1825": {
+  "action": "reject",
+  "reason": "Melvin census 22 Oct: culinary content on toxic/inedible species",
+  "rule": "excluded: culinary",
+  "edited_text": null,
+  "species_id": 477,
+  "species": "Dryopteris crassirhizoma",
+  "field": "recipe"
+ },
+ "1832": {
+  "action": "reject",
+  "reason": "Melvin census 22 Oct: early draft — low quality",
+  "rule": "G2b (listed)",
+  "edited_text": null,
+  "species_id": 482,
+  "species": "Epilobium palustre",
+  "field": "medicinal_notes"
+ },
+ "1837": {
+  "action": "reject",
+  "reason": "Melvin census 22 Oct: field horsetail",
+  "rule": "override reject",
+  "edited_text": null,
+  "species_id": 527,
+  "species": "Equisetum arvense",
+  "field": "medicinal_notes"
+ },
+ "1838": {
+  "action": "reject",
+  "reason": "Melvin census 22 Oct: culinary content on toxic/inedible species",
+  "rule": "excluded: culinary",
+  "edited_text": null,
+  "species_id": 364,
+  "species": "Equisetum sylvaticum",
+  "field": "taste_notes"
+ },
+ "1839": {
+  "action": "hold",
+  "reason": null,
+  "rule": "excluded: medicinal — later round",
+  "edited_text": null,
+  "species_id": 364,
+  "species": "Equisetum sylvaticum",
+  "field": "medicinal_notes"
+ },
+ "1840": {
+  "action": "reject",
+  "reason": "Melvin census 22 Oct: culinary content on toxic/inedible species",
+  "rule": "excluded: culinary",
+  "edited_text": null,
+  "species_id": 364,
+  "species": "Equisetum sylvaticum",
+  "field": "recipe"
+ },
+ "1848": {
+  "action": "reject",
+  "reason": "Melvin census 22 Oct: field horsetail",
+  "rule": "override reject",
+  "edited_text": null,
+  "species_id": 527,
+  "species": "Equisetum arvense",
+  "field": "taste_notes"
+ },
+ "1849": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census LOOK)",
+  "edited_text": null,
+  "species_id": 527,
+  "species": "Equisetum arvense",
+  "field": "recipe"
+ },
+ "1859": {
+  "action": "reject",
+  "reason": "Melvin census 22 Oct: protected species; Veratrum look-alike",
+  "rule": "override reject",
+  "edited_text": null,
+  "species_id": 363,
+  "species": "Gentiana lutea",
+  "field": "taste_notes"
+ },
+ "1860": {
+  "action": "reject",
+  "reason": "Melvin census 22 Oct: protected species; Veratrum look-alike",
+  "rule": "override reject",
+  "edited_text": null,
+  "species_id": 363,
+  "species": "Gentiana lutea",
+  "field": "medicinal_notes"
+ },
+ "1861": {
+  "action": "reject",
+  "reason": "Melvin census 22 Oct: protected species; Veratrum look-alike",
+  "rule": "override reject",
+  "edited_text": null,
+  "species_id": 363,
+  "species": "Gentiana lutea",
+  "field": "recipe"
+ },
+ "1866": {
+  "action": "reject",
+  "reason": "Melvin census 22 Oct: culinary content on toxic/inedible species",
+  "rule": "excluded: culinary",
+  "edited_text": null,
+  "species_id": 485,
+  "species": "Hieracium umbellatum",
+  "field": "taste_notes"
+ },
+ "1868": {
+  "action": "reject",
+  "reason": "Melvin census 22 Oct: culinary content on toxic/inedible species",
+  "rule": "excluded: culinary",
+  "edited_text": null,
+  "species_id": 485,
+  "species": "Hieracium umbellatum",
+  "field": "recipe"
+ },
+ "1869": {
+  "action": "hold",
+  "reason": null,
+  "rule": "G3 non-European — hold",
+  "edited_text": null,
+  "species_id": 538,
+  "species": "Hydrocotyle sibthorpioides",
+  "field": "taste_notes"
+ },
+ "1870": {
+  "action": "reject",
+  "reason": "Melvin census 22 Oct: early draft — low quality",
+  "rule": "G2b (listed)",
+  "edited_text": null,
+  "species_id": 538,
+  "species": "Hydrocotyle sibthorpioides",
+  "field": "medicinal_notes"
+ },
+ "1871": {
+  "action": "hold",
+  "reason": null,
+  "rule": "G3 non-European — hold",
+  "edited_text": null,
+  "species_id": 538,
+  "species": "Hydrocotyle sibthorpioides",
+  "field": "recipe"
+ },
+ "1875": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census APPROVE)",
+  "edited_text": null,
+  "species_id": 208,
+  "species": "Knautia arvensis",
+  "field": "taste_notes"
+ },
+ "1876": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census APPROVE)",
+  "edited_text": null,
+  "species_id": 208,
+  "species": "Knautia arvensis",
+  "field": "recipe"
+ },
+ "1878": {
+  "action": "reject",
+  "reason": "Melvin census 22 Oct: culinary content on toxic/inedible species",
+  "rule": "excluded: culinary",
+  "edited_text": null,
+  "species_id": 311,
+  "species": "Lathyrus pratensis",
+  "field": "taste_notes"
+ },
+ "1880": {
+  "action": "reject",
+  "reason": "Melvin census 22 Oct: culinary content on toxic/inedible species",
+  "rule": "excluded: culinary",
+  "edited_text": null,
+  "species_id": 311,
+  "species": "Lathyrus pratensis",
+  "field": "recipe"
+ },
+ "1881": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census APPROVE)",
+  "edited_text": null,
+  "species_id": 216,
+  "species": "Leucanthemum ircutianum",
+  "field": "taste_notes"
+ },
+ "1883": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census APPROVE)",
+  "edited_text": null,
+  "species_id": 216,
+  "species": "Leucanthemum ircutianum",
+  "field": "recipe"
+ },
+ "1884": {
+  "action": "reject",
+  "reason": "Melvin census 22 Oct: culinary content on toxic/inedible species",
+  "rule": "excluded: culinary",
+  "edited_text": null,
+  "species_id": 240,
+  "species": "Lonicera periclymenum",
+  "field": "taste_notes"
+ },
+ "1886": {
+  "action": "reject",
+  "reason": "Melvin census 22 Oct: culinary content on toxic/inedible species",
+  "rule": "excluded: culinary",
+  "edited_text": null,
+  "species_id": 240,
+  "species": "Lonicera periclymenum",
+  "field": "recipe"
+ },
+ "1887": {
+  "action": "reject",
+  "reason": "Melvin census 22 Oct: culinary content on toxic/inedible species",
+  "rule": "excluded: culinary",
+  "edited_text": null,
+  "species_id": 304,
+  "species": "Lotus corniculatus",
+  "field": "taste_notes"
+ },
+ "1888": {
+  "action": "reject",
+  "reason": "Melvin census 22 Oct: culinary content on toxic/inedible species",
+  "rule": "excluded: culinary",
+  "edited_text": null,
+  "species_id": 304,
+  "species": "Lotus corniculatus",
+  "field": "recipe"
+ },
+ "1900": {
+  "action": "reject",
+  "reason": "Melvin census 22 Oct: culinary content on toxic/inedible species",
+  "rule": "excluded: culinary",
+  "edited_text": null,
+  "species_id": 377,
+  "species": "Myosotis scorpioides",
+  "field": "taste_notes"
+ },
+ "1901": {
+  "action": "hold",
+  "reason": null,
+  "rule": "excluded: medicinal — later round",
+  "edited_text": null,
+  "species_id": 377,
+  "species": "Myosotis scorpioides",
+  "field": "medicinal_notes"
+ },
+ "1902": {
+  "action": "reject",
+  "reason": "Melvin census 22 Oct: culinary content on toxic/inedible species",
+  "rule": "excluded: culinary",
+  "edited_text": null,
+  "species_id": 377,
+  "species": "Myosotis scorpioides",
+  "field": "recipe"
+ },
+ "1903": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census APPROVE)",
+  "edited_text": null,
+  "species_id": 393,
+  "species": "Oxalis tetraphylla",
+  "field": "taste_notes"
+ },
+ "1904": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census APPROVE)",
+  "edited_text": null,
+  "species_id": 393,
+  "species": "Oxalis tetraphylla",
+  "field": "medicinal_notes"
+ },
+ "1905": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census APPROVE)",
+  "edited_text": null,
+  "species_id": 393,
+  "species": "Oxalis tetraphylla",
+  "field": "recipe"
+ },
+ "1909": {
+  "action": "reject",
+  "reason": "Melvin census 22 Oct: opium poppy — medicinal draft rejected",
+  "rule": "override reject",
+  "edited_text": null,
+  "species_id": 314,
+  "species": "Papaver somniferum",
+  "field": "medicinal_notes"
+ },
+ "1913": {
+  "action": "reject",
+  "reason": "Melvin census 22 Oct: culinary content on toxic/inedible species",
+  "rule": "excluded: culinary",
+  "edited_text": null,
+  "species_id": 334,
+  "species": "Petasites hybridus",
+  "field": "taste_notes"
+ },
+ "1914": {
+  "action": "hold",
+  "reason": null,
+  "rule": "excluded: medicinal — later round",
+  "edited_text": null,
+  "species_id": 334,
+  "species": "Petasites hybridus",
+  "field": "medicinal_notes"
+ },
+ "1915": {
+  "action": "reject",
+  "reason": "Melvin census 22 Oct: culinary content on toxic/inedible species",
+  "rule": "excluded: culinary",
+  "edited_text": null,
+  "species_id": 334,
+  "species": "Petasites hybridus",
+  "field": "recipe"
+ },
+ "1927": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census APPROVE)",
+  "edited_text": null,
+  "species_id": 438,
+  "species": "Pinus nigra",
+  "field": "taste_notes"
+ },
+ "1929": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census APPROVE)",
+  "edited_text": null,
+  "species_id": 438,
+  "species": "Pinus nigra",
+  "field": "recipe"
+ },
+ "1931": {
+  "action": "hold",
+  "reason": null,
+  "rule": "G3 non-European — hold",
+  "edited_text": null,
+  "species_id": 508,
+  "species": "Pinus radiata",
+  "field": "taste_notes"
+ },
+ "1933": {
+  "action": "hold",
+  "reason": null,
+  "rule": "G3 non-European — hold",
+  "edited_text": null,
+  "species_id": 508,
+  "species": "Pinus radiata",
+  "field": "recipe"
+ },
+ "1935": {
+  "action": "reject",
+  "reason": "Melvin census 22 Oct: culinary content on toxic/inedible species",
+  "rule": "excluded: culinary",
+  "edited_text": null,
+  "species_id": 221,
+  "species": "Polygala vulgaris",
+  "field": "taste_notes"
+ },
+ "1936": {
+  "action": "hold",
+  "reason": null,
+  "rule": "excluded: medicinal — later round",
+  "edited_text": null,
+  "species_id": 221,
+  "species": "Polygala vulgaris",
+  "field": "medicinal_notes"
+ },
+ "1937": {
+  "action": "reject",
+  "reason": "Melvin census 22 Oct: culinary content on toxic/inedible species",
+  "rule": "excluded: culinary",
+  "edited_text": null,
+  "species_id": 221,
+  "species": "Polygala vulgaris",
+  "field": "recipe"
+ },
+ "1950": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census APPROVE)",
+  "edited_text": null,
+  "species_id": 212,
+  "species": "Prunus cerasus",
+  "field": "taste_notes"
+ },
+ "1952": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census APPROVE)",
+  "edited_text": null,
+  "species_id": 212,
+  "species": "Prunus cerasus",
+  "field": "recipe"
+ },
+ "1953": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census APPROVE)",
+  "edited_text": null,
+  "species_id": 437,
+  "species": "Prunus padus",
+  "field": "taste_notes"
+ },
+ "1954": {
+  "action": "reject",
+  "reason": "Melvin census 22 Oct: early draft — low quality",
+  "rule": "G2b (listed)",
+  "edited_text": null,
+  "species_id": 437,
+  "species": "Prunus padus",
+  "field": "medicinal_notes"
+ },
+ "1955": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census APPROVE)",
+  "edited_text": null,
+  "species_id": 437,
+  "species": "Prunus padus",
+  "field": "recipe"
+ },
+ "1956": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census APPROVE)",
+  "edited_text": null,
+  "species_id": 488,
+  "species": "Pseudotsuga menziesii",
+  "field": "taste_notes"
+ },
+ "1957": {
+  "action": "reject",
+  "reason": "Melvin census 22 Oct: early draft — low quality",
+  "rule": "G2b (listed)",
+  "edited_text": null,
+  "species_id": 488,
+  "species": "Pseudotsuga menziesii",
+  "field": "medicinal_notes"
+ },
+ "1958": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census APPROVE)",
+  "edited_text": null,
+  "species_id": 488,
+  "species": "Pseudotsuga menziesii",
+  "field": "recipe"
+ },
+ "1959": {
+  "action": "reject",
+  "reason": "Melvin census 22 Oct: culinary content on toxic/inedible species",
+  "rule": "excluded: culinary",
+  "edited_text": null,
+  "species_id": 385,
+  "species": "Pyrola minor",
+  "field": "taste_notes"
+ },
+ "1961": {
+  "action": "reject",
+  "reason": "Melvin census 22 Oct: culinary content on toxic/inedible species",
+  "rule": "excluded: culinary",
+  "edited_text": null,
+  "species_id": 385,
+  "species": "Pyrola minor",
+  "field": "recipe"
+ },
+ "1962": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census APPROVE)",
+  "edited_text": null,
+  "species_id": 433,
+  "species": "Pyrus communis",
+  "field": "taste_notes"
+ },
+ "1964": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census APPROVE)",
+  "edited_text": null,
+  "species_id": 433,
+  "species": "Pyrus communis",
+  "field": "recipe"
+ },
+ "1968": {
+  "action": "hold",
+  "reason": null,
+  "rule": "G3 non-European — hold",
+  "edited_text": null,
+  "species_id": 388,
+  "species": "Quercus velutina",
+  "field": "taste_notes"
+ },
+ "1969": {
+  "action": "reject",
+  "reason": "Melvin census 22 Oct: early draft — low quality",
+  "rule": "G2b (listed)",
+  "edited_text": null,
+  "species_id": 388,
+  "species": "Quercus velutina",
+  "field": "medicinal_notes"
+ },
+ "1970": {
+  "action": "hold",
+  "reason": null,
+  "rule": "G3 non-European — hold",
+  "edited_text": null,
+  "species_id": 388,
+  "species": "Quercus velutina",
+  "field": "recipe"
+ },
+ "1971": {
+  "action": "reject",
+  "reason": "Melvin census 22 Oct: culinary content on toxic/inedible species",
+  "rule": "excluded: culinary",
+  "edited_text": null,
+  "species_id": 123,
+  "species": "Ranunculus ficaria",
+  "field": "taste_notes"
+ },
+ "1972": {
+  "action": "hold",
+  "reason": null,
+  "rule": "excluded: medicinal — later round",
+  "edited_text": null,
+  "species_id": 123,
+  "species": "Ranunculus ficaria",
+  "field": "medicinal_notes"
+ },
+ "1973": {
+  "action": "reject",
+  "reason": "Melvin census 22 Oct: culinary content on toxic/inedible species",
+  "rule": "excluded: culinary",
+  "edited_text": null,
+  "species_id": 123,
+  "species": "Ranunculus ficaria",
+  "field": "recipe"
+ },
+ "1974": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census APPROVE)",
+  "edited_text": null,
+  "species_id": 419,
+  "species": "Reynoutria japonica",
+  "field": "taste_notes"
+ },
+ "1975": {
+  "action": "reject",
+  "reason": "Melvin census 22 Oct: early draft — low quality",
+  "rule": "G2b (listed)",
+  "edited_text": null,
+  "species_id": 419,
+  "species": "Reynoutria japonica",
+  "field": "medicinal_notes"
+ },
+ "1976": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census APPROVE)",
+  "edited_text": null,
+  "species_id": 419,
+  "species": "Reynoutria japonica",
+  "field": "recipe"
+ },
+ "1977": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census APPROVE)",
+  "edited_text": null,
+  "species_id": 391,
+  "species": "Ribes nigrum",
+  "field": "taste_notes"
+ },
+ "1979": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census APPROVE)",
+  "edited_text": null,
+  "species_id": 391,
+  "species": "Ribes nigrum",
+  "field": "recipe"
+ },
+ "1981": {
+  "action": "reject",
+  "reason": "Melvin census 22 Oct: early draft — low quality",
+  "rule": "G2b (listed)",
+  "edited_text": null,
+  "species_id": 277,
+  "species": "Rosa dumalis",
+  "field": "medicinal_notes"
+ },
+ "1982": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census APPROVE)",
+  "edited_text": null,
+  "species_id": 396,
+  "species": "Rosa micrantha",
+  "field": "taste_notes"
+ },
+ "1983": {
+  "action": "reject",
+  "reason": "Melvin census 22 Oct: early draft — low quality",
+  "rule": "G2b (listed)",
+  "edited_text": null,
+  "species_id": 396,
+  "species": "Rosa micrantha",
+  "field": "medicinal_notes"
+ },
+ "1984": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census APPROVE)",
+  "edited_text": null,
+  "species_id": 396,
+  "species": "Rosa micrantha",
+  "field": "recipe"
+ },
+ "1985": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census APPROVE)",
+  "edited_text": null,
+  "species_id": 536,
+  "species": "Rosa multiflora",
+  "field": "taste_notes"
+ },
+ "1987": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census APPROVE)",
+  "edited_text": null,
+  "species_id": 536,
+  "species": "Rosa multiflora",
+  "field": "recipe"
+ },
+ "1991": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census APPROVE)",
+  "edited_text": null,
+  "species_id": 293,
+  "species": "Rubus fruticosus",
+  "field": "taste_notes"
+ },
+ "1992": {
+  "action": "reject",
+  "reason": "Melvin census 22 Oct: early draft — low quality",
+  "rule": "G2b (listed)",
+  "edited_text": null,
+  "species_id": 293,
+  "species": "Rubus fruticosus",
+  "field": "medicinal_notes"
+ },
+ "1993": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census APPROVE)",
+  "edited_text": null,
+  "species_id": 293,
+  "species": "Rubus fruticosus",
+  "field": "recipe"
+ },
+ "2000": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census APPROVE)",
+  "edited_text": null,
+  "species_id": 305,
+  "species": "Rumex obtusifolius",
+  "field": "taste_notes"
+ },
+ "2002": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census APPROVE)",
+  "edited_text": null,
+  "species_id": 305,
+  "species": "Rumex obtusifolius",
+  "field": "recipe"
+ },
+ "2004": {
+  "action": "hold",
+  "reason": null,
+  "rule": "excluded: medicinal — later round",
+  "edited_text": null,
+  "species_id": 586,
+  "species": "Erigeron sumatrensis",
+  "field": "medicinal_notes"
+ },
+ "2005": {
+  "action": "reject",
+  "reason": "Melvin census 22 Oct: culinary content on toxic/inedible species",
+  "rule": "excluded: culinary",
+  "edited_text": null,
+  "species_id": 409,
+  "species": "Salix caprea",
+  "field": "taste_notes"
+ },
+ "2006": {
+  "action": "hold",
+  "reason": null,
+  "rule": "excluded: medicinal — later round",
+  "edited_text": null,
+  "species_id": 409,
+  "species": "Salix caprea",
+  "field": "medicinal_notes"
+ },
+ "2007": {
+  "action": "reject",
+  "reason": "Melvin census 22 Oct: culinary content on toxic/inedible species",
+  "rule": "excluded: culinary",
+  "edited_text": null,
+  "species_id": 409,
+  "species": "Salix caprea",
+  "field": "recipe"
+ },
+ "2008": {
+  "action": "reject",
+  "reason": "Melvin census 22 Oct: red-berried elder taste",
+  "rule": "override reject",
+  "edited_text": null,
+  "species_id": 402,
+  "species": "Sambucus racemosa",
+  "field": "taste_notes"
+ },
+ "2010": {
+  "action": "reject",
+  "reason": "Melvin census 22 Oct: seeds not strained out",
+  "rule": "check: approve only if the seeds are strained out",
+  "edited_text": null,
+  "species_id": 402,
+  "species": "Sambucus racemosa",
+  "field": "recipe"
+ },
+ "2018": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census APPROVE)",
+  "edited_text": null,
+  "species_id": 301,
+  "species": "Silene latifolia",
+  "field": "taste_notes"
+ },
+ "2019": {
+  "action": "reject",
+  "reason": "Melvin census 22 Oct: early draft — low quality",
+  "rule": "G2b (listed)",
+  "edited_text": null,
+  "species_id": 301,
+  "species": "Silene latifolia",
+  "field": "medicinal_notes"
+ },
+ "2020": {
+  "action": "approve",
+  "reason": null,
+  "rule": "override approve",
+  "edited_text": null,
+  "species_id": 301,
+  "species": "Silene latifolia",
+  "field": "recipe"
+ },
+ "2022": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census APPROVE)",
+  "edited_text": null,
+  "species_id": 347,
+  "species": "Sisymbrium officinale",
+  "field": "taste_notes"
+ },
+ "2027": {
+  "action": "reject",
+  "reason": "Melvin census 22 Oct: early draft — low quality",
+  "rule": "G2b (listed)",
+  "edited_text": null,
+  "species_id": 207,
+  "species": "Sonchus arvensis",
+  "field": "medicinal_notes"
+ },
+ "2029": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census APPROVE)",
+  "edited_text": null,
+  "species_id": 350,
+  "species": "Sonchus oleraceus",
+  "field": "taste_notes"
+ },
+ "2031": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census APPROVE)",
+  "edited_text": null,
+  "species_id": 350,
+  "species": "Sonchus oleraceus",
+  "field": "recipe"
+ },
+ "2032": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census APPROVE)",
+  "edited_text": null,
+  "species_id": 296,
+  "species": "Stachys sylvatica",
+  "field": "taste_notes"
+ },
+ "2033": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census APPROVE)",
+  "edited_text": null,
+  "species_id": 296,
+  "species": "Stachys sylvatica",
+  "field": "recipe"
+ },
+ "2041": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census APPROVE)",
+  "edited_text": null,
+  "species_id": 395,
+  "species": "Tanacetum parthenium",
+  "field": "taste_notes"
+ },
+ "2043": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census APPROVE)",
+  "edited_text": null,
+  "species_id": 395,
+  "species": "Tanacetum parthenium",
+  "field": "recipe"
+ },
+ "2050": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census APPROVE)",
+  "edited_text": null,
+  "species_id": 513,
+  "species": "Thlaspi arvense",
+  "field": "taste_notes"
+ },
+ "2052": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census APPROVE)",
+  "edited_text": null,
+  "species_id": 513,
+  "species": "Thlaspi arvense",
+  "field": "recipe"
+ },
+ "2056": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census APPROVE)",
+  "edited_text": null,
+  "species_id": 532,
+  "species": "Tilia cordata",
+  "field": "taste_notes"
+ },
+ "2057": {
+  "action": "reject",
+  "reason": "Melvin census 22 Oct: early draft — low quality",
+  "rule": "G2b (listed)",
+  "edited_text": null,
+  "species_id": 532,
+  "species": "Tilia cordata",
+  "field": "medicinal_notes"
+ },
+ "2058": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census APPROVE)",
+  "edited_text": null,
+  "species_id": 532,
+  "species": "Tilia cordata",
+  "field": "recipe"
+ },
+ "2060": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census APPROVE)",
+  "edited_text": null,
+  "species_id": 487,
+  "species": "Trifolium repens",
+  "field": "taste_notes"
+ },
+ "2062": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census APPROVE)",
+  "edited_text": null,
+  "species_id": 487,
+  "species": "Trifolium repens",
+  "field": "recipe"
+ },
+ "2063": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census APPROVE)",
+  "edited_text": null,
+  "species_id": 262,
+  "species": "Turritis glabra",
+  "field": "taste_notes"
+ },
+ "2065": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census APPROVE)",
+  "edited_text": null,
+  "species_id": 262,
+  "species": "Turritis glabra",
+  "field": "recipe"
+ },
+ "2067": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census APPROVE)",
+  "edited_text": null,
+  "species_id": 369,
+  "species": "Verbascum densiflorum",
+  "field": "taste_notes"
+ },
+ "2068": {
+  "action": "reject",
+  "reason": "Melvin census 22 Oct: mullein (V. densiflorum) medicinal",
+  "rule": "override reject",
+  "edited_text": null,
+  "species_id": 369,
+  "species": "Verbascum densiflorum",
+  "field": "medicinal_notes"
+ },
+ "2069": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census APPROVE)",
+  "edited_text": null,
+  "species_id": 369,
+  "species": "Verbascum densiflorum",
+  "field": "recipe"
+ },
+ "2082": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census APPROVE)",
+  "edited_text": null,
+  "species_id": 384,
+  "species": "Veronica officinalis",
+  "field": "taste_notes"
+ },
+ "2083": {
+  "action": "reject",
+  "reason": "Melvin census 22 Oct: early draft — low quality",
+  "rule": "G2b (listed)",
+  "edited_text": null,
+  "species_id": 384,
+  "species": "Veronica officinalis",
+  "field": "medicinal_notes"
+ },
+ "2084": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census APPROVE)",
+  "edited_text": null,
+  "species_id": 384,
+  "species": "Veronica officinalis",
+  "field": "recipe"
+ },
+ "2085": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census APPROVE)",
+  "edited_text": null,
+  "species_id": 372,
+  "species": "Vicia cracca",
+  "field": "taste_notes"
+ },
+ "2086": {
+  "action": "reject",
+  "reason": "Melvin census 22 Oct: early draft — low quality",
+  "rule": "G2b (listed)",
+  "edited_text": null,
+  "species_id": 372,
+  "species": "Vicia cracca",
+  "field": "medicinal_notes"
+ },
+ "2087": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census APPROVE)",
+  "edited_text": null,
+  "species_id": 372,
+  "species": "Vicia cracca",
+  "field": "recipe"
+ },
+ "2088": {
+  "action": "reject",
+  "reason": "Melvin census 22 Oct: early draft — low quality",
+  "rule": "G2b (listed)",
+  "edited_text": null,
+  "species_id": 300,
+  "species": "Vicia hirsuta",
+  "field": "medicinal_notes"
+ },
+ "2097": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census APPROVE)",
+  "edited_text": null,
+  "species_id": 587,
+  "species": "Malus sylvestris",
+  "field": "taste_notes"
+ },
+ "2098": {
+  "action": "reject",
+  "reason": "Melvin census 22 Oct: early draft — low quality",
+  "rule": "G2b (listed)",
+  "edited_text": null,
+  "species_id": 587,
+  "species": "Malus sylvestris",
+  "field": "medicinal_notes"
+ },
+ "2099": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census APPROVE)",
+  "edited_text": null,
+  "species_id": 587,
+  "species": "Malus sylvestris",
+  "field": "recipe"
+ },
+ "2102": {
+  "action": "reject",
+  "reason": "Melvin census 22 Oct: culinary content on toxic/inedible species",
+  "rule": "excluded: culinary",
+  "edited_text": null,
+  "species_id": 432,
+  "species": "Salix alba",
+  "field": "recipe"
+ },
+ "2107": {
+  "action": "hold",
+  "reason": null,
+  "rule": "excluded: medicinal — later round",
+  "edited_text": null,
+  "species_id": 432,
+  "species": "Salix alba",
+  "field": "medicinal_notes"
+ },
+ "2111": {
+  "action": "hold",
+  "reason": null,
+  "rule": "excluded: medicinal — later round",
+  "edited_text": null,
+  "species_id": 589,
+  "species": "Cota tinctoria",
+  "field": "medicinal_notes"
+ },
+ "2116": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census APPROVE)",
+  "edited_text": null,
+  "species_id": 591,
+  "species": "Lysimachia vulgaris",
+  "field": "recipe"
+ },
+ "2117": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census APPROVE)",
+  "edited_text": null,
+  "species_id": 591,
+  "species": "Lysimachia vulgaris",
+  "field": "taste_notes"
+ },
+ "2122": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census APPROVE)",
+  "edited_text": null,
+  "species_id": 342,
+  "species": "Erigeron canadensis",
+  "field": "taste_notes"
+ },
+ "2123": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census APPROVE)",
+  "edited_text": null,
+  "species_id": 342,
+  "species": "Erigeron canadensis",
+  "field": "recipe"
+ },
+ "2127": {
+  "action": "reject",
+  "reason": "Melvin census 22 Oct: placeholder — no medicinal content",
+  "rule": "G1 (extra match)",
+  "edited_text": null,
+  "species_id": 593,
+  "species": "Rumex thyrsiflorus",
+  "field": "medicinal_notes"
+ },
+ "2141": {
+  "action": "hold",
+  "reason": null,
+  "rule": "G3 non-European — hold",
+  "edited_text": null,
+  "species_id": 370,
+  "species": "Picea mariana",
+  "field": "taste_notes"
+ },
+ "2143": {
+  "action": "hold",
+  "reason": null,
+  "rule": "G3 non-European — hold",
+  "edited_text": null,
+  "species_id": 370,
+  "species": "Picea mariana",
+  "field": "recipe"
+ },
+ "2172": {
+  "action": "reject",
+  "reason": "Melvin census 22 Oct: culinary content on toxic/inedible species",
+  "rule": "excluded: culinary",
+  "edited_text": null,
+  "species_id": 432,
+  "species": "Salix alba",
+  "field": "taste_notes"
+ },
+ "2180": {
+  "action": "hold",
+  "reason": null,
+  "rule": "G3 non-European — hold",
+  "edited_text": null,
+  "species_id": 598,
+  "species": "Chrysosplenium americanum",
+  "field": "medicinal_notes"
+ },
+ "2184": {
+  "action": "reject",
+  "reason": "Melvin census 22 Oct: placeholder — no medicinal content",
+  "rule": "G1 (extra match)",
+  "edited_text": null,
+  "species_id": 599,
+  "species": "Vicia tenuifolia",
+  "field": "medicinal_notes"
+ },
+ "2187": {
+  "action": "hold",
+  "reason": null,
+  "rule": "excluded: medicinal — later round",
+  "edited_text": null,
+  "species_id": 602,
+  "species": "Centaurea jacea",
+  "field": "medicinal_notes"
+ },
+ "2190": {
+  "action": "reject",
+  "reason": "Melvin census 22 Oct: AI chat text",
+  "rule": "override reject",
+  "edited_text": null,
+  "species_id": 553,
+  "species": "Carpinus caroliniana",
+  "field": "recipe"
+ },
+ "2193": {
+  "action": "hold",
+  "reason": null,
+  "rule": "G3 non-European — hold",
+  "edited_text": null,
+  "species_id": 553,
+  "species": "Carpinus caroliniana",
+  "field": "taste_notes"
+ },
+ "2194": {
+  "action": "reject",
+  "reason": "Melvin census 22 Oct: placeholder — no medicinal content",
+  "rule": "G1 (extra match)",
+  "edited_text": null,
+  "species_id": 606,
+  "species": "Dianthus carthusianorum",
+  "field": "medicinal_notes"
+ },
+ "2197": {
+  "action": "reject",
+  "reason": "Melvin census 22 Oct: placeholder — no medicinal content",
+  "rule": "G1 (extra match)",
+  "edited_text": null,
+  "species_id": 607,
+  "species": "Fraxinus angustifolia",
+  "field": "medicinal_notes"
+ },
+ "2205": {
+  "action": "hold",
+  "reason": null,
+  "rule": "excluded: medicinal — later round",
+  "edited_text": null,
+  "species_id": 610,
+  "species": "Ranunculus aconitifolius",
+  "field": "medicinal_notes"
+ },
+ "2208": {
+  "action": "hold",
+  "reason": null,
+  "rule": "excluded: medicinal — later round",
+  "edited_text": null,
+  "species_id": 614,
+  "species": "Saxifraga rotundifolia",
+  "field": "medicinal_notes"
+ },
+ "2214": {
+  "action": "hold",
+  "reason": null,
+  "rule": "excluded: medicinal — later round",
+  "edited_text": null,
+  "species_id": 621,
+  "species": "Silene flos-cuculi",
+  "field": "medicinal_notes"
+ },
+ "2216": {
+  "action": "hold",
+  "reason": null,
+  "rule": "excluded: medicinal — later round",
+  "edited_text": null,
+  "species_id": 623,
+  "species": "Carduus personata",
+  "field": "medicinal_notes"
+ },
+ "2217": {
+  "action": "hold",
+  "reason": null,
+  "rule": "excluded: medicinal — later round",
+  "edited_text": null,
+  "species_id": 624,
+  "species": "Pedicularis palustris",
+  "field": "medicinal_notes"
+ },
+ "2219": {
+  "action": "hold",
+  "reason": null,
+  "rule": "excluded: medicinal — later round",
+  "edited_text": null,
+  "species_id": 626,
+  "species": "Hieracium lachenalii",
+  "field": "medicinal_notes"
+ },
+ "2222": {
+  "action": "hold",
+  "reason": null,
+  "rule": "excluded: medicinal — later round",
+  "edited_text": null,
+  "species_id": 629,
+  "species": "Symphytum asperum",
+  "field": "medicinal_notes"
+ },
+ "2225": {
+  "action": "reject",
+  "reason": "Melvin census 22 Oct: culinary content on toxic/inedible species",
+  "rule": "excluded: culinary",
+  "edited_text": null,
+  "species_id": 447,
+  "species": "Fomitopsis pinicola",
+  "field": "taste_notes"
+ },
+ "2226": {
+  "action": "hold",
+  "reason": null,
+  "rule": "excluded: medicinal — later round",
+  "edited_text": null,
+  "species_id": 447,
+  "species": "Fomitopsis pinicola",
+  "field": "medicinal_notes"
+ },
+ "2227": {
+  "action": "reject",
+  "reason": "Melvin census 22 Oct: culinary content on toxic/inedible species",
+  "rule": "excluded: culinary",
+  "edited_text": null,
+  "species_id": 447,
+  "species": "Fomitopsis pinicola",
+  "field": "recipe"
+ },
+ "2228": {
+  "action": "hold",
+  "reason": null,
+  "rule": "excluded: medicinal — later round",
+  "edited_text": null,
+  "species_id": 631,
+  "species": "Arceuthobium douglasii",
+  "field": "medicinal_notes"
+ },
+ "2229": {
+  "action": "reject",
+  "reason": "Melvin census 22 Oct: placeholder — no medicinal content",
+  "rule": "G1 (extra match)",
+  "edited_text": null,
+  "species_id": 632,
+  "species": "Picea obovata",
+  "field": "medicinal_notes"
+ },
+ "2231": {
+  "action": "reject",
+  "reason": "Melvin census 22 Oct: placeholder — no medicinal content",
+  "rule": "G1 (extra match)",
+  "edited_text": null,
+  "species_id": 634,
+  "species": "Cirsium oleraceum",
+  "field": "medicinal_notes"
+ },
+ "2236": {
+  "action": "reject",
+  "reason": "Melvin census 22 Oct: placeholder — no medicinal content",
+  "rule": "G1 (extra match)",
+  "edited_text": null,
+  "species_id": 640,
+  "species": "Rorippa sylvestris",
+  "field": "medicinal_notes"
+ },
+ "2237": {
+  "action": "reject",
+  "reason": "Melvin census 22 Oct: placeholder — no medicinal content",
+  "rule": "G1 (extra match)",
+  "edited_text": null,
+  "species_id": 641,
+  "species": "Ribes alpinum",
+  "field": "medicinal_notes"
+ },
+ "2238": {
+  "action": "hold",
+  "reason": null,
+  "rule": "excluded: medicinal — later round",
+  "edited_text": null,
+  "species_id": 642,
+  "species": "Cirsium dissectum",
+  "field": "medicinal_notes"
+ },
+ "2239": {
+  "action": "hold",
+  "reason": null,
+  "rule": "excluded: medicinal — later round",
+  "edited_text": null,
+  "species_id": 643,
+  "species": "Lonicera xylosteum",
+  "field": "medicinal_notes"
+ },
+ "2240": {
+  "action": "reject",
+  "reason": "Melvin census 22 Oct: placeholder — no medicinal content",
+  "rule": "G1 (extra match)",
+  "edited_text": null,
+  "species_id": 644,
+  "species": "Blitum bonus-henricus",
+  "field": "medicinal_notes"
+ },
+ "2245": {
+  "action": "reject",
+  "reason": "Melvin census 22 Oct: placeholder — no medicinal content",
+  "rule": "G1 (extra match)",
+  "edited_text": null,
+  "species_id": 654,
+  "species": "Acer platanoides",
+  "field": "medicinal_notes"
+ },
+ "2249": {
+  "action": "reject",
+  "reason": "Melvin census 22 Oct: culinary content on toxic/inedible species",
+  "rule": "excluded: culinary",
+  "edited_text": null,
+  "species_id": 518,
+  "species": "Cytisus scoparius",
+  "field": "taste_notes"
+ },
+ "2251": {
+  "action": "reject",
+  "reason": "Melvin census 22 Oct: culinary content on toxic/inedible species",
+  "rule": "excluded: culinary",
+  "edited_text": null,
+  "species_id": 518,
+  "species": "Cytisus scoparius",
+  "field": "recipe"
+ },
+ "2264": {
+  "action": "hold",
+  "reason": null,
+  "rule": "excluded: medicinal — later round",
+  "edited_text": null,
+  "species_id": 655,
+  "species": "Jasione laevis",
+  "field": "medicinal_notes"
+ },
+ "2266": {
+  "action": "hold",
+  "reason": null,
+  "rule": "excluded: medicinal — later round",
+  "edited_text": null,
+  "species_id": 657,
+  "species": "Erinus alpinus",
+  "field": "medicinal_notes"
+ },
+ "2267": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census APPROVE)",
+  "edited_text": null,
+  "species_id": 659,
+  "species": "Clinopodium alpinum",
+  "field": "medicinal_notes"
+ },
+ "2268": {
+  "action": "reject",
+  "reason": "Melvin census 22 Oct: placeholder — no medicinal content",
+  "rule": "G1 (extra match)",
+  "edited_text": null,
+  "species_id": 661,
+  "species": "Cirsium spinosissimum",
+  "field": "medicinal_notes"
+ },
+ "2269": {
+  "action": "hold",
+  "reason": null,
+  "rule": "excluded: medicinal — later round",
+  "edited_text": null,
+  "species_id": 662,
+  "species": "Ranunculus platanifolius",
+  "field": "medicinal_notes"
+ },
+ "2270": {
+  "action": "reject",
+  "reason": "Melvin census 22 Oct: placeholder — no medicinal content",
+  "rule": "G1 (extra match)",
+  "edited_text": null,
+  "species_id": 663,
+  "species": "Artemisia verlotiorum",
+  "field": "medicinal_notes"
+ },
+ "2271": {
+  "action": "reject",
+  "reason": "Melvin census 22 Oct: placeholder — no medicinal content",
+  "rule": "G1 (extra match)",
+  "edited_text": null,
+  "species_id": 664,
+  "species": "Nepeta racemosa",
+  "field": "medicinal_notes"
+ },
+ "2275": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census APPROVE)",
+  "edited_text": null,
+  "species_id": 383,
+  "species": "Teucrium scorodonia",
+  "field": "taste_notes"
+ },
+ "2277": {
+  "action": "hold",
+  "reason": null,
+  "rule": "excluded: medicinal — later round",
+  "edited_text": null,
+  "species_id": 669,
+  "species": "Jasione montana",
+  "field": "medicinal_notes"
+ },
+ "2281": {
+  "action": "hold",
+  "reason": null,
+  "rule": "excluded: medicinal — later round",
+  "edited_text": null,
+  "species_id": 671,
+  "species": "Helianthus silphioides",
+  "field": "medicinal_notes"
+ },
+ "2302": {
+  "action": "hold",
+  "reason": null,
+  "rule": "excluded: medicinal — later round",
+  "edited_text": null,
+  "species_id": 675,
+  "species": "Galium rotundifolium",
+  "field": "medicinal_notes"
+ },
+ "2309": {
+  "action": "reject",
+  "reason": "Melvin census 22 Oct: culinary content on toxic/inedible species",
+  "rule": "excluded: culinary",
+  "edited_text": null,
+  "species_id": 215,
+  "species": "Galeopsis tetrahit",
+  "field": "taste_notes"
+ },
+ "2311": {
+  "action": "reject",
+  "reason": "Melvin census 22 Oct: culinary content on toxic/inedible species",
+  "rule": "excluded: culinary",
+  "edited_text": null,
+  "species_id": 215,
+  "species": "Galeopsis tetrahit",
+  "field": "recipe"
+ },
+ "2317": {
+  "action": "hold",
+  "reason": null,
+  "rule": "excluded: medicinal — later round",
+  "edited_text": null,
+  "species_id": 678,
+  "species": "Salix myrsinifolia",
+  "field": "medicinal_notes"
+ },
+ "2319": {
+  "action": "hold",
+  "reason": null,
+  "rule": "excluded: medicinal — later round",
+  "edited_text": null,
+  "species_id": 679,
+  "species": "Polystichum aculeatum",
+  "field": "medicinal_notes"
+ },
+ "2320": {
+  "action": "hold",
+  "reason": null,
+  "rule": "excluded: medicinal — later round",
+  "edited_text": null,
+  "species_id": 680,
+  "species": "Luzula sylvatica",
+  "field": "medicinal_notes"
+ },
+ "2321": {
+  "action": "reject",
+  "reason": "Melvin census 22 Oct: placeholder — no medicinal content",
+  "rule": "G1 (extra match)",
+  "edited_text": null,
+  "species_id": 681,
+  "species": "Potentilla indica",
+  "field": "medicinal_notes"
+ },
+ "2323": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census APPROVE)",
+  "edited_text": null,
+  "species_id": 228,
+  "species": "Matricaria chamomilla",
+  "field": "taste_notes"
+ },
+ "2324": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census APPROVE)",
+  "edited_text": null,
+  "species_id": 228,
+  "species": "Matricaria chamomilla",
+  "field": "recipe"
+ },
+ "2326": {
+  "action": "reject",
+  "reason": "Melvin census 22 Oct: placeholder — no medicinal content",
+  "rule": "G1 (extra match)",
+  "edited_text": null,
+  "species_id": 612,
+  "species": "Phyteuma spicatum",
+  "field": "medicinal_notes"
+ },
+ "2342": {
+  "action": "hold",
+  "reason": null,
+  "rule": "excluded: medicinal — later round",
+  "edited_text": null,
+  "species_id": 686,
+  "species": "Rhododendron albiflorum",
+  "field": "medicinal_notes"
+ },
+ "2343": {
+  "action": "reject",
+  "reason": "Melvin census 22 Oct: placeholder — no medicinal content",
+  "rule": "G1 (extra match)",
+  "edited_text": null,
+  "species_id": 687,
+  "species": "Epilobium montanum",
+  "field": "medicinal_notes"
+ },
+ "2344": {
+  "action": "hold",
+  "reason": null,
+  "rule": "excluded: medicinal — later round",
+  "edited_text": null,
+  "species_id": 688,
+  "species": "Heracleum mantegazzianum",
+  "field": "medicinal_notes"
+ },
+ "2351": {
+  "action": "reject",
+  "reason": "Melvin census 22 Oct: placeholder/refusal text",
+  "rule": "default (census REJECT)",
+  "edited_text": null,
+  "species_id": 692,
+  "species": "Oenothera parviflora",
+  "field": "medicinal_notes"
+ },
+ "2357": {
+  "action": "reject",
+  "reason": "Melvin census 22 Oct: eltrot medicinal",
+  "rule": "override reject",
+  "edited_text": null,
+  "species_id": 694,
+  "species": "Heracleum sibiricum",
+  "field": "medicinal_notes"
+ },
+ "2360": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census APPROVE)",
+  "edited_text": null,
+  "species_id": 371,
+  "species": "Prunella vulgaris",
+  "field": "taste_notes"
+ },
+ "2361": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census LOOK)",
+  "edited_text": null,
+  "species_id": 371,
+  "species": "Prunella vulgaris",
+  "field": "medicinal_notes"
+ },
+ "2362": {
+  "action": "edit_approve",
+  "reason": null,
+  "rule": "G4 strip 'None known' line",
+  "edited_text": "**Self-Heal and Sweet Potato Cakes, with a Chickpea and Sorrel Broth**\n\nYou will find self-heal growing in the most ordinary of places. Lawns, path edges, the margins of gardens where the mower doesn’t quite reach. It is a plant of quiet persistence, pressing close to the ground, sending up those tight, sausage-shaped purple flower spikes in late spring. The leaves taste like romaine lettuce, but with a gentle, tonic bitterness from the tannins. That bitterness is not a flaw to be corrected; it is a grounding note, a structure that asks to be balanced with sweetness. Here, soft, roasted sweet potato is the partner it needs. The self-heal leaves are added raw to the cake mixture, their vitality preserved, while the flowers become a garnish that speaks of the plant’s full character.\n\nThis is not a complicated dish. It is a simple one, done well.\n\n*For the cakes:*\n- 500g sweet potatoes, peeled and cut into chunks\n- 1 shallot, finely diced\n- 2 fat cloves of garlic, crushed\n- 1 teaspoon smoked paprika\n- ½ teaspoon cumin seeds, toasted and ground\n- A generous handful of self-heal leaves (around 30-40 leaves, loosely packed), washed and finely chopped\n- 100g chickpea flour\n- Salt and black pepper\n- Olive oil, for frying\n\n*For the broth:*\n- 1 tablespoon olive oil\n- 1 small onion, finely diced\n- 2 cloves garlic, sliced thinly\n- 1 teaspoon sweet paprika\n- 1 x 400g tin of chickpeas, drained and rinsed\n- 500ml vegetable stock, good quality\n- A generous handful of wood sorrel leaves (or a squeeze of lemon juice if sorrel is unavailable)\n- Salt and pepper\n\n*To finish:*\n- A small handful of self-heal flower spikes, picked from the stem into individual little purple whorls\n\n**Method**\n\nFirst, the sweet potatoes. Steam them or boil them in salted water until completely tender. Drain well, let the steam carry the excess moisture away, then mash them roughly with a fork. You want some texture, not a purée.\n\nWhile the potatoes cook, warm a little olive oil in a small pan over a gentle heat. Soften the shallot and the garlic with a pinch of salt until they are translucent and fragrant. Do not colour them. Stir in the smoked paprika and ground cumin, let them cook for another thirty seconds, then take the pan off the heat.\n\nCombine the mashed sweet potato, the cooked shallot and spices, the finely chopped self-heal leaves, and the chickpea flour. Season well with salt and pepper. Mix with your hands until everything is evenly distributed. The mixture should be firm enough to shape. If it is too wet, add a little more chickpea flour. If too dry, a drop of water.\n\nShape the mixture into eight small patties, about the size of your palm. Place them on a tray and refrigerate for at least twenty minutes. This rest is not optional; it allows the chickpea flour to hydrate and the flavours to settle.\n\nWhile the cakes rest, make the broth. Warm the olive oil in a wide saucepan over a medium heat. Add the onion and a pinch of salt. Cook, stirring occasionally, until the onion is soft and just beginning to take colour. Add the sliced garlic and the sweet paprika, and cook for a minute more. Pour in the chickpeas and the vegetable stock. Bring to a gentle simmer and let it cook for ten minutes, so the stock becomes slightly thickened and the chickpeas soften. Taste, season with salt and pepper, then turn off the heat. Stir through the wood sorrel leaves just before serving, so they wilt from the residual heat but keep their bright, sharp flavour.\n\nTo cook the cakes, film a large, heavy frying pan with olive oil and place it over a medium-high heat. When the oil is hot and moving, add the cakes in a single layer, leaving space around each one. Cook for three to four minutes per side, until they are deeply golden and crisp. Keep them warm in a low oven while you cook the remaining batches.\n\nTo serve, ladle the broth into shallow bowls. Place two sweet potato cakes in each bowl.",
+  "species_id": 371,
+  "species": "Prunella vulgaris",
+  "field": "recipe"
+ },
+ "2363": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census APPROVE)",
+  "edited_text": null,
+  "species_id": 371,
+  "species": "Prunella vulgaris",
+  "field": "medicinal_folklore"
+ },
+ "2418": {
+  "action": "hold",
+  "reason": null,
+  "rule": "excluded: medicinal — later round",
+  "edited_text": null,
+  "species_id": 123,
+  "species": "Ranunculus ficaria",
+  "field": "medicinal_folklore"
+ },
+ "2432": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census LOOK)",
+  "edited_text": null,
+  "species_id": 166,
+  "species": "Rumex acetosella",
+  "field": "medicinal_folklore"
+ },
+ "2460": {
+  "action": "hold",
+  "reason": null,
+  "rule": "excluded: medicinal — later round",
+  "edited_text": null,
+  "species_id": 215,
+  "species": "Galeopsis tetrahit",
+  "field": "medicinal_folklore"
+ },
+ "2586": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census APPROVE)",
+  "edited_text": null,
+  "species_id": 625,
+  "species": "Stachys officinalis",
+  "field": "taste_notes"
+ },
+ "2587": {
+  "action": "edit_approve",
+  "reason": null,
+  "rule": "G4 strip 'None known' line",
+  "edited_text": "Let me tell you about betony. Most people walk past it without a second glance, but its leaves carry a clean, aromatic bitterness that lifts a dish in the same way lemon thyme or a good sage might — but with more backbone. It has a warmth to it, a kind of earthy grace that makes me think of old hedgerows and limestone paths. When you steep it, it gives a tea that’s a touch floral, a touch savoury, and utterly refreshing. But I wanted something with more bite, more presence. So here’s what I do: I take those leaves and I let them cook slowly into butter, then I let that butter do its work on a simple, late-summer meal.\n\n*Betony & Summer Squash with Brown Butter & Whipped Ricotta*\n\nFor two, as a light main or a generous starter.\n\n**Ingredients**\n\nA generous handful of betony leaves — the top few inches of the plant, just the leaves and young flowering tops, washed and roughly torn  \n250g mixed summer squash — courgettes, patty pans, yellow crooknecks — cut into coins or wedges, about a centimetre thick  \n1 fat clove of garlic, sliced thin  \n75g unsalted butter  \n200g good ricotta — the kind that’s creamy, not grainy  \nJuice of half a lemon  \nA small handful of hazelnuts, roughly chopped  \nFlaky salt and black pepper  \nA few fresh marjoram leaves, if you have them  \n\n**Method**\n\nFirst, the ricotta. Tip it into a bowl, add a pinch of salt, a twist of pepper, and the lemon juice. Whisk it with a fork until it’s light and airy, almost like a thick cream. Taste it. It should be bright, clean, begging for something to sit on top. Put it aside.\n\nNow the butter. Melt it in a wide, heavy pan over a medium heat. Let it foam, then go quiet, then start to turn a pale hazelnut colour. The moment you see brown specks appear in the foam, drop in the betony leaves. They’ll sizzle and wilt almost instantly. Stir them into the butter — they’ll release a scent that’s somewhere between hops and hay, with a faint, pleasant bitterness. Let them fry for just a minute, until the butter is aromatic and the leaves are crisping at the edges. Scoop the leaves out onto a plate, leaving the butter in the pan. Don’t wipe it out.\n\nReturn the pan to a medium-high heat. Add the squash in a single layer — don’t crowd them, do it in batches if you need to. Let them sit for a good two minutes without moving, until the undersides are a deep gold with dark brown edges. Flip them, add the garlic, and cook for another minute. The squash should be tender but still holding its shape. Season with salt and pepper.\n\nWhile the squash cooks, toast the hazelnuts in a dry pan until they smell warm and the skins flake off. Rub them in a clean tea towel to remove the skins, then crush them roughly.\n\nTo serve, spoon the whipped ricotta onto a plate — let it spread into a wide, uneven bed. Arrange the squash on top. Scatter the fried betony leaves over everything, then the toasted hazelnuts, then the marjoram. Drizzle any remaining brown butter from the pan over the whole thing. Eat it while it’s warm, with good bread to mop up the ricotta.\n\n---\n\n**Variation or pairing**\n\nIf you want to stretch it into a full meal, drop a poached egg on top — the yolk running into the brown butter and ricotta is something else. Or serve it alongside a piece of fried fish, like mackerel or sardines, where the betony’s bitterness cuts through the oil.",
+  "species_id": 625,
+  "species": "Stachys officinalis",
+  "field": "recipe"
+ },
+ "2640": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census APPROVE)",
+  "edited_text": null,
+  "species_id": 682,
+  "species": "Lamium galeobdolon",
+  "field": "taste_notes"
+ },
+ "2641": {
+  "action": "edit_approve",
+  "reason": null,
+  "rule": "G4 strip 'None known' line",
+  "edited_text": "**Yellow Archangel, Butterbean & Saffron Broth**\n\nI’ve always liked the way yellow archangel shows up — quietly, in the margins, with those sharp-toothed leaves and that flash of gold when it flowers. It’s not a shouty plant; it’s steady, with a mild, green freshness that softens into something almost nutty when it’s cooked. That temperament works beautifully in a gentle broth. This dish isn’t about forcing the plant to perform — it’s about letting it hold its own alongside things that know how to carry flavour: butterbeans, saffron, a good stock. The leaves and young flowering tops go in towards the end, just long enough to soften without losing their nerve. It’s a bowl of quiet vitality.\n\n**Ingredients**\n- 200g young yellow archangel leaves and flowering tips, washed\n- 1 large onion, diced\n- 3 cloves garlic, sliced\n- 1 litre good vegetable stock (homemade if you have it)\n- 400g cooked butterbeans (tinned is fine, but rinse them)\n- A generous pinch of saffron threads\n- Juice of half a lemon\n- Olive oil, salt, black pepper\n- A small handful of flat-leaf parsley, chopped (optional, for finish)\n\n**Method**\n\nWarm a thick-bottomed pan over a medium heat. Add a good glug of olive oil — enough to coat the base — then tip in the diced onion. Cook it slowly, stirring now and then, until it’s translucent and sweet, about eight minutes. Add the sliced garlic and let it release its scent for another minute.\n\nPour in the stock and bring it to a gentle simmer. Drop in the saffron threads, stirring once so they unfurl and stain the liquid. Add the butterbeans and let everything bubble softly for ten minutes — you want the beans to warm through and the stock to take on that saffron depth.\n\nNow the archangel. Add the leaves and flowering tops to the pot and push them under the liquid. Cook for just two to three minutes — no more — until they’ve wilted but still hold a little structure. Turn off the heat. Stir through the lemon juice, taste, and adjust with salt and pepper. The broth should be savoury, slightly floral, with the green freshness of the archangel sitting just behind.\n\nLadle into warm bowls. A drizzle of good olive oil over the top, and if you’ve got it, a scatter of chopped parsley for colour.\n\n**Variation or pairing**\nServe with a chunk of sourdough grilled over coals, rubbed with garlic and a little extra oil — the char and crunch gives the softness of the broth a reason to be grateful.",
+  "species_id": 682,
+  "species": "Lamium galeobdolon",
+  "field": "recipe"
+ },
+ "2643": {
+  "action": "hold",
+  "reason": null,
+  "rule": "excluded: medicinal — later round",
+  "edited_text": null,
+  "species_id": 696,
+  "species": "Polygala alpestris",
+  "field": "medicinal_notes"
+ },
+ "2648": {
+  "action": "hold",
+  "reason": null,
+  "rule": "excluded: medicinal — later round",
+  "edited_text": null,
+  "species_id": 698,
+  "species": "Platanthera chlorantha",
+  "field": "medicinal_notes"
+ },
+ "2649": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census APPROVE)",
+  "edited_text": null,
+  "species_id": 618,
+  "species": "Geum rivale",
+  "field": "taste_notes"
+ },
+ "2650": {
+  "action": "edit_approve",
+  "reason": null,
+  "rule": "G4 strip 'None known' line",
+  "edited_text": "**Coffee and Cloves from the Wet Ground**\n\nWater avens root is a strange and lovely thing. It grows in damp, shaded places, nodding its purple head as if in apology. But the root — that’s where the magic hides. Dry it slowly, and it gives you something close to chocolate, but earthier, with a clove-like warmth that sits right at the back of the throat. This isn’t a novelty. It’s a real flavouring, one that deserves to be treated with respect and used deliberately.\n\nThis recipe is for a spiced, root-based drink that works as a morning brew or an evening digestif. It’s not sweet, not bitter — just deeply savoury and aromatic, with a gentle grip from the tannins. I’ve added a pinch of smoked salt to lift the earthiness. Serve it in small cups, like you would a strong coffee.\n\nFor four small cups:\n\n- 20g dried geum rivale root, roughly broken\n- 500ml cold water\n- 1 small cinnamon stick\n- 3 black peppercorns\n- 1 thin slice of fresh ginger\n- A pinch of smoked salt\n- Honey or maple syrup to taste (optional)\n\nPut the dried root, cinnamon, peppercorns, and ginger into a small saucepan. Cover with the cold water and bring to a gentle simmer — no boiling, you want to coax the flavour out, not shock it. Let it murmur away for 15 minutes, until the liquid has reduced by about a third and the kitchen smells like a damp forest floor crossed with a spice market.\n\nTake it off the heat. Add the smoked salt, stir once, and let it rest for five minutes. Strain through a fine sieve or muslin. Taste it before you add any sweetener — it should have a deep, slightly astringent character, like a dark roast with tannins. If you want it gentler, stir in a teaspoon of honey or maple syrup.\n\nServe hot. Drink slowly. Let the warmth sit in your chest.\n\n**Variation:** If you can get fresh root, use 30g and infuse it overnight in cold water before simmering. The result is more floral, less tannic. Pair it with a shortbread biscuit made with spelt flour and a little orange zest.",
+  "species_id": 618,
+  "species": "Geum rivale",
+  "field": "recipe"
+ },
+ "2663": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census APPROVE)",
+  "edited_text": null,
+  "species_id": 600,
+  "species": "Lactuca muralis",
+  "field": "taste_notes"
+ },
+ "2664": {
+  "action": "reject",
+  "reason": "Melvin census 22 Oct: placeholder — no medicinal content",
+  "rule": "G1 (listed)",
+  "edited_text": null,
+  "species_id": 600,
+  "species": "Lactuca muralis",
+  "field": "medicinal_notes"
+ },
+ "2665": {
+  "action": "edit_approve",
+  "reason": null,
+  "rule": "G4 strip 'None known' line",
+  "edited_text": "It’s nearly August, and the stone walls around Sheffield are veined with wall lettuce. It grows where nothing else bothers — mortar cracks, the base of a drystone wall, the edge of a pavement that’s seen one too many bin lorries. Most people walk straight past it. That’s their loss. The leaves are tender, with a mild bitterness that sits somewhere between dandelion and endive, but softer. They don’t fight you. They just hold their ground.\n\nThis is a salad that leans into that bitterness and lets it speak. It’s not a side dish. It’s a plate in its own right — generous, elegant, and built for the end of a long day.\n\nYou’ll need something fatty to cut the green, something sharp to lift it, and something crunchy to keep your teeth happy.\n\n---\n\n**Ingredients**\n\n- A good handful of wall lettuce leaves — young and whole, washed and spun dry\n- 1 fennel bulb, shaved paper-thin on a mandoline or with a sharp knife\n- 1 blood orange or a good sweet orange, peeled and sliced into rounds, juice reserved\n- 50g hazelnuts, toasted and roughly crushed\n- 100g soft goat’s cheese or a sharp, crumbling feta\n- A small handful of foraged wood sorrel or a few lemon balm leaves (optional, but it lifts the whole thing)\n- 3 tablespoons extra virgin olive oil\n- 1 tablespoon cider vinegar or verjuice\n- Flaky sea salt and black pepper\n\n---\n\n**Method**\n\nGet a large, low bowl or a flat plate. Arrange the wall lettuce leaves as a base — not all in a pile, but scattered so each leaf has room. Lay the fennel slices over the top, then the orange rounds. Crumble the cheese with your fingers — not too fine, not too chunky. Scatter the hazelnuts.\n\nWhisk the olive oil with the vinegar, the reserved orange juice, a pinch of salt, and a grind of pepper. Taste it. It should be bright, not sharp. Adjust with a drop more oil if it bites back.\n\nDrizzle the dressing over the salad — not a drench, just enough to coat. Finish with the wood sorrel or lemon balm if you found some. Eat within ten minutes. It doesn’t sit.\n\n---\n\n**Variation**\n\nIf you want to take it towards supper rather than lunch, serve it alongside a fillet of mackerel, grilled over coals until the skin is crackling. The fish’s oil and the salad’s bitterness will meet in the middle like old friends.",
+  "species_id": 600,
+  "species": "Lactuca muralis",
+  "field": "recipe"
+ },
+ "2671": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census APPROVE)",
+  "edited_text": null,
+  "species_id": 596,
+  "species": "Impatiens noli-tangere",
+  "field": "taste_notes"
+ },
+ "2672": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census APPROVE)",
+  "edited_text": null,
+  "species_id": 596,
+  "species": "Impatiens noli-tangere",
+  "field": "medicinal_notes"
+ },
+ "2673": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census APPROVE)",
+  "edited_text": null,
+  "species_id": 596,
+  "species": "Impatiens noli-tangere",
+  "field": "recipe"
+ },
+ "2678": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census APPROVE)",
+  "edited_text": null,
+  "species_id": 699,
+  "species": "Anaphalis margaritacea",
+  "field": "medicinal_notes"
+ },
+ "2679": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census LOOK)",
+  "edited_text": null,
+  "species_id": 672,
+  "species": "Chenopodium ficifolium",
+  "field": "taste_notes"
+ },
+ "2680": {
+  "action": "reject",
+  "reason": "Melvin census 22 Oct: fig-leaf goosefoot medicinal",
+  "rule": "override reject",
+  "edited_text": null,
+  "species_id": 672,
+  "species": "Chenopodium ficifolium",
+  "field": "medicinal_notes"
+ },
+ "2681": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census LOOK)",
+  "edited_text": null,
+  "species_id": 672,
+  "species": "Chenopodium ficifolium",
+  "field": "recipe"
+ },
+ "2714": {
+  "action": "hold",
+  "reason": null,
+  "rule": "excluded: medicinal — later round",
+  "edited_text": null,
+  "species_id": 703,
+  "species": "Omalotheca sylvatica",
+  "field": "medicinal_notes"
+ },
+ "2716": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census APPROVE)",
+  "edited_text": null,
+  "species_id": 622,
+  "species": "Potentilla erecta",
+  "field": "taste_notes"
+ },
+ "2717": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census APPROVE)",
+  "edited_text": null,
+  "species_id": 622,
+  "species": "Potentilla erecta",
+  "field": "recipe"
+ },
+ "2718": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census APPROVE)",
+  "edited_text": null,
+  "species_id": 667,
+  "species": "Euphrasia officinalis",
+  "field": "taste_notes"
+ },
+ "2719": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census APPROVE)",
+  "edited_text": null,
+  "species_id": 667,
+  "species": "Euphrasia officinalis",
+  "field": "recipe"
+ },
+ "2723": {
+  "action": "edit_approve",
+  "reason": null,
+  "rule": "override edit: append interaction sentence",
+  "edited_text": "Hypericum maculatum has traditional uses for treating depression, anxiety, and nerve pain, and is applied externally for wounds and inflammation. It is also used as a mild sedative and to soothe digestive discomfort. Interacts with many medicines, including the contraceptive pill. Traditional and folk use only — not medical advice.",
+  "species_id": 677,
+  "species": "Hypericum maculatum",
+  "field": "medicinal_notes"
+ },
+ "2725": {
+  "action": "hold",
+  "reason": null,
+  "rule": "excluded: medicinal — later round",
+  "edited_text": null,
+  "species_id": 705,
+  "species": "Parmotrema perlatum",
+  "field": "medicinal_notes"
+ },
+ "2726": {
+  "action": "reject",
+  "reason": "Melvin census 22 Oct: placeholder — no medicinal content",
+  "rule": "G1 (extra match)",
+  "edited_text": null,
+  "species_id": 706,
+  "species": "Suillus grevillei",
+  "field": "medicinal_notes"
+ },
+ "2727": {
+  "action": "reject",
+  "reason": "Melvin census 22 Oct: placeholder — no medicinal content",
+  "rule": "G1 (listed)",
+  "edited_text": null,
+  "species_id": 707,
+  "species": "Oxalis triangularis",
+  "field": "medicinal_notes"
+ },
+ "2728": {
+  "action": "hold",
+  "reason": null,
+  "rule": "excluded: medicinal — later round",
+  "edited_text": null,
+  "species_id": 708,
+  "species": "Oreopteris limbosperma",
+  "field": "medicinal_notes"
+ },
+ "2743": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census APPROVE)",
+  "edited_text": null,
+  "species_id": 710,
+  "species": "Rosa villosa",
+  "field": "medicinal_notes"
+ },
+ "2745": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census LOOK)",
+  "edited_text": null,
+  "species_id": 711,
+  "species": "Marasmius oreades",
+  "field": "medicinal_notes"
+ },
+ "2751": {
+  "action": "hold",
+  "reason": null,
+  "rule": "excluded: medicinal — later round",
+  "edited_text": null,
+  "species_id": 714,
+  "species": "Papaver atlanticum",
+  "field": "medicinal_notes"
+ },
+ "2752": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census APPROVE)",
+  "edited_text": null,
+  "species_id": 715,
+  "species": "Agrimonia eupatoria",
+  "field": "medicinal_notes"
+ },
+ "2753": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census APPROVE)",
+  "edited_text": null,
+  "species_id": 716,
+  "species": "Agrimonia procera",
+  "field": "medicinal_notes"
+ },
+ "2754": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census APPROVE)",
+  "edited_text": null,
+  "species_id": 717,
+  "species": "Malva verticillata",
+  "field": "medicinal_notes"
+ },
+ "2755": {
+  "action": "reject",
+  "reason": "Melvin census 22 Oct: culinary content on toxic/inedible species",
+  "rule": "excluded: culinary",
+  "edited_text": null,
+  "species_id": 696,
+  "species": "Polygala alpestris",
+  "field": "recipe"
+ },
+ "2756": {
+  "action": "hold",
+  "reason": null,
+  "rule": "excluded: medicinal — later round",
+  "edited_text": null,
+  "species_id": 718,
+  "species": "Linaria vulgaris",
+  "field": "medicinal_notes"
+ },
+ "2758": {
+  "action": "hold",
+  "reason": null,
+  "rule": "excluded: medicinal — later round",
+  "edited_text": null,
+  "species_id": 720,
+  "species": "Polygonatum verticillatum",
+  "field": "medicinal_notes"
+ },
+ "2760": {
+  "action": "hold",
+  "reason": null,
+  "rule": "excluded: medicinal — later round",
+  "edited_text": null,
+  "species_id": 722,
+  "species": "Melampyrum sylvaticum",
+  "field": "medicinal_notes"
+ },
+ "2761": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census APPROVE)",
+  "edited_text": null,
+  "species_id": 617,
+  "species": "Sanguisorba officinalis",
+  "field": "taste_notes"
+ },
+ "2762": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census APPROVE)",
+  "edited_text": null,
+  "species_id": 617,
+  "species": "Sanguisorba officinalis",
+  "field": "recipe"
+ },
+ "2766": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census APPROVE)",
+  "edited_text": null,
+  "species_id": 366,
+  "species": "Picea abies",
+  "field": "taste_notes"
+ },
+ "2767": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census APPROVE)",
+  "edited_text": null,
+  "species_id": 366,
+  "species": "Picea abies",
+  "field": "medicinal_notes"
+ },
+ "2768": {
+  "action": "edit_approve",
+  "reason": null,
+  "rule": "G4 strip 'None known' line",
+  "edited_text": "**Spruce-Tip & Caramelised Onion Tart**\n\nThis is a dish that started in a forager’s idea and ended up on a friend’s plate, and that’s always how the best things happen. The Norway spruce shoots — soft, resinous, bright green — are one of the few wild ingredients that bring both perfume and structure to a savoury dish. Young tips taste like the forest floor after a rain shower: pine, lemon, and something almost floral. Combined with slow-cooked onions and a salty, buttery pastry, they become the kind of thing you talk about long after the last bite. This is a tart for a table that doesn’t rush.\n\n**For the pastry:**\n250g plain flour\n125g cold butter, cubed\n1 egg yolk\nA pinch of sea salt\nCold water, enough to bring it together\n\n**For the filling:**\n4 large onions, peeled and sliced into half-moons\n3 tablespoons olive oil\na good knob of butter\na generous fistful of young Norway spruce tips (about 30g)\n3 large eggs\n200ml double cream\n100ml whole milk\nSalt and black pepper\na little grated Parmesan (optional, but good)\n\n---\n\nMake the pastry first. Rub the butter into the flour and salt until it looks like damp breadcrumbs. Add the egg yolk and just enough cold water to bring it into a ball. Don’t knead it — just gather it, wrap it, and rest it in the fridge for at least half an hour. This is not negotiable.\n\nWhile it rests, cook the onions. Put a heavy-bottomed pan over a medium heat, add the olive oil and butter, then tip in all the onions. Stir them well, then leave them. You want colour, not just softness. Let them go for about 20 minutes, stirring every so often, until they are deep gold and sweet. Just before you take them off the heat, stir through half of the spruce tips — just enough to wilt them into the onions. Set aside.\n\nPreheat your oven to 190°C. Roll out the pastry and line a 25cm tart tin. Prick the base with a fork, line with greaseproof paper and fill with baking beans or rice. Bake blind for 15 minutes, then remove the paper and beans and bake for another 5 minutes.\n\nWhisk the eggs, cream, milk, salt and pepper together. Spread the onion mixture over the base of the tart shell. Pour the custard over the top, then scatter the remaining spruce tips across the surface. Grate a little Parmesan over it if you like — it adds a savoury note that holds the whole thing together.\n\nBake for 30–35 minutes, until set and golden. Let it rest for 10 minutes before you cut into it. This is where the flavours settle and the spruce softens and surrenders.\n\nServe warm, with nothing more than a sharp green salad. The spruce tips will taste of resin and spring and something you can’t quite name — but you’ll want to find it again.\n\n---\n\n**Variation:** Swap the onions for leeks, and add a handful of chopped hazelnuts on top before baking. The nuts echo the spruce’s resinous edge and add a little crunch.",
+  "species_id": 366,
+  "species": "Picea abies",
+  "field": "recipe"
+ },
+ "2769": {
+  "action": "reject",
+  "reason": "Melvin census 22 Oct: placeholder — no medicinal content",
+  "rule": "G1 (listed)",
+  "edited_text": null,
+  "species_id": 723,
+  "species": "Crepis capillaris",
+  "field": "medicinal_notes"
+ },
+ "2775": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census APPROVE)",
+  "edited_text": null,
+  "species_id": 273,
+  "species": "Erigeron annuus",
+  "field": "taste_notes"
+ },
+ "2776": {
+  "action": "reject",
+  "reason": "Melvin census 22 Oct: placeholder — no medicinal content",
+  "rule": "G1 (listed)",
+  "edited_text": null,
+  "species_id": 273,
+  "species": "Erigeron annuus",
+  "field": "medicinal_notes"
+ },
+ "2777": {
+  "action": "edit_approve",
+  "reason": null,
+  "rule": "G4 strip 'None known' line",
+  "edited_text": "Let’s be straight about this one. Erigeron annuus is not a plant you’ll find in any supermarket or seed catalogue, and it’s not something I’d recommend eating raw in quantity. But when the young leaves appear in that narrow window between late spring and early summer—before the stems get fibrous and the flowers open—they have a gentle, herbaceous character that works beautifully when you treat them with the same respect you’d give a good wild rocket or a mild dandelion. The trick is to blanch them first, which softens their fuzzy texture and brings out a quiet, slightly peppery warmth that sits well with rich things. This is a dish for the quiet edge of the season, when you’re looking for something that feels both humble and entirely present.\n\n**Young Erigeron Leaves with Brown Butter, Lemon, and Toasted Hazelnuts**\n\nFor two, as a side or a light lunch on good bread.\n\nA generous handful of young Erigeron annuus leaves—pick them before the flower stalks appear, when they’re still soft and tender\n\nA thick slice of unsalted butter—about 40 grams\n\nA handful of hazelnuts, roughly crushed\n\nThe juice and zest of half a lemon\n\nA pinch of flaky salt\n\nA little grating of nutmeg—optional, but good\n\nA slice of sourdough or a piece of good toast, if you want to make a meal of it\n\nBring a pot of salted water to a rolling boil. Drop the Erigeron leaves in and let them cook for no more than a minute—just long enough to soften the fuzz and take the raw edge off. Drain them immediately and plunge into cold water to stop the cooking. Squeeze them dry with your hands, not too aggressively, but enough to get rid of the excess water. You want them to be moist, not wet.\n\nPut a dry frying pan over a medium heat and toast the hazelnuts until they smell warm and the skins start to flake. Tip them out and set aside.\n\nIn the same pan, add the butter and let it melt, then keep cooking until it turns a deep golden brown—the colour of old honey, with little dark specks settling at the bottom. This will take about two or three minutes. Swirl the pan as it goes. When it smells nutty and rich, take it off the heat.\n\nAdd the Erigeron leaves to the pan and toss them in the brown butter until they’re evenly coated. Sprinkle in the lemon zest, a squeeze of juice, the toasted hazelnuts, and the salt. If you’re using the nutmeg, grate it in now. Toss everything together once more.\n\nPile it onto a plate or over a slice of good toast. Eat it while it’s still warm, when the butter is glossy and the leaves are tender but not limp. The bitterness is barely there—just enough to remind you that this came from a field, not a glasshouse.\n\n**Variation**  \nIf you want to stretch this into something more substantial, serve it alongside a piece of grilled fish or a soft-boiled egg. The butter and lemon will carry the meal, and the Erigeron will sit quietly in the background, doing its job without needing applause.",
+  "species_id": 273,
+  "species": "Erigeron annuus",
+  "field": "recipe"
+ },
+ "2778": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census APPROVE)",
+  "edited_text": null,
+  "species_id": 666,
+  "species": "Rumex arifolius",
+  "field": "taste_notes"
+ },
+ "2779": {
+  "action": "reject",
+  "reason": "Melvin census 22 Oct: placeholder — no medicinal content",
+  "rule": "G1 (listed)",
+  "edited_text": null,
+  "species_id": 666,
+  "species": "Rumex arifolius",
+  "field": "medicinal_notes"
+ },
+ "2780": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census APPROVE)",
+  "edited_text": null,
+  "species_id": 666,
+  "species": "Rumex arifolius",
+  "field": "recipe"
+ },
+ "2781": {
+  "action": "hold",
+  "reason": null,
+  "rule": "excluded: medicinal — later round",
+  "edited_text": null,
+  "species_id": 725,
+  "species": "Lythrum virgatum",
+  "field": "medicinal_notes"
+ },
+ "2782": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census LOOK)",
+  "edited_text": null,
+  "species_id": 727,
+  "species": "Chenopodium album",
+  "field": "medicinal_notes"
+ },
+ "2784": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census APPROVE)",
+  "edited_text": null,
+  "species_id": 730,
+  "species": "Achillea ptarmica",
+  "field": "medicinal_notes"
+ },
+ "2785": {
+  "action": "reject",
+  "reason": "Melvin census 22 Oct: placeholder — no medicinal content",
+  "rule": "G1 (listed)",
+  "edited_text": null,
+  "species_id": 731,
+  "species": "Crepis pulchra",
+  "field": "medicinal_notes"
+ },
+ "2787": {
+  "action": "reject",
+  "reason": "Melvin census 22 Oct: placeholder — no medicinal content",
+  "rule": "G1 (listed)",
+  "edited_text": null,
+  "species_id": 733,
+  "species": "Chrysosplenium oppositifolium",
+  "field": "medicinal_notes"
+ },
+ "2788": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census APPROVE)",
+  "edited_text": null,
+  "species_id": 456,
+  "species": "Papaver rhoeas",
+  "field": "taste_notes"
+ },
+ "2789": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census APPROVE)",
+  "edited_text": null,
+  "species_id": 456,
+  "species": "Papaver rhoeas",
+  "field": "medicinal_notes"
+ },
+ "2790": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census APPROVE)",
+  "edited_text": null,
+  "species_id": 456,
+  "species": "Papaver rhoeas",
+  "field": "recipe"
+ },
+ "2791": {
+  "action": "hold",
+  "reason": null,
+  "rule": "excluded: medicinal — later round",
+  "edited_text": null,
+  "species_id": 734,
+  "species": "Oreomecon crocea",
+  "field": "medicinal_notes"
+ },
+ "2792": {
+  "action": "reject",
+  "reason": "Melvin census 22 Oct: placeholder — no medicinal content",
+  "rule": "G1 (listed)",
+  "edited_text": null,
+  "species_id": 735,
+  "species": "Tragopogon dubius",
+  "field": "medicinal_notes"
+ },
+ "2793": {
+  "action": "reject",
+  "reason": "Melvin census 22 Oct: no known food use",
+  "rule": "override reject",
+  "edited_text": null,
+  "species_id": 294,
+  "species": "Verbascum nigrum",
+  "field": "taste_notes"
+ },
+ "2794": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census APPROVE)",
+  "edited_text": null,
+  "species_id": 294,
+  "species": "Verbascum nigrum",
+  "field": "medicinal_notes"
+ },
+ "2795": {
+  "action": "reject",
+  "reason": "Melvin census 22 Oct: no known food use",
+  "rule": "override reject",
+  "edited_text": null,
+  "species_id": 294,
+  "species": "Verbascum nigrum",
+  "field": "recipe"
+ },
+ "2797": {
+  "action": "hold",
+  "reason": null,
+  "rule": "excluded: medicinal — later round",
+  "edited_text": null,
+  "species_id": 697,
+  "species": "Epipactis helleborine",
+  "field": "medicinal_notes"
+ },
+ "2798": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census APPROVE)",
+  "edited_text": null,
+  "species_id": 732,
+  "species": "Tragopogon pratensis",
+  "field": "medicinal_notes"
+ },
+ "2799": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census APPROVE)",
+  "edited_text": null,
+  "species_id": 736,
+  "species": "Medicago sativa",
+  "field": "medicinal_notes"
+ },
+ "2803": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census APPROVE)",
+  "edited_text": null,
+  "species_id": 743,
+  "species": "Lathyrus linifolius",
+  "field": "medicinal_notes"
+ },
+ "2804": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census APPROVE)",
+  "edited_text": null,
+  "species_id": 634,
+  "species": "Cirsium oleraceum",
+  "field": "taste_notes"
+ },
+ "2805": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census APPROVE)",
+  "edited_text": null,
+  "species_id": 634,
+  "species": "Cirsium oleraceum",
+  "field": "recipe"
+ },
+ "2810": {
+  "action": "hold",
+  "reason": null,
+  "rule": "excluded: medicinal — later round",
+  "edited_text": null,
+  "species_id": 728,
+  "species": "Verbascum chaixii",
+  "field": "medicinal_notes"
+ },
+ "2812": {
+  "action": "reject",
+  "reason": "Melvin census 22 Oct: placeholder — no medicinal content",
+  "rule": "G1 (listed)",
+  "edited_text": null,
+  "species_id": 749,
+  "species": "Mycelis muralis",
+  "field": "medicinal_notes"
+ },
+ "2813": {
+  "action": "hold",
+  "reason": null,
+  "rule": "excluded: medicinal — later round",
+  "edited_text": null,
+  "species_id": 719,
+  "species": "Senecio ovatus",
+  "field": "medicinal_notes"
+ },
+ "2821": {
+  "action": "hold",
+  "reason": null,
+  "rule": "excluded: medicinal — later round",
+  "edited_text": null,
+  "species_id": 745,
+  "species": "Hedera helix",
+  "field": "medicinal_notes"
+ },
+ "2828": {
+  "action": "reject",
+  "reason": "Melvin census 22 Oct: raw Apiaceae leaves / medicinal text in the taste field",
+  "rule": "override reject",
+  "edited_text": null,
+  "species_id": 590,
+  "species": "Pimpinella major",
+  "field": "taste_notes"
+ },
+ "2829": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census LOOK)",
+  "edited_text": null,
+  "species_id": 590,
+  "species": "Pimpinella major",
+  "field": "medicinal_notes"
+ },
+ "2830": {
+  "action": "reject",
+  "reason": "Melvin census 22 Oct: raw Apiaceae leaves / medicinal text in the taste field",
+  "rule": "override reject",
+  "edited_text": null,
+  "species_id": 590,
+  "species": "Pimpinella major",
+  "field": "recipe"
+ },
+ "2831": {
+  "action": "hold",
+  "reason": null,
+  "rule": "excluded: medicinal — later round",
+  "edited_text": null,
+  "species_id": 750,
+  "species": "Aconitum variegatum",
+  "field": "medicinal_notes"
+ },
+ "2837": {
+  "action": "hold",
+  "reason": null,
+  "rule": "excluded: medicinal — later round",
+  "edited_text": null,
+  "species_id": 757,
+  "species": "Coronilla varia",
+  "field": "medicinal_notes"
+ },
+ "2838": {
+  "action": "hold",
+  "reason": null,
+  "rule": "excluded: medicinal — later round",
+  "edited_text": null,
+  "species_id": 758,
+  "species": "Securigera varia",
+  "field": "medicinal_notes"
+ },
+ "2867": {
+  "action": "reject",
+  "reason": "Melvin census 22 Oct: culinary content on toxic/inedible species",
+  "rule": "excluded: culinary",
+  "edited_text": null,
+  "species_id": 48,
+  "species": "Vinca minor",
+  "field": "taste_notes"
+ },
+ "2868": {
+  "action": "hold",
+  "reason": null,
+  "rule": "excluded: medicinal — later round",
+  "edited_text": null,
+  "species_id": 48,
+  "species": "Vinca minor",
+  "field": "medicinal_notes"
+ },
+ "2869": {
+  "action": "reject",
+  "reason": "Melvin census 22 Oct: culinary content on toxic/inedible species",
+  "rule": "excluded: culinary",
+  "edited_text": null,
+  "species_id": 48,
+  "species": "Vinca minor",
+  "field": "recipe"
+ },
+ "2882": {
+  "action": "reject",
+  "reason": "Melvin census 22 Oct: culinary content on toxic/inedible species",
+  "rule": "excluded: culinary",
+  "edited_text": null,
+  "species_id": 66,
+  "species": "Orobanche caryophyllacea",
+  "field": "taste_notes"
+ },
+ "2883": {
+  "action": "hold",
+  "reason": null,
+  "rule": "excluded: medicinal — later round",
+  "edited_text": null,
+  "species_id": 66,
+  "species": "Orobanche caryophyllacea",
+  "field": "medicinal_notes"
+ },
+ "2884": {
+  "action": "reject",
+  "reason": "Melvin census 22 Oct: culinary content on toxic/inedible species",
+  "rule": "excluded: culinary",
+  "edited_text": null,
+  "species_id": 66,
+  "species": "Orobanche caryophyllacea",
+  "field": "recipe"
+ },
+ "2893": {
+  "action": "reject",
+  "reason": "Melvin census 22 Oct: culinary content on toxic/inedible species",
+  "rule": "excluded: culinary",
+  "edited_text": null,
+  "species_id": 492,
+  "species": "Berula erecta",
+  "field": "taste_notes"
+ },
+ "2894": {
+  "action": "hold",
+  "reason": null,
+  "rule": "excluded: medicinal — later round",
+  "edited_text": null,
+  "species_id": 492,
+  "species": "Berula erecta",
+  "field": "medicinal_notes"
+ },
+ "2895": {
+  "action": "reject",
+  "reason": "Melvin census 22 Oct: culinary content on toxic/inedible species",
+  "rule": "excluded: culinary",
+  "edited_text": null,
+  "species_id": 492,
+  "species": "Berula erecta",
+  "field": "recipe"
+ },
+ "2907": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census APPROVE)",
+  "edited_text": null,
+  "species_id": 104,
+  "species": "Medicago lupulina",
+  "field": "taste_notes"
+ },
+ "2908": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census APPROVE)",
+  "edited_text": null,
+  "species_id": 336,
+  "species": "Hydnum repandum",
+  "field": "taste_notes"
+ },
+ "2909": {
+  "action": "reject",
+  "reason": "Melvin census 22 Oct: placeholder — no medicinal content",
+  "rule": "G1 (extra match)",
+  "edited_text": null,
+  "species_id": 336,
+  "species": "Hydnum repandum",
+  "field": "medicinal_notes"
+ },
+ "2910": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census APPROVE)",
+  "edited_text": null,
+  "species_id": 336,
+  "species": "Hydnum repandum",
+  "field": "recipe"
+ },
+ "2911": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census APPROVE)",
+  "edited_text": null,
+  "species_id": 223,
+  "species": "Meripilus giganteus",
+  "field": "taste_notes"
+ },
+ "2912": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census APPROVE)",
+  "edited_text": null,
+  "species_id": 223,
+  "species": "Meripilus giganteus",
+  "field": "recipe"
+ },
+ "2917": {
+  "action": "reject",
+  "reason": "Melvin census 22 Oct: placeholder — no medicinal content",
+  "rule": "G1 (listed)",
+  "edited_text": null,
+  "species_id": 495,
+  "species": "Apioperdon pyriforme",
+  "field": "medicinal_notes"
+ },
+ "2918": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census APPROVE)",
+  "edited_text": null,
+  "species_id": 323,
+  "species": "Oudemansiella mucida",
+  "field": "taste_notes"
+ },
+ "2919": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census APPROVE)",
+  "edited_text": null,
+  "species_id": 323,
+  "species": "Oudemansiella mucida",
+  "field": "recipe"
+ },
+ "2922": {
+  "action": "hold",
+  "reason": null,
+  "rule": "excluded: medicinal — later round",
+  "edited_text": null,
+  "species_id": 496,
+  "species": "Tricholomopsis rutilans",
+  "field": "medicinal_notes"
+ },
+ "2923": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census APPROVE)",
+  "edited_text": null,
+  "species_id": 160,
+  "species": "Boletus edulis",
+  "field": "taste_notes"
+ },
+ "2924": {
+  "action": "reject",
+  "reason": "Melvin census 22 Oct: cep medicinal",
+  "rule": "override reject",
+  "edited_text": null,
+  "species_id": 160,
+  "species": "Boletus edulis",
+  "field": "medicinal_notes"
+ },
+ "2925": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census APPROVE)",
+  "edited_text": null,
+  "species_id": 160,
+  "species": "Boletus edulis",
+  "field": "recipe"
+ },
+ "2926": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census LOOK)",
+  "edited_text": null,
+  "species_id": 497,
+  "species": "Leccinum scabrum",
+  "field": "taste_notes"
+ },
+ "2927": {
+  "action": "reject",
+  "reason": "Melvin census 22 Oct: placeholder — no medicinal content",
+  "rule": "G1 (listed)",
+  "edited_text": null,
+  "species_id": 497,
+  "species": "Leccinum scabrum",
+  "field": "medicinal_notes"
+ },
+ "2928": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census LOOK)",
+  "edited_text": null,
+  "species_id": 497,
+  "species": "Leccinum scabrum",
+  "field": "recipe"
+ },
+ "2929": {
+  "action": "hold",
+  "reason": null,
+  "rule": "excluded: medicinal — later round",
+  "edited_text": null,
+  "species_id": 498,
+  "species": "Pyxine albovirens",
+  "field": "medicinal_notes"
+ },
+ "2930": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census LOOK)",
+  "edited_text": null,
+  "species_id": 156,
+  "species": "Coprinus comatus",
+  "field": "taste_notes"
+ },
+ "2931": {
+  "action": "reject",
+  "reason": "Melvin census 22 Oct: placeholder — no medicinal content",
+  "rule": "G1 (listed)",
+  "edited_text": null,
+  "species_id": 156,
+  "species": "Coprinus comatus",
+  "field": "medicinal_notes"
+ },
+ "2932": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census LOOK)",
+  "edited_text": null,
+  "species_id": 156,
+  "species": "Coprinus comatus",
+  "field": "recipe"
+ },
+ "2933": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census APPROVE)",
+  "edited_text": null,
+  "species_id": 157,
+  "species": "Fistulina hepatica",
+  "field": "taste_notes"
+ },
+ "2934": {
+  "action": "reject",
+  "reason": "Melvin census 22 Oct: placeholder — no medicinal content",
+  "rule": "G1 (listed)",
+  "edited_text": null,
+  "species_id": 157,
+  "species": "Fistulina hepatica",
+  "field": "medicinal_notes"
+ },
+ "2935": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census APPROVE)",
+  "edited_text": null,
+  "species_id": 157,
+  "species": "Fistulina hepatica",
+  "field": "recipe"
+ },
+ "2936": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census LOOK)",
+  "edited_text": null,
+  "species_id": 489,
+  "species": "Leccinum versipelle",
+  "field": "taste_notes"
+ },
+ "2937": {
+  "action": "reject",
+  "reason": "Melvin census 22 Oct: orange birch bolete medicinal",
+  "rule": "override reject",
+  "edited_text": null,
+  "species_id": 489,
+  "species": "Leccinum versipelle",
+  "field": "medicinal_notes"
+ },
+ "2938": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census LOOK)",
+  "edited_text": null,
+  "species_id": 489,
+  "species": "Leccinum versipelle",
+  "field": "recipe"
+ },
+ "2939": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census LOOK)",
+  "edited_text": null,
+  "species_id": 467,
+  "species": "Amanita rubescens",
+  "field": "taste_notes"
+ },
+ "2940": {
+  "action": "reject",
+  "reason": "Melvin census 22 Oct: placeholder — no medicinal content",
+  "rule": "G1 (listed)",
+  "edited_text": null,
+  "species_id": 467,
+  "species": "Amanita rubescens",
+  "field": "medicinal_notes"
+ },
+ "2941": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census APPROVE)",
+  "edited_text": null,
+  "species_id": 225,
+  "species": "Imleria badia",
+  "field": "taste_notes"
+ },
+ "2942": {
+  "action": "reject",
+  "reason": "Melvin census 22 Oct: placeholder — no medicinal content",
+  "rule": "G1 (listed)",
+  "edited_text": null,
+  "species_id": 225,
+  "species": "Imleria badia",
+  "field": "medicinal_notes"
+ },
+ "2943": {
+  "action": "reject",
+  "reason": "Melvin census 22 Oct: AI chat text",
+  "rule": "override reject",
+  "edited_text": null,
+  "species_id": 225,
+  "species": "Imleria badia",
+  "field": "recipe"
+ },
+ "2944": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census APPROVE)",
+  "edited_text": null,
+  "species_id": 324,
+  "species": "Xerocomellus chrysenteron",
+  "field": "taste_notes"
+ },
+ "2945": {
+  "action": "reject",
+  "reason": "Melvin census 22 Oct: red-cracking bolete medicinal",
+  "rule": "override reject",
+  "edited_text": null,
+  "species_id": 324,
+  "species": "Xerocomellus chrysenteron",
+  "field": "medicinal_notes"
+ },
+ "2946": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census APPROVE)",
+  "edited_text": null,
+  "species_id": 324,
+  "species": "Xerocomellus chrysenteron",
+  "field": "recipe"
+ },
+ "2950": {
+  "action": "reject",
+  "reason": "Melvin census 22 Oct: culinary content on toxic/inedible species",
+  "rule": "excluded: culinary",
+  "edited_text": null,
+  "species_id": 503,
+  "species": "Amanita citrina",
+  "field": "taste_notes"
+ },
+ "2951": {
+  "action": "hold",
+  "reason": null,
+  "rule": "excluded: medicinal — later round",
+  "edited_text": null,
+  "species_id": 503,
+  "species": "Amanita citrina",
+  "field": "medicinal_notes"
+ },
+ "2952": {
+  "action": "reject",
+  "reason": "Melvin census 22 Oct: culinary content on toxic/inedible species",
+  "rule": "excluded: culinary",
+  "edited_text": null,
+  "species_id": 503,
+  "species": "Amanita citrina",
+  "field": "recipe"
+ },
+ "2953": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census LOOK)",
+  "edited_text": null,
+  "species_id": 457,
+  "species": "Trametes versicolor",
+  "field": "taste_notes"
+ },
+ "2954": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census LOOK)",
+  "edited_text": null,
+  "species_id": 457,
+  "species": "Trametes versicolor",
+  "field": "medicinal_notes"
+ },
+ "2955": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census LOOK)",
+  "edited_text": null,
+  "species_id": 457,
+  "species": "Trametes versicolor",
+  "field": "recipe"
+ },
+ "2956": {
+  "action": "reject",
+  "reason": "Melvin census 22 Oct: culinary content on toxic/inedible species",
+  "rule": "excluded: culinary",
+  "edited_text": null,
+  "species_id": 504,
+  "species": "Populus tremuloides",
+  "field": "taste_notes"
+ },
+ "2957": {
+  "action": "hold",
+  "reason": null,
+  "rule": "excluded: medicinal — later round",
+  "edited_text": null,
+  "species_id": 504,
+  "species": "Populus tremuloides",
+  "field": "medicinal_notes"
+ },
+ "2958": {
+  "action": "reject",
+  "reason": "Melvin census 22 Oct: culinary content on toxic/inedible species",
+  "rule": "excluded: culinary",
+  "edited_text": null,
+  "species_id": 504,
+  "species": "Populus tremuloides",
+  "field": "recipe"
+ },
+ "2959": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census LOOK)",
+  "edited_text": null,
+  "species_id": 505,
+  "species": "Lepista nuda",
+  "field": "taste_notes"
+ },
+ "2960": {
+  "action": "reject",
+  "reason": "Melvin census 22 Oct: placeholder — no medicinal content",
+  "rule": "G1 (listed)",
+  "edited_text": null,
+  "species_id": 505,
+  "species": "Lepista nuda",
+  "field": "medicinal_notes"
+ },
+ "2961": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census LOOK)",
+  "edited_text": null,
+  "species_id": 505,
+  "species": "Lepista nuda",
+  "field": "recipe"
+ },
+ "2962": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census LOOK)",
+  "edited_text": null,
+  "species_id": 506,
+  "species": "Boletus reticulatus",
+  "field": "taste_notes"
+ },
+ "2963": {
+  "action": "reject",
+  "reason": "Melvin census 22 Oct: placeholder — no medicinal content",
+  "rule": "G1 (listed)",
+  "edited_text": null,
+  "species_id": 506,
+  "species": "Boletus reticulatus",
+  "field": "medicinal_notes"
+ },
+ "2964": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census LOOK)",
+  "edited_text": null,
+  "species_id": 506,
+  "species": "Boletus reticulatus",
+  "field": "recipe"
+ },
+ "2966": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census APPROVE)",
+  "edited_text": null,
+  "species_id": 424,
+  "species": "Malva trimestris",
+  "field": "taste_notes"
+ },
+ "2967": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census APPROVE)",
+  "edited_text": null,
+  "species_id": 424,
+  "species": "Malva trimestris",
+  "field": "medicinal_notes"
+ },
+ "2968": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census APPROVE)",
+  "edited_text": null,
+  "species_id": 424,
+  "species": "Malva trimestris",
+  "field": "recipe"
+ },
+ "2969": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census APPROVE)",
+  "edited_text": null,
+  "species_id": 476,
+  "species": "Rubus armeniacus",
+  "field": "taste_notes"
+ },
+ "2970": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census LOOK)",
+  "edited_text": null,
+  "species_id": 476,
+  "species": "Rubus armeniacus",
+  "field": "medicinal_notes"
+ },
+ "2971": {
+  "action": "edit_approve",
+  "reason": null,
+  "rule": "G4 strip 'None known' line",
+  "edited_text": "## Armenian Blackberry & Burnt Honey Flummery\n\nThe Armenian blackberry, *Rubus armeniacus*, is often dismissed as a thorny thug, but its fruit is a marvel — deeply fragrant, with a wild, almost wine-dark intensity that cultivated berries can’t touch. This recipe lets that flavour lead, turning the fruit into a soft, wobbling flummery — a set cream more elegant than a fool, more restrained than a mousse. The burnt honey adds a bitter edge that cuts the fruit’s natural sweetness, and the whole thing feels like something you’d eat in a garden at dusk, when the air is thick with the scent of ripening canes.\n\n**Ingredients**\n\n- 500g ripe Armenian blackberries, washed\n- 200g clear honey (something floral, like heather or acacia)\n- 500ml double cream\n- 4 gelatine leaves (or 2 tsp agar agar for vegetarian)\n- 1 lemon, juice only\n- A pinch of sea salt\n\n**Method**\n\nStart by making the burnt honey. Warm the honey in a heavy-bottomed pan over a medium heat — don’t stir, just let it bubble and darken. You’re looking for a deep amber, just before it turns acrid. Take it off the heat the moment it smells toasted. Stir in a tablespoon of warm water to stop the cooking, then pour into a bowl and set aside. It will stiffen as it cools.\n\nWhile that happens, put the blackberries in a bowl. Mash them lightly with a fork — you want some whole berries still, bits that will speak of the bramble. Sprinkle over the lemon juice and a pinch of salt, and let them sit for ten minutes. The salt will coax out the fruit’s wildness.\n\nSoak the gelatine leaves in cold water for five minutes until soft. Warm 150ml of the cream in a small pan, then lift out the gelatine leaves, squeeze them dry, and stir into the warm cream until dissolved. Don’t boil. Take it off the heat.\n\nNow, whip the remaining cream to soft peaks — you want it just thick enough to hold a ribbon. Fold in the mashed blackberries and two-thirds of the burnt honey. Taste. The fruit should be sharp, the honey dark. Adjust if needed. Then fold in the cream-gelatine mixture gently, until everything is just combined.\n\nPour into a dish — a single large platter or six small glasses — and refrigerate for at least four hours, or overnight. The flummery should set to a trembling softness, not a rigid jelly.\n\nTo serve, warm the remaining burnt honey slightly so it moves like syrup, and spoon it over the top. Eat cold, with a spoon, and nothing else.\n\n**Variation or pairing**\n\nIf you’ve got meadowsweet growing nearby — *Filipendula ulmaria* — steep a sprig in the cream as it warms, then strain it out. Its almond-meets-wintergreen will echo the almond notes in the fruit, and the whole thing will smell of high summer.",
+  "species_id": 476,
+  "species": "Rubus armeniacus",
+  "field": "recipe"
+ },
+ "2972": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census APPROVE)",
+  "edited_text": null,
+  "species_id": 168,
+  "species": "Geranium pyrenaicum",
+  "field": "taste_notes"
+ },
+ "2973": {
+  "action": "reject",
+  "reason": "Melvin census 22 Oct: placeholder — no medicinal content",
+  "rule": "G1 (extra match)",
+  "edited_text": null,
+  "species_id": 168,
+  "species": "Geranium pyrenaicum",
+  "field": "medicinal_notes"
+ },
+ "2974": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census APPROVE)",
+  "edited_text": null,
+  "species_id": 168,
+  "species": "Geranium pyrenaicum",
+  "field": "recipe"
+ },
+ "2975": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census APPROVE)",
+  "edited_text": null,
+  "species_id": 217,
+  "species": "Silene pendula",
+  "field": "taste_notes"
+ },
+ "2976": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census LOOK)",
+  "edited_text": null,
+  "species_id": 217,
+  "species": "Silene pendula",
+  "field": "medicinal_notes"
+ },
+ "2977": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census APPROVE)",
+  "edited_text": null,
+  "species_id": 217,
+  "species": "Silene pendula",
+  "field": "recipe"
+ },
+ "2978": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census APPROVE)",
+  "edited_text": null,
+  "species_id": 172,
+  "species": "Mentha × piperita",
+  "field": "taste_notes"
+ },
+ "2979": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census APPROVE)",
+  "edited_text": null,
+  "species_id": 172,
+  "species": "Mentha × piperita",
+  "field": "medicinal_notes"
+ },
+ "2980": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census APPROVE)",
+  "edited_text": null,
+  "species_id": 172,
+  "species": "Mentha × piperita",
+  "field": "recipe"
+ },
+ "2981": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census APPROVE)",
+  "edited_text": null,
+  "species_id": 173,
+  "species": "Marrubium vulgare",
+  "field": "taste_notes"
+ },
+ "2982": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census APPROVE)",
+  "edited_text": null,
+  "species_id": 173,
+  "species": "Marrubium vulgare",
+  "field": "recipe"
+ },
+ "2983": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census APPROVE)",
+  "edited_text": null,
+  "species_id": 175,
+  "species": "Trifolium pratense",
+  "field": "medicinal_notes"
+ },
+ "2984": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census APPROVE)",
+  "edited_text": null,
+  "species_id": 226,
+  "species": "Trifolium medium",
+  "field": "taste_notes"
+ },
+ "2985": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census APPROVE)",
+  "edited_text": null,
+  "species_id": 226,
+  "species": "Trifolium medium",
+  "field": "medicinal_notes"
+ },
+ "2986": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census APPROVE)",
+  "edited_text": null,
+  "species_id": 226,
+  "species": "Trifolium medium",
+  "field": "recipe"
+ },
+ "2987": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census APPROVE)",
+  "edited_text": null,
+  "species_id": 177,
+  "species": "Tilia × europaea",
+  "field": "taste_notes"
+ },
+ "2988": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census APPROVE)",
+  "edited_text": null,
+  "species_id": 177,
+  "species": "Tilia × europaea",
+  "field": "medicinal_notes"
+ },
+ "2989": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census APPROVE)",
+  "edited_text": null,
+  "species_id": 177,
+  "species": "Tilia × europaea",
+  "field": "recipe"
+ },
+ "2990": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census APPROVE)",
+  "edited_text": null,
+  "species_id": 184,
+  "species": "Veronica beccabunga",
+  "field": "taste_notes"
+ },
+ "2991": {
+  "action": "edit_approve",
+  "reason": null,
+  "rule": "G4 strip 'None known' line",
+  "edited_text": "### Brooklime, New Potato & Wild Garlic Butter\n\nBrooklime is a blast of watercress heat wrapped in succulence. It grows low and tight along stream edges, the leaves thick as purslane, the stems brittle with stored moisture. Most people who try it once will call it \"interesting\" and move on. That's because they treat it as a leaf. You have to treat it as what it actually is: a cool, peppery, pickle-tempered plant that needs a hot, starchy backdrop to show you what it can do. This dish lets brooklime sit alongside something soft and buttery, so its bite becomes a lift rather than a challenge.\n\n**Serves 4 as a side or lunch**\n\n* 500g new potatoes – small, waxy, unpeeled\n* 2 generous handfuls of brooklime – picked clean, washed well, shaken dry\n* 80g unsalted butter\n* A fistful of wild garlic leaves – about 30g\n* Good salt – flaky sea salt, not table salt\n* A pinch of black pepper – coarse, just cracked\n\n**Method**\n\nScrub the new potatoes and drop them into a pot of cold, well-salted water. Bring them up to a boil and let them roll for about twelve minutes, until a knife goes through with a little resistance. Not collapsing – just tender. Drain them, slice each one in half lengthways, and leave them steaming in the colander.\n\nWhile the potatoes cool enough to handle, make the wild garlic butter. Melt the butter over a very low heat. Finely shred the wild garlic leaves and stir them in as soon as the butter is liquid. Do not let the butter brown or sizzle – you want the garlic's greenness, not fried bitterness. Take it off the heat and let it sit for two minutes. The colour will seep into the butter like a slow stain.\n\nIn a wide bowl, toss the halved potatoes with the wild garlic butter. They should be warm but not hot – warm enough to soften the butter into a glaze but not hot enough to wilt the brooklime into mush. Add the brooklime now. Toss with your hands. The brooklime will cling to the butter-slicked potato, the leaves softening just a little on contact. Season with flaky salt and a crack of black pepper.\n\nEat this while it's still hand-warm. The brooklime stays crisp and cool against the potato's starch, the wild garlic butter carries the green note all the way through.\n\n**Variation** – If you cannot find wild garlic, use a fat clove of regular garlic, crushed and steeped in the warm butter for three minutes, then strained out. Add a small squeeze of lemon before serving to replace the sharpness wild garlic brings.",
+  "species_id": 184,
+  "species": "Veronica beccabunga",
+  "field": "recipe"
+ },
+ "2992": {
+  "action": "reject",
+  "reason": "Melvin census 22 Oct: culinary content on toxic/inedible species",
+  "rule": "excluded: culinary",
+  "edited_text": null,
+  "species_id": 182,
+  "species": "Pilosella aurantiaca",
+  "field": "taste_notes"
+ },
+ "2993": {
+  "action": "hold",
+  "reason": null,
+  "rule": "excluded: medicinal — later round",
+  "edited_text": null,
+  "species_id": 182,
+  "species": "Pilosella aurantiaca",
+  "field": "medicinal_notes"
+ },
+ "2994": {
+  "action": "reject",
+  "reason": "Melvin census 22 Oct: culinary content on toxic/inedible species",
+  "rule": "excluded: culinary",
+  "edited_text": null,
+  "species_id": 182,
+  "species": "Pilosella aurantiaca",
+  "field": "recipe"
+ },
+ "2995": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census APPROVE)",
+  "edited_text": null,
+  "species_id": 181,
+  "species": "Fragaria vesca",
+  "field": "medicinal_notes"
+ },
+ "2996": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census APPROVE)",
+  "edited_text": null,
+  "species_id": 183,
+  "species": "Galium album",
+  "field": "taste_notes"
+ },
+ "2997": {
+  "action": "reject",
+  "reason": "Melvin census 22 Oct: placeholder — no medicinal content",
+  "rule": "G1 (extra match)",
+  "edited_text": null,
+  "species_id": 183,
+  "species": "Galium album",
+  "field": "medicinal_notes"
+ },
+ "2998": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census APPROVE)",
+  "edited_text": null,
+  "species_id": 183,
+  "species": "Galium album",
+  "field": "recipe"
+ },
+ "2999": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census APPROVE)",
+  "edited_text": null,
+  "species_id": 349,
+  "species": "Hylotelephium telephium",
+  "field": "taste_notes"
+ },
+ "3000": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census LOOK)",
+  "edited_text": null,
+  "species_id": 349,
+  "species": "Hylotelephium telephium",
+  "field": "medicinal_notes"
+ },
+ "3001": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census APPROVE)",
+  "edited_text": null,
+  "species_id": 349,
+  "species": "Hylotelephium telephium",
+  "field": "recipe"
+ },
+ "3003": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census APPROVE)",
+  "edited_text": null,
+  "species_id": 233,
+  "species": "Hypochaeris radicata",
+  "field": "taste_notes"
+ },
+ "3004": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census LOOK)",
+  "edited_text": null,
+  "species_id": 233,
+  "species": "Hypochaeris radicata",
+  "field": "medicinal_notes"
+ },
+ "3005": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census APPROVE)",
+  "edited_text": null,
+  "species_id": 233,
+  "species": "Hypochaeris radicata",
+  "field": "recipe"
+ },
+ "3007": {
+  "action": "reject",
+  "reason": "Melvin census 22 Oct: culinary content on toxic/inedible species",
+  "rule": "excluded: culinary",
+  "edited_text": null,
+  "species_id": 188,
+  "species": "Genista sagittalis",
+  "field": "taste_notes"
+ },
+ "3008": {
+  "action": "hold",
+  "reason": null,
+  "rule": "excluded: medicinal — later round",
+  "edited_text": null,
+  "species_id": 188,
+  "species": "Genista sagittalis",
+  "field": "medicinal_notes"
+ },
+ "3009": {
+  "action": "reject",
+  "reason": "Melvin census 22 Oct: culinary content on toxic/inedible species",
+  "rule": "excluded: culinary",
+  "edited_text": null,
+  "species_id": 188,
+  "species": "Genista sagittalis",
+  "field": "recipe"
+ },
+ "3012": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census APPROVE)",
+  "edited_text": null,
+  "species_id": 190,
+  "species": "Alchemilla monticola",
+  "field": "taste_notes"
+ },
+ "3013": {
+  "action": "reject",
+  "reason": "Melvin census 22 Oct: placeholder — no medicinal content",
+  "rule": "G1 (listed)",
+  "edited_text": null,
+  "species_id": 190,
+  "species": "Alchemilla monticola",
+  "field": "medicinal_notes"
+ },
+ "3014": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census APPROVE)",
+  "edited_text": null,
+  "species_id": 190,
+  "species": "Alchemilla monticola",
+  "field": "recipe"
+ },
+ "3015": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census APPROVE)",
+  "edited_text": null,
+  "species_id": 189,
+  "species": "Pinus sylvestris",
+  "field": "medicinal_notes"
+ },
+ "3016": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census APPROVE)",
+  "edited_text": null,
+  "species_id": 341,
+  "species": "Malva moschata",
+  "field": "medicinal_notes"
+ },
+ "3017": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census APPROVE)",
+  "edited_text": null,
+  "species_id": 353,
+  "species": "Solidago canadensis",
+  "field": "taste_notes"
+ },
+ "3018": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census APPROVE)",
+  "edited_text": null,
+  "species_id": 353,
+  "species": "Solidago canadensis",
+  "field": "medicinal_notes"
+ },
+ "3019": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census APPROVE)",
+  "edited_text": null,
+  "species_id": 353,
+  "species": "Solidago canadensis",
+  "field": "recipe"
+ },
+ "3020": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census APPROVE)",
+  "edited_text": null,
+  "species_id": 193,
+  "species": "Stellaria graminea",
+  "field": "taste_notes"
+ },
+ "3021": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census APPROVE)",
+  "edited_text": null,
+  "species_id": 193,
+  "species": "Stellaria graminea",
+  "field": "medicinal_notes"
+ },
+ "3022": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census APPROVE)",
+  "edited_text": null,
+  "species_id": 199,
+  "species": "Sanguisorba minor",
+  "field": "medicinal_notes"
+ },
+ "3023": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census APPROVE)",
+  "edited_text": null,
+  "species_id": 344,
+  "species": "Crepis tectorum",
+  "field": "taste_notes"
+ },
+ "3024": {
+  "action": "reject",
+  "reason": "Melvin census 22 Oct: placeholder — no medicinal content",
+  "rule": "G1 (listed)",
+  "edited_text": null,
+  "species_id": 344,
+  "species": "Crepis tectorum",
+  "field": "medicinal_notes"
+ },
+ "3025": {
+  "action": "edit_approve",
+  "reason": null,
+  "rule": "G4 strip 'None known' line",
+  "edited_text": "**Crepis tectorum. Narrow-leaved hawksbeard. Ground that thinks it knows better than you.**\n\nI’ve been eating this plant for eight seasons now, and every time I bend to take it, I’m struck by the same thing — there’s no bitterness that needs forgiveness, no surrender to a blanch. Just a clean, honest greenness with a whisper of chicory behind it, the way a memory of chicory might taste. It’s an odd one among the aster family, this. Most of its cousins want you to prove yourself. This one just offers itself.\n\nThe leaves are the thing. They’re narrow, yes, like the name says, but not wiry — they hold moisture well, they’ve got a tenderness that makes me think of early lamb’s lettuce crossed with the quietest endive you’ve ever met. They wilt in seconds, which tells you how to treat them. Brief, respectful heat. Anything more and you’d lose what makes them worth picking.\n\nI like this plant because it works with things that have got some heft. A white bean, say. A soft-boiled egg. A slick of good oil that tastes of something — not the supermarket stuff, the kind from a bottle that makes you stop and look at it. And because the hawksbeard is delicate, you serve it on top. Not mixed in. On top. Let it be the last thing someone tastes.\n\n---\n\n**Ingredients**\n\n- A generous handful of young narrow-leaved hawksbeard leaves — picked before the plant flowers, washed, spun dry\n- 200g cooked white beans (cannellini, or better, the small Greek ones if you can find them) — cooked from dried, not tinned\n- 1 fat clove of garlic, sliced thin\n- 1 soft-boiled egg — 6 minutes, plunged into cold water, peeled\n- A good pinch of flaky salt\n- Black pepper, freshly ground\n- Juice of half a lemon\n- 3 tablespoons of a grassy olive oil — the kind that makes your throat catch\n- A scattering of pickled wild garlic buds (or capers, if the season’s against you)\n\n---\n\n**Method**\n\nWarm the beans in a small pan with a splash of their cooking liquor and a teaspoon of the olive oil. Just enough to heat them through, not enough to break them. Swirl in the sliced garlic and let it soften for thirty seconds — you’re not colouring it, just taking the raw edge off. Tip into a low, wide bowl.\n\nNow the hawksbeard. Wipe the pan clean — I know, I know, but you want the heat to hit the leaves cleanly. Return it to a medium flame with the remaining oil. When it shimmers, drop the leaves in and turn them with tongs for thirty seconds, maybe forty. They will collapse into something that looks like you’ve done nothing, but lift one and taste it. That’s what I mean. They’ve changed.\n\nPile the wilted leaves directly over the beans. Split the soft-boiled egg in half and nestle it into the greens, yolk side up. The yolk will be the sauce — don’t scramble it, don’t pre-mix, let the person eating this do that themselves. Squeeze the lemon over everything, scatter the salt and pepper, and finish with the pickled wild garlic buds or capers. Eat it with good bread, the kind that demands you tear it.\n\n---\n\n**Variation**\n\nIf you’ve got a piece of cured mackerel or a fillet of sardine, flake it over the top before the egg goes on. The fish’s oil and the hawksbeard’s greenness — they’ve got something to say to each other. Or leave it as it is. Some dishes don’t need improvement, just presence.",
+  "species_id": 344,
+  "species": "Crepis tectorum",
+  "field": "recipe"
+ },
+ "3026": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census LOOK)",
+  "edited_text": null,
+  "species_id": 201,
+  "species": "Achillea nobilis",
+  "field": "medicinal_notes"
+ },
+ "3029": {
+  "action": "hold",
+  "reason": null,
+  "rule": "excluded: medicinal — later round",
+  "edited_text": null,
+  "species_id": 354,
+  "species": "Crocus",
+  "field": "medicinal_notes"
+ },
+ "3032": {
+  "action": "reject",
+  "reason": "Melvin census 22 Oct: culinary content on toxic/inedible species",
+  "rule": "excluded: culinary",
+  "edited_text": null,
+  "species_id": 124,
+  "species": "Aquilegia nigricans",
+  "field": "taste_notes"
+ },
+ "3033": {
+  "action": "reject",
+  "reason": "Melvin census 22 Oct: culinary content on toxic/inedible species",
+  "rule": "excluded: culinary",
+  "edited_text": null,
+  "species_id": 124,
+  "species": "Aquilegia nigricans",
+  "field": "recipe"
+ },
+ "3034": {
+  "action": "reject",
+  "reason": "Melvin census 22 Oct: culinary content on toxic/inedible species",
+  "rule": "excluded: culinary",
+  "edited_text": null,
+  "species_id": 132,
+  "species": "Galium sylvaticum",
+  "field": "taste_notes"
+ },
+ "3035": {
+  "action": "hold",
+  "reason": null,
+  "rule": "excluded: medicinal — later round",
+  "edited_text": null,
+  "species_id": 132,
+  "species": "Galium sylvaticum",
+  "field": "medicinal_notes"
+ },
+ "3036": {
+  "action": "reject",
+  "reason": "Melvin census 22 Oct: culinary content on toxic/inedible species",
+  "rule": "excluded: culinary",
+  "edited_text": null,
+  "species_id": 132,
+  "species": "Galium sylvaticum",
+  "field": "recipe"
+ },
+ "3043": {
+  "action": "reject",
+  "reason": "Melvin census 22 Oct: culinary content on toxic/inedible species",
+  "rule": "excluded: culinary",
+  "edited_text": null,
+  "species_id": 19,
+  "species": "Petasites albus",
+  "field": "taste_notes"
+ },
+ "3047": {
+  "action": "hold",
+  "reason": null,
+  "rule": "excluded: medicinal — later round",
+  "edited_text": null,
+  "species_id": 767,
+  "species": "Jacobaea erucifolia",
+  "field": "medicinal_notes"
+ },
+ "3048": {
+  "action": "hold",
+  "reason": null,
+  "rule": "excluded: medicinal — later round",
+  "edited_text": null,
+  "species_id": 769,
+  "species": "Polytrichum formosum",
+  "field": "medicinal_notes"
+ },
+ "3049": {
+  "action": "hold",
+  "reason": null,
+  "rule": "excluded: medicinal — later round",
+  "edited_text": null,
+  "species_id": 770,
+  "species": "Erica cinerea",
+  "field": "medicinal_notes"
+ },
+ "3050": {
+  "action": "hold",
+  "reason": null,
+  "rule": "excluded: medicinal — later round",
+  "edited_text": null,
+  "species_id": 771,
+  "species": "Mnium hornum",
+  "field": "medicinal_notes"
+ },
+ "3052": {
+  "action": "hold",
+  "reason": null,
+  "rule": "excluded: medicinal — later round",
+  "edited_text": null,
+  "species_id": 773,
+  "species": "Adenium obesum",
+  "field": "medicinal_notes"
+ },
+ "3055": {
+  "action": "hold",
+  "reason": null,
+  "rule": "excluded: medicinal — later round",
+  "edited_text": null,
+  "species_id": 777,
+  "species": "Aposeris foetida",
+  "field": "medicinal_notes"
+ },
+ "3056": {
+  "action": "reject",
+  "reason": "Melvin census 22 Oct: placeholder — no medicinal content",
+  "rule": "G1 (listed)",
+  "edited_text": null,
+  "species_id": 778,
+  "species": "Campanula barbata",
+  "field": "medicinal_notes"
+ },
+ "3057": {
+  "action": "hold",
+  "reason": null,
+  "rule": "excluded: medicinal — later round",
+  "edited_text": null,
+  "species_id": 779,
+  "species": "Cirsium acaulon",
+  "field": "medicinal_notes"
+ },
+ "3058": {
+  "action": "reject",
+  "reason": "Melvin census 22 Oct: placeholder — no medicinal content",
+  "rule": "G1 (listed)",
+  "edited_text": null,
+  "species_id": 780,
+  "species": "Crepis paludosa",
+  "field": "medicinal_notes"
+ },
+ "3060": {
+  "action": "hold",
+  "reason": null,
+  "rule": "excluded: medicinal — later round",
+  "edited_text": null,
+  "species_id": 782,
+  "species": "Aconitum plicatum",
+  "field": "medicinal_notes"
+ },
+ "3061": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census LOOK)",
+  "edited_text": null,
+  "species_id": 783,
+  "species": "Melilotus officinalis",
+  "field": "medicinal_notes"
+ },
+ "3068": {
+  "action": "reject",
+  "reason": "Melvin census 22 Oct: placeholder — no medicinal content",
+  "rule": "G1 (listed)",
+  "edited_text": null,
+  "species_id": 804,
+  "species": "Suillus viscidus",
+  "field": "medicinal_notes"
+ },
+ "3069": {
+  "action": "approve",
+  "reason": null,
+  "rule": "override approve",
+  "edited_text": null,
+  "species_id": 806,
+  "species": "Juniperus communis",
+  "field": "medicinal_notes"
+ },
+ "3071": {
+  "action": "hold",
+  "reason": null,
+  "rule": "excluded: medicinal — later round",
+  "edited_text": null,
+  "species_id": 808,
+  "species": "Ambrosia confertiflora",
+  "field": "medicinal_notes"
+ },
+ "3075": {
+  "action": "hold",
+  "reason": null,
+  "rule": "excluded: medicinal — later round",
+  "edited_text": null,
+  "species_id": 811,
+  "species": "Euphrasia alpina",
+  "field": "medicinal_notes"
+ },
+ "3077": {
+  "action": "hold",
+  "reason": null,
+  "rule": "excluded: medicinal — later round",
+  "edited_text": null,
+  "species_id": 813,
+  "species": "Homogyne alpina",
+  "field": "medicinal_notes"
+ },
+ "3080": {
+  "action": "hold",
+  "reason": null,
+  "rule": "excluded: medicinal — later round",
+  "edited_text": null,
+  "species_id": 797,
+  "species": "Alnus alnobetula",
+  "field": "medicinal_notes"
+ },
+ "3083": {
+  "action": "reject",
+  "reason": "Melvin census 22 Oct: placeholder — no medicinal content",
+  "rule": "G1 (listed)",
+  "edited_text": null,
+  "species_id": 790,
+  "species": "Vaccinium uliginosum",
+  "field": "medicinal_notes"
+ },
+ "3084": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census LOOK)",
+  "edited_text": null,
+  "species_id": 788,
+  "species": "Cichorium intybus",
+  "field": "medicinal_notes"
+ },
+ "3085": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census APPROVE)",
+  "edited_text": null,
+  "species_id": 615,
+  "species": "Carlina acaulis",
+  "field": "taste_notes"
+ },
+ "3086": {
+  "action": "reject",
+  "reason": "Melvin census 22 Oct: AI chat text",
+  "rule": "override reject",
+  "edited_text": null,
+  "species_id": 615,
+  "species": "Carlina acaulis",
+  "field": "recipe"
+ },
+ "3087": {
+  "action": "reject",
+  "reason": "Melvin census 22 Oct: placeholder — no medicinal content",
+  "rule": "G1 (listed)",
+  "edited_text": null,
+  "species_id": 800,
+  "species": "Viola lutea",
+  "field": "medicinal_notes"
+ },
+ "3088": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census APPROVE)",
+  "edited_text": null,
+  "species_id": 799,
+  "species": "Vaccinium vitis-idaea",
+  "field": "medicinal_notes"
+ },
+ "3096": {
+  "action": "reject",
+  "reason": "Melvin census 22 Oct: placeholder — no medicinal content",
+  "rule": "G1 (listed)",
+  "edited_text": null,
+  "species_id": 816,
+  "species": "Macrolepiota excoriata",
+  "field": "medicinal_notes"
+ },
+ "3098": {
+  "action": "reject",
+  "reason": "Melvin census 22 Oct: placeholder — no medicinal content",
+  "rule": "G1 (listed)",
+  "edited_text": null,
+  "species_id": 817,
+  "species": "Agaricus campestris",
+  "field": "medicinal_notes"
+ },
+ "3099": {
+  "action": "hold",
+  "reason": null,
+  "rule": "excluded: medicinal — later round",
+  "edited_text": null,
+  "species_id": 818,
+  "species": "Leucocoprinus leucothites",
+  "field": "medicinal_notes"
+ },
+ "3100": {
+  "action": "reject",
+  "reason": "Melvin census 22 Oct: placeholder — no medicinal content",
+  "rule": "G1 (listed)",
+  "edited_text": null,
+  "species_id": 819,
+  "species": "Taraxacum erythrospermum",
+  "field": "medicinal_notes"
+ },
+ "3102": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census LOOK)",
+  "edited_text": null,
+  "species_id": 405,
+  "species": "Macrolepiota procera",
+  "field": "taste_notes"
+ },
+ "3103": {
+  "action": "reject",
+  "reason": "Melvin census 22 Oct: placeholder — no medicinal content",
+  "rule": "G1 (listed)",
+  "edited_text": null,
+  "species_id": 405,
+  "species": "Macrolepiota procera",
+  "field": "medicinal_notes"
+ },
+ "3104": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census LOOK)",
+  "edited_text": null,
+  "species_id": 405,
+  "species": "Macrolepiota procera",
+  "field": "recipe"
+ },
+ "3105": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census LOOK)",
+  "edited_text": null,
+  "species_id": 399,
+  "species": "Verbascum thapsus",
+  "field": "taste_notes"
+ },
+ "3106": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census LOOK)",
+  "edited_text": null,
+  "species_id": 399,
+  "species": "Verbascum thapsus",
+  "field": "recipe"
+ },
+ "3109": {
+  "action": "reject",
+  "reason": "Melvin census 22 Oct: placeholder — no medicinal content",
+  "rule": "G1 (listed)",
+  "edited_text": null,
+  "species_id": 822,
+  "species": "Hypochaeris glabra",
+  "field": "medicinal_notes"
+ },
+ "3110": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census APPROVE)",
+  "edited_text": null,
+  "species_id": 823,
+  "species": "Oenothera biennis",
+  "field": "medicinal_notes"
+ },
+ "3111": {
+  "action": "reject",
+  "reason": "Melvin census 22 Oct: placeholder — no medicinal content",
+  "rule": "G1 (listed)",
+  "edited_text": null,
+  "species_id": 793,
+  "species": "Abies nordmanniana",
+  "field": "medicinal_notes"
+ },
+ "3112": {
+  "action": "hold",
+  "reason": null,
+  "rule": "G3 non-European — hold",
+  "edited_text": null,
+  "species_id": 824,
+  "species": "Cirsium hookerianum",
+  "field": "medicinal_notes"
+ },
+ "3115": {
+  "action": "reject",
+  "reason": "Melvin census 22 Oct: placeholder — no medicinal content",
+  "rule": "G1 (listed)",
+  "edited_text": null,
+  "species_id": 827,
+  "species": "Barbarea verna",
+  "field": "medicinal_notes"
+ },
+ "3118": {
+  "action": "reject",
+  "reason": "Melvin census 22 Oct: placeholder — no medicinal content",
+  "rule": "G1 (listed)",
+  "edited_text": null,
+  "species_id": 829,
+  "species": "Armillaria ostoyae",
+  "field": "medicinal_notes"
+ },
+ "3120": {
+  "action": "hold",
+  "reason": null,
+  "rule": "excluded: medicinal — later round",
+  "edited_text": null,
+  "species_id": 830,
+  "species": "Coprinellus disseminatus",
+  "field": "medicinal_notes"
+ },
+ "3123": {
+  "action": "reject",
+  "reason": "Melvin census 22 Oct: placeholder — no medicinal content",
+  "rule": "G1 (listed)",
+  "edited_text": null,
+  "species_id": 832,
+  "species": "Armillaria cepistipes",
+  "field": "medicinal_notes"
+ },
+ "3127": {
+  "action": "hold",
+  "reason": null,
+  "rule": "excluded: medicinal — later round",
+  "edited_text": null,
+  "species_id": 837,
+  "species": "Paulownia tomentosa",
+  "field": "medicinal_notes"
+ },
+ "3131": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census LOOK)",
+  "edited_text": null,
+  "species_id": 502,
+  "species": "Armillaria mellea",
+  "field": "taste_notes"
+ },
+ "3132": {
+  "action": "reject",
+  "reason": "Melvin census 22 Oct: placeholder — no medicinal content",
+  "rule": "G1 (listed)",
+  "edited_text": null,
+  "species_id": 502,
+  "species": "Armillaria mellea",
+  "field": "medicinal_notes"
+ },
+ "3133": {
+  "action": "reject",
+  "reason": "Melvin census 22 Oct: honey fungus recipe",
+  "rule": "override reject",
+  "edited_text": null,
+  "species_id": 502,
+  "species": "Armillaria mellea",
+  "field": "recipe"
+ },
+ "3136": {
+  "action": "reject",
+  "reason": "Melvin census 22 Oct: placeholder — no medicinal content",
+  "rule": "G1 (listed)",
+  "edited_text": null,
+  "species_id": 839,
+  "species": "Lamium maculatum",
+  "field": "medicinal_notes"
+ },
+ "3137": {
+  "action": "hold",
+  "reason": null,
+  "rule": "excluded: medicinal — later round",
+  "edited_text": null,
+  "species_id": 840,
+  "species": "Paxillus involutus",
+  "field": "medicinal_notes"
+ },
+ "3141": {
+  "action": "reject",
+  "reason": "Melvin census 22 Oct: culinary content on toxic/inedible species",
+  "rule": "excluded: culinary",
+  "edited_text": null,
+  "species_id": 633,
+  "species": "Populus nigra",
+  "field": "taste_notes"
+ },
+ "3142": {
+  "action": "reject",
+  "reason": "Melvin census 22 Oct: culinary content on toxic/inedible species",
+  "rule": "excluded: culinary",
+  "edited_text": null,
+  "species_id": 633,
+  "species": "Populus nigra",
+  "field": "recipe"
+ },
+ "3143": {
+  "action": "hold",
+  "reason": null,
+  "rule": "G3 non-European — hold",
+  "edited_text": null,
+  "species_id": 791,
+  "species": "Larix lyallii",
+  "field": "medicinal_notes"
+ },
+ "3145": {
+  "action": "reject",
+  "reason": "Melvin census 22 Oct: placeholder — no medicinal content",
+  "rule": "G1 (listed)",
+  "edited_text": null,
+  "species_id": 704,
+  "species": "Polyporus versicolor",
+  "field": "medicinal_notes"
+ },
+ "3147": {
+  "action": "hold",
+  "reason": null,
+  "rule": "excluded: medicinal — later round",
+  "edited_text": null,
+  "species_id": 841,
+  "species": "Ramaria stricta",
+  "field": "medicinal_notes"
+ },
+ "3149": {
+  "action": "reject",
+  "reason": "Melvin census 22 Oct: placeholder — no medicinal content",
+  "rule": "G1 (listed)",
+  "edited_text": null,
+  "species_id": 842,
+  "species": "Aleuria aurantia",
+  "field": "medicinal_notes"
+ },
+ "3151": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census APPROVE)",
+  "edited_text": null,
+  "species_id": 358,
+  "species": "Fraxinus excelsior",
+  "field": "taste_notes"
+ },
+ "3152": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census APPROVE)",
+  "edited_text": null,
+  "species_id": 358,
+  "species": "Fraxinus excelsior",
+  "field": "medicinal_notes"
+ },
+ "3153": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census APPROVE)",
+  "edited_text": null,
+  "species_id": 358,
+  "species": "Fraxinus excelsior",
+  "field": "recipe"
+ },
+ "3156": {
+  "action": "reject",
+  "reason": "Melvin census 22 Oct: placeholder — no medicinal content",
+  "rule": "G1 (listed)",
+  "edited_text": null,
+  "species_id": 836,
+  "species": "Galinsoga quadriradiata",
+  "field": "medicinal_notes"
+ },
+ "3157": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census LOOK)",
+  "edited_text": null,
+  "species_id": 144,
+  "species": "Heracleum sphondylium",
+  "field": "medicinal_notes"
+ },
+ "3160": {
+  "action": "hold",
+  "reason": null,
+  "rule": "G3 non-European — hold",
+  "edited_text": null,
+  "species_id": 765,
+  "species": "Chenopodium pratericola",
+  "field": "medicinal_notes"
+ },
+ "3166": {
+  "action": "hold",
+  "reason": null,
+  "rule": "excluded: medicinal — later round",
+  "edited_text": null,
+  "species_id": 809,
+  "species": "Gloeophyllum sepiarium",
+  "field": "medicinal_notes"
+ },
+ "3167": {
+  "action": "hold",
+  "reason": null,
+  "rule": "excluded: medicinal — later round",
+  "edited_text": null,
+  "species_id": 787,
+  "species": "Melampyrum nemorosum",
+  "field": "medicinal_notes"
+ },
+ "3168": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census APPROVE)",
+  "edited_text": null,
+  "species_id": 368,
+  "species": "Corylus avellana",
+  "field": "taste_notes"
+ },
+ "3169": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census APPROVE)",
+  "edited_text": null,
+  "species_id": 368,
+  "species": "Corylus avellana",
+  "field": "medicinal_notes"
+ },
+ "3170": {
+  "action": "edit_approve",
+  "reason": null,
+  "rule": "G4 strip 'None known' line",
+  "edited_text": "Hazelnuts are one of the great gifts of the British hedgerow, and they carry a sweetness that shop-bought nuts rarely match — freshly dried, they taste of toasted cream and warm wood. This soup is a celebration of that quality, thickened with nuts rather than cream, lifted with a little cider and finished with a scatter of roasted hazelnuts and a slick of hazelnut oil. It is rich, elegant, and deeply comforting — the kind of food that feels generous without trying too hard.\n\n**Ingredients**\n\n*For the soup*\n- 250g shelled hazelnuts, preferably foraged and dried\n- 1 medium onion, roughly chopped\n- 2 sticks celery, roughly chopped\n- 1 leek, white part only, sliced\n- 2 cloves garlic, sliced\n- 1 medium potato, peeled and diced\n- 1 litre good vegetable stock\n- 150ml dry cider\n- 2 tbsp hazelnut oil (or rapeseed oil)\n- Sea salt and white pepper\n- A grating of nutmeg\n\n*To finish*\n- A handful of hazelnuts, roughly chopped and toasted\n- A few drops of hazelnut oil\n- A little finely chopped celery leaf or flat parsley\n\n**Method**\n\nFirst, deal with the hazelnuts. Spread them on a baking tray and roast at 180°C for eight to ten minutes, until the skins are cracked and the nuts smell warm and sweet. Tip them into a clean tea towel and rub vigorously — most of the skins will come away, and the ones that cling are no matter. Set aside a small handful for the finish, and roughly chop the rest.\n\nWarm the oil in a heavy pan over a medium heat. Add the onion, celery, and leek with a good pinch of salt, and sweat them gently for ten minutes or so, until soft and sweet but not coloured. Add the garlic and cook for another minute, then tip in the potato and the chopped hazelnuts. Stir everything together so the nuts are coated in the oil, then pour in the cider and let it bubble away for a minute or two.\n\nAdd the stock, bring to a simmer, and cook gently for twenty-five to thirty minutes, until the potato is completely soft and the nuts have given up their richness to the liquid. Take off the heat, add a good grating of nutmeg, and blend until completely smooth — you want it velvety, so let the blender run for longer than feels necessary. If it seems thick, loosen with a little more stock or water. Taste and adjust: it will want more salt than you think, and a generous grind of white pepper.\n\nServe in warm bowls, scattered with the toasted hazelnuts, a few drops of hazelnut oil, and a little chopped celery leaf. A slice of good buttered bread alongside is all it needs.\n\n*To vary it, stir a spoonful of crab apple jelly or quince membrillo through each bowl just before serving — the tartness cuts the richness beautifully and makes it feel like something you'd serve at a dinner party rather than a Tuesday supper.*",
+  "species_id": 368,
+  "species": "Corylus avellana",
+  "field": "recipe"
+ },
+ "3172": {
+  "action": "reject",
+  "reason": "Melvin census 22 Oct: placeholder — no medicinal content",
+  "rule": "G1 (listed)",
+  "edited_text": null,
+  "species_id": 845,
+  "species": "Taraxacum campylodes",
+  "field": "medicinal_notes"
+ },
+ "3174": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census APPROVE)",
+  "edited_text": null,
+  "species_id": 802,
+  "species": "Pinus cembra",
+  "field": "medicinal_notes"
+ },
+ "3175": {
+  "action": "hold",
+  "reason": null,
+  "rule": "excluded: medicinal — later round",
+  "edited_text": null,
+  "species_id": 846,
+  "species": "Salix barclayi",
+  "field": "medicinal_notes"
+ },
+ "3176": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census APPROVE)",
+  "edited_text": null,
+  "species_id": 186,
+  "species": "Thymus pulegioides",
+  "field": "medicinal_notes"
+ },
+ "3177": {
+  "action": "reject",
+  "reason": "Melvin census 22 Oct: placeholder — no medicinal content",
+  "rule": "G1 (listed)",
+  "edited_text": null,
+  "species_id": 847,
+  "species": "Clinopodium nepeta",
+  "field": "medicinal_notes"
+ },
+ "3452": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census APPROVE)",
+  "edited_text": null,
+  "species_id": 486,
+  "species": "Acer pseudoplatanus",
+  "field": "medicinal_notes"
+ },
+ "3453": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census APPROVE)",
+  "edited_text": null,
+  "species_id": 567,
+  "species": "Alchemilla xanthochlora",
+  "field": "medicinal_notes"
+ },
+ "3455": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census LOOK)",
+  "edited_text": null,
+  "species_id": 844,
+  "species": "Amaranthus retroflexus",
+  "field": "medicinal_notes"
+ },
+ "3456": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census LOOK)",
+  "edited_text": null,
+  "species_id": 278,
+  "species": "Aruncus dioicus",
+  "field": "medicinal_notes"
+ },
+ "3457": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census APPROVE)",
+  "edited_text": null,
+  "species_id": 646,
+  "species": "Cardamine impatiens",
+  "field": "medicinal_notes"
+ },
+ "3458": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census LOOK)",
+  "edited_text": null,
+  "species_id": 615,
+  "species": "Carlina acaulis",
+  "field": "medicinal_notes"
+ },
+ "3459": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census LOOK)",
+  "edited_text": null,
+  "species_id": 416,
+  "species": "Carpinus betulus",
+  "field": "medicinal_notes"
+ },
+ "3460": {
+  "action": "hold",
+  "reason": null,
+  "rule": "G3 non-European — hold",
+  "edited_text": null,
+  "species_id": 553,
+  "species": "Carpinus caroliniana",
+  "field": "medicinal_notes"
+ },
+ "3461": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census APPROVE)",
+  "edited_text": null,
+  "species_id": 693,
+  "species": "Centaurium erythraea",
+  "field": "medicinal_notes"
+ },
+ "3463": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census LOOK)",
+  "edited_text": null,
+  "species_id": 738,
+  "species": "Cichorium endivia",
+  "field": "medicinal_notes"
+ },
+ "3464": {
+  "action": "hold",
+  "reason": null,
+  "rule": "excluded: medicinal — later round",
+  "edited_text": null,
+  "species_id": 748,
+  "species": "Circaea lutetiana",
+  "field": "medicinal_notes"
+ },
+ "3465": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census LOOK)",
+  "edited_text": null,
+  "species_id": 551,
+  "species": "Cirsium arvense",
+  "field": "medicinal_notes"
+ },
+ "3466": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census APPROVE)",
+  "edited_text": null,
+  "species_id": 375,
+  "species": "Cirsium vulgare",
+  "field": "medicinal_notes"
+ },
+ "3467": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census LOOK)",
+  "edited_text": null,
+  "species_id": 639,
+  "species": "Cornus sanguinea",
+  "field": "medicinal_notes"
+ },
+ "3471": {
+  "action": "hold",
+  "reason": null,
+  "rule": "excluded: medicinal — later round",
+  "edited_text": null,
+  "species_id": 518,
+  "species": "Cytisus scoparius",
+  "field": "medicinal_notes"
+ },
+ "3472": {
+  "action": "hold",
+  "reason": null,
+  "rule": "excluded: medicinal — later round",
+  "edited_text": null,
+  "species_id": 360,
+  "species": "Dactylorhiza maculata",
+  "field": "medicinal_notes"
+ },
+ "3474": {
+  "action": "hold",
+  "reason": null,
+  "rule": "excluded: medicinal — later round",
+  "edited_text": null,
+  "species_id": 843,
+  "species": "Euphorbia corollata",
+  "field": "medicinal_notes"
+ },
+ "3475": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census LOOK)",
+  "edited_text": null,
+  "species_id": 667,
+  "species": "Euphrasia officinalis",
+  "field": "medicinal_notes"
+ },
+ "3476": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census APPROVE)",
+  "edited_text": null,
+  "species_id": 574,
+  "species": "Fuchsia magellanica",
+  "field": "medicinal_notes"
+ },
+ "3478": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census APPROVE)",
+  "edited_text": null,
+  "species_id": 618,
+  "species": "Geum rivale",
+  "field": "medicinal_notes"
+ },
+ "3479": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census APPROVE)",
+  "edited_text": null,
+  "species_id": 638,
+  "species": "Hesperis matronalis",
+  "field": "medicinal_notes"
+ },
+ "3480": {
+  "action": "hold",
+  "reason": null,
+  "rule": "excluded: medicinal — later round",
+  "edited_text": null,
+  "species_id": 485,
+  "species": "Hieracium umbellatum",
+  "field": "medicinal_notes"
+ },
+ "3481": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census LOOK)",
+  "edited_text": null,
+  "species_id": 378,
+  "species": "Impatiens glandulifera",
+  "field": "medicinal_notes"
+ },
+ "3482": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census APPROVE)",
+  "edited_text": null,
+  "species_id": 682,
+  "species": "Lamium galeobdolon",
+  "field": "medicinal_notes"
+ },
+ "3483": {
+  "action": "hold",
+  "reason": null,
+  "rule": "excluded: medicinal — later round",
+  "edited_text": null,
+  "species_id": 311,
+  "species": "Lathyrus pratensis",
+  "field": "medicinal_notes"
+ },
+ "3484": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census LOOK)",
+  "edited_text": null,
+  "species_id": 216,
+  "species": "Leucanthemum ircutianum",
+  "field": "medicinal_notes"
+ },
+ "3485": {
+  "action": "hold",
+  "reason": null,
+  "rule": "excluded: medicinal — later round",
+  "edited_text": null,
+  "species_id": 637,
+  "species": "Lilium martagon",
+  "field": "medicinal_notes"
+ },
+ "3486": {
+  "action": "hold",
+  "reason": null,
+  "rule": "excluded: medicinal — later round",
+  "edited_text": null,
+  "species_id": 240,
+  "species": "Lonicera periclymenum",
+  "field": "medicinal_notes"
+ },
+ "3487": {
+  "action": "hold",
+  "reason": null,
+  "rule": "excluded: medicinal — later round",
+  "edited_text": null,
+  "species_id": 834,
+  "species": "Lycopus europaeus",
+  "field": "medicinal_notes"
+ },
+ "3488": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census APPROVE)",
+  "edited_text": null,
+  "species_id": 591,
+  "species": "Lysimachia vulgaris",
+  "field": "medicinal_notes"
+ },
+ "3489": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census LOOK)",
+  "edited_text": null,
+  "species_id": 340,
+  "species": "Melissa officinalis",
+  "field": "medicinal_notes"
+ },
+ "3490": {
+  "action": "hold",
+  "reason": null,
+  "rule": "excluded: medicinal — later round",
+  "edited_text": null,
+  "species_id": 684,
+  "species": "Nymphaea alba",
+  "field": "medicinal_notes"
+ },
+ "3491": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census LOOK)",
+  "edited_text": null,
+  "species_id": 747,
+  "species": "Nymphoides peltata",
+  "field": "medicinal_notes"
+ },
+ "3492": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census LOOK)",
+  "edited_text": null,
+  "species_id": 568,
+  "species": "Origanum vulgare",
+  "field": "medicinal_notes"
+ },
+ "3493": {
+  "action": "hold",
+  "reason": null,
+  "rule": "Melvin: keep pending — he will edit it",
+  "edited_text": null,
+  "species_id": 691,
+  "species": "Oxalis grandis",
+  "field": "medicinal_notes"
+ },
+ "3496": {
+  "action": "hold",
+  "reason": null,
+  "rule": "excluded: medicinal — later round",
+  "edited_text": null,
+  "species_id": 781,
+  "species": "Parnassia palustris",
+  "field": "medicinal_notes"
+ },
+ "3497": {
+  "action": "hold",
+  "reason": null,
+  "rule": "excluded: medicinal — later round",
+  "edited_text": null,
+  "species_id": 19,
+  "species": "Petasites albus",
+  "field": "medicinal_notes"
+ },
+ "3498": {
+  "action": "hold",
+  "reason": null,
+  "rule": "G3 non-European — hold",
+  "edited_text": null,
+  "species_id": 370,
+  "species": "Picea mariana",
+  "field": "medicinal_notes"
+ },
+ "3499": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census LOOK)",
+  "edited_text": null,
+  "species_id": 438,
+  "species": "Pinus nigra",
+  "field": "medicinal_notes"
+ },
+ "3500": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census APPROVE)",
+  "edited_text": null,
+  "species_id": 289,
+  "species": "Pinus pinea",
+  "field": "medicinal_notes"
+ },
+ "3501": {
+  "action": "hold",
+  "reason": null,
+  "rule": "G3 non-European — hold",
+  "edited_text": null,
+  "species_id": 508,
+  "species": "Pinus radiata",
+  "field": "medicinal_notes"
+ },
+ "3502": {
+  "action": "hold",
+  "reason": null,
+  "rule": "excluded: medicinal — later round",
+  "edited_text": null,
+  "species_id": 670,
+  "species": "Polygonatum odoratum",
+  "field": "medicinal_notes"
+ },
+ "3504": {
+  "action": "hold",
+  "reason": null,
+  "rule": "excluded: medicinal — later round",
+  "edited_text": null,
+  "species_id": 633,
+  "species": "Populus nigra",
+  "field": "medicinal_notes"
+ },
+ "3505": {
+  "action": "hold",
+  "reason": null,
+  "rule": "excluded: medicinal — later round",
+  "edited_text": null,
+  "species_id": 742,
+  "species": "Populus × canadensis",
+  "field": "medicinal_notes"
+ },
+ "3506": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census LOOK)",
+  "edited_text": null,
+  "species_id": 622,
+  "species": "Potentilla erecta",
+  "field": "medicinal_notes"
+ },
+ "3507": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census APPROVE)",
+  "edited_text": null,
+  "species_id": 756,
+  "species": "Potentilla nepalensis",
+  "field": "medicinal_notes"
+ },
+ "3508": {
+  "action": "reject",
+  "reason": "Melvin census 22 Oct: sour cherry medicinal",
+  "rule": "override reject",
+  "edited_text": null,
+  "species_id": 212,
+  "species": "Prunus cerasus",
+  "field": "medicinal_notes"
+ },
+ "3509": {
+  "action": "hold",
+  "reason": null,
+  "rule": "excluded: medicinal — later round",
+  "edited_text": null,
+  "species_id": 385,
+  "species": "Pyrola minor",
+  "field": "medicinal_notes"
+ },
+ "3510": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census APPROVE)",
+  "edited_text": null,
+  "species_id": 433,
+  "species": "Pyrus communis",
+  "field": "medicinal_notes"
+ },
+ "3513": {
+  "action": "hold",
+  "reason": null,
+  "rule": "excluded: medicinal — later round",
+  "edited_text": null,
+  "species_id": 801,
+  "species": "Rhododendron ferrugineum",
+  "field": "medicinal_notes"
+ },
+ "3514": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census APPROVE)",
+  "edited_text": null,
+  "species_id": 391,
+  "species": "Ribes nigrum",
+  "field": "medicinal_notes"
+ },
+ "3515": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census APPROVE)",
+  "edited_text": null,
+  "species_id": 536,
+  "species": "Rosa multiflora",
+  "field": "medicinal_notes"
+ },
+ "3516": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census LOOK)",
+  "edited_text": null,
+  "species_id": 812,
+  "species": "Rumex alpinus",
+  "field": "medicinal_notes"
+ },
+ "3518": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census LOOK)",
+  "edited_text": null,
+  "species_id": 305,
+  "species": "Rumex obtusifolius",
+  "field": "medicinal_notes"
+ },
+ "3519": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census LOOK)",
+  "edited_text": null,
+  "species_id": 348,
+  "species": "Rumex sanguineus",
+  "field": "medicinal_notes"
+ },
+ "3521": {
+  "action": "hold",
+  "reason": null,
+  "rule": "excluded: medicinal — later round",
+  "edited_text": null,
+  "species_id": 795,
+  "species": "Salix aurita",
+  "field": "medicinal_notes"
+ },
+ "3522": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census LOOK)",
+  "edited_text": null,
+  "species_id": 402,
+  "species": "Sambucus racemosa",
+  "field": "medicinal_notes"
+ },
+ "3523": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census LOOK)",
+  "edited_text": null,
+  "species_id": 617,
+  "species": "Sanguisorba officinalis",
+  "field": "medicinal_notes"
+ },
+ "3525": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census LOOK)",
+  "edited_text": null,
+  "species_id": 164,
+  "species": "Silene vulgaris",
+  "field": "medicinal_notes"
+ },
+ "3526": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census LOOK)",
+  "edited_text": null,
+  "species_id": 347,
+  "species": "Sisymbrium officinale",
+  "field": "medicinal_notes"
+ },
+ "3527": {
+  "action": "hold",
+  "reason": null,
+  "rule": "excluded: medicinal — later round",
+  "edited_text": null,
+  "species_id": 814,
+  "species": "Soldanella alpina",
+  "field": "medicinal_notes"
+ },
+ "3528": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census LOOK)",
+  "edited_text": null,
+  "species_id": 713,
+  "species": "Solidago virgaurea",
+  "field": "medicinal_notes"
+ },
+ "3529": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census APPROVE)",
+  "edited_text": null,
+  "species_id": 327,
+  "species": "Sonchus asper",
+  "field": "medicinal_notes"
+ },
+ "3530": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census LOOK)",
+  "edited_text": null,
+  "species_id": 350,
+  "species": "Sonchus oleraceus",
+  "field": "medicinal_notes"
+ },
+ "3531": {
+  "action": "hold",
+  "reason": null,
+  "rule": "excluded: medicinal — later round",
+  "edited_text": null,
+  "species_id": 689,
+  "species": "Spiraea salicifolia",
+  "field": "medicinal_notes"
+ },
+ "3533": {
+  "action": "reject",
+  "reason": "Melvin census 22 Oct: dosage advice",
+  "rule": "override reject",
+  "edited_text": null,
+  "species_id": 395,
+  "species": "Tanacetum parthenium",
+  "field": "medicinal_notes"
+ },
+ "3534": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census APPROVE)",
+  "edited_text": null,
+  "species_id": 383,
+  "species": "Teucrium scorodonia",
+  "field": "medicinal_notes"
+ },
+ "3535": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census LOOK)",
+  "edited_text": null,
+  "species_id": 513,
+  "species": "Thlaspi arvense",
+  "field": "medicinal_notes"
+ },
+ "3536": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census LOOK)",
+  "edited_text": null,
+  "species_id": 594,
+  "species": "Thymus vulgaris",
+  "field": "medicinal_notes"
+ },
+ "3537": {
+  "action": "hold",
+  "reason": null,
+  "rule": "G3 non-European — hold",
+  "edited_text": null,
+  "species_id": 573,
+  "species": "Tilia americana",
+  "field": "medicinal_notes"
+ },
+ "3538": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census APPROVE)",
+  "edited_text": null,
+  "species_id": 487,
+  "species": "Trifolium repens",
+  "field": "medicinal_notes"
+ },
+ "3539": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census APPROVE)",
+  "edited_text": null,
+  "species_id": 262,
+  "species": "Turritis glabra",
+  "field": "medicinal_notes"
+ },
+ "3541": {
+  "action": "hold",
+  "reason": null,
+  "rule": "G3 non-European — hold",
+  "edited_text": null,
+  "species_id": 550,
+  "species": "Viburnum trilobum",
+  "field": "medicinal_notes"
+ },
+ "3542": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census APPROVE)",
+  "edited_text": null,
+  "species_id": 645,
+  "species": "Vicia sylvatica",
+  "field": "medicinal_notes"
+ },
+ "3543": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census APPROVE)",
+  "edited_text": null,
+  "species_id": 578,
+  "species": "Vitis vinifera",
+  "field": "medicinal_notes"
+ },
+ "3544": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census LOOK)",
+  "edited_text": null,
+  "species_id": 737,
+  "species": "Verbena officinalis",
+  "field": "medicinal_notes"
+ },
+ "3545": {
+  "action": "hold",
+  "reason": null,
+  "rule": "excluded: medicinal — later round",
+  "edited_text": null,
+  "species_id": 789,
+  "species": "Gentiana verna",
+  "field": "medicinal_notes"
+ },
+ "3546": {
+  "action": "hold",
+  "reason": null,
+  "rule": "excluded: medicinal — later round",
+  "edited_text": null,
+  "species_id": 796,
+  "species": "Ampulloclitocybe clavipes",
+  "field": "medicinal_notes"
+ },
+ "3549": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census LOOK)",
+  "edited_text": null,
+  "species_id": 785,
+  "species": "Amaranthus hybridus",
+  "field": "taste_notes"
+ },
+ "3550": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census LOOK)",
+  "edited_text": null,
+  "species_id": 785,
+  "species": "Amaranthus hybridus",
+  "field": "medicinal_notes"
+ },
+ "3551": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census LOOK)",
+  "edited_text": null,
+  "species_id": 785,
+  "species": "Amaranthus hybridus",
+  "field": "recipe"
+ },
+ "3556": {
+  "action": "hold",
+  "reason": null,
+  "rule": "G3 non-European — hold",
+  "edited_text": null,
+  "species_id": 791,
+  "species": "Larix lyallii",
+  "field": "taste_notes"
+ },
+ "3557": {
+  "action": "hold",
+  "reason": null,
+  "rule": "G3 non-European — hold",
+  "edited_text": null,
+  "species_id": 791,
+  "species": "Larix lyallii",
+  "field": "recipe"
+ },
+ "3559": {
+  "action": "hold",
+  "reason": null,
+  "rule": "excluded: medicinal — later round",
+  "edited_text": null,
+  "species_id": 851,
+  "species": "Rhytisma acerinum",
+  "field": "medicinal_notes"
+ },
+ "3561": {
+  "action": "hold",
+  "reason": null,
+  "rule": "excluded: medicinal — later round",
+  "edited_text": null,
+  "species_id": 852,
+  "species": "Lactarius pubescens",
+  "field": "medicinal_notes"
+ },
+ "3563": {
+  "action": "hold",
+  "reason": null,
+  "rule": "excluded: medicinal — later round",
+  "edited_text": null,
+  "species_id": 853,
+  "species": "Phlegmacium triumphans",
+  "field": "medicinal_notes"
+ },
+ "3711": {
+  "action": "hold",
+  "reason": null,
+  "rule": "excluded: medicinal — later round",
+  "edited_text": null,
+  "species_id": 854,
+  "species": "Trametopsis cervina",
+  "field": "medicinal_notes"
+ },
+ "3712": {
+  "action": "reject",
+  "reason": "Melvin census 22 Oct: placeholder — no medicinal content",
+  "rule": "G1 (listed)",
+  "edited_text": null,
+  "species_id": 855,
+  "species": "Corylus maxima",
+  "field": "medicinal_notes"
+ },
+ "3713": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census APPROVE)",
+  "edited_text": null,
+  "species_id": 143,
+  "species": "Picea orientalis",
+  "field": "taste_notes"
+ },
+ "3714": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census APPROVE)",
+  "edited_text": null,
+  "species_id": 143,
+  "species": "Picea orientalis",
+  "field": "medicinal_notes"
+ },
+ "3715": {
+  "action": "reject",
+  "reason": "Melvin census 22 Oct: no known food use",
+  "rule": "override reject",
+  "edited_text": null,
+  "species_id": 128,
+  "species": "Verbascum phlomoides",
+  "field": "taste_notes"
+ },
+ "3716": {
+  "action": "reject",
+  "reason": "Melvin census 22 Oct: no known food use",
+  "rule": "override reject",
+  "edited_text": null,
+  "species_id": 128,
+  "species": "Verbascum phlomoides",
+  "field": "recipe"
+ },
+ "3717": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census APPROVE)",
+  "edited_text": null,
+  "species_id": 134,
+  "species": "Polygonum aviculare",
+  "field": "taste_notes"
+ },
+ "3718": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census LOOK)",
+  "edited_text": null,
+  "species_id": 134,
+  "species": "Polygonum aviculare",
+  "field": "medicinal_notes"
+ },
+ "3719": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census APPROVE)",
+  "edited_text": null,
+  "species_id": 134,
+  "species": "Polygonum aviculare",
+  "field": "recipe"
+ },
+ "3720": {
+  "action": "reject",
+  "reason": "Melvin census 22 Oct: off-region phrasing: “North America”",
+  "rule": "default (census REJECT)",
+  "edited_text": null,
+  "species_id": 15,
+  "species": "Moehringia trinervia",
+  "field": "taste_notes"
+ },
+ "3721": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census APPROVE)",
+  "edited_text": null,
+  "species_id": 15,
+  "species": "Moehringia trinervia",
+  "field": "recipe"
+ },
+ "3722": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census APPROVE)",
+  "edited_text": null,
+  "species_id": 121,
+  "species": "Viola riviniana",
+  "field": "taste_notes"
+ },
+ "3723": {
+  "action": "reject",
+  "reason": "Melvin census 22 Oct: no known food use",
+  "rule": "override reject",
+  "edited_text": null,
+  "species_id": 209,
+  "species": "Prenanthes purpurea",
+  "field": "taste_notes"
+ },
+ "3724": {
+  "action": "reject",
+  "reason": "Melvin census 22 Oct: placeholder — no medicinal content",
+  "rule": "G1 (listed)",
+  "edited_text": null,
+  "species_id": 209,
+  "species": "Prenanthes purpurea",
+  "field": "medicinal_notes"
+ },
+ "3725": {
+  "action": "reject",
+  "reason": "Melvin census 22 Oct: no known food use",
+  "rule": "override reject",
+  "edited_text": null,
+  "species_id": 209,
+  "species": "Prenanthes purpurea",
+  "field": "recipe"
+ },
+ "3726": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census APPROVE)",
+  "edited_text": null,
+  "species_id": 59,
+  "species": "Stellaria apetala",
+  "field": "taste_notes"
+ },
+ "3727": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census APPROVE)",
+  "edited_text": null,
+  "species_id": 59,
+  "species": "Stellaria apetala",
+  "field": "recipe"
+ },
+ "3728": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census APPROVE)",
+  "edited_text": null,
+  "species_id": 60,
+  "species": "Valeriana officinalis",
+  "field": "taste_notes"
+ },
+ "3729": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census APPROVE)",
+  "edited_text": null,
+  "species_id": 64,
+  "species": "Quercus robur",
+  "field": "taste_notes"
+ },
+ "3730": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census LOOK)",
+  "edited_text": null,
+  "species_id": 64,
+  "species": "Quercus robur",
+  "field": "medicinal_notes"
+ },
+ "3731": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census APPROVE)",
+  "edited_text": null,
+  "species_id": 64,
+  "species": "Quercus robur",
+  "field": "recipe"
+ },
+ "3732": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census LOOK)",
+  "edited_text": null,
+  "species_id": 355,
+  "species": "Laetiporus sulphureus",
+  "field": "taste_notes"
+ },
+ "3733": {
+  "action": "reject",
+  "reason": "Melvin census 22 Oct: placeholder — no medicinal content",
+  "rule": "G1 (extra match)",
+  "edited_text": null,
+  "species_id": 355,
+  "species": "Laetiporus sulphureus",
+  "field": "medicinal_notes"
+ },
+ "3734": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census LOOK)",
+  "edited_text": null,
+  "species_id": 355,
+  "species": "Laetiporus sulphureus",
+  "field": "recipe"
+ },
+ "3735": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census APPROVE)",
+  "edited_text": null,
+  "species_id": 63,
+  "species": "Valeriana locusta",
+  "field": "taste_notes"
+ },
+ "3736": {
+  "action": "reject",
+  "reason": "Melvin census 22 Oct: placeholder — no medicinal content",
+  "rule": "G1 (listed)",
+  "edited_text": null,
+  "species_id": 63,
+  "species": "Valeriana locusta",
+  "field": "medicinal_notes"
+ },
+ "3737": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census APPROVE)",
+  "edited_text": null,
+  "species_id": 63,
+  "species": "Valeriana locusta",
+  "field": "recipe"
+ },
+ "3738": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census APPROVE)",
+  "edited_text": null,
+  "species_id": 68,
+  "species": "Syringa vulgaris",
+  "field": "taste_notes"
+ },
+ "3739": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census LOOK)",
+  "edited_text": null,
+  "species_id": 68,
+  "species": "Syringa vulgaris",
+  "field": "medicinal_notes"
+ },
+ "3740": {
+  "action": "edit_approve",
+  "reason": null,
+  "rule": "G4 strip 'None known' line",
+  "edited_text": "Lilac flowers are a strange and lovely thing to cook with. They taste of almost nothing at all, then give up a faint green floral note that lands somewhere between cucumber peel and honeysuckle, and they carry a perfume that survives heat better than you would expect. That makes them a poor man for heavy spice and a fine one for light batter and something sharp alongside — which is why I fry them the way my grandmother treated elderflowers, and serve them with a lemon syrup that does the seasoning work the flower can't.\n\n**Ingredients**\n\nFor the fritters\n- A generous double handful of lilac flowers, picked in full sun, in small intact trusses — shake them out, don't wash them, and pick out any brown or withered florets\n- 150g plain flour\n- 1 tbsp cornflour\n- A pinch of fine salt\n- 1 tsp baking powder\n- 200ml very cold sparkling water, maybe a splash more\n- Sunflower or light rapeseed oil, for frying\n\nFor the lemon and lilac syrup\n- 100g caster sugar\n- 80ml water\n- The pared zest and juice of one unwaxed lemon\n- A small handful of lilac florets, rubbed free of their green stems\n\n**Method**\n\nStart with the syrup, because it wants to be cold and the fritters want to be hot. Put the sugar, water and lemon zest in a small pan, bring it up gently until the sugar has gone, then let it bubble for two or three minutes until it just starts to thicken. Take it off the heat, stir in the lemon juice and the loose lilac florets, and leave it to steep and cool. Fish out the zest and flowers before you serve — they've done their job by then.\n\nNow the batter. Whisk the flour, cornflour, salt and baking powder together, then pour in the cold sparkling water and stir with a fork just until it comes together. Lumps are fine; a smooth batter is a tight batter, and you want this one loose and half-asleep. Let it sit a few minutes while the oil heats.\n\nGet a good depth of oil in a heavy pan — a couple of centimetres — up to about 180°C. If you haven't a thermometer, a drop of batter should sink and come back up fizzing within a couple of seconds.\n\nTake a lilac truss, hold it by the stem and dip the flower head into the batter so it's thinly coated, then lay it gently into the oil, flower-side down. Do three or four at a time, no more, or the oil drops and you get greasy fritters. They take barely a minute a side — you want them pale gold, not brown, because the flower's perfume burns off long before the batter does. Lift them onto kitchen paper, and keep them warm in a low oven while you finish the rest. Snip off the coarse stems before serving.\n\nPile them on a plate, spoon the cold syrup over the hot fritters at the table so it sizzles, and eat them with your fingers while they're still too hot to be sensible.\n\n**One variation**\n\nIf you want them savoury instead, drop the sugar from the syrup and steep the lilac in a little warmed honey and cider vinegar with a pinch of salt and a few cracked coriander seeds — serve that alongside, with the fritters hot from the pan and a sharp sheep's cheese on the side. The floral note holds up better against acid than it does against fat.",
+  "species_id": 68,
+  "species": "Syringa vulgaris",
+  "field": "recipe"
+ },
+ "3741": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census APPROVE)",
+  "edited_text": null,
+  "species_id": 69,
+  "species": "Veronica chamaedrys",
+  "field": "taste_notes"
+ },
+ "3742": {
+  "action": "edit_approve",
+  "reason": null,
+  "rule": "G4 strip 'None known' line",
+  "edited_text": "Germander speedwell is one of those plants that asks you to slow down. The leaves are mild and green-tasting with a faint bitterness that sharpens beautifully against fat and acid, and a gentle floral note that comes through when you steep them rather than cook them hard. This recipe uses the leaves two ways — steeped into a bright green oil and folded raw into a sharp, herby sauce — spooned over new potatoes and soft-boiled eggs. It's a spring lunch, nothing more complicated than that.\n\n**For the speedwell oil**\nA good handful of germander speedwell leaves — 40g or so, picked from clean ground away from roads and dog-walked verges\n150ml mild olive oil or rapeseed oil\nA pinch of fine salt flakes\n\n**For the sauce**\nAnother 20g speedwell leaves, finely chopped\n1 small shallot, minced\n1 tbsp capers, roughly chopped\nZest and juice of half a lemon\n4 tbsp good olive oil\nSea salt and black pepper\n\n**To serve**\n500g new potatoes, scrubbed\n4 eggs\nA few extra speedwell leaves, left whole\n\nFirst make the oil. Bring a small pan of water to the boil, drop the speedwell leaves in for barely fifteen seconds — just long enough to wake them and fix the colour — then lift them straight into a bowl of iced water. Squeeze them dry in a clean cloth, getting as much water out as you can. Blitz them with the oil and salt in a small processor, or pound them in a mortar if you have the patience, until you have a loose, vivid green oil. Let it sit for half an hour, then strain it through a fine sieve, pressing the solids to get every last drop. Don't rush this — the flavour deepens as it stands.\n\nFor the sauce, put the chopped speedwell, shallot, capers and lemon zest in a bowl. Add the lemon juice and olive oil, season, and stir. Taste it. It should be sharp, green and a little bit bitter at the back. Adjust with more lemon if it's flat, more salt if it's dull.\n\nBoil the potatoes in well-salted water until just tender, then drain and let them steam dry for a minute. Soft-boil the eggs — six and a half minutes from boiling, then straight into cold water and peel.\n\nTo serve, halve the warm potatoes, spoon over a little of the speedwell oil, and season. Break the eggs over the top, spoon the sauce generously over everything, and finish with a few whole leaves and another drizzle of the green oil. Eat outside if you can.\n\nIf you want to push it further, the sauce is excellent spooned over grilled mackerel or folded through warm barley — the bitterness cuts through oily fish and grain in a way that feels exactly right for early spring.",
+  "species_id": 69,
+  "species": "Veronica chamaedrys",
+  "field": "recipe"
+ },
+ "3743": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census APPROVE)",
+  "edited_text": null,
+  "species_id": 73,
+  "species": "Rumex conglomeratus",
+  "field": "taste_notes"
+ },
+ "3744": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census LOOK)",
+  "edited_text": null,
+  "species_id": 73,
+  "species": "Rumex conglomeratus",
+  "field": "medicinal_notes"
+ },
+ "3745": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census APPROVE)",
+  "edited_text": null,
+  "species_id": 73,
+  "species": "Rumex conglomeratus",
+  "field": "recipe"
+ },
+ "3746": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census APPROVE)",
+  "edited_text": null,
+  "species_id": 77,
+  "species": "Parietaria judaica",
+  "field": "medicinal_notes"
+ },
+ "3747": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census APPROVE)",
+  "edited_text": null,
+  "species_id": 236,
+  "species": "Larix decidua",
+  "field": "taste_notes"
+ },
+ "3748": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census APPROVE)",
+  "edited_text": null,
+  "species_id": 90,
+  "species": "Silene dioica",
+  "field": "taste_notes"
+ },
+ "3749": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census APPROVE)",
+  "edited_text": null,
+  "species_id": 90,
+  "species": "Silene dioica",
+  "field": "medicinal_notes"
+ },
+ "3750": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census APPROVE)",
+  "edited_text": null,
+  "species_id": 90,
+  "species": "Silene dioica",
+  "field": "recipe"
+ },
+ "3751": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census APPROVE)",
+  "edited_text": null,
+  "species_id": 97,
+  "species": "Populus tremula",
+  "field": "taste_notes"
+ },
+ "3752": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census APPROVE)",
+  "edited_text": null,
+  "species_id": 100,
+  "species": "Rosa canina",
+  "field": "taste_notes"
+ },
+ "3753": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census APPROVE)",
+  "edited_text": null,
+  "species_id": 101,
+  "species": "Vicia sativa",
+  "field": "taste_notes"
+ },
+ "3754": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census APPROVE)",
+  "edited_text": null,
+  "species_id": 102,
+  "species": "Vicia sepium",
+  "field": "taste_notes"
+ },
+ "3755": {
+  "action": "reject",
+  "reason": "Melvin census 22 Oct: placeholder — no medicinal content",
+  "rule": "G1 (listed)",
+  "edited_text": null,
+  "species_id": 102,
+  "species": "Vicia sepium",
+  "field": "medicinal_notes"
+ },
+ "3756": {
+  "action": "edit_approve",
+  "reason": null,
+  "rule": "override approve + G4 strip line",
+  "edited_text": "Bush vetch is one of those hedgerow plants that gives you very little and asks for nothing — a quiet, clambering thing with small blue-purple flowers and delicate tendrils that carry a genuine pea sweetness. The seeds are the part you cook, and they're worth the fiddly work precisely because they taste so cleanly of fresh peas — green, faintly sweet, with that leguminous depth that only comes from something growing in real soil. I treat them like a poor man's pea, and I mean that as a compliment.\n\n**Bush Vetch Seed & Barley Broth**\n\n*Serves four generously*\n\n**Ingredients**\n\nA good double handful of bush vetch pods — green and tender, picked from hedgerows you know are clean, away from roads and spray. You want enough to pod out to a couple of generous tablespoons of seed.\n150g pearl barley\nOne onion, finely chopped\nTwo sticks of celery, diced small\nA carrot, diced small\nThree cloves of garlic, sliced\nA bay leaf or two\nA sprig of thyme\nGood olive oil\nA litre and a half of light vegetable stock, or chicken stock if you're that way inclined\nSalt and black pepper\nA squeeze of lemon\nA handful of flat parsley, chopped\n\n**Method**\n\nFirst, the seeds. Pod them out — it's a meditation, not a chore, and you'll get less than you think, which is the point. Put them in a small pan, cover with cold water, bring to a boil and simmer for two or three minutes, then drain. They'll be tender and bright green. Set aside.\n\nNow the broth. Warm a good glug of olive oil in a heavy pan, add the onion, celery and carrot with a pinch of salt, and sweat them gently for ten minutes until soft and sweet but not coloured. Add the garlic, thyme and bay, cook another minute or two until the garlic smells like garlic and not like raw heat.\n\nTip in the barley and stir it through the vegetables for a minute — let it toast slightly in the oil. Pour in the stock, bring to a gentle simmer, and let it cook for forty minutes or so, until the barley is tender and the broth has thickened and gone slightly creamy. Stir it now and then. Season as you go, not just at the end.\n\nWhen the barley is ready, stir in the cooked vetch seeds, taste, and adjust — salt, plenty of black pepper, a squeeze of lemon to lift it. The vetch seeds should still be green and sweet against the earthy barley. Scatter the parsley over, drizzle a little more olive oil, and serve in deep bowls with good bread.\n\n**A thought**\n\nIf you find the seeds too fiddly — and nobody would blame you — the flowers and tender shoot tips scattered over the finished bowl are lovely, though I wouldn't push the shoots too hard. A spoonful of crème fraîche stirred through at the end, or a poached egg broken over the top, turns this from a broth into a supper. And it pairs beautifully with a dry cider, which is what I'd be drinking if I were sat in the garden eating it.",
+  "species_id": 102,
+  "species": "Vicia sepium",
+  "field": "recipe"
+ },
+ "3757": {
+  "action": "reject",
+  "reason": "Melvin census 22 Oct: placeholder — no medicinal content",
+  "rule": "G1 (listed)",
+  "edited_text": null,
+  "species_id": 162,
+  "species": "Epilobium tetragonum",
+  "field": "medicinal_notes"
+ },
+ "3758": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census APPROVE)",
+  "edited_text": null,
+  "species_id": 520,
+  "species": "Rumex acetosa",
+  "field": "taste_notes"
+ },
+ "3759": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census APPROVE)",
+  "edited_text": null,
+  "species_id": 520,
+  "species": "Rumex acetosa",
+  "field": "medicinal_notes"
+ },
+ "3760": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census APPROVE)",
+  "edited_text": null,
+  "species_id": 520,
+  "species": "Rumex acetosa",
+  "field": "recipe"
+ },
+ "3761": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census LOOK)",
+  "edited_text": null,
+  "species_id": 562,
+  "species": "Cymbalaria muralis",
+  "field": "medicinal_notes"
+ },
+ "3762": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census APPROVE)",
+  "edited_text": null,
+  "species_id": 406,
+  "species": "Sedum album",
+  "field": "taste_notes"
+ },
+ "3763": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census LOOK)",
+  "edited_text": null,
+  "species_id": 406,
+  "species": "Sedum album",
+  "field": "medicinal_notes"
+ },
+ "3764": {
+  "action": "edit_approve",
+  "reason": null,
+  "rule": "G4 strip 'None known' line",
+  "edited_text": "White stonecrop is one of those plants that gives you something for nothing — it grows where almost nothing else will, on walls and roofs and gravel, and the small fleshy leaves carry a clean, faintly cucumber-sour snap that sharpens as the season runs on. It's at its best in spring and early summer, before the flower stems shoot up and the leaves turn woody and bitter. Pick only the plump rosettes, leave the roots to carry on, and wash them well — they hold grit in the leaf joints like nothing else.\n\nWhat I do with it is a quick pickle, because the acidity is the making of it, and pickled white stonecrop is the sort of thing that lifts a plate of cold lamb or a bowl of good yoghurt into something you remember. It keeps for weeks and gets better for a fortnight.\n\n**Ingredients**\n\n- A good double handful of white stonecrop leaves and tender rosettes, washed and shaken dry\n- 200ml white wine vinegar\n- 100ml water\n- 1 heaped tsp fine sea salt\n- 1 tsp caster sugar\n- A few strips of lemon peel, pared thin\n- 1 small clove garlic, sliced\n- A pinch of chilli flakes\n- A few black peppercorns\n\n**Method**\n\nPick the stonecrop over on the bench. You want the tight little rosettes whole and the larger leaves separated. Discard anything that's gone limp or yellowed at the base, and get rid of any stem that's started to toughen — that's the line between a clean crunch and a mouthful of gristle. Give it a final rinse in cold water, spin it dry, and pack it loosely into a sterilised jar with the garlic, lemon peel, chilli, and peppercorns. Don't cram it; leave a little headroom.\n\nNow the brine. Bring the vinegar, water, salt, and sugar to a boil in a small pan, stirring until everything dissolves, then pour it over the stonecrop while it's still hot. It'll go a brighter, paler green as the heat hits it — that's what you want. Seal the jar and leave it somewhere cool for at least three days before you eat it. It'll be sharp and vegetal at that point, and it'll keep softening and rounding out for a fortnight or more.\n\nEat it straight from the jar with cold meat, fold it through a grain salad, or lay a few pieces over grilled fish with a slick of good oil.\n\n**A variation —** swap half the vinegar for the juice of a preserved lemon and leave out the fresh peel; it turns the pickle warmer and more perfumed, and it's very good alongside anything off the fire.",
+  "species_id": 406,
+  "species": "Sedum album",
+  "field": "recipe"
+ },
+ "3765": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census APPROVE)",
+  "edited_text": null,
+  "species_id": 351,
+  "species": "Lunaria annua",
+  "field": "taste_notes"
+ },
+ "3766": {
+  "action": "reject",
+  "reason": "Melvin census 22 Oct: placeholder — no medicinal content",
+  "rule": "G1 (listed)",
+  "edited_text": null,
+  "species_id": 351,
+  "species": "Lunaria annua",
+  "field": "medicinal_notes"
+ },
+ "3767": {
+  "action": "edit_approve",
+  "reason": null,
+  "rule": "G4 strip 'None known' line",
+  "edited_text": "Honesty is one of those plants that rewards you twice — once in the garden, once in the kitchen — provided you understand what each part is doing and when to catch it. The root is at its best before the plant flowers, when it's still pale and firm in the soil rather than the woody, spent thing it becomes once the purple flowers open and the seed pods start to form. That timing discipline is everything here: lift the root in early spring, before a single flower shows, and you have something quietly wonderful — sweet, faintly radishy, with a clean mineral snap that cooks beautifully under heat.\n\nThe roots you want are the pencil-thick ones, not the fat woody crowns the plant builds as it ages. Scrub them hard rather than peeling — you lose too much. This is a fire-and-fat dish: good olive oil, a hot pan, salt, and enough garlic to make you feel it's worth doing. Nothing clever, nothing perfumed. The root's own sweetness does the work.\n\n**Ingredients**\n\nA generous handful of honesty root per person, pencil-thick and lifted before flowering, scrubbed well and left whole or halved lengthways if fat. Olive oil. Three fat cloves of garlic, thinly sliced. A good pinch of dried chilli. Fine sea salt. A squeeze of lemon. A handful of flat parsley, chopped. Good bread, to serve.\n\n**Method**\n\nGet a heavy pan properly hot — cast iron if you've got it — and add a decent slick of olive oil. Lay the roots in cut-side down if you've halved them, and leave them alone. Don't poke, don't turn. You want a dark, burnished gold on that cut face before you move them. Give it three or four minutes depending on girth; you'll hear the sizzle change pitch as the moisture goes and the sugars catch. Turn them once and give them another two or three minutes.\n\nNow the garlic and chilli go in, off the direct heat of the roots so the garlic sweats and softens rather than scorches — thirty seconds or so, just until it smells sweet and floral rather than sharp. Toss everything together, hit it with salt, a squeeze of lemon, and the parsley off the heat so it stays green. Taste one. The bitterness you might expect should have gone; what's left should be savoury, a little sweet, with a peppery finish at the back of your throat.\n\nTip it all onto a warm plate and mop the garlicky oil up with bread. Serve with something plain alongside — a piece of grilled fish, a soft white cheese, a bowl of good beans — so the roots are the thing you notice.\n\n**Variation**\n\nRoast them instead when you want less fuss: whole, oiled, salted, in a hot oven for twenty minutes, then tossed in a warm dressing of lemon, crushed garlic and a spoonful of good mustard whisked with olive oil, and scattered with sea salt flakes while still hot. The mustard brings out the root's own peppery edge and the leftovers, cold, are excellent on bread the next day.",
+  "species_id": 351,
+  "species": "Lunaria annua",
+  "field": "recipe"
+ },
+ "3768": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census APPROVE)",
+  "edited_text": null,
+  "species_id": 431,
+  "species": "Crataegus azarolus",
+  "field": "taste_notes"
+ },
+ "3769": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census APPROVE)",
+  "edited_text": null,
+  "species_id": 431,
+  "species": "Crataegus azarolus",
+  "field": "medicinal_notes"
+ },
+ "3770": {
+  "action": "edit_approve",
+  "reason": null,
+  "rule": "G4 strip 'None known' line",
+  "edited_text": "Azarole is the Mediterranean hawthorn, and in the warm countries where it ripens properly it turns into something quite different from the austere fruit of our own hedgerows. The pulp softens to a fragrant, sugary sweetness with just enough acid behind it to keep you interested, and the trick is to coax that fragrance out without letting the fruit collapse into a purée. I like it roasted hard and fast with something rich and slightly savoury — the acid cuts through the fat and the sweetness deepens in the oven until it tastes almost of quince and rose.\n\n**Roast azarole with honey, thyme and sheep's yoghurt**\n\nServes four.\n\nYou'll need about 500g of ripe azarole fruit, picked over and stalks removed. Leave the little seed-stone clusters in — they're part of the charm and the fruit holds together around them, cherry-like. Alongside that: three tablespoons of good runny honey, a small handful of wild thyme or lemon thyme, stripped from its stalk; the pared zest of half a lemon; two or three tablespoons of olive oil; a pinch of flaky sea salt; and a tub of thick sheep's yoghurt, maybe 300g, to serve. A few toasted walnuts scattered over the top are a fine addition if you have them.\n\nHeat your oven to 220°C. Tip the fruit into a roasting tin in a single layer — don't crowd them, or they'll steam instead of colour. Trickle over the olive oil and half the honey, scatter the thyme and lemon zest, and add the salt. Roll everything about with your hands so each fruit is slicked. Roast for twelve to fifteen minutes, shaking the tin once, until the skins have split and blackened in patches and the juices have run and started to catch and caramelise at the edges of the tin. That catching is where the flavour is.\n\nPull the tin out and spoon over the rest of the honey while everything is still hot, so it loosens the sticky juices into a syrup. Taste one — if the fruit is on the sharp side, a little more honey; if it's already sweet and fragrant, leave it.\n\nSpoon the yoghurt onto warm plates, spreading it out with the back of the spoon. Pile the hot fruit and all its sticky roasting juices over the top, scatter the walnuts if you're using them, and eat straight away, while the cold yoghurt and hot fruit are still arguing with each other.\n\n**A variation:** the same tin, cooled, stirred through a little red wine vinegar and a crushed garlic clove, makes an extraordinary relish for roast lamb or a sharp hard cheese — the sweetness and acid do the work of a chutney in half the time.",
+  "species_id": 431,
+  "species": "Crataegus azarolus",
+  "field": "recipe"
+ },
+ "3771": {
+  "action": "reject",
+  "reason": "Melvin census 22 Oct: raw Apiaceae leaves / medicinal text in the taste field",
+  "rule": "override reject",
+  "edited_text": null,
+  "species_id": 603,
+  "species": "Pimpinella saxifraga",
+  "field": "taste_notes"
+ },
+ "3772": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census LOOK)",
+  "edited_text": null,
+  "species_id": 603,
+  "species": "Pimpinella saxifraga",
+  "field": "medicinal_notes"
+ },
+ "3773": {
+  "action": "reject",
+  "reason": "Melvin census 22 Oct: raw Apiaceae leaves / medicinal text in the taste field",
+  "rule": "override reject",
+  "edited_text": null,
+  "species_id": 603,
+  "species": "Pimpinella saxifraga",
+  "field": "recipe"
+ },
+ "3774": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census APPROVE)",
+  "edited_text": null,
+  "species_id": 604,
+  "species": "Rubus canescens",
+  "field": "taste_notes"
+ },
+ "3775": {
+  "action": "reject",
+  "reason": "Melvin census 22 Oct: placeholder — no medicinal content",
+  "rule": "G1 (listed)",
+  "edited_text": null,
+  "species_id": 604,
+  "species": "Rubus canescens",
+  "field": "medicinal_notes"
+ },
+ "3776": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census APPROVE)",
+  "edited_text": null,
+  "species_id": 604,
+  "species": "Rubus canescens",
+  "field": "recipe"
+ },
+ "3777": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census APPROVE)",
+  "edited_text": null,
+  "species_id": 605,
+  "species": "Ononis spinosa",
+  "field": "medicinal_notes"
+ },
+ "3778": {
+  "action": "edit_approve",
+  "reason": null,
+  "rule": "G4 strip 'None known' line",
+  "edited_text": "Spiny restharrow is a plant most people walk past, and that's their loss. The young shoots, picked before the spines harden, have a green, faintly peppery bite with a sweet, liquorice-leaning finish that reminds me of samphire crossed with tarragon. It grows on dry, chalky banks and rough pasture, and those conditions concentrate its flavour — the tougher the ground, the better the shoot tastes.\n\nI treat the shoots like a spring vegetable, cooked briefly and dressed while warm so they drink up everything you put on them. The roots are chewed for their liquorice flavour and that same aniseed note runs through the shoots, so I lean into it — fennel seed, a little lemon, good olive oil. The flowers go raw over the top at the end, because they're pretty and they carry a soft sweetness that lifts the whole plate.\n\n**Ingredients**\n\nServes four as a side, or two with bread and something grilled alongside.\n\nA good double handful of young spiny restharrow shoots — 250g or so, picked young and tender, before the spines stiffen\n3 tbsp best olive oil\n1 tsp fennel seeds\n1 small clove garlic, bruised but left whole\nZest and juice of half a lemon\nA pinch of flaky sea salt\nA small handful of the flowers, for finishing\nBread, to serve, if you like\n\n**Method**\n\nPick your shoots early in the day, from clean ground away from roads. You want the top four or five inches, still soft between the fingers. If a stem resists when you bend it, it's gone over — leave it. Rinse them well in cold water and shake dry. Don't blanch them ahead; they lose that green pepperiness fast.\n\nWarm the olive oil gently in a wide pan with the fennel seeds and the bruised garlic. Keep the heat low — you're infusing, not frying. After a couple of minutes, when the fennel smells sweet and toasty, lift out the garlic and discard it. It's done its job.\n\nTurn the heat up to medium, add the shoots, and toss them through the oil. You want them just wilted and glossy — two, three minutes at most. They should still have a bit of snap. Season with the salt while they're hot, then take the pan off the heat and add the lemon zest and a good squeeze of juice. Taste one. If it needs more lemon, add it. If the liquorice note is fighting the acid, add a drop more oil to round it out.\n\nTip them onto a warm plate, spoon over any oil left in the pan, and scatter the flowers over the top. Eat straight away, with bread to mop up the dressing.\n\n**One variation**\n\nGrill a piece of firm white fish or some good bread and lay it on the plate first, spooning the shoots and their dressing over while everything's hot — the juices soak down and the liquorice note works beautifully against something charred.",
+  "species_id": 605,
+  "species": "Ononis spinosa",
+  "field": "recipe"
+ },
+ "3779": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census APPROVE)",
+  "edited_text": null,
+  "species_id": 759,
+  "species": "Oxalis stricta",
+  "field": "taste_notes"
+ },
+ "3780": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census LOOK)",
+  "edited_text": null,
+  "species_id": 759,
+  "species": "Oxalis stricta",
+  "field": "medicinal_notes"
+ },
+ "3781": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census APPROVE)",
+  "edited_text": null,
+  "species_id": 759,
+  "species": "Oxalis stricta",
+  "field": "recipe"
+ },
+ "3782": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census LOOK)",
+  "edited_text": null,
+  "species_id": 761,
+  "species": "Angelica sylvestris",
+  "field": "taste_notes"
+ },
+ "3783": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census LOOK)",
+  "edited_text": null,
+  "species_id": 761,
+  "species": "Angelica sylvestris",
+  "field": "medicinal_notes"
+ },
+ "3784": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census LOOK)",
+  "edited_text": null,
+  "species_id": 764,
+  "species": "Artemisia absinthium",
+  "field": "taste_notes"
+ },
+ "3785": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census LOOK)",
+  "edited_text": null,
+  "species_id": 764,
+  "species": "Artemisia absinthium",
+  "field": "medicinal_notes"
+ },
+ "3786": {
+  "action": "reject",
+  "reason": "Melvin census 22 Oct: wormwood recipe",
+  "rule": "override reject",
+  "edited_text": null,
+  "species_id": 764,
+  "species": "Artemisia absinthium",
+  "field": "recipe"
+ },
+ "3787": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census APPROVE)",
+  "edited_text": null,
+  "species_id": 768,
+  "species": "Geranium robertianum",
+  "field": "taste_notes"
+ },
+ "3788": {
+  "action": "approve",
+  "reason": null,
+  "rule": "default (census LOOK)",
+  "edited_text": null,
+  "species_id": 768,
+  "species": "Geranium robertianum",
+  "field": "medicinal_notes"
+ },
+ "3789": {
+  "action": "reject",
+  "reason": "Melvin census 22 Oct: no known food use",
+  "rule": "override reject",
+  "edited_text": null,
+  "species_id": 768,
+  "species": "Geranium robertianum",
+  "field": "recipe"
+ }
+}

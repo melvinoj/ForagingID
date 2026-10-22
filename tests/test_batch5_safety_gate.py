@@ -350,7 +350,8 @@ def test_every_page_loads_the_helper_and_sw_caches_it():
     for p in PAGES:
         assert '<script src="/static/js/safety-gate.js"></script>' in _src(p), p
     sw = _src("frontend/static/sw.js")
-    assert "'/static/js/safety-gate.js'" in sw and "foragingid-v9" in sw
+    # v11: dry-run.js joined the app shell (22 Oct 2026, enrichment safety).
+    assert "'/static/js/safety-gate.js'" in sw and "foragingid-v11" in sw
 
 
 def test_no_page_rederives_the_rule():

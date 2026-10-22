@@ -336,21 +336,6 @@ def _build_registry() -> List[Dict]:
         },
         # ── Sharing ───────────────────────────────────────────────────────
         {
-            "key": "guest_mode_enabled",
-            "default": False,
-            "type": "bool",
-            "label": "Workshop guest mode",
-            "description": (
-                "When OFF (default): ngrok connections resolve as curator — "
-                "your own phone records over the tunnel with no restrictions. "
-                "Turn ON only during workshops so participants get read-only guest access."
-            ),
-            "group": "Sharing",
-            # Managed by the dedicated toggle in the Share with Guests card;
-            # hidden from the generic settings renderer to avoid duplication.
-            "hidden": True,
-        },
-        {
             "key": "guest_show_sourced_fields",
             "default": False,
             "type": "bool",

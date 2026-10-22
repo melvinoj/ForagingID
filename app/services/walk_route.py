@@ -311,9 +311,12 @@ def insert_cheapest(saved: list, new: list, closed: bool) -> list:
 def plan_reroute(old_waypoints: list, route: dict, new_stops: list) -> dict:
     """new_stops: [{lat, lng, old_index (0-based saved position, or None for a
     new stop)}] in the new order. Returns {legs, runs, closed} where each leg is
-    {i, j, kind: 'keep'|'route', range: (a, b) old vertex range for 'keep'} and
-    runs are lists of consecutive stop indices to send to ORS (≤ ORS_MAX_POINTS
-    each, adjacent runs share an end stop)."""
+    {i, j, kind: 'keep'|'route', range: (a, b) old vertex range for 'keep',
+    reverse: bool} and runs are lists of consecutive stop indices to send to
+    ORS (≤ ORS_MAX_POINTS each, adjacent runs share an end stop).
+    A stored leg walked the other way (new i→j = old b→a, as 2-opt produces)
+    is kept too, its geometry and dashes reversed (reverse=True): a path
+    walks both ways, so it never goes back to ORS."""
     coords = line_coords(route)
     closed = bool(coords) and is_closed(coords)
     v = stop_vertex_indices(coords, old_waypoints, circular=closed) if coords else []
@@ -322,14 +325,19 @@ def plan_reroute(old_waypoints: list, route: dict, new_stops: list) -> dict:
     legs = []
     for i, j in pairs:
         a, b = new_stops[i].get("old_index"), new_stops[j].get("old_index")
-        keep = None
+        keep, rev = None, False
         if coords and a is not None and b is not None:
             if b == a + 1:
                 keep = (v[a], v[b])
             elif closed and j == 0 and a == n_old - 1 and b == 0:
                 keep = (v[a], len(coords) - 1)                 # the stored closing leg
-        legs.append({"i": i, "j": j, "kind": "keep" if keep and keep[1] > keep[0] else "route",
-                     "range": keep if keep and keep[1] > keep[0] else None})
+            elif b == a - 1:
+                keep, rev = (v[b], v[a]), True                 # a stored leg, walked backwards
+            elif closed and i == 0 and a == 0 and b == n_old - 1:
+                keep, rev = (v[b], len(coords) - 1), True      # the closing leg, walked backwards
+        ok = bool(keep) and keep[1] > keep[0]
+        legs.append({"i": i, "j": j, "kind": "keep" if ok else "route",
+                     "range": keep if ok else None, "reverse": rev if ok else False})
     runs, cur = [], []
     for leg in legs:
         if leg["kind"] == "route":
@@ -367,7 +375,10 @@ def assemble_reroute(route: dict, new_stops: list, plan: dict, routed: dict) -> 
         i, j = leg["i"], leg["j"]
         if leg["kind"] == "keep":
             a, b = leg["range"]
-            add(old[a:b + 1], old_flags[a:b])
+            if leg.get("reverse"):
+                add(old[a:b + 1][::-1], old_flags[a:b][::-1])
+            else:
+                add(old[a:b + 1], old_flags[a:b])
             continue
         seg = routed[(i, j)]["coords"]
         straight = _hav([new_stops[i]["lng"], new_stops[i]["lat"]], [new_stops[j]["lng"], new_stops[j]["lat"]])
@@ -386,3 +397,99 @@ def assemble_reroute(route: dict, new_stops: list, plan: dict, routed: dict) -> 
     out = _set_meta(out, coords, flags)
     out["foragingid"].pop("straight_note", None)          # described old leg numbers — no longer true
     return out, line_length_m(coords), report
+
+
+# ── stop order by geometry (tidy) ────────────────────────────────────────────
+# The ONLY definition of a walk's stop order: Build walk (new walks, via
+# POST /api/walk/tidy-order) and "Tidy route order" on a saved walk. Pure, no
+# ORS: straight-line distances between stops. Nearest-neighbour from the first
+# stop (or a given order), then 2-opt until no reversal shortens the walk —
+# which also leaves no two legs crossing.
+
+def _pt(s) -> list:
+    return [s["lng"], s["lat"]]
+
+
+def order_length_m(stops: list, order: list, circular: bool) -> float:
+    """Straight-line length of the walk visiting stops in this order."""
+    return sum(_hav(_pt(stops[a]), _pt(stops[b])) for a, b in order_legs(order, circular))
+
+
+def order_legs(order: list, circular: bool) -> list:
+    """[(a, b), …] stop-index pairs walked in this order."""
+    legs = [(order[k], order[k + 1]) for k in range(len(order) - 1)]
+    if circular and len(order) > 2:
+        legs.append((order[-1], order[0]))
+    return legs
+
+
+def crossing_legs(stops: list, order: list, circular: bool) -> list:
+    """Pairs of straight legs that cross (legs sharing a stop never count).
+    Planar test on an equirectangular projection — exact enough at walk scale."""
+    if not stops:
+        return []
+    k = math.cos(math.radians(sum(s["lat"] for s in stops) / len(stops)))
+    P = lambda i: (stops[i]["lng"] * k, stops[i]["lat"])
+
+    def orient(a, b, c):
+        return (b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0])
+
+    legs = order_legs(order, circular)
+    out = []
+    for x in range(len(legs)):
+        for y in range(x + 1, len(legs)):
+            (a, b), (c, d) = legs[x], legs[y]
+            if len({a, b, c, d}) < 4:
+                continue
+            p1, p2, p3, p4 = P(a), P(b), P(c), P(d)
+            if orient(p3, p4, p1) * orient(p3, p4, p2) < 0 and orient(p1, p2, p3) * orient(p1, p2, p4) < 0:
+                out.append((legs[x], legs[y]))
+    return out
+
+
+def _nearest_neighbour(stops: list, start: int) -> list:
+    left = [i for i in range(len(stops)) if i != start]
+    order = [start]
+    while left:
+        last = _pt(stops[order[-1]])
+        nxt = min(left, key=lambda q: (_hav(last, _pt(stops[q])), q))
+        order.append(nxt)
+        left.remove(nxt)
+    return order
+
+
+def _two_opt(stops: list, order: list, circular: bool) -> list:
+    """Reverse order[i..k] while that shortens the walk; position 0 never moves.
+    Point-to-point: the walk may end anywhere (the last leg has no successor)."""
+    order = list(order)
+    n = len(order)
+    D = lambda a, b: _hav(_pt(stops[a]), _pt(stops[b]))
+    improved = True
+    while improved:
+        improved = False
+        for i in range(1, n - 1):
+            for k in range(i + 1, n):
+                a, b, c = order[i - 1], order[i], order[k]
+                d = order[k + 1] if k + 1 < n else (order[0] if circular else None)
+                before = D(a, b) + (D(c, d) if d is not None else 0.0)
+                after = D(a, c) + (D(b, d) if d is not None else 0.0)
+                if after < before - 1e-6:
+                    order[i:k + 1] = order[i:k + 1][::-1]
+                    improved = True
+    return order
+
+
+def tidy_order(stops: list, circular: bool, fixed_start: int = 0, order: Optional[list] = None) -> list:
+    """Stop order (indices into stops; items need lat/lng) with stops[fixed_start]
+    first: nearest-neighbour from it, or from the given order (a saved walk —
+    2-opt from its current order changes the fewest legs), then 2-opt."""
+    n = len(stops)
+    if order is not None:
+        order = list(order)
+        if sorted(order) != list(range(n)) or (n and order[0] != fixed_start):
+            raise RouteError("order must list every stop once, starting at the fixed stop")
+    if n < 3:
+        return order if order is not None else ([fixed_start] + [i for i in range(n) if i != fixed_start] if n else [])
+    if order is None:
+        order = _nearest_neighbour(stops, fixed_start)
+    return _two_opt(stops, order, circular)

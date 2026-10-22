@@ -832,7 +832,7 @@ async function mintToken() {
     // Show reveal box
     const reveal = document.getElementById('token-reveal');
     document.getElementById('token-string').textContent = tok.token;
-    const shareUrl = `${location.origin}/?token=${tok.token}`;
+    const shareUrl = `${await _refreshJoinBase()}/join/${tok.token}`;   // one-time link (batch 7)
     document.getElementById('token-link').textContent = shareUrl;
     reveal.classList.add('visible');
 
@@ -848,9 +848,21 @@ async function mintToken() {
   }
 }
 
+// One-time /join links are built on the https share address when sharing is on
+// (the address a participant's phone can reach), else on this page's origin.
+let _joinBase = location.origin;
+async function _refreshJoinBase() {
+  try {
+    const d = await fetch('/api/sharing/status').then(r => r.ok ? r.json() : {});
+    _joinBase = (d.active && d.url) ? d.url.replace(/\/+$/, '') : location.origin;
+  } catch (_) { _joinBase = location.origin; }
+  return _joinBase;
+}
+_refreshJoinBase();
+
 function copyToken() {
   const tok = document.getElementById('token-string').textContent;
-  navigator.clipboard.writeText(`${location.origin}/?token=${tok}`)
+  navigator.clipboard.writeText(`${_joinBase}/join/${tok}`)
     .then(() => _toast('Link copied'))
     .catch(() => _toast('Copy failed', true));
 }

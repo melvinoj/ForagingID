@@ -509,20 +509,19 @@
 
   <!-- ── Sharing section ──────────────────────────────────────────────── -->
   <style>
-    /* P3 — Share with Guests collapsible */
+    /* P3 — Your devices & sharing collapsible */
     #sharing-group.collapsed .sharing-caret { transform: rotate(-90deg); }
     .sharing-caret { margin-left: auto; font-size: 0.8rem; color: #889; transition: transform .15s; }
   </style>
   <div class="settings-group" id="sharing-group" style="margin-bottom:20px">
     <div class="group-header" onclick="toggleSharing()" style="cursor:pointer">
       <span style="font-size:1rem">🌐</span>
-      <span class="group-title">Share with Guests</span>
+      <span class="group-title">Your devices &amp; sharing</span>
       <span class="sharing-caret">▾</span>
     </div>
     <div class="sharing-body" style="padding:16px">
       <p style="font-size:0.82rem;color:#555;margin-bottom:14px;line-height:1.5">
-        Generate a read-only shareable link via ngrok. Guests can view the map,
-        species pages, and plan walks — no editing or access to admin pages.
+        Guests are invited from the Workshops page.
       </p>
 
       <!-- Status row -->
@@ -530,7 +529,7 @@
         <span id="sharing-indicator"
           style="display:inline-flex;align-items:center;gap:6px;font-size:0.82rem;color:#888">
           <span id="sharing-dot" style="width:8px;height:8px;border-radius:50%;background:#ccc;display:inline-block"></span>
-          <span id="sharing-text">Not sharing</span>
+          <span id="sharing-text">Sharing off</span>
         </span>
         <button id="sharing-start-btn" onclick="startSharing()"
           style="padding:6px 16px;background:#2d5016;color:white;border:none;border-radius:6px;
@@ -544,42 +543,35 @@
         </button>
       </div>
 
-      <!-- Link + QR (shown when active) -->
-      <div id="sharing-link-panel" style="display:none">
-        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:12px">
-          <input id="sharing-url-input" type="text" readonly
-            style="flex:1;min-width:200px;padding:6px 10px;border:1px solid #c5d9a0;
-                   border-radius:6px;font-size:0.82rem;background:#f8faf4;color:#2d5016;
-                   font-weight:600">
-          <button onclick="copyShareLink()"
-            style="padding:6px 12px;background:#f0f4e8;border:1px solid #c5d9a0;
-                   border-radius:6px;font-size:0.8rem;cursor:pointer;color:#2d5016">
-            📋 Copy
-          </button>
-        </div>
-        <div id="sharing-qr" style="text-align:center;margin-top:8px"></div>
-        <p style="font-size:0.72rem;color:#999;margin-top:10px;line-height:1.4">
-          Share this link with guests. They can view the map and species data but cannot
-          scan, review, edit, or access settings.
-        </p>
-      </div>
+      <!-- The bare share address is not shown (it opens nothing on its own).
+           /join links are still built on it: curator devices server-side
+           (POST /api/sharing/devices), participants on Workshops / Lists. -->
 
-      <!-- Workshop guest mode toggle -->
-      <div style="margin-top:14px;padding:10px 12px;background:#f8faf4;border:1px solid #ddebc8;border-radius:8px">
-        <div style="display:flex;align-items:center;justify-content:space-between;gap:12px">
+      <!-- Curator devices (batch 7): long-lived, full access over https -->
+      <div id="devices-box" style="margin-top:14px;padding:10px 12px;background:#f8faf4;border:1px solid #ddebc8;border-radius:8px">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
           <div>
-            <div style="font-size:0.82rem;font-weight:600;color:#2d5016">Workshop guest mode</div>
+            <div style="font-size:0.82rem;font-weight:600;color:#2d5016">Curator devices</div>
             <div style="font-size:0.75rem;color:#667;margin-top:2px;line-height:1.4">
-              Off: your phone records over ngrok as curator (no restrictions).<br>
-              On: turn on only during workshops — participants get read-only access.
+              Full access over the https share link. Each device gets a one-time link.
             </div>
           </div>
-          <label class="fm-toggle" style="flex-shrink:0">
-            <input type="checkbox" id="guest-mode-cb" onchange="_saveGuestMode(this.checked)">
-            <span class="fm-slider"></span>
-          </label>
+          <button id="device-add-btn" onclick="addDevice()" style="display:none;padding:6px 12px;background:#2d5016;color:white;
+            border:none;border-radius:6px;font-size:0.8rem;cursor:pointer;font-weight:600">＋ Add device</button>
         </div>
-        <div id="guest-mode-status" style="font-size:0.72rem;margin-top:6px;color:#888"></div>
+        <div id="device-add-note" style="display:none;font-size:0.72rem;color:#888;margin-top:6px">
+          New device links can only be made on the laptop.
+        </div>
+        <div id="device-new" style="display:none;margin-top:10px;padding:10px;background:#fff;border:1px solid #c5d9a0;border-radius:6px">
+          <div style="font-size:0.78rem;font-weight:600;color:#2d5016;margin-bottom:6px">
+            One-time link for <span id="device-new-name"></span> — open it on that device. Shown only now.
+          </div>
+          <input id="device-new-url" type="text" readonly
+            style="width:100%;box-sizing:border-box;padding:6px 10px;border:1px solid #c5d9a0;border-radius:6px;
+                   font-size:0.78rem;background:#f8faf4;color:#2d5016">
+          <div id="device-new-qr" style="text-align:center;margin-top:8px"></div>
+        </div>
+        <div id="device-list" style="margin-top:10px;font-size:0.78rem;color:#888">Loading…</div>
       </div>
 
       <!-- Local network section — always visible -->
@@ -605,7 +597,8 @@
           </button>
         </div>
         <p style="font-size:0.72rem;color:#999;margin-top:8px;line-height:1.4">
-          Full access. Works when your device is on the same network or hotspot.
+          Works with a workshop participant link on the same network or hotspot.
+          Curator devices use the https share link only.
         </p>
       </div>
     </div>
@@ -1187,7 +1180,7 @@ window._saveFmThreshold = function (v) {
 loadSettings();
 loadSharingStatus();
 loadLanUrl();
-_loadGuestMode();
+loadDevices();
 loadSnapshots();
 loadBackupExternalStatus();
 loadCacheStatus();
@@ -1499,6 +1492,8 @@ async function synSrcRemove(domain) {
 // ── AI draft backfill ─────────────────────────────────────────────────────────
 
 async function runDraftBackfill() {
+  // Dry run first, before any UI change (Melvin, 22 Oct 2026) — nothing runs until confirmed.
+  if (!(await lmDryRunCheck('/api/drafts/backfill', { method: 'POST' }, 'Run the AI draft backfill?'))) return;
   const btn      = document.getElementById('btn-draft-backfill');
   const statusEl = document.getElementById('draft-backfill-status');
   if (btn) { btn.disabled = true; btn.textContent = '⏳ Starting…'; }
@@ -1596,23 +1591,17 @@ function _updateSharingUI(d) {
   const text   = document.getElementById('sharing-text');
   const startBtn = document.getElementById('sharing-start-btn');
   const stopBtn  = document.getElementById('sharing-stop-btn');
-  const panel  = document.getElementById('sharing-link-panel');
-  const input  = document.getElementById('sharing-url-input');
 
   if (d.active && d.url) {
     if (dot)   { dot.style.background = '#22c55e'; }
-    if (text)  { text.textContent = 'Sharing active'; text.style.color = '#166534'; }
+    if (text)  { text.textContent = 'Sharing on'; text.style.color = '#166534'; }
     if (startBtn) startBtn.style.display = 'none';
     if (stopBtn)  stopBtn.style.display  = '';
-    if (panel)  panel.style.display = '';
-    if (input)  input.value = d.url;
-    _loadQR(d.url);
   } else {
     if (dot)   { dot.style.background = '#ccc'; }
-    if (text)  { text.textContent = 'Not sharing'; text.style.color = '#888'; }
+    if (text)  { text.textContent = 'Sharing off'; text.style.color = '#888'; }
     if (startBtn) startBtn.style.display = '';
     if (stopBtn)  stopBtn.style.display  = 'none';
-    if (panel)  panel.style.display = 'none';
   }
 }
 
@@ -1624,7 +1613,7 @@ async function startSharing() {
     const d = await r.json();
     if (!r.ok) throw new Error(d.detail || 'HTTP ' + r.status);
     _updateSharingUI({ active: true, url: d.url });
-    _showToast('✓ Sharing started — link is live');
+    _showToast('✓ Sharing on');
   } catch (e) {
     _showToast('✗ ' + (e.message || 'Failed to start sharing'), true);
     if (btn) { btn.disabled = false; btn.textContent = '📡 Start sharing'; }
@@ -1643,33 +1632,6 @@ async function stopSharing() {
   } finally {
     if (btn) btn.disabled = false;
   }
-}
-
-async function _loadQR(url) {
-  const qrEl = document.getElementById('sharing-qr');
-  if (!qrEl) return;
-  qrEl.innerHTML = '<div style="color:#aaa;font-size:0.78rem">Loading QR…</div>';
-  try {
-    const r = await fetch('/api/connections/qr?url=' + encodeURIComponent(url));
-    if (!r.ok) throw new Error('QR failed');
-    const d = await r.json();
-    qrEl.innerHTML = '<img src="' + d.data_url + '" alt="QR code" '
-      + 'style="max-width:180px;border-radius:8px;border:1px solid #e0e8d0">';
-  } catch (_) {
-    qrEl.innerHTML = '<div style="color:#aaa;font-size:0.75rem">QR unavailable</div>';
-  }
-}
-
-function copyShareLink() {
-  const input = document.getElementById('sharing-url-input');
-  if (!input) return;
-  navigator.clipboard.writeText(input.value)
-    .then(function() { _showToast('✓ Link copied to clipboard'); })
-    .catch(function() {
-      input.select();
-      document.execCommand('copy');
-      _showToast('✓ Link copied');
-    });
 }
 
 // ---------------------------------------------------------------------------
@@ -1694,39 +1656,70 @@ async function loadLanUrl() {
 }
 
 // ---------------------------------------------------------------------------
-// Workshop guest mode toggle
+// Curator devices (batch 7)
 // ---------------------------------------------------------------------------
-async function _loadGuestMode() {
-  const cb     = document.getElementById('guest-mode-cb');
-  const status = document.getElementById('guest-mode-status');
+function _fmtWhen(iso) {
+  if (!iso) return '—';
+  const d = new Date(iso + (iso.endsWith('Z') ? '' : 'Z'));   // server stores UTC
+  return d.toLocaleString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+}
+
+async function loadDevices() {
+  const list = document.getElementById('device-list');
   try {
-    const r = await fetch('/api/settings');
-    if (!r.ok) return;
-    const d = await r.json();
-    const entry = (d.settings || []).find(function(s) { return s.key === 'guest_mode_enabled'; });
-    const enabled = entry ? (entry.current_value === true || entry.current_value === 'true' || entry.current_value === '1') : false;
-    if (cb) cb.checked = enabled;
-    if (status) status.textContent = enabled ? '● Guest mode ON — workshop participants get read-only access' : '● Guest mode OFF — ngrok connects as curator';
-    if (status) status.style.color = enabled ? '#92400e' : '#166534';
-  } catch (_) {
-    if (status) { status.textContent = 'Could not load setting'; status.style.color = '#c0392b'; }
+    const me = await fetch('/api/me').then(r => r.ok ? r.json() : {}).catch(() => ({}));
+    document.getElementById('device-add-btn').style.display = me.is_local ? '' : 'none';
+    document.getElementById('device-add-note').style.display = me.is_local ? 'none' : '';
+    const r = await fetch('/api/sharing/devices');
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const rows = await r.json();
+    if (!rows.length) { list.textContent = 'No curator devices yet.'; return; }
+    list.innerHTML = rows.map(function (d) {
+      const state = !d.is_active ? 'revoked' : (d.claimed_at ? 'signed in' : 'link not used yet');
+      return '<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-top:1px solid #e8f0d8;flex-wrap:wrap">' +
+        '<strong style="color:#2d5016;min-width:110px">' + _esc(d.name || ('Device ' + d.id)) + '</strong>' +
+        '<span>' + _esc(state) + '</span>' +
+        '<span>· created ' + _esc(_fmtWhen(d.created_at)) + '</span>' +
+        '<span>· last used ' + _esc(_fmtWhen(d.last_used_at)) + '</span>' +
+        (d.is_active ? '<button onclick="revokeDevice(' + Number(d.id) + ')" style="margin-left:auto;padding:3px 10px;' +
+          'background:#fff;border:1px solid #fca5a5;color:#c0392b;border-radius:6px;font-size:0.75rem;cursor:pointer">Revoke</button>' : '') +
+        '</div>';
+    }).join('');
+  } catch (e) {
+    list.textContent = 'Could not load devices (' + e.message + ')';
   }
 }
 
-async function _saveGuestMode(enabled) {
-  const status = document.getElementById('guest-mode-status');
-  if (status) { status.textContent = 'Saving…'; status.style.color = '#888'; }
+async function addDevice() {
+  const name = (prompt('Name this device (e.g. "Melvin\'s phone"):') || '').trim();
+  if (!name) return;
   try {
-    const r = await fetch('/api/settings/guest_mode_enabled', {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ value: String(enabled) }),
+    const r = await fetch('/api/sharing/devices', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name }),
     });
-    if (!r.ok) throw new Error('HTTP ' + r.status);
-    if (status) status.textContent = enabled ? '● Guest mode ON — workshop participants get read-only access' : '● Guest mode OFF — ngrok connects as curator';
-    if (status) status.style.color = enabled ? '#92400e' : '#166534';
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(d.detail || ('HTTP ' + r.status));
+    document.getElementById('device-new-name').textContent = d.name;
+    document.getElementById('device-new-url').value = d.join_url;
+    document.getElementById('device-new-qr').innerHTML = d.qr_data_url
+      ? '<img src="' + _esc(d.qr_data_url) + '" alt="QR code" style="max-width:200px;border-radius:8px;border:1px solid #e0e8d0">'
+      : '<div style="color:#aaa;font-size:0.75rem">QR unavailable — use the link</div>';
+    document.getElementById('device-new').style.display = '';
+    loadDevices();
   } catch (e) {
-    if (status) { status.textContent = 'Error: ' + e.message; status.style.color = '#c0392b'; }
+    _showToast('✗ ' + e.message, true);
+  }
+}
+
+async function revokeDevice(id) {
+  if (!confirm('Revoke this device? It loses access on its next request.')) return;
+  try {
+    const r = await fetch('/api/sharing/devices/' + id + '/revoke', { method: 'POST' });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    _showToast('Device revoked');
+    loadDevices();
+  } catch (e) {
+    _showToast('✗ ' + e.message, true);
   }
 }
 
@@ -2332,6 +2325,7 @@ function _restoreDynSecState() {
 }
 </script>
 <script src="/static/js/pwa.js"></script>
+<script src="/static/js/dry-run.js"></script>
 <script src="/static/js/offline.js"></script>
 <script src="/static/js/guest-mode.js"></script>
 <script src="/static/js/seasonal-returns.js"></script>

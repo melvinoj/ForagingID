@@ -2373,6 +2373,9 @@
           <button id="walk-reroute-btn" class="walk-map-btn" data-guest-hide onclick="walkReroute()"
             style="display:none;background:#fff;color:#2d5016;border:1px solid #b8d48a;cursor:pointer"
             title="Rebuild the line through the current stops — only changed legs are re-routed (asks first)">↻ Re-route</button>
+          <button id="walk-tidy-btn" class="walk-map-btn" data-guest-hide onclick="walkTidyOrder()"
+            style="display:none;background:#fff;color:#2d5016;border:1px solid #b8d48a;cursor:pointer"
+            title="Put the stops in an order with no crossing legs — same stops and members, stop 1 stays first (asks first)">⤳ Tidy route order</button>
           <a id="walk-google-btn" class="walk-map-btn google" href="#" target="_blank" rel="noopener">🗺 Google Maps</a>
           <button id="walk-gpx-btn" class="walk-map-btn" onclick="walkDownloadGpx()"
             style="background:#fff;color:#2d5016;border:1px solid #b8d48a;cursor:pointer"
@@ -3452,7 +3455,7 @@ function _renderNearMe() {
     const count = sp.observation_count || 0;
     const common = sp.common_name ? `<div class="nearme-common">${_esc(spCommon(sp.common_name))}</div>` : '';
 
-    html += `<a class="nearme-card" href="#" onclick="event.preventDefault();_discoverShowSpecies('${encodeURIComponent(sp.scientific_name)}')">
+    html += `<a class="nearme-card" href="#" onclick="event.preventDefault();_discoverShowSpecies('${encodeURIComponent(sp.scientific_name).replace(/'/g, "\\'")}')">
 
       ${thumb}
       <div class="nearme-info">
@@ -4619,7 +4622,7 @@ function showDetail(p) {
 
   const thumbName = p.thumbnail ? p.thumbnail.split('/').pop() : null;
   const thumb = thumbName
-    ? `<img class="obs-thumb" src="/thumbnails/${thumbName}"
+    ? `<img class="obs-thumb" src="/thumbnails/${_esc(thumbName)}"
            loading="lazy"
            onclick="openPhotoLightbox(${p.id})"
            onerror="this.style.display='none'"
@@ -4663,7 +4666,7 @@ function showDetail(p) {
     const extraCommon = _allCommon.length > 1
       ? `<div class="meta-row" style="color:#888">${_esc(spCommonList(_allCommon.slice(1)))}</div>` : '';
     const renameBtn = `<button class="rename-btn" title="Correct species name"
-        onclick="openRenameForm(${p.id}, '${_esc(p.species_primary)}')">✎ rename</button>`;
+        onclick="openRenameForm(${p.id}, '${_esc(p.species_primary).replace(/'/g, "\\'")}')">✎ rename</button>`;
     speciesBlock = `${commonLine}
       <div class="det-sci-name">${_esc(p.species_primary)} ${renameBtn}</div>
       ${extraCommon}
@@ -4675,7 +4678,7 @@ function showDetail(p) {
         <input type="text" id="rename-common-${p.id}" placeholder="e.g. Stinging nettle" autocomplete="off">
         <div class="rename-actions">
           <button class="btn-rename-save" id="rename-save-${p.id}"
-            onclick="saveSpeciesRename(${p.id}, '${_esc(p.species_primary)}')">Save &amp; re-enrich</button>
+            onclick="saveSpeciesRename(${p.id}, '${_esc(p.species_primary).replace(/'/g, "\\'")}')">Save &amp; re-enrich</button>
           <button class="btn-rename-cancel"
             onclick="document.getElementById('rename-form-${p.id}').style.display='none'">Cancel</button>
         </div>
@@ -4704,7 +4707,7 @@ function showDetail(p) {
   // "Enrich this species" — shown when confirmed but not yet enriched (not landscape)
   const enrichBtn = (!isLandscapeObs && p.species_primary && !p.has_enrichment)
     ? `<button class="det-btn enrich" id="enrich-btn-${p.id}"
-         onclick="enrichSpeciesFromMap('${_esc(p.species_primary)}', ${p.id})">⚡ Enrich this species</button>`
+         onclick="enrichSpeciesFromMap('${_esc(p.species_primary).replace(/'/g, "\\'")}', ${p.id})">⚡ Enrich this species</button>`
     : '';
 
   const removeBtn = `<button class="det-btn danger"
@@ -4769,6 +4772,8 @@ function showDetail(p) {
 // ── Enrich this species ───────────────────────────────────────────────────
 
 async function enrichSpeciesFromMap(speciesName, obsId) {
+  // Dry run first, before any UI change (Melvin, 22 Oct 2026) — nothing runs until confirmed.
+  if (!(await lmDryRunCheck(`/api/culinary/${encodeURIComponent(speciesName)}/enrich`, { method: 'POST' }, `Enrich ${speciesName}?`))) return;
   const btn = document.getElementById(`enrich-btn-${obsId}`);
   const resultSlot = document.getElementById(`enrich-result-${obsId}`);
   if (btn) { btn.disabled = true; btn.textContent = '⚡ Enriching…'; }
@@ -5231,6 +5236,7 @@ function _exitWalkMode() {
   _hideWalkCircle();
   _detachWalkDraw();
   if (_walkRouteLayer) { map.removeLayer(_walkRouteLayer); _walkRouteLayer = null; }
+  _walkTidySeq++;                // a build still waiting for its stop order is dropped
   _walkSelected = [];
   _walkLastPins = null;
   _walkRouteStatus = null;
@@ -5657,8 +5663,29 @@ function _haversineM(lat1, lng1, lat2, lng2) {
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
 }
 
+// Build walk's stop order: the server's walk_route.tidy_order (the ONE rule —
+// nearest-neighbour from stop 1, the southernmost stop _clusterStops puts
+// first, then 2-opt: no crossing legs). _nnRoute below is only the fallback
+// when the server can't be asked (offline, or a guest session that may not POST).
+let _walkTidySeq = 0;       // a newer build/regroup supersedes an older one's await
+async function _tidyRoute(stops) {
+  if (stops.length < 3) return stops;
+  try {
+    const r = await fetch('/api/walk/tidy-order', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ stops: stops.map(s => ({ lat: s.lat, lng: s.lng })), circular: !!_walkCircular }),
+    });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const d = await r.json();
+    if (!Array.isArray(d.order) || d.order.length !== stops.length) throw new Error('bad order');
+    return d.order.map(i => stops[i]);
+  } catch (e) {
+    return _nnRoute(stops);
+  }
+}
+
 function _nnRoute(stops) {
-  // Nearest-neighbour TSP starting from first stop
+  // Nearest-neighbour TSP starting from first stop (fallback — see _tidyRoute)
   if (!stops.length) return [];
   const unvisited = [...stops];
   const route = [unvisited.shift()];
@@ -5943,7 +5970,9 @@ async function _buildWalkRoute(bounds, circle, suppressFitBounds = false) {
   _walkLastPins     = pins;
   _walkStraightLine = false;
   _syncWalkRadiusUi(true);
-  const route = _nnRoute(_clusterStops(pins, _walkStopRadiusM));
+  const _seq = ++_walkTidySeq;
+  const route = await _tidyRoute(_clusterStops(pins, _walkStopRadiusM));
+  if (_seq !== _walkTidySeq) return;          // a newer build/regroup started meanwhile
   _walkSelected     = route;
   _activeWalkRoute  = route;
 
@@ -6190,7 +6219,9 @@ function onWalkRadiusInput(v) {
 async function _regroupWalk() {
   if (!_walkLastPins) return;
   _walkStraightLine = false;
-  const route = _nnRoute(_clusterStops(_walkLastPins, _walkStopRadiusM));
+  const _seq = ++_walkTidySeq;
+  const route = await _tidyRoute(_clusterStops(_walkLastPins, _walkStopRadiusM));
+  if (_seq !== _walkTidySeq) return;          // a newer build/regroup started meanwhile
   _walkSelected    = route;
   _activeWalkRoute = route;
   if (await _routeWalk({ suppressFitBounds: true })) {
@@ -6924,6 +6955,7 @@ async function loadSavedWalk(id) {
     _walkStraightLine = false;
     if (_meta && _meta.stop_radius_m) _walkStopRadiusM = _meta.stop_radius_m;
     _syncWalkRadiusUi(false);
+    _walkTidySeq++;              // a build still waiting for its stop order is dropped
     _activeWalkRoute  = route;
     _walkSelected     = route;
     _activeWalkEnrich = {};
@@ -7046,7 +7078,7 @@ function _fitSavedWalk() {
 // walk" (all pins shown + tap to select) replaced "Show all pins" and
 // "◎ Select pins" — off = only the walk's own markers (Melvin, 20 Oct 2026).
 function _syncWalkPinsBtn() {
-  ['walk-saved-btn', 'walk-reverse-btn', 'walk-edit-btn', 'walk-reroute-btn'].forEach(id => {
+  ['walk-saved-btn', 'walk-reverse-btn', 'walk-edit-btn', 'walk-reroute-btn', 'walk-tidy-btn'].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.style.display = _savedWalkView ? '' : 'none';
   });
@@ -7214,6 +7246,7 @@ async function _refreshSavedWalk(w) {
   // signature below, so the title keeps the walk's name.
   _applyShownLine(w);
   const route = _savedWalkRoute();
+  _walkTidySeq++;                // a build still waiting for its stop order is dropped
   _activeWalkRoute = route;
   _walkSelected    = route;
   _walkSaved       = { id: w.id, name: w.name, sig: _walkRouteSig(route) };
@@ -7448,6 +7481,45 @@ async function walkSaveChanges() {
     _syncWalkSaveBtn();
     try { renderMarkers(); } catch (_) {}
   }
+}
+
+// "⤳ Tidy route order" (walk.py tidy_walk / walk_route.tidy_order): the saved
+// stops in an order with no crossing legs (2-opt from the current order, stop 1
+// first). Dry run shown first; on OK the server snapshots, routes only the new
+// legs (stored legs are kept, also when walked backwards), refuses if the
+// walk's members would change, then writes and reads back.
+async function walkTidyOrder() {
+  const d = _savedWalkData;
+  if (!d) return;
+  let t;
+  try {
+    const r = await fetch(`/api/walk/saves/${d.id}/tidy`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ confirm: false }),
+    });
+    t = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(typeof t.detail === 'string' ? t.detail : `HTTP ${r.status}`);
+  } catch (e) {
+    alert('Tidy route order: ' + e.message);
+    return;
+  }
+  const km = m => (m / 1000).toFixed(1) + ' km';
+  const lines = [
+    `Tidy the stop order of "${d.name}"?`, '',
+    `Crossing legs: ${t.crossings_before} → ${t.crossings_after}`,
+    `Distance: ${km(t.distance_before_m)} now → about ${km(t.estimated_distance_m)} (new legs counted straight; ORS paths can add a little)`,
+    `Legs changed (${t.legs_changed.length}, old stop numbers): ${t.legs_changed.join(', ')}`,
+    `Legs kept as stored: ${t.legs_kept}${t.legs_kept_reversed ? ` (${t.legs_kept_reversed} walked the other way)` : ''} · ORS requests: ${t.ors_requests}`,
+    '', 'Same stops and members; stop 1 stays first. Stops are renumbered in the new order.',
+    'A database snapshot is taken first. Refused if the new line would change the walk\'s members.',
+    'Printed sheets and published pages will no longer match until reprinted / republished.',
+  ];
+  if (!confirm(lines.join('\n'))) return;
+  const out = await _walkMembershipCall('tidy', 'POST', { confirm: true });
+  if (!out || !out.tidy) return;
+  const tt = out.tidy;
+  _fitSavedWalk();
+  alert(`Tidied: ${km(tt.distance_before_m)} → ${km(tt.distance_m)}, ${tt.duration_min} min. `
+    + `Crossing legs ${tt.crossings_before} → ${tt.crossings_after}.\n\nSnapshot: ${String(tt.snapshot || '').split('/').pop()}`);
 }
 
 // "↻ Re-route" (walk.py reroute_walk / walk_route.plan_reroute): dry run first,
@@ -9328,7 +9400,7 @@ function _noteSpeciesSearch(q) {
   if (!hits.length) { dd.style.display = 'none'; return; }
   dd.innerHTML = hits.map(sp => {
     const label = spNameText(sp.scientific_name, sp.preferred_common_name || (sp.common_names && sp.common_names[0]));
-    return `<div class="nsp-item" onclick="_addNoteTag('${_esc(sp.scientific_name)}')">${_esc(label)}</div>`;
+    return `<div class="nsp-item" onclick="_addNoteTag('${_esc(sp.scientific_name).replace(/'/g, "\\'")}')">${_esc(label)}</div>`;
   }).join('');
   dd.style.display = 'block';
 }
@@ -9353,7 +9425,7 @@ function _renderNoteTags() {
   const row = document.getElementById('note-tags-row');
   if (!row) return;
   row.innerHTML = _noteSpeciesTags.map(t =>
-    `<span class="np-tag" onclick="_removeNoteTag('${_esc(t)}')" title="Click to remove">${_esc(t)} ✕</span>`
+    `<span class="np-tag" onclick="_removeNoteTag('${_esc(t).replace(/'/g, "\\'")}')" title="Click to remove">${_esc(t)} ✕</span>`
   ).join('');
 }
 
@@ -9473,7 +9545,7 @@ async function _findInSeason() {
     if (!r.ok) throw new Error(`HTTP ${r.status}`);
     data = await r.json();
   } catch (e) {
-    resultsEl.innerHTML = `<div class="find-state">❌ ${e.message}</div>`;
+    resultsEl.innerHTML = `<div class="find-state">❌ ${_esc(e.message)}</div>`;
     return;
   }
 
@@ -9509,7 +9581,7 @@ async function _findRecipes() {
     if (!r.ok) throw new Error(`HTTP ${r.status}`);
     data = await r.json();
   } catch (e) {
-    resultsEl.innerHTML = `<div class="find-state">❌ ${e.message}</div>`;
+    resultsEl.innerHTML = `<div class="find-state">❌ ${_esc(e.message)}</div>`;
     return;
   }
 
@@ -9525,7 +9597,7 @@ async function _findRecipes() {
       ${_escHtml(sp.scientific_name)}${sp.common_name ? ' <span style="font-style:normal;color:#888;font-weight:400">· ' + _escHtml(spCommon(sp.common_name)) + '</span>' : ''}
     </div>`;
     for (const rec of sp.recipes) {
-      html += `<div class="find-card" onclick="_discoverShowSpecies('${encodeURIComponent(sp.scientific_name)}')">
+      html += `<div class="find-card" onclick="_discoverShowSpecies('${encodeURIComponent(sp.scientific_name).replace(/'/g, "\\'")}')">
         <div class="find-info">
           <div class="find-name">${_escHtml(rec.title || 'Recipe')}</div>
           <div class="find-snippet">${_escHtml(rec.snippet)}</div>
@@ -9552,7 +9624,7 @@ async function _findMedicinal() {
     if (!r.ok) throw new Error(`HTTP ${r.status}`);
     data = await r.json();
   } catch (e) {
-    resultsEl.innerHTML = `<div class="find-state">❌ ${e.message}</div>`;
+    resultsEl.innerHTML = `<div class="find-state">❌ ${_esc(e.message)}</div>`;
     return;
   }
 
@@ -9564,7 +9636,7 @@ async function _findMedicinal() {
   let html = `<div class="find-section-hdr">🌿 ${data.prep_count} preparation${data.prep_count !== 1 ? 's' : ''} across ${data.species_count} species</div>`;
   for (const sp of data.results) {
     for (const prep of sp.preparations) {
-      html += `<div class="find-card" onclick="_discoverShowSpecies('${encodeURIComponent(sp.scientific_name)}')">
+      html += `<div class="find-card" onclick="_discoverShowSpecies('${encodeURIComponent(sp.scientific_name).replace(/'/g, "\\'")}')">
         <div class="find-info">
           <div class="find-name" style="font-style:italic">${_escHtml(sp.scientific_name)}</div>
           <div class="find-common">${_escHtml(spCommon(sp.common_name || ''))}</div>
@@ -9581,9 +9653,9 @@ async function _findMedicinal() {
 function _findCardHtml(sp, { badge = '', sub = '' } = {}) {
   const edibStyle = _FIND_EDIB_STYLE[sp.edibility_status] || _FIND_EDIB_STYLE.unknown;
   const edibLabel = sp.edibility_status || 'unknown';
-  return `<div class="find-card" onclick="_discoverShowSpecies('${encodeURIComponent(sp.scientific_name)}')">
+  return `<div class="find-card" onclick="_discoverShowSpecies('${encodeURIComponent(sp.scientific_name).replace(/'/g, "\\'")}')">
     ${sp.thumbnail
-      ? `<img class="find-thumb" src="${sp.thumbnail}" loading="lazy" alt="">`
+      ? `<img class="find-thumb" src="${_esc(sp.thumbnail)}" loading="lazy" alt="">`
       : '<div class="find-thumb-empty"></div>'}
     <div class="find-info">
       <div class="find-name">${_escHtml(sp.scientific_name)}</div>
@@ -9614,6 +9686,7 @@ function _escHtml(s) {
 </script>
 <script src="/static/js/lightbox.js"></script>
 <script src="/static/js/pwa.js"></script>
+<script src="/static/js/dry-run.js"></script>
 <script src="/static/js/offline.js"></script>
 <script src="/static/js/guest-mode.js"></script>
 <script src="/static/js/seasonal-returns.js"></script>

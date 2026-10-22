@@ -262,11 +262,14 @@ async def archive_recipe(
 async def regenerate_recipe(
     species_name: str,
     body: RegenerateRequest,
+    dry_run: bool = Query(False, description="show what it would create; write nothing"),
     db: AsyncSession = Depends(get_db),
 ):
     """
     Regenerate (or edit) a recipe on the AI backend (DeepSeek) with Melvin's cooking style prompt.
-    Creates a new species_ai_drafts entry with status='pending' — shows in review queue.
+    Creates a new species_ai_drafts entry with status='pending' — shows in review queue
+    BESIDE any pending recipe draft (kept one wins when Melvin approves it).
+    Saved through the shared pre-save check (draft_gate); a refused recipe is 422.
     Returns the new draft immediately (not yet approved).
     """
     from app.integrations.deepseek_draft import ai_backend, ai_complete
@@ -281,6 +284,11 @@ async def regenerate_recipe(
     edib = (sp.edibility_status or "").lower()
     if edib in AI_NO_CONTENT_VERDICTS:
         raise HTTPException(400, f"Recipe generation is blocked for {edib} species.")
+    if dry_run:
+        from app.services.enrichment_plan import plan
+        out = await plan(db, [sp.scientific_name], sources=False, regenerate=True, only_field="recipe")
+        out["drafts_may_create"] = {"recipe": 1}
+        return out
 
     # Get source recipe (from existing recipe or culinary_info)
     existing_body: Optional[str] = None
@@ -359,20 +367,17 @@ async def regenerate_recipe(
     if is_ai_placeholder("recipe", new_text):
         raise HTTPException(422, "The AI returned a placeholder/refusal, not a recipe — nothing saved.")
 
-    # Save as pending AI draft
-    draft = SpeciesAIDraft(
-        species_id=sp.id,
-        field_name="recipe",
-        draft_text=new_text,
-        status="pending",
-        model=backend.label,
-        generation_context_json=json.dumps({
+    # Save as pending AI draft — through the shared pre-save check
+    from app.services.draft_gate import check_ai_draft, save_ai_draft
+    ci = await db.scalar(select(CulinaryInfo).where(CulinaryInfo.species_id == sp.id))
+    draft = save_ai_draft(db, sp, ci, "recipe", new_text, model=backend.label,
+                          context_json=json.dumps({
             "edit_command": body.edit_command,
             "season":       body.season,
             "source_recipe_id": body.recipe_id,
-        }),
-    )
-    db.add(draft)
+        }))
+    if draft is None:
+        raise HTTPException(422, f"Recipe not saved — {check_ai_draft('recipe', new_text, sp, ci).reason}")
     await db.commit()
     await db.refresh(draft)
 
@@ -380,6 +385,6 @@ async def regenerate_recipe(
         "ok":       True,
         "draft_id": draft.id,
         "season":   body.season,
-        "preview":  new_text[:200] + ("…" if len(new_text) > 200 else ""),
-        "draft_text": new_text,
+        "preview":  draft.draft_text[:200] + ("…" if len(draft.draft_text) > 200 else ""),
+        "draft_text": draft.draft_text,
     }

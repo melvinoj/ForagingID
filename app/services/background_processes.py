@@ -560,6 +560,36 @@ async def bp_paused_row(process_type: str) -> Optional[dict]:
         return None
 
 
+async def bp_resume_point(process_type: str) -> Optional[dict]:
+    """Where to resume a run (22 Oct 2026): the MOST RECENT row of this type,
+    if it is 'paused' or 'interrupted' (server stopped mid-run) and its payload
+    records the last completed species ({"resume_after": name}). Older rows are
+    never resumed — a later run superseded them. Read-only."""
+    import json as _json
+    try:
+        async with AsyncSessionLocal() as db:
+            row = (await db.execute(
+                text("SELECT process_id, status, payload, progress_current, progress_total, detail "
+                     "FROM background_processes WHERE process_type = :pt "
+                     "ORDER BY started_at DESC, process_id DESC LIMIT 1"),
+                {"pt": process_type},
+            )).fetchone()
+    except Exception:
+        log.exception("background_processes: bp_resume_point failed")
+        return None
+    if not row or row[1] not in ("paused", "interrupted"):
+        return None
+    try:
+        payload = _json.loads(row[2] or "{}")
+    except ValueError:
+        payload = {}
+    after = payload.get("resume_after") if isinstance(payload, dict) else None
+    if not after:
+        return None
+    return {"process_id": row[0], "status": row[1], "resume_after": after,
+            "progress_current": row[3], "progress_total": row[4], "detail": row[5]}
+
+
 def _row_to_dict(row) -> dict:
     from datetime import datetime as _dt
     def _dt_parse(v):

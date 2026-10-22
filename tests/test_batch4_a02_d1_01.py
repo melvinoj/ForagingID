@@ -88,7 +88,17 @@ def _client():
     api = FastAPI()
     api.include_router(settings_api.router)
     api.dependency_overrides[get_db] = _get_db
-    return TestClient(api)
+    return TestClient(_with_peer(api, "127.0.0.1"))
+
+
+def _with_peer(asgi, ip):
+    """TestClient's peer is 'testclient'; batch 7 decides localhost by the socket
+    peer too, so set it (as uvicorn does for a request from the laptop)."""
+    async def wrapped(scope, receive, send):
+        if scope["type"] == "http":
+            scope = dict(scope, client=(ip, 50000))
+        await asgi(scope, receive, send)
+    return wrapped
 
 
 class _CfgSecrets:
@@ -158,45 +168,51 @@ def test_put_and_delete_never_echo_the_secret():
 
 
 def test_guest_host_gets_403_on_every_settings_route():
+    """An ngrok request with no curator device is a guest identity (batch 7:
+    the guest-mode switch is gone; the token decides)."""
     c = _client()
-    ss._cache["guest_mode_enabled"] = True
-    try:
-        h = {"host": "abc123.ngrok-free.app"}
-        for method, url in [
-            ("GET", "/api/settings"),
-            ("GET", "/api/settings/api-meta"),
-            ("GET", "/api/settings/api-status"),
-            ("GET", "/api/settings/api-status/plantnet"),
-            ("GET", "/api/settings/synthesis-sources"),
-            ("PUT", "/api/settings/min_identification_confidence"),
-            ("DELETE", "/api/settings/min_identification_confidence"),
-            ("POST", "/api/settings/api-key"),
-            ("POST", "/api/settings/synthesis-sources"),
-            ("DELETE", "/api/settings/synthesis-sources/example.com"),
-        ]:
-            r = c.request(method, url, headers=h, json={"value": 1, "api": "x", "key": "y"})
-            assert r.status_code == 403, (method, url, r.status_code)
-            _assert_no_secret(r.text, url)
-    finally:
-        ss._cache["guest_mode_enabled"] = False
+    h = {"host": "abc123.ngrok-free.app", "x-forwarded-for": "203.0.113.9"}
+    for method, url in [
+        ("GET", "/api/settings"),
+        ("GET", "/api/settings/api-meta"),
+        ("GET", "/api/settings/api-status"),
+        ("GET", "/api/settings/api-status/plantnet"),
+        ("GET", "/api/settings/synthesis-sources"),
+        ("PUT", "/api/settings/min_identification_confidence"),
+        ("DELETE", "/api/settings/min_identification_confidence"),
+        ("POST", "/api/settings/api-key"),
+        ("POST", "/api/settings/synthesis-sources"),
+        ("DELETE", "/api/settings/synthesis-sources/example.com"),
+    ]:
+        r = c.request(method, url, headers=h, json={"value": 1, "api": "x", "key": "y"})
+        assert r.status_code == 403, (method, url, r.status_code)
+        _assert_no_secret(r.text, url)
 
 
-def test_guest_token_on_a_curator_host_gets_403():
-    """An unknown/expired token resolves to an anonymous guest even on localhost."""
+def test_url_and_bearer_tokens_grant_nothing():
+    """Batch 7: a ?token= / Bearer value is never a credential (only a /join
+    device cookie is). Off localhost it stays a guest; on localhost it is ignored."""
     c = _client()
-    r = c.get("/api/settings", headers={"host": "localhost", "authorization": "Bearer not-a-real-token"})
+    ngrok = {"host": "abc123.ngrok-free.app", "x-forwarded-for": "203.0.113.9"}
+    r = c.get("/api/settings", headers={**ngrok, "authorization": "Bearer not-a-real-token"})
+    assert r.status_code == 403
+    r = c.get("/api/settings?token=not-a-real-token", headers=ngrok)
     assert r.status_code == 403
     r = c.get("/api/settings?token=not-a-real-token", headers={"host": "localhost"})
-    assert r.status_code == 403
+    assert r.status_code == 200
 
 
-def test_curator_still_sees_set_not_set_and_ngrok_curator_when_guest_mode_off():
+def test_curator_sees_set_not_set_and_lan_or_ngrok_without_a_device_do_not():
     c = _client()
-    for host in ("localhost", "192.168.1.20:8000", "abc123.ngrok-free.app"):   # guest mode OFF
-        r = c.get("/api/settings", headers={"host": host})
-        assert r.status_code == 200, host
-        ds = next(e for e in r.json()["settings"] if e["key"] == "deepseek_api_key")
-        assert ds["is_set"] is True
+    r = c.get("/api/settings", headers={"host": "localhost"})
+    assert r.status_code == 200
+    ds = next(e for e in r.json()["settings"] if e["key"] == "deepseek_api_key")
+    assert ds["is_set"] is True
+    for h in ({"host": "192.168.1.20:8000"},          # the laptop's own LAN address is not localhost
+              {"host": "abc123.ngrok-free.app", "x-forwarded-for": "203.0.113.9"}):
+        r = c.get("/api/settings", headers=h)
+        assert r.status_code == 403, h
+        _assert_no_secret(r.text, "/api/settings")
 
 
 def test_frontend_never_reads_a_secret_value():

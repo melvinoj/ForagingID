@@ -317,12 +317,21 @@ async def fetch_taxon_description(scientific_name: str) -> Optional[INatTaxonDes
 
     Returns INatTaxonDescription or None on any failure.
     """
+    from app.services import net_health
     try:
         async with httpx.AsyncClient(timeout=TIMEOUT_S) as client:
             resp = await client.get(
                 TAXA_SEARCH_URL,
                 params={"q": scientific_name.strip(), "rank": "species", "per_page": 3},
             )
+    except Exception as e:
+        net_health.note_failure("inaturalist", e)   # could not ask — not "no entry"
+        return None
+    if net_health.is_gateway_failure(resp.status_code):
+        net_health.note_failure("inaturalist", f"HTTP {resp.status_code}")
+        return None
+    net_health.note_success("inaturalist")
+    try:
         if resp.status_code != 200:
             return None
         data = resp.json()

@@ -1,5 +1,52 @@
 ## Current State
 
+### Build
+- Alembic head 0056 (CLAUDE.md still states an older head — fix in batch 17). 288 tests pass (24 files). Service worker foragingid-v11 (hard refresh needed once).
+
+### Done 21 Oct evening – 22 Oct
+- Batch 7 (access): three layers — localhost (local Host + loopback + no X-Forwarded-For) = curator; curator device tokens (https only, admin in Settings, create from localhost only); participant tokens (Workshops). No token → "Ask Melvin for a link" (401). /join/<token> one-time, sets a session cookie, clean URL. Guest-mode toggle removed. Escaping fixed across review/print/index/species/lists. Snapshot db_20261021_204249. Melvin's phone paired.
+- Enrichment offline run (bp 203) damage repaired: 285 drafts restored, Ononis prep warning restored (#3401, snapshot_restore), 380 data_confidence values restored (db_20261022_125857).
+- Daucus carota edible_parts: Melvin's text (#3402).
+- AI draft census (488 drafts): applied — approve/edit/reject per Melvin, reject reasons stored; G3 non-European species held pending; 3493 Oxalis grandis kept pending for Melvin's edit.
+- Toxic/inedible medicinal round: 25 approved (#3729–3753), 91 rejected (db_20261022_073815).
+- Enrichment safety: circuit breaker pauses on no network; failed fetch writes nothing; bulk runs never invalidate drafts (bulk re-enrich removed); Regenerate shows old/new side by side; warning fields + edible_parts/id_notes/seasonal_peak filled only when empty, changes go to review; Wikidata batched (414 fixed); resume from last species; shared pre-save check refuses placeholder/chat/no-edible-parts/toxic-culinary/deadly-dosing drafts and strips "None known" recipe lines; every enrichment button shows a dry run first.
+- In progress before this session: walk tidy-order (2-opt) + warning review cards for all verdicts + workshop links on share URL + Settings sharing rename + signed-out vs offline message (check its report).
+
+### Next (order)
+1. Context-warning hook + status line (config only).
+2. Confirm the walk tidy-order / warning cards / UI fixes report; then Tidy route order on Morning sunshine walk.
+3. Batch 8 (guest visibility), then Stage C publish panel.
+4. Batches 9, 10, 11, 11b, 12, 13, 15, 15b, 16, 17 per REPORT.md section 9.
+
+### Rules learned
+- Don't run a full enrichment: the dry run shows ~900 new drafts. Run it for walk species only, in small batches (add a species-limit option in a later batch).
+- Auto-enrichment after an ID correction has no dry run, but goes through the same guards.
+
+### Scope added (keep)
+- 11b: merges 704→457, 758↔757, 708↔412, 608↔589, 103↔531, 600↔749, 82↔200; relink Collybia nuda (obs 8410) and Conyza canadensis; GBIF check 187; genus/family sweep (Aconitum, Alchemilla, Bellis, Erigeron, Imleria, Matricaria, "Rubus subg. Rubus", "Rosa sect. Caninae", 494 puffball) + find the fill that wrote them; non-European card sweep (Rubus occidentalis, Quercus bicolor/velutina, Acer macrophyllum, Juglans nigra, Picea mariana, Tilia americana, Salix barclayi, Erigeron aliceae, Chrysosplenium americanum, Luffa, Ulmus davidiana, Viburnum trilobum, Carpinus caroliniana, Larix lyallii, Pinus radiata, Hydrocotyle, 808 Ambrosia confertiflora); G3-held drafts decided after the sweep; English common-name backfill (Dianthus carthusianorum → Carthusian pink).
+- 15b: empty saved walk stops hide or drop.
+- 17: Lists "Lookalike warnings" toggle dead; reload banner on new app version; thumbnail field on /api/species/; CLAUDE.md Alembic head; scan.html:1795 loadPrefilterThreshold; curator-device list refreshes itself; enrichment species-limit option.
+
+### Open decisions (Melvin)
+- Should a curator look-alike warning (not only prep) let a caution species print culinary content on handouts? (817 Meadow Mushroom, 711 Marasmius)
+
+### Melvin's review queue
+- Warning review cards (all verdicts, walk species first).
+- Edit Oxalis grandis 3493.
+- Text tidy-up (on the simmer): 352 edible_parts / 689 id_notes with no history, many long PFAF dumps or "North America" text.
+- 347 Takeout person_animal rejects (mount DIGIERA). Draft #3252 Amaranthus hybridus.
+
+### Browser checks: walkthroughs
+Test species: Conium maculatum, Oenanthe crocata, Sambucus nigra, 229 St John's wort, 295 Ramsons, 97 Aspen, Pineapple weed.
+- A. Species page: three views, safety sort, filters kept, capitalised names, test species pages; species resources load.
+- B. Map + walks: Conium pin full look-alike; Ramsons labelled; ☠ on 155/688/745; walk stop cards; Edit walk → Save → Re-route; Tidy route order; Export summary; published Rümmelsbühl page; Discover/Find cards, ✎ rename, Enrich, note tags.
+- C. Handouts: Lists → print (field guide, workshop) + PDF in 3 layouts: Conium uncut, 229 withheld label, no PFAF Folklore, corners present.
+- D. Review: Critical section; verdict queue; warning cards (Approve / Edit / Remove); Regenerate side by side; Run now dry run + Cancel; AI-draft card buttons; reviewer notes.
+- E. Phone: pair via Add device; installed app signed in; used link → "Link already used"; bare URL → "Ask Melvin"; Revoke works; unpaired shows "not signed in", not "offline"; List view at 390px; proximity alert folds; airplane-mode short walk (outbox).
+- F. Settings/system: "Your devices & sharing"; no guest toggle; device list (no Add device on phone); every enrichment button asks first; paused run shows "paused — no network"; run summary skip counts; DeepSeek key; Jobs pop-up; caffeinate exits.
+- G. Workshops: participant link uses the ngrok address; guest view loads on a second phone; used link refused; revoke works; works on mobile data.
+Rule: Code tests whatever it can; new browser checks go into a walkthrough, not numbered.
+
 ## Current State — 21 Oct 2026, evening
 
 ### Build
@@ -51,60 +98,114 @@ Test species: Conium maculatum, Oenanthe crocata, Sambucus nigra, 229 St John's 
 - F. Settings/system: DeepSeek key set; API dashboard; species chat; About regenerate; Jobs pop-up drag; caffeinate exits with the server.
 Rule: Code tests whatever it can (real JS via jsc, real PDFs); new browser checks are added to a walkthrough, not numbered.
 
-## Current State — 21 Oct 2026, evening
-
-### Build
-- Alembic head 0055 (CLAUDE.md still states an older head — fix in batch 17).
-- 202 tests pass. Service worker v9 (species cache renamed, old cached profiles dropped).
-- Uncommitted until this End Session: batch 6, Aspen, Oenanthe text, E-14 cleanup, sentence-case names, species views, 1b gate change.
-
-### Done since 16:00
-- Batch 6: one shared warnings helper. In-app shows full text; uncurated text is labelled "Source text — not yet reviewed" and is never dropped. Handouts (Lists, print, PDF, Export summary, experience page) show curator text only, uncut, read from the DB. Caution species with no curator prep warning print no culinary content ("⚠ caution — warning not yet reviewed"): 25 of 45 caution species, after Keck. Marker writes are refused by a DB trigger (0055).
-- Aspen (97) edible + edible_parts (edibility history #2229, culinary history #3388). Recipe #48 shows. David's-harp stays toxic, recipe #37 hidden.
-- Oenanthe crocata (653) look-alike text, curator-authored (#3389).
-- E-14 cleanup: 10 marker fields got a real human row (#3390–3399); drafts 3181/3194/3202/3209/3223/3232 approved. Melvin read the Keck and Meum texts.
-- Common names in sentence case through the shared helpers (no DB writes).
-- Species page: Large / Grid / List views; List sorts by every column, including safety.
-- 1b: dual-API-agreed harmless species are now included on published walks (rule 7 hazard blocker unchanged). Walk 4 republished: ed3b4d9, 63 species, 31 stops, 244 photos with clean EXIF/GPS, live pages byte-identical to the build. w/walk-4/ not published.
-- Grid "toxicity unknown" everywhere was a stale browser cache, not a bug.
-
-### In progress
-- Read-only diagnosis of orphan species cards (0 pins, e.g. Betacoronavirus, Maniola jurtina, Noctiluca; 33 with verdict drafts). Leave those 33 drafts untouched until the cleanup dry run.
-
-### Next (order)
-1. Orphan-card report → source fix + verdict queue limited to species with observations + cleanup dry run.
-2. Batch 7, plus: review.html:1962 shows common names unescaped.
-3. Batch 8.
-4. Stage C publish panel (in-app republish) after batch 8.
-5. Batches 9, 10, 11, 11b, 12, 13, 15, 15b, 16, 17 per REPORT.md section 9.
-
-### Scope added (keep)
-- 11b, first:
-  - Merges: 704→457 Trametes versicolor; 758↔757 Coronilla varia; 708↔412 Thelypteris limbosperma; 608↔589 Cota tinctoria; 103↔531 Chamaenerion angustifolium; 600↔749 Mycelis muralis; 82↔200 Cirsium ferox.
-  - Relink the Collybia nuda and Conyza canadensis observations. GBIF check on 187 "Hypericum perfoliatum".
-  - Genus/family sweep (family column holding a genus: Aconitum, Alchemilla, Bellis, Erigeron, Imleria, Matricaria, "Rubus subg. Rubus", "Rosa sect. Caninae"; 494 puffball as Caprifoliaceae) + find the fill that wrote them.
-  - Non-European species card sweep against data/reference/plantnet_europe_species.json (e.g. Rubus occidentalis, Quercus bicolor/velutina, Acer macrophyllum, Juglans nigra, Picea mariana, Tilia americana, Salix barclayi, Erigeron aliceae, Chrysosplenium americanum, Luffa).
-  - English common-name backfill (e.g. Dianthus carthusianorum → Carthusian pink).
-- 15b: empty saved walk stops (walk 5 stop 35) hide or drop.
-- 17: the Lists "Lookalike warnings" toggle is now dead (remove or relabel); a reload banner on a new app version; a thumbnail field on /api/species/ (Large/List views currently load all map data); CLAUDE.md Alembic head; scan.html:1795 loadPrefilterThreshold.
-
-### Open decisions (Melvin)
-- Should a curator look-alike warning (not only prep) let a caution species print culinary content on handouts? Affects 817 Meadow Mushroom, 711 Marasmius.
-
-### Melvin's review queue
-- Caution species with no warning text (13): 817, 460, 810, 677, 381, 702, 816, 821, 405, 820, 711, 411 (+ Hypericum group).
-- Uncurated caution text to review (12): 295 Ramsons, 764, 98, 672, 639, 149, 363, 229, 148, 590, 603, 194, 399.
-- 92 medicinal drafts + Verbena 3544; edit Oxalis grandis 3493. Refusal drafts to reject. 347 Takeout person_animal rejects (mount DIGIERA). Draft #3252 Amaranthus hybridus.
-
-### Browser checks: six walkthroughs (replace the old numbered list)
-Test species: Conium maculatum, Oenanthe crocata, Sambucus nigra, 229 St John's wort, 295 Ramsons, 97 Aspen, Pineapple weed.
-- A. Species page: three views, safety sort, filters kept, capitalised names, test species pages (badges, full warnings, labels, recipe #48).
-- B. Map + walk 4: Conium pin full look-alike; Ramsons labelled; ☠ on 155/688/745; walk panel stop cards (817 look-alike, Sambucus open, "Also here" lines); Edit walk → Save → Re-route; Export summary; published Rümmelsbühl page.
-- C. Handouts: Lists → browser print (field guide with ID notes off; workshop) + PDF in 3 layouts: Conium uncut, 229 withheld label, no PFAF Folklore section, corners present.
-- D. Review: Critical section + red badge; verdict and warning drafts; Second Opinion 24149; capitalised names.
--
-
 ## History
+
+### 2026-10-22 13:02
+**Snapshot** — End of session — Session ended from Settings page
+DB: `snapshots/db_20261022_130213.sqlite`
+
+### 2026-10-22 13:02
+**Session ended** — Session ended from Settings page
+
+### 2026-10-22 12:59
+**22 Oct: Part A, the toxic medicinal round (25 approved, 91 rejected). Part B, enrichment safety: a network circuit breaker and resume, no destructive writes on fetch failure, drafts kept beside each other instead of replaced, fill-only-when-empty plus review cards for warning and ID fields, Wikidata batched at 50, one shared AI draft gate, a dry run on every enrichment button. data_confidence restored for the 380 species lowered by bp 203.**
+
+**Built:**
+- net_health circuit breaker: a run pauses as 'paused — no network', resumes when the network is back, and resumes from the last completed species
+- A failed fetch never lowers data_confidence, never clears a field, never replaces sources_json
+- Bulk re-enrich option removed; bulk runs never invalidate pending drafts; Regenerate puts the new version beside the old one and the old one is retired only on approve
+- preparation_warnings, look_alike_warnings, edible_parts, id_notes, seasonal_peak: filled only when empty; changed source text becomes a review card
+- Wikidata batched at 50 names per request, with a URL length guard and per-chunk failure sentinel
+- draft_gate.save_ai_draft: the one pre-save check for AI drafts (no-use, chat phrasing, no edible parts, toxic culinary, deadly internal use), strips a leading 'None known' line from recipes, counts skips
+- enrichment_plan dry-run summary + dry-run.js confirm on every enrichment / backfill / regenerate / repopulate button
+**Fixed:**
+- data_confidence restored from db_20261021_210339 for 380 culinary_info rows lowered during bp 203 (2 changed since, ci 118 and 139, left alone); snapshot db_20261022_125857; all 380 read back by id
+**Files:** `app/services/net_health.py`, `app/services/draft_gate.py`, `app/services/enrichment_plan.py`, `app/services/enrichment.py`, `app/services/background_processes.py`, `app/integrations/wikidata.py`, `app/integrations/pfaf.py`, `app/integrations/inaturalist.py`, `app/integrations/trompenburg.py`, `app/models/species.py`, `app/api/culinary.py`, `app/api/enrich.py`, `app/api/recipes.py`, `frontend/review.html`, `frontend/scan.html`, `frontend/settings.html`, `frontend/species.html`, `frontend/index.html`, `frontend/static/js/dry-run.js`, `frontend/static/sw.js`, `tests/test_enrichment_safety.py`, `tests/test_batch5_safety_gate.py`, `tests/test_route_order_and_warning_review.py`
+**Pending:**
+- Melvin: browser walkthrough of the dry-run confirms, two-version drafts, and the paused-no-network label
+- A fresh enrichment run (bp 203 has no resume point)
+- Auto-enrich after a species-ID correction is not dry-run gated (_sopApply, _retryApprove, _corrSaveFromLookup, saveCorrection)
+- Not committed
+
+### 2026-10-22 07:31
+**AI draft census applied (Melvin 22 Oct decisions) through the existing approve / edit-approve / reject routes**
+
+**Built:**
+- Optional {reason} body on POST /api/species/{name}/drafts/{field}/reject (verdict_drafts.record_rejection_reason); test added
+**Fixed:**
+- 307 approved, 19 edited-then-approved (18 recipes: 'None known' first line removed; 2723 St John's wort interaction sentence), 199 rejected with 'Melvin census 22 Oct: ...' reasons, 141 kept pending (116 toxic-medicinal, 23 non-European, 3493 Oxalis grandis, 3714 refused)
+- History #3403-3728 (326 rows, ai_approved:human); species_recipes #177-271 (95); snapshot db_20261022_072924
+**Files:** `app/api/culinary.py`, `tests/test_route_order_and_warning_review.py`, `docs/audit/2026-10-22/draft_census/apply_plan.json`, `docs/audit/2026-10-22/draft_census/apply_dryrun.md`, `docs/audit/2026-10-22/draft_census/toxic_medicinal_round.md`
+**Pending:**
+- 3714 Picea orientalis medicinal: approve refused (PFAF lists uses) - a G1 'no specific medicinal uses' draft the pattern missed
+- Toxic medicinal round (116 drafts)
+- Not committed (End session)
+
+### 2026-10-22 06:36
+**Curator text: Daucus carota (9) edible_parts written via PATCH /api/culinary/{name}/field (species-page path)**
+
+**Fixed:**
+- Daucus carota edible_parts = Melvin verbatim (274 bytes); history #3402 changed_by human, old_value = the 5443-char PFAF text; is_curator_authored True; snapshot db_20261022_063521
+**Pending:**
+- Not committed (End session)
+
+### 2026-10-22 06:18
+**Diagnosed + repaired the offline enrichment run bp 203 (killed by an app/ reload at 575/638)**
+
+**Fixed:**
+- 285 AI drafts on 140 species restored invalidated -> pending (pending before the run, discarded by re_enrich with no replacement because the laptop was offline); every column now equals the pre-run snapshot
+- Ononis spinosa (605) preparation_warnings restored from snapshot db_20261021_210339 (the run had written PFAF 'None known'); history #3401 changed_by='snapshot_restore' (not human); draft 3633 approvable again
+**Pending:**
+- Snapshot before repair: db_20261022_061757
+- Not restored (by decision): confidence scores (382 lowered), Populus nigra + Pimpinella saxifraga prep text, Ononis/Daucus edible_parts, 26 sources_json
+- Enrichment run: Wikidata batch 414 bug; re-run only online, consider re_enrich off
+- Not committed (End session)
+
+### 2026-10-22 06:06
+**Route order by geometry (tidy) + review cards for every unreviewed warning + post-batch-7 UI fixes (sharing section, signed-out vs offline)**
+
+**Built:**
+- walk_route.tidy_order (NN + 2-opt), crossing_legs, order_length_m; plan_reroute keeps stored legs walked backwards (geometry + dashes reversed)
+- POST /api/walk/saves/{id}/tidy: dry run (crossings, legs changed, estimate) -> Re-route snapshot, ORS on new legs only, refuses if members change, read-back; walk 5 dry run 3->0 crossings, 13 legs, est 7.06 km (was 11.5)
+- POST /api/walk/tidy-order; Build walk + regroup use it (NN fallback offline), sequence guard
+- Map: Tidy route order button on loaded saved walks
+- scripts/import_warning_review_drafts.py (renamed): both warning fields, every verdict, live cards; 140 drafts written (ids 3564-3703), snapshot db_20261021_210339
+- look_alike_warnings joins CURATOR_DRAFT_FIELDS; Remove endpoint (human history row, never deadly); 409 if field changed since drafting (approve + remove); Review queue walk species first + walk badge
+- Settings: 'Your devices & sharing', share URL/Copy/QR removed, Sharing on/off status; participant /join links built on the share URL
+- 401 vs offline: one SIGNED_OUT_TEXT; 401 JSON for fetch, HTML for navigation, no-store; offline.js signed-out banner + stop pinging; SW bypasses /health, v10; outbox keeps items on 401, no replay loop
+**Fixed:**
+- Frangula alnus (628) queues its field text, PFAF text kept in context
+- SW cached /health 200 masked real outages
+- Workshops/Lists participant links pointed at localhost when minted on the laptop
+**Files:** `app/services/walk_route.py`, `app/api/walk.py`, `app/api/culinary.py`, `app/models/species.py`, `app/services/access.py`, `app/main.py`, `app/api/sharing.py`, `app/api/workshop_tokens.py`, `frontend/index.html`, `frontend/review.html`, `frontend/settings.html`, `frontend/workshops.html`, `frontend/lists.html`, `frontend/static/js/offline.js`, `frontend/static/js/encounter-queue.js`, `frontend/static/sw.js`, `scripts/import_warning_review_drafts.py`, `tests/test_route_order_and_warning_review.py`, `tests/test_signed_out_vs_offline.py`, `tests/fixtures/walk5_stops.json`, `tests/test_experience_gates.py`, `tests/test_batch7_access.py`, `tests/test_batch5_safety_gate.py`
+**Pending:**
+- Re-run the bulk enrichment job f4d95b3f (killed by an app/ reload during this work)
+- Tidy walk 5 (Melvin, in the app)
+- Re-route/Tidy snapshot path commits the whole tree (git add -A)
+- Not committed (End session)
+
+### 2026-10-21 20:45
+**Batch 7: access gated by the token layer (localhost / curator device / participant) + source-text escaping sweep**
+
+**Built:**
+- One access middleware (app/services/access.py resolve_access): localhost = local Host AND loopback peer AND no X-Forwarded-For; curator devices https-only; participants guest (cookie Secure on https only); no device -> 'Ask Melvin for a link' 401, no data/API
+- One-time /join/<token>: atomic claim, separate cookie secret (sha256 stored), clean redirect, 'Link already used' on reuse
+- Settings > Share with Guests: Curator devices list/add (localhost only, link + QR)/revoke; guest-mode toggle and setting removed
+- Migration 0056_device_tokens (name, claimed_at, session_hash, last_used_at; expires_at nullable)
+- Workshops/Lists participant links -> /join/<token>
+**Fixed:**
+- review.html:1962 common names escaped + reviewer-notes textarea, file path/name, thumbnails, error text
+- print.html medicinal notes/folklore and ID notes escaped
+- Inline-handler quote escaping: review 17, index 9, species 2, lists 2 sites
+- species.html called undefined _resc (resources list always failed)
+- ?token=/Bearer no longer credentials; /api/workshop/tokens can't mint or list curator tokens
+- Stale duplicate Current State block removed from CHANGELOG
+**Files:** `app/services/access.py`, `app/main.py`, `app/api/sharing.py`, `app/api/identity.py`, `app/api/workshop_tokens.py`, `app/api/connections.py`, `app/models/workshop.py`, `app/services/settings_service.py`, `migrations/versions/0056_device_tokens.py`, `frontend/settings.html`, `frontend/workshops.html`, `frontend/lists.html`, `frontend/review.html`, `frontend/index.html`, `frontend/species.html`, `frontend/print.html`, `tests/test_batch7_access.py`, `tests/test_batch7_escaping.py`, `tests/test_batch4_a02_d1_01.py`, `CHANGELOG.md`
+**Pending:**
+- Melvin: pair phone via Settings > Add device (ngrok must be running)
+- Browser checks in walkthroughs B/D/E/F
+- Not committed (End session)
+- CLAUDE.md Alembic head now 0056 (batch 17)
 
 ### 2026-10-21 19:56
 **Snapshot** — End of session — Session ended from Settings page

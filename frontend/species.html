@@ -1552,7 +1552,7 @@ async function loadSpeciesList() {
     applyFilters();
   } catch (e) {
     document.getElementById('species-grid').innerHTML =
-      `<div class="empty-state">Could not load species list: ${e.message}</div>`;
+      `<div class="empty-state">Could not load species list: ${_esc(e.message)}</div>`;
   }
 }
 
@@ -1849,7 +1849,7 @@ function _spCardHtml(sp) {
       ? thumbs.slice(0, 8).map(t =>
           `<img class="ps-thumb${t.file === chosen ? ' chosen' : ''}" data-file="${_esc(t.file)}"
                 src="/thumbnails/${_esc(t.file)}"
-                onclick="_selPickPhoto(event, '${_esc(name)}', '${_esc(t.file)}', this)"
+                onclick="_selPickPhoto(event, '${_esc(name).replace(/'/g, "\\'")}', '${_esc(t.file).replace(/'/g, "\\'")}', this)"
                 onerror="this.remove()">`).join('')
       : '<span class="ps-empty">No photos available</span>';
     return `
@@ -1965,7 +1965,7 @@ async function loadProfile(name) {
   } catch (e) {
     console.error('[species] loadProfile error:', e);
     document.getElementById('culinary-content').innerHTML =
-      `<div class="empty-state">Error loading profile: ${e.message}</div>`;
+      `<div class="empty-state">Error loading profile: ${_esc(e.message)}</div>`;
     // Render gallery with whatever observations loaded before the error
     if (observations.length) {
       renderGallery(observations);
@@ -3253,7 +3253,7 @@ function _renderResources(items, sciName) {
         <a class="resources-item-url" href="${href}" target="_blank" rel="noopener">${_esc(linkText)}</a>
         ${label}
       </div>
-      <button onclick="deleteResource(${item.id}, '${_resc(sciName)}')"
+      <button onclick="deleteResource(${item.id}, '${_esc(sciName).replace(/'/g, "\\'")}')"
               title="Delete" data-guest-hide
               style="border:none;background:none;color:#bbb;cursor:pointer;font-size:0.9rem;padding:2px 4px;flex-shrink:0">✕</button>
     </div>`;
@@ -3953,6 +3953,9 @@ async function pdReject(sciName, fieldName, draftId) {
 }
 
 async function pdRegenerate(sciName) {
+  // Dry run first, before any UI change (Melvin, 22 Oct 2026) — nothing runs until confirmed.
+  if (!(await lmDryRunCheck('/api/drafts/generate', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ scientific_name: sciName, re_enrich: true }) }, 'Regenerate drafts for ' + sciName + '?'))) return;
   const btn = document.getElementById('pd-regen-btn');
   if (btn) { btn.disabled = true; btn.textContent = '⏳ Regenerating…'; }
   try {
@@ -4843,6 +4846,9 @@ function _chatScrollBottom() {
 async function repopulateSection(section) {
   const name = window._currentSpeciesName;
   if (!name) return;
+  // Dry run first, before any UI change (Melvin, 22 Oct 2026) — nothing runs until confirmed.
+  if (!(await lmDryRunCheck(`/api/culinary/${encodeURIComponent(name)}/enrich?section=${encodeURIComponent(section)}`,
+                            { method: 'POST' }, `Draft a new ${section} version for ${name}?`))) return;
   const btn = document.getElementById('repop-btn-' + section);
   if (btn) { btn.disabled = true; btn.textContent = '⏳…'; }
 
@@ -4967,6 +4973,7 @@ async function repopulateSection(section) {
 <div id="sp-toast"></div>
 <script src="/static/js/lightbox.js"></script>
 <script src="/static/js/pwa.js"></script>
+<script src="/static/js/dry-run.js"></script>
 <script src="/static/js/offline.js"></script>
 <script src="/static/js/guest-mode.js"></script>
 <script src="/static/js/seasonal-returns.js"></script>

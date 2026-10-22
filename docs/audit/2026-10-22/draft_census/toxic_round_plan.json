@@ -1,0 +1,789 @@
+{
+ "2894": {
+  "action": "approve",
+  "species": "Berula erecta",
+  "field": "medicinal_notes",
+  "species_id": 492
+ },
+ "3464": {
+  "action": "approve",
+  "species": "Circaea lutetiana",
+  "field": "medicinal_notes",
+  "species_id": 748
+ },
+ "3471": {
+  "action": "approve",
+  "species": "Cytisus scoparius",
+  "field": "medicinal_notes",
+  "species_id": 518
+ },
+ "2797": {
+  "action": "approve",
+  "species": "Epipactis helleborine",
+  "field": "medicinal_notes",
+  "species_id": 697
+ },
+ "3049": {
+  "action": "approve",
+  "species": "Erica cinerea",
+  "field": "medicinal_notes",
+  "species_id": 770
+ },
+ "2460": {
+  "action": "approve",
+  "species": "Galeopsis tetrahit",
+  "field": "medicinal_folklore",
+  "species_id": 215
+ },
+ "3483": {
+  "action": "approve",
+  "species": "Lathyrus pratensis",
+  "field": "medicinal_notes",
+  "species_id": 311
+ },
+ "3486": {
+  "action": "approve",
+  "species": "Lonicera periclymenum",
+  "field": "medicinal_notes",
+  "species_id": 240
+ },
+ "3487": {
+  "action": "approve",
+  "species": "Lycopus europaeus",
+  "field": "medicinal_notes",
+  "species_id": 834
+ },
+ "2781": {
+  "action": "approve",
+  "species": "Lythrum virgatum",
+  "field": "medicinal_notes",
+  "species_id": 725
+ },
+ "2760": {
+  "action": "approve",
+  "species": "Melampyrum sylvaticum",
+  "field": "medicinal_notes",
+  "species_id": 722
+ },
+ "3490": {
+  "action": "approve",
+  "species": "Nymphaea alba",
+  "field": "medicinal_notes",
+  "species_id": 684
+ },
+ "2714": {
+  "action": "approve",
+  "species": "Omalotheca sylvatica",
+  "field": "medicinal_notes",
+  "species_id": 703
+ },
+ "3496": {
+  "action": "approve",
+  "species": "Parnassia palustris",
+  "field": "medicinal_notes",
+  "species_id": 781
+ },
+ "3497": {
+  "action": "approve",
+  "species": "Petasites albus",
+  "field": "medicinal_notes",
+  "species_id": 19
+ },
+ "3502": {
+  "action": "approve",
+  "species": "Polygonatum odoratum",
+  "field": "medicinal_notes",
+  "species_id": 670
+ },
+ "3504": {
+  "action": "approve",
+  "species": "Populus nigra",
+  "field": "medicinal_notes",
+  "species_id": 633
+ },
+ "3505": {
+  "action": "approve",
+  "species": "Populus × canadensis",
+  "field": "medicinal_notes",
+  "species_id": 742
+ },
+ "3509": {
+  "action": "approve",
+  "species": "Pyrola minor",
+  "field": "medicinal_notes",
+  "species_id": 385
+ },
+ "2418": {
+  "action": "approve",
+  "species": "Ranunculus ficaria",
+  "field": "medicinal_folklore",
+  "species_id": 123
+ },
+ "3513": {
+  "action": "approve",
+  "species": "Rhododendron ferrugineum",
+  "field": "medicinal_notes",
+  "species_id": 801
+ },
+ "3521": {
+  "action": "approve",
+  "species": "Salix aurita",
+  "field": "medicinal_notes",
+  "species_id": 795
+ },
+ "3527": {
+  "action": "approve",
+  "species": "Soldanella alpina",
+  "field": "medicinal_notes",
+  "species_id": 814
+ },
+ "3531": {
+  "action": "approve",
+  "species": "Spiraea salicifolia",
+  "field": "medicinal_notes",
+  "species_id": 689
+ },
+ "2868": {
+  "action": "approve",
+  "species": "Vinca minor",
+  "field": "medicinal_notes",
+  "species_id": 48
+ },
+ "3052": {
+  "action": "reject",
+  "reason": "Melvin toxic round 22 Oct: placeholder / no medicinal content / early draft / non-European",
+  "species": "Adenium obesum",
+  "field": "medicinal_notes",
+  "species_id": 773
+ },
+ "3080": {
+  "action": "reject",
+  "reason": "Melvin toxic round 22 Oct: placeholder / no medicinal content / early draft / non-European",
+  "species": "Alnus alnobetula",
+  "field": "medicinal_notes",
+  "species_id": 797
+ },
+ "3071": {
+  "action": "reject",
+  "reason": "Melvin toxic round 22 Oct: placeholder / no medicinal content / early draft / non-European",
+  "species": "Ambrosia confertiflora",
+  "field": "medicinal_notes",
+  "species_id": 808
+ },
+ "3055": {
+  "action": "reject",
+  "reason": "Melvin toxic round 22 Oct: placeholder / no medicinal content / early draft / non-European",
+  "species": "Aposeris foetida",
+  "field": "medicinal_notes",
+  "species_id": 777
+ },
+ "2228": {
+  "action": "reject",
+  "reason": "Melvin toxic round 22 Oct: placeholder / no medicinal content / early draft / non-European",
+  "species": "Arceuthobium douglasii",
+  "field": "medicinal_notes",
+  "species_id": 631
+ },
+ "1775": {
+  "action": "reject",
+  "reason": "Melvin toxic round 22 Oct: placeholder / no medicinal content / early draft / non-European",
+  "species": "Blechnum spicant",
+  "field": "medicinal_notes",
+  "species_id": 413
+ },
+ "633": {
+  "action": "reject",
+  "reason": "Melvin toxic round 22 Oct: placeholder / no medicinal content / early draft / non-European",
+  "species": "Bryonia syriaca",
+  "field": "medicinal_notes",
+  "species_id": 136
+ },
+ "2216": {
+  "action": "reject",
+  "reason": "Melvin toxic round 22 Oct: placeholder / no medicinal content / early draft / non-European",
+  "species": "Carduus personata",
+  "field": "medicinal_notes",
+  "species_id": 623
+ },
+ "2187": {
+  "action": "reject",
+  "reason": "Melvin toxic round 22 Oct: placeholder / no medicinal content / early draft / non-European",
+  "species": "Centaurea jacea",
+  "field": "medicinal_notes",
+  "species_id": 602
+ },
+ "1738": {
+  "action": "reject",
+  "reason": "Melvin toxic round 22 Oct: placeholder / no medicinal content / early draft / non-European",
+  "species": "Chamaecyparis lawsoniana",
+  "field": "medicinal_notes",
+  "species_id": 576
+ },
+ "3057": {
+  "action": "reject",
+  "reason": "Melvin toxic round 22 Oct: placeholder / no medicinal content / early draft / non-European",
+  "species": "Cirsium acaulon",
+  "field": "medicinal_notes",
+  "species_id": 779
+ },
+ "2238": {
+  "action": "reject",
+  "reason": "Melvin toxic round 22 Oct: placeholder / no medicinal content / early draft / non-European",
+  "species": "Cirsium dissectum",
+  "field": "medicinal_notes",
+  "species_id": 642
+ },
+ "3120": {
+  "action": "reject",
+  "reason": "Melvin toxic round 22 Oct: placeholder / no medicinal content / early draft / non-European",
+  "species": "Coprinellus disseminatus",
+  "field": "medicinal_notes",
+  "species_id": 830
+ },
+ "2837": {
+  "action": "reject",
+  "reason": "Melvin toxic round 22 Oct: placeholder / no medicinal content / early draft / non-European",
+  "species": "Coronilla varia",
+  "field": "medicinal_notes",
+  "species_id": 757
+ },
+ "2111": {
+  "action": "reject",
+  "reason": "Melvin toxic round 22 Oct: placeholder / no medicinal content / early draft / non-European",
+  "species": "Cota tinctoria",
+  "field": "medicinal_notes",
+  "species_id": 589
+ },
+ "1824": {
+  "action": "reject",
+  "reason": "Melvin toxic round 22 Oct: placeholder / no medicinal content / early draft / non-European",
+  "species": "Dryopteris crassirhizoma",
+  "field": "medicinal_notes",
+  "species_id": 477
+ },
+ "1839": {
+  "action": "reject",
+  "reason": "Melvin toxic round 22 Oct: placeholder / no medicinal content / early draft / non-European",
+  "species": "Equisetum sylvaticum",
+  "field": "medicinal_notes",
+  "species_id": 364
+ },
+ "2004": {
+  "action": "reject",
+  "reason": "Melvin toxic round 22 Oct: placeholder / no medicinal content / early draft / non-European",
+  "species": "Erigeron sumatrensis",
+  "field": "medicinal_notes",
+  "species_id": 586
+ },
+ "2266": {
+  "action": "reject",
+  "reason": "Melvin toxic round 22 Oct: placeholder / no medicinal content / early draft / non-European",
+  "species": "Erinus alpinus",
+  "field": "medicinal_notes",
+  "species_id": 657
+ },
+ "3075": {
+  "action": "reject",
+  "reason": "Melvin toxic round 22 Oct: placeholder / no medicinal content / early draft / non-European",
+  "species": "Euphrasia alpina",
+  "field": "medicinal_notes",
+  "species_id": 811
+ },
+ "2226": {
+  "action": "reject",
+  "reason": "Melvin toxic round 22 Oct: placeholder / no medicinal content / early draft / non-European",
+  "species": "Fomitopsis pinicola",
+  "field": "medicinal_notes",
+  "species_id": 447
+ },
+ "2302": {
+  "action": "reject",
+  "reason": "Melvin toxic round 22 Oct: placeholder / no medicinal content / early draft / non-European",
+  "species": "Galium rotundifolium",
+  "field": "medicinal_notes",
+  "species_id": 675
+ },
+ "3035": {
+  "action": "reject",
+  "reason": "Melvin toxic round 22 Oct: placeholder / no medicinal content / early draft / non-European",
+  "species": "Galium sylvaticum",
+  "field": "medicinal_notes",
+  "species_id": 132
+ },
+ "3008": {
+  "action": "reject",
+  "reason": "Melvin toxic round 22 Oct: placeholder / no medicinal content / early draft / non-European",
+  "species": "Genista sagittalis",
+  "field": "medicinal_notes",
+  "species_id": 188
+ },
+ "1747": {
+  "action": "reject",
+  "reason": "Melvin toxic round 22 Oct: placeholder / no medicinal content / early draft / non-European",
+  "species": "Genista tinctoria",
+  "field": "medicinal_notes",
+  "species_id": 585
+ },
+ "3545": {
+  "action": "reject",
+  "reason": "Melvin toxic round 22 Oct: placeholder / no medicinal content / early draft / non-European",
+  "species": "Gentiana verna",
+  "field": "medicinal_notes",
+  "species_id": 789
+ },
+ "3166": {
+  "action": "reject",
+  "reason": "Melvin toxic round 22 Oct: placeholder / no medicinal content / early draft / non-European",
+  "species": "Gloeophyllum sepiarium",
+  "field": "medicinal_notes",
+  "species_id": 809
+ },
+ "2821": {
+  "action": "reject",
+  "reason": "Melvin toxic round 22 Oct: placeholder / no medicinal content / early draft / non-European",
+  "species": "Hedera helix",
+  "field": "medicinal_notes",
+  "species_id": 745
+ },
+ "2281": {
+  "action": "reject",
+  "reason": "Melvin toxic round 22 Oct: placeholder / no medicinal content / early draft / non-European",
+  "species": "Helianthus silphioides",
+  "field": "medicinal_notes",
+  "species_id": 671
+ },
+ "2344": {
+  "action": "reject",
+  "reason": "Melvin toxic round 22 Oct: placeholder / no medicinal content / early draft / non-European",
+  "species": "Heracleum mantegazzianum",
+  "field": "medicinal_notes",
+  "species_id": 688
+ },
+ "2219": {
+  "action": "reject",
+  "reason": "Melvin toxic round 22 Oct: placeholder / no medicinal content / early draft / non-European",
+  "species": "Hieracium lachenalii",
+  "field": "medicinal_notes",
+  "species_id": 626
+ },
+ "3480": {
+  "action": "reject",
+  "reason": "Melvin toxic round 22 Oct: placeholder / no medicinal content / early draft / non-European",
+  "species": "Hieracium umbellatum",
+  "field": "medicinal_notes",
+  "species_id": 485
+ },
+ "3077": {
+  "action": "reject",
+  "reason": "Melvin toxic round 22 Oct: placeholder / no medicinal content / early draft / non-European",
+  "species": "Homogyne alpina",
+  "field": "medicinal_notes",
+  "species_id": 813
+ },
+ "3047": {
+  "action": "reject",
+  "reason": "Melvin toxic round 22 Oct: placeholder / no medicinal content / early draft / non-European",
+  "species": "Jacobaea erucifolia",
+  "field": "medicinal_notes",
+  "species_id": 767
+ },
+ "2264": {
+  "action": "reject",
+  "reason": "Melvin toxic round 22 Oct: placeholder / no medicinal content / early draft / non-European",
+  "species": "Jasione laevis",
+  "field": "medicinal_notes",
+  "species_id": 655
+ },
+ "2277": {
+  "action": "reject",
+  "reason": "Melvin toxic round 22 Oct: placeholder / no medicinal content / early draft / non-European",
+  "species": "Jasione montana",
+  "field": "medicinal_notes",
+  "species_id": 669
+ },
+ "3561": {
+  "action": "reject",
+  "reason": "Melvin toxic round 22 Oct: placeholder / no medicinal content / early draft / non-European",
+  "species": "Lactarius pubescens",
+  "field": "medicinal_notes",
+  "species_id": 852
+ },
+ "3099": {
+  "action": "reject",
+  "reason": "Melvin toxic round 22 Oct: placeholder / no medicinal content / early draft / non-European",
+  "species": "Leucocoprinus leucothites",
+  "field": "medicinal_notes",
+  "species_id": 818
+ },
+ "1705": {
+  "action": "reject",
+  "reason": "Melvin toxic round 22 Oct: placeholder / no medicinal content / early draft / non-European",
+  "species": "Linaria purpurea",
+  "field": "medicinal_notes",
+  "species_id": 563
+ },
+ "2756": {
+  "action": "reject",
+  "reason": "Melvin toxic round 22 Oct: placeholder / no medicinal content / early draft / non-European",
+  "species": "Linaria vulgaris",
+  "field": "medicinal_notes",
+  "species_id": 718
+ },
+ "2239": {
+  "action": "reject",
+  "reason": "Melvin toxic round 22 Oct: placeholder / no medicinal content / early draft / non-European",
+  "species": "Lonicera xylosteum",
+  "field": "medicinal_notes",
+  "species_id": 643
+ },
+ "2320": {
+  "action": "reject",
+  "reason": "Melvin toxic round 22 Oct: placeholder / no medicinal content / early draft / non-European",
+  "species": "Luzula sylvatica",
+  "field": "medicinal_notes",
+  "species_id": 680
+ },
+ "3167": {
+  "action": "reject",
+  "reason": "Melvin toxic round 22 Oct: placeholder / no medicinal content / early draft / non-European",
+  "species": "Melampyrum nemorosum",
+  "field": "medicinal_notes",
+  "species_id": 787
+ },
+ "3050": {
+  "action": "reject",
+  "reason": "Melvin toxic round 22 Oct: placeholder / no medicinal content / early draft / non-European",
+  "species": "Mnium hornum",
+  "field": "medicinal_notes",
+  "species_id": 771
+ },
+ "1901": {
+  "action": "reject",
+  "reason": "Melvin toxic round 22 Oct: placeholder / no medicinal content / early draft / non-European",
+  "species": "Myosotis scorpioides",
+  "field": "medicinal_notes",
+  "species_id": 377
+ },
+ "2791": {
+  "action": "reject",
+  "reason": "Melvin toxic round 22 Oct: placeholder / no medicinal content / early draft / non-European",
+  "species": "Oreomecon crocea",
+  "field": "medicinal_notes",
+  "species_id": 734
+ },
+ "2728": {
+  "action": "reject",
+  "reason": "Melvin toxic round 22 Oct: placeholder / no medicinal content / early draft / non-European",
+  "species": "Oreopteris limbosperma",
+  "field": "medicinal_notes",
+  "species_id": 708
+ },
+ "2883": {
+  "action": "reject",
+  "reason": "Melvin toxic round 22 Oct: placeholder / no medicinal content / early draft / non-European",
+  "species": "Orobanche caryophyllacea",
+  "field": "medicinal_notes",
+  "species_id": 66
+ },
+ "2751": {
+  "action": "reject",
+  "reason": "Melvin toxic round 22 Oct: placeholder / no medicinal content / early draft / non-European",
+  "species": "Papaver atlanticum",
+  "field": "medicinal_notes",
+  "species_id": 714
+ },
+ "2725": {
+  "action": "reject",
+  "reason": "Melvin toxic round 22 Oct: placeholder / no medicinal content / early draft / non-European",
+  "species": "Parmotrema perlatum",
+  "field": "medicinal_notes",
+  "species_id": 705
+ },
+ "3127": {
+  "action": "reject",
+  "reason": "Melvin toxic round 22 Oct: placeholder / no medicinal content / early draft / non-European",
+  "species": "Paulownia tomentosa",
+  "field": "medicinal_notes",
+  "species_id": 837
+ },
+ "3137": {
+  "action": "reject",
+  "reason": "Melvin toxic round 22 Oct: placeholder / no medicinal content / early draft / non-European",
+  "species": "Paxillus involutus",
+  "field": "medicinal_notes",
+  "species_id": 840
+ },
+ "2217": {
+  "action": "reject",
+  "reason": "Melvin toxic round 22 Oct: placeholder / no medicinal content / early draft / non-European",
+  "species": "Pedicularis palustris",
+  "field": "medicinal_notes",
+  "species_id": 624
+ },
+ "1914": {
+  "action": "reject",
+  "reason": "Melvin toxic round 22 Oct: placeholder / no medicinal content / early draft / non-European",
+  "species": "Petasites hybridus",
+  "field": "medicinal_notes",
+  "species_id": 334
+ },
+ "3563": {
+  "action": "reject",
+  "reason": "Melvin toxic round 22 Oct: placeholder / no medicinal content / early draft / non-European",
+  "species": "Phlegmacium triumphans",
+  "field": "medicinal_notes",
+  "species_id": 853
+ },
+ "2993": {
+  "action": "reject",
+  "reason": "Melvin toxic round 22 Oct: placeholder / no medicinal content / early draft / non-European",
+  "species": "Pilosella aurantiaca",
+  "field": "medicinal_notes",
+  "species_id": 182
+ },
+ "2643": {
+  "action": "reject",
+  "reason": "Melvin toxic round 22 Oct: placeholder / no medicinal content / early draft / non-European",
+  "species": "Polygala alpestris",
+  "field": "medicinal_notes",
+  "species_id": 696
+ },
+ "1936": {
+  "action": "reject",
+  "reason": "Melvin toxic round 22 Oct: placeholder / no medicinal content / early draft / non-European",
+  "species": "Polygala vulgaris",
+  "field": "medicinal_notes",
+  "species_id": 221
+ },
+ "2758": {
+  "action": "reject",
+  "reason": "Melvin toxic round 22 Oct: placeholder / no medicinal content / early draft / non-European",
+  "species": "Polygonatum verticillatum",
+  "field": "medicinal_notes",
+  "species_id": 720
+ },
+ "2319": {
+  "action": "reject",
+  "reason": "Melvin toxic round 22 Oct: placeholder / no medicinal content / early draft / non-European",
+  "species": "Polystichum aculeatum",
+  "field": "medicinal_notes",
+  "species_id": 679
+ },
+ "3048": {
+  "action": "reject",
+  "reason": "Melvin toxic round 22 Oct: placeholder / no medicinal content / early draft / non-European",
+  "species": "Polytrichum formosum",
+  "field": "medicinal_notes",
+  "species_id": 769
+ },
+ "2957": {
+  "action": "reject",
+  "reason": "Melvin toxic round 22 Oct: placeholder / no medicinal content / early draft / non-European",
+  "species": "Populus tremuloides",
+  "field": "medicinal_notes",
+  "species_id": 504
+ },
+ "802": {
+  "action": "reject",
+  "reason": "Melvin toxic round 22 Oct: placeholder / no medicinal content / early draft / non-European",
+  "species": "Psilocybe semilanceata",
+  "field": "medicinal_notes",
+  "species_id": 292
+ },
+ "3147": {
+  "action": "reject",
+  "reason": "Melvin toxic round 22 Oct: placeholder / no medicinal content / early draft / non-European",
+  "species": "Ramaria stricta",
+  "field": "medicinal_notes",
+  "species_id": 841
+ },
+ "2929": {
+  "action": "reject",
+  "reason": "Melvin toxic round 22 Oct: placeholder / no medicinal content / early draft / non-European",
+  "species": "Pyxine albovirens",
+  "field": "medicinal_notes",
+  "species_id": 498
+ },
+ "2205": {
+  "action": "reject",
+  "reason": "Melvin toxic round 22 Oct: placeholder / no medicinal content / early draft / non-European",
+  "species": "Ranunculus aconitifolius",
+  "field": "medicinal_notes",
+  "species_id": 610
+ },
+ "1972": {
+  "action": "reject",
+  "reason": "Melvin toxic round 22 Oct: placeholder / no medicinal content / early draft / non-European",
+  "species": "Ranunculus ficaria",
+  "field": "medicinal_notes",
+  "species_id": 123
+ },
+ "2269": {
+  "action": "reject",
+  "reason": "Melvin toxic round 22 Oct: placeholder / no medicinal content / early draft / non-European",
+  "species": "Ranunculus platanifolius",
+  "field": "medicinal_notes",
+  "species_id": 662
+ },
+ "2342": {
+  "action": "reject",
+  "reason": "Melvin toxic round 22 Oct: placeholder / no medicinal content / early draft / non-European",
+  "species": "Rhododendron albiflorum",
+  "field": "medicinal_notes",
+  "species_id": 686
+ },
+ "3559": {
+  "action": "reject",
+  "reason": "Melvin toxic round 22 Oct: placeholder / no medicinal content / early draft / non-European",
+  "species": "Rhytisma acerinum",
+  "field": "medicinal_notes",
+  "species_id": 851
+ },
+ "2107": {
+  "action": "reject",
+  "reason": "Melvin toxic round 22 Oct: placeholder / no medicinal content / early draft / non-European",
+  "species": "Salix alba",
+  "field": "medicinal_notes",
+  "species_id": 432
+ },
+ "3175": {
+  "action": "reject",
+  "reason": "Melvin toxic round 22 Oct: placeholder / no medicinal content / early draft / non-European",
+  "species": "Salix barclayi",
+  "field": "medicinal_notes",
+  "species_id": 846
+ },
+ "2006": {
+  "action": "reject",
+  "reason": "Melvin toxic round 22 Oct: placeholder / no medicinal content / early draft / non-European",
+  "species": "Salix caprea",
+  "field": "medicinal_notes",
+  "species_id": 409
+ },
+ "2317": {
+  "action": "reject",
+  "reason": "Melvin toxic round 22 Oct: placeholder / no medicinal content / early draft / non-European",
+  "species": "Salix myrsinifolia",
+  "field": "medicinal_notes",
+  "species_id": 678
+ },
+ "2208": {
+  "action": "reject",
+  "reason": "Melvin toxic round 22 Oct: placeholder / no medicinal content / early draft / non-European",
+  "species": "Saxifraga rotundifolia",
+  "field": "medicinal_notes",
+  "species_id": 614
+ },
+ "2838": {
+  "action": "reject",
+  "reason": "Melvin toxic round 22 Oct: placeholder / no medicinal content / early draft / non-European",
+  "species": "Securigera varia",
+  "field": "medicinal_notes",
+  "species_id": 758
+ },
+ "2813": {
+  "action": "reject",
+  "reason": "Melvin toxic round 22 Oct: placeholder / no medicinal content / early draft / non-European",
+  "species": "Senecio ovatus",
+  "field": "medicinal_notes",
+  "species_id": 719
+ },
+ "2214": {
+  "action": "reject",
+  "reason": "Melvin toxic round 22 Oct: placeholder / no medicinal content / early draft / non-European",
+  "species": "Silene flos-cuculi",
+  "field": "medicinal_notes",
+  "species_id": 621
+ },
+ "2222": {
+  "action": "reject",
+  "reason": "Melvin toxic round 22 Oct: placeholder / no medicinal content / early draft / non-European",
+  "species": "Symphytum asperum",
+  "field": "medicinal_notes",
+  "species_id": 629
+ },
+ "3711": {
+  "action": "reject",
+  "reason": "Melvin toxic round 22 Oct: placeholder / no medicinal content / early draft / non-European",
+  "species": "Trametopsis cervina",
+  "field": "medicinal_notes",
+  "species_id": 854
+ },
+ "2922": {
+  "action": "reject",
+  "reason": "Melvin toxic round 22 Oct: placeholder / no medicinal content / early draft / non-European",
+  "species": "Tricholomopsis rutilans",
+  "field": "medicinal_notes",
+  "species_id": 496
+ },
+ "2810": {
+  "action": "reject",
+  "reason": "Melvin toxic round 22 Oct: placeholder / no medicinal content / early draft / non-European",
+  "species": "Verbascum chaixii",
+  "field": "medicinal_notes",
+  "species_id": 728
+ },
+ "3474": {
+  "action": "reject",
+  "reason": "Melvin toxic round 22 Oct: placeholder / no medicinal content / early draft / non-European",
+  "species": "Euphorbia corollata",
+  "field": "medicinal_notes",
+  "species_id": 843
+ },
+ "3060": {
+  "action": "reject",
+  "reason": "Melvin toxic round 22 Oct: unsafe or contradicts verdict",
+  "species": "Aconitum plicatum",
+  "field": "medicinal_notes",
+  "species_id": 782
+ },
+ "2831": {
+  "action": "reject",
+  "reason": "Melvin toxic round 22 Oct: unsafe or contradicts verdict",
+  "species": "Aconitum variegatum",
+  "field": "medicinal_notes",
+  "species_id": 750
+ },
+ "2951": {
+  "action": "reject",
+  "reason": "Melvin toxic round 22 Oct: unsafe or contradicts verdict",
+  "species": "Amanita citrina",
+  "field": "medicinal_notes",
+  "species_id": 503
+ },
+ "3546": {
+  "action": "reject",
+  "reason": "Melvin toxic round 22 Oct: unsafe or contradicts verdict",
+  "species": "Ampulloclitocybe clavipes",
+  "field": "medicinal_notes",
+  "species_id": 796
+ },
+ "3029": {
+  "action": "reject",
+  "reason": "Melvin toxic round 22 Oct: unsafe or contradicts verdict",
+  "species": "Crocus",
+  "field": "medicinal_notes",
+  "species_id": 354
+ },
+ "3472": {
+  "action": "reject",
+  "reason": "Melvin toxic round 22 Oct: unsafe or contradicts verdict",
+  "species": "Dactylorhiza maculata",
+  "field": "medicinal_notes",
+  "species_id": 360
+ },
+ "2648": {
+  "action": "reject",
+  "reason": "Melvin toxic round 22 Oct: unsafe or contradicts verdict",
+  "species": "Platanthera chlorantha",
+  "field": "medicinal_notes",
+  "species_id": 698
+ },
+ "3485": {
+  "action": "reject",
+  "reason": "Melvin toxic round 22 Oct: unsafe or contradicts verdict",
+  "species": "Lilium martagon",
+  "field": "medicinal_notes",
+  "species_id": 637
+ }
+}

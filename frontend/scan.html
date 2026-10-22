@@ -4623,6 +4623,8 @@ let _enrichPollTimer = null;
 let _enrichLogSeen = 0;
 
 async function runEnrich() {
+  // Dry run first, before any UI change (Melvin, 22 Oct 2026) — nothing runs until confirmed.
+  if (!(await lmDryRunCheck('/api/enrich/run', { method: 'POST' }, 'Run enrichment?'))) return;
   const btn = document.getElementById('btn-enrich');
   btn.disabled = true;
   document.getElementById('enrich-summary').classList.remove('visible');
@@ -4746,6 +4748,8 @@ function _updateEmptyCounts(d) {
 // ── Re-enrich empty species ────────────────────────────────────────────────
 
 async function runReEnrichEmpty() {
+  // Dry run first, before any UI change (Melvin, 22 Oct 2026) — nothing runs until confirmed.
+  if (!(await lmDryRunCheck('/api/enrich/re-enrich-empty', { method: 'POST' }, 'Re-enrich species with no edible parts?'))) return;
   const btn = document.getElementById('btn-re-enrich-empty');
   btn.disabled = true;
   document.getElementById('enrich-summary').classList.remove('visible');
@@ -4938,6 +4942,8 @@ async function _backfillLoadCounts() {
 }
 
 async function _backfillRunDomain(field, btn) {
+  // Dry run first, before any UI change (Melvin, 22 Oct 2026) — nothing runs until confirmed.
+  if (!(await lmDryRunCheck('/api/drafts/backfill?field=' + encodeURIComponent(field), { method: 'POST' }, 'Backfill ' + field + '?'))) return;
   if (btn) btn.disabled = true;
   _caffArm();
   try {
@@ -4962,6 +4968,8 @@ async function _backfillRunDomain(field, btn) {
 }
 
 async function _backfillRunAll() {
+  // Dry run first, before any UI change (Melvin, 22 Oct 2026) — nothing runs until confirmed.
+  if (!(await lmDryRunCheck('/api/drafts/backfill?field=all', { method: 'POST' }, 'Backfill all domains?'))) return;
   // M15: one request to the backend orchestrator, which runs each domain
   // sequentially as its own job. No client-side fan-out / setTimeout pseudo-sequencing.
   const btn = document.getElementById('btn-backfill-run-all');
@@ -5752,6 +5760,7 @@ async function _jqResumeJob(id) {
   // the job FAILED. Mirror _jqRerunJob: cancel the stuck job and POST /api/drafts/backfill
   // which resumes from in-memory resume_from.
   if (job && job.job_type === 'ai_draft_backfill') {
+    if (!(await lmDryRunCheck('/api/drafts/backfill', { method: 'POST' }, 'Resume the AI draft backfill?'))) return;
     await fetch(`/api/queue/${id}/cancel`, { method: 'POST' }).catch(() => {});
     _jqDismissed.add(id);
     await fetch('/api/drafts/backfill', { method: 'POST' }).catch(() => null);
@@ -5792,6 +5801,7 @@ async function _jqRerunJob(id) {
   if (!job) return;
   // Server-driven jobs need their own restart endpoints
   if (job.job_type === 'ai_draft_backfill') {
+    if (!(await lmDryRunCheck('/api/drafts/backfill', { method: 'POST' }, 'Re-run the AI draft backfill?'))) return;
     await fetch(`/api/queue/${id}/cancel`, { method: 'POST' }).catch(() => {});
     _jqDismissed.add(id);
     await fetch('/api/drafts/backfill', { method: 'POST' }).catch(() => null);
@@ -6041,6 +6051,7 @@ async function _jqRunEnrich(job) {
 </div>
 
 <script src="/static/js/pwa.js"></script>
+<script src="/static/js/dry-run.js"></script>
 <script src="/static/js/offline.js"></script>
 <script src="/static/js/guest-mode.js"></script>
 <script src="/static/js/seasonal-returns.js"></script>

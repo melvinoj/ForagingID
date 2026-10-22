@@ -67,14 +67,20 @@ async def _curl_get(url: str) -> Optional[str]:
         stdout, stderr = await asyncio.wait_for(
             proc.communicate(), timeout=REQUEST_TIMEOUT_S + 5
         )
+        from app.services import net_health
         if proc.returncode != 0:
             log.debug("curl exit %d for %r: %s", proc.returncode, url,
                       stderr.decode(errors="replace")[:200])
+            if proc.returncode in net_health.CURL_NETWORK_EXIT:
+                net_health.note_failure("trompenburg", f"curl exit {proc.returncode}")
             return None
+        net_health.note_success("trompenburg")
         text = stdout.decode("utf-8", errors="replace")
         return text if text.strip() else None
     except Exception as e:
         log.debug("curl fetch failed for %r: %s", url, e)
+        from app.services import net_health
+        net_health.note_failure("trompenburg", e)
         return None
 
 

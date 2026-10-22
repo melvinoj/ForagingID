@@ -11,7 +11,7 @@ import logging
 from datetime import datetime
 from typing import Optional
 
-from fastapi import APIRouter, BackgroundTasks, HTTPException
+from fastapi import APIRouter, BackgroundTasks, HTTPException, Query
 from sqlalchemy import func, select, text
 
 from app.database import AsyncSessionLocal
@@ -217,7 +217,14 @@ async def last_run_table():
 
 
 @router.post("/run")
-async def enrich_run(background_tasks: BackgroundTasks):
+async def enrich_run(background_tasks: BackgroundTasks,
+                     dry_run: bool = Query(False, description="show what it would do; start nothing")):
+    if dry_run:
+        from app.services.enrichment import batch_species_names
+        from app.services.enrichment_plan import plan
+        async with AsyncSessionLocal() as session:
+            return await plan(session, await batch_species_names(),
+                              note="Only fills empty fields; changed source text goes to Review. Pauses if the network fails.")
     if _state["running"]:
         return {"status": "already_running"}
     background_tasks.add_task(_run_enrichment_task, None, "manual")
@@ -298,7 +305,8 @@ async def enrich_resume(background_tasks: BackgroundTasks):
 
 
 @router.post("/re-enrich-empty")
-async def re_enrich_empty(background_tasks: BackgroundTasks):
+async def re_enrich_empty(background_tasks: BackgroundTasks,
+                          dry_run: bool = Query(False, description="show what it would do; start nothing")):
     """
     Re-fetch PFAF + Wikidata for all confirmed species that already have a
     culinary_info row but whose edible_parts field is NULL (i.e. the original
@@ -328,6 +336,10 @@ async def re_enrich_empty(background_tasks: BackgroundTasks):
         )).scalars().all()
 
     target = list(rows)
+    if dry_run:
+        from app.services.enrichment_plan import plan
+        async with AsyncSessionLocal() as session:
+            return await plan(session, target, note="Species with no edible parts yet; only empty fields are filled.")
     if not target:
         return {"status": "nothing_to_do", "count": 0}
 

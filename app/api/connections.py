@@ -15,14 +15,9 @@ from fastapi.responses import Response
 router = APIRouter(tags=["connections"])
 
 
-@router.get("/api/connections/qr")
-async def generate_qr(
-    url: str = Query(..., description="URL to encode in the QR code"),
-):
-    """
-    Generate a QR code PNG for `url` and return it as a base64 data URL.
-    The client embeds the result directly as an <img src="data:image/png;base64,...">.
-    """
+def qr_data_url(text: str) -> str:
+    """A QR code PNG for `text` as a base64 data URL. Also used server-side for
+    one-time /join links, so those never travel in a ?url= query string."""
     try:
         import qrcode
         from qrcode.image.pure import PyPNGImage
@@ -38,7 +33,7 @@ async def generate_qr(
         box_size=8,
         border=3,
     )
-    qr.add_data(url)
+    qr.add_data(text)
     qr.make(fit=True)
 
     img = qr.make_image(fill_color="#2d5016", back_color="white")
@@ -49,6 +44,15 @@ async def generate_qr(
     png_bytes = buf.read()
 
     b64 = base64.b64encode(png_bytes).decode("ascii")
-    data_url = f"data:image/png;base64,{b64}"
+    return f"data:image/png;base64,{b64}"
 
-    return {"data_url": data_url, "url": url}
+
+@router.get("/api/connections/qr")
+async def generate_qr(
+    url: str = Query(..., description="URL to encode in the QR code"),
+):
+    """
+    Generate a QR code PNG for `url` and return it as a base64 data URL.
+    The client embeds the result directly as an <img src="data:image/png;base64,...">.
+    """
+    return {"data_url": qr_data_url(url), "url": url}

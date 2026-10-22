@@ -89,6 +89,39 @@
     }
   }
 
+  // ── Signed-out banner (batch 7 follow-up, Melvin 21 Oct 2026) ──────────────
+  // A 401 means the server is reachable but this device has no valid device or
+  // participant cookie — not offline. The text is the server's 401 `detail`
+  // (app/services/access.py SIGNED_OUT_TEXT); this copy is only the fallback
+  // and tests/test_signed_out_vs_offline.py keeps the two equal.
+  var SIGNED_OUT_TEXT = "This device isn't signed in — ask Melvin for a link";
+
+  function _showSignedOut(text) {
+    _hideBanner();
+    if (document.getElementById('signedout-banner')) return;
+    var b = document.createElement('div');
+    b.id = 'signedout-banner';
+    b.setAttribute('role', 'status');
+    b.style.cssText = [
+      'position:fixed', 'top:0', 'left:0', 'right:0', 'z-index:10000',
+      'display:flex', 'align-items:center', 'gap:10px',
+      'padding:7px 16px',
+      'background:#3b1d2a', 'color:#ffe4ec',
+      'font-size:0.83rem', 'font-family:system-ui,sans-serif',
+      'box-shadow:0 2px 6px rgba(0,0,0,0.3)',
+    ].join(';');
+    var icon = document.createElement('span');
+    icon.style.fontSize = '1rem';
+    icon.textContent = '🔒';
+    var msg = document.createElement('strong');
+    msg.textContent = text || SIGNED_OUT_TEXT;
+    b.appendChild(icon);
+    b.appendChild(msg);
+    document.body.style.paddingTop =
+      (parseInt(document.body.style.paddingTop || '0', 10) + 36) + 'px';
+    document.body.insertBefore(b, document.body.firstChild);
+  }
+
   // ── Offline-mode CSS ──────────────────────────────────────────────────────
 
   var _styleInjected = false;
@@ -180,7 +213,7 @@
   }
 
   async function _precacheSpecies(force) {
-    if (_wasOffline) return;
+    if (_wasOffline || _signedOut) return;
     if (!force && !_shouldPrecache()) return;
     if (typeof fetch === 'undefined') return;
 
@@ -226,8 +259,17 @@
   var _consecutiveFails = 0;
   var _pingTimer        = null;
   var _wasOffline       = false;
+  var _signedOut        = false;
+
+  // "Offline" = the app cannot be reached: a network error / timeout, or a
+  // gateway status (502/503/504 — the ngrok tunnel is up but the laptop's
+  // server is not). 401 = reachable but this device isn't signed in: the
+  // signed-out banner instead, and pinging stops (no retry loop — signing in
+  // is a /join link, which reloads the page). Any other status changes nothing.
+  var GATEWAY_DOWN = { 502: 1, 503: 1, 504: 1 };
 
   async function _ping() {
+    if (_signedOut) return;
     try {
       var r = await fetch(PING_URL, { method: 'GET', cache: 'no-store',
         signal: AbortSignal.timeout(PING_TIMEOUT_MS) });
@@ -238,12 +280,24 @@
           _setOffline(false);
           setTimeout(function () { _precacheSpecies(true); }, 2500);
         }
-      } else {
+      } else if (r.status === 401) {
+        var detail = null;
+        try { detail = ((await r.json()) || {}).detail || null; } catch (e) {}
+        _onSignedOut(detail);
+      } else if (GATEWAY_DOWN[r.status]) {
         _onPingFail();
       }
     } catch (e) {
       _onPingFail();
     }
+  }
+
+  function _onSignedOut(detail) {
+    _signedOut = true;
+    _consecutiveFails = 0;
+    if (_wasOffline) { _wasOffline = false; _setOffline(false); }
+    if (_pingTimer) { clearInterval(_pingTimer); _pingTimer = null; }
+    _showSignedOut(detail);
   }
 
   function _onPingFail() {

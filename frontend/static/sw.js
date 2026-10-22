@@ -13,7 +13,7 @@
 //
 // Writes (POST / PATCH / DELETE) are never intercepted — they always go to the network.
 
-const CACHE_VERSION  = 'foragingid-v9';   // bump → old STATIC/RUNTIME caches evicted on activate
+const CACHE_VERSION  = 'foragingid-v11';   // bump → old STATIC/RUNTIME caches evicted on activate
 const STATIC_CACHE   = CACHE_VERSION + '-static';
 const RUNTIME_CACHE  = CACHE_VERSION + '-runtime';
 // TILE_CACHE and SPECIES_CACHE are deliberately version-independent. Both
@@ -45,6 +45,7 @@ const APP_SHELL = [
   '/static/js/pwa.js',
   '/static/js/guest-mode.js',
   '/static/js/offline.js',
+  '/static/js/dry-run.js',
   '/static/js/safety-gate.js',   // batch 5 safety gate — every map/species/list page needs it offline
   '/static/icons/icon-192.png',
   '/static/icons/icon-512.png',
@@ -272,6 +273,16 @@ self.addEventListener('fetch', (event) => {
   if (request.method !== 'GET') return;
 
   const url = new URL(request.url);
+
+  // offline.js's reachability ping must see the real network: never answered
+  // from a cache (a cached 200 hid real outages), never stored. A 401 here
+  // means "not signed in", which offline.js tells apart from offline.
+  if (url.origin === self.location.origin && url.pathname === '/health') return;
+
+  // 401 (no valid device / participant cookie) is never cached and never
+  // replaced by a cached copy: every strategy below stores only ok responses
+  // (tiles: also opaque cross-origin), and only a network ERROR falls back to
+  // the cache — a 401 response is returned as it is.
 
   // Cross-origin tile CDNs → tile cache
   if (isTile(url)) {

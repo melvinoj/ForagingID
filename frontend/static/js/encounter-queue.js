@@ -17,16 +17,18 @@
 //     response body to parse and echo the matching client_uuid (with an id). This
 //     defeats a proxy/ngrok interstitial that returns "200 OK" with HTML.
 //   • ngrok-skip-browser-warning header sent on every POST.
-//   • Failure taxonomy: 401/403 = auth (keep retrying, surface "re-open your link",
-//     queue intentionally wedges so nothing is lost); 408/429/5xx/network = transient
+//   • Failure taxonomy: 401/403 = auth (keep every record; 401 shows "This device
+//     isn't signed in — ask Melvin for a link" and stops the periodic replay — a
+//     focus / online / page load still tries once; the queue intentionally wedges
+//     so nothing is lost); 408/429/5xx/network = transient
 //     (retry, preserve order); other permanent 4xx (e.g. 422) = PARK in a won't-retry
 //     bucket so one poison record can't stall everything behind it.
 //   • Location grace: a record captured without coordinates waits briefly for a fresh
 //     GPS fix (attachLocation) before its first send, so field captures land located.
 //
-// Auth: the participant token is read ONCE from ?token= on load into a module-level
-// variable and attached as `Authorization: Bearer` on every send. Never persisted in
-// the queue, never in the URL.
+// Auth: the device cookie set by a one-time /join link (batch 7) — same-origin
+// fetch sends it. (A ?token= value is still read and sent as Bearer for old
+// links; the server no longer treats it as a credential.)
 //
 // Exposes window.EncounterQueue and dispatches window CustomEvents:
 //   • 'encounter-queue:change' { pending, parked, failed, authBlocked, syncing }
@@ -116,7 +118,12 @@
 
   // ── Status ──────────────────────────────────────────────────────────────────
   var _flushing    = false;
-  var _authBlocked = false;  // last flush hit a 401/403 — token expired/invalid
+  var _authBlocked = false;  // last flush hit a 401/403
+  var _authStatus  = null;   // 401 = not signed in, 403 = not allowed
+  // The server's 401 detail (app/services/access.py SIGNED_OUT_TEXT); this copy
+  // is the fallback, kept equal by tests/test_signed_out_vs_offline.py.
+  var SIGNED_OUT_TEXT = "This device isn't signed in — ask Melvin for a link";
+  var _signedOutText  = SIGNED_OUT_TEXT;
 
   function _status() {
     return _all().then(function (recs) {
@@ -128,9 +135,10 @@
         if ((recs[i].attempts || 0) > FAILED_THRESHOLD) failed++;
       }
       return { pending: pending, parked: parked, failed: failed,
-               authBlocked: _authBlocked, syncing: _flushing };
+               authBlocked: _authBlocked, signedOut: _authStatus === 401, syncing: _flushing };
     }).catch(function () {
-      return { pending: 0, parked: 0, failed: 0, authBlocked: _authBlocked, syncing: _flushing };
+      return { pending: 0, parked: 0, failed: 0, authBlocked: _authBlocked,
+               signedOut: _authStatus === 401, syncing: _flushing };
     });
   }
 
@@ -159,7 +167,9 @@
     if (!chip) return;
     var dot, label, bg, fg, opacity = '1';
     if (st.authBlocked) {
-      dot = '⚠️'; label = 'Token expired — re-open your link';   bg = '#5a2030'; fg = '#ffd2d2';
+      dot = '🔒'; label = st.signedOut ? _signedOutText : 'Not allowed from this device — ask Melvin';
+      bg = '#5a2030'; fg = '#ffd2d2';
+      if (st.pending > 0) label += ' (' + st.pending + ' kept)';
     } else if (st.syncing && st.pending > 0) {
       dot = '🔄'; label = 'Syncing…';                            bg = '#23406b'; fg = '#dce8ff';
     } else if (st.pending > 0 && st.failed > 0) {
@@ -193,7 +203,9 @@
   var _intervalId = null;
   function _scheduleInterval() {
     if (_intervalId) return;
-    _intervalId = setInterval(function () { flush(); }, REPLAY_INTERVAL_MS);
+    // Never a retry loop against a 401/403 (also covers an interval started
+    // before that flush finished).
+    _intervalId = setInterval(function () { if (!_authBlocked) flush(); }, REPLAY_INTERVAL_MS);
   }
   function _clearInterval() {
     if (_intervalId) { clearInterval(_intervalId); _intervalId = null; }
@@ -251,9 +263,13 @@
     }
     var s = resp.status;
     if (s === 401 || s === 403) {
-      // Auth: keep the data, keep retrying; the whole queue waits for a fresh token.
+      // Auth: keep the data; the whole queue waits until the device is signed in.
       _authBlocked = true;
-      return _markFailed(rec, 'HTTP ' + s + ' (auth) — re-open your link').then(function () { return 'stop'; });
+      _authStatus  = s;
+      return resp.json().catch(function () { return {}; }).then(function (j) {
+        if (s === 401 && j && j.detail) _signedOutText = j.detail;
+        return _markFailed(rec, 'HTTP ' + s + (s === 401 ? ' — not signed in' : ' — not allowed'));
+      }).then(function () { return 'stop'; });
     }
     if (s === 408 || s === 429 || s >= 500) {
       // Transient: retry later, preserve order.
@@ -274,6 +290,7 @@
     if (!navigator.onLine) return _emitChange();
     _flushing    = true;
     _authBlocked = false;  // recomputed this pass
+    _authStatus  = null;
     _emitChange();         // → "Syncing…"
     var now = Date.now();
     return _all().then(function (records) {
@@ -306,8 +323,10 @@
       return _all();
     }).then(function (recs) {
       // Keep the retry interval alive only while retryable (non-parked) items remain.
+      // Not while auth-blocked: no retry loop against a 401 — focus / online /
+      // page load still try once.
       var retryable = (recs || []).some(function (r) { return r.status !== 'parked'; });
-      if (retryable) _scheduleInterval(); else _clearInterval();
+      if (retryable && !_authBlocked) _scheduleInterval(); else _clearInterval();
     }).catch(function () { /* swallow — chip refresh below reflects state */ })
       .then(function () {
         _flushing = false;

@@ -1,7 +1,7 @@
 """
 Tests for the experience-export gates — caution rule 8 (audit D3-01, fix pass
 batch 1, 20 Oct 2026) and the curator-authored predicate it rests on — plus the
-classifier of scripts/import_caution_warning_drafts.py.
+classifier of scripts/import_warning_review_drafts.py.
 
 Rule 8: a caution species' recipes are published only when its
 preparation_warnings is curator-authored (latest history row changed_by='human'
@@ -23,7 +23,7 @@ sys.path.insert(0, os.path.join(ROOT, "scripts"))
 
 import gates  # noqa: E402
 from app.models.species import is_curator_authored  # noqa: E402
-from import_caution_warning_drafts import MARKER, classify  # noqa: E402
+from import_warning_review_drafts import MARKER, classify  # noqa: E402
 
 WARNING = "Contains a photosensitising compound; avoid in strong sunlight."
 CFG = {"recipe_sources_allowed": ["ai_generated", "human"], "exclude_recipe_ids": [], "exclude_recipe_species_ids": []}
@@ -160,10 +160,17 @@ def test_apiaceae_caution_keeps_id_card_and_shows_approved_warning():
     assert gates.safety_texts(sp, _ci(), conn)["caution"] == WARNING
 
 
-# ── import classifier (scripts/import_caution_warning_drafts.py) ─────────────
+# ── import classifier (scripts/import_warning_review_drafts.py) ─────────────
 
 def test_classify_pfaf_warning():
-    assert classify("old text", [], WARNING) == ("pfaf", WARNING, "PFAF Known Hazards")
+    assert classify(None, [], WARNING) == ("pfaf", WARNING, "PFAF Known Hazards")
+    assert classify(WARNING, [], WARNING) == ("pfaf", WARNING, "PFAF Known Hazards")   # field = PFAF
+
+
+def test_classify_field_text_that_differs_from_pfaf_is_queued_as_shown():
+    """21 Oct 2026 (Frangula alnus): the shown text is queued, never PFAF's."""
+    assert classify("old text", [], WARNING) == (
+        "unknown_origin", "old text", "text in the field differs from PFAF — field text queued")
 
 
 def test_classify_pfaf_none_known_is_no_data():
@@ -174,6 +181,11 @@ def test_classify_pfaf_none_known_is_no_data():
 def test_classify_unknown_origin_copies_field_verbatim():
     assert classify("The leaves are used in salads.", [], None) == (
         "unknown_origin", "The leaves are used in salads.", "text in the field, origin unknown")
+
+
+def test_classify_pfaf_reparsed_field_with_history_still_queued():
+    """A field PFAF wrote (machine history row) and PFAF agrees with → queued."""
+    assert classify(WARNING, [("pfaf_reparse", WARNING)], WARNING)[0] == "pfaf"
 
 
 def test_classify_machine_text_with_history_not_queued():

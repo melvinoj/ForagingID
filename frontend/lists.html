@@ -1160,7 +1160,7 @@ function render() {
         <span class="sp-compact-sci">${_esc(name)}</span>
         ${common ? `<span class="sp-compact-common">${_esc(spCommon(common))}</span>` : ''}
         <button class="sp-compact-rm" title="Remove"
-                onclick="removeFromList('${_esc(name)}')">×</button>
+                onclick="removeFromList('${_esc(String(name).replace(/'/g, "\\'"))}')">×</button>
       </div>`;
     }).join('');
   }
@@ -2427,7 +2427,7 @@ function _spLookup(q) {
   const box = document.getElementById('sp-add-results');
   if (!results.length) { box.style.display = 'none'; return; }
   box.innerHTML = results.map(x => {
-    const safe = (x.scientific_name || '').replace(/'/g,"&#39;").replace(/"/g,'&quot;');
+    const safe = _esc((x.scientific_name || '').replace(/'/g, "\\'"));
     const common = x.common_names && x.common_names[0] ? ` — ${_esc(spCommon(x.common_names[0]))}` : '';
     return `<div class="sp-lookup-item" onclick="addSessionSpecies('${safe}')">
       <span class="sp-lookup-sci">${_esc(x.scientific_name)}</span>
@@ -2642,7 +2642,7 @@ async function addWorkshopParticipant() {
     });
     if (!tr.ok) throw new Error(((await tr.json().catch(function(){return {};})).detail) || ('HTTP ' + tr.status));
     const tok = await tr.json();
-    const link = window.location.origin + '/encounters?token=' + tok.token;
+    const link = (await _refreshJoinBase()) + '/join/' + tok.token + '?next=/encounters';   // one-time link (batch 7)
     linkBox.innerHTML = '<strong>' + _esc(name) + '</strong> — access link:<br>' +
       '<code style="word-break:break-all">' + _esc(link) + '</code>' +
       '<button class="sp-btn-ghost" style="margin-left:8px;padding:2px 8px;font-size:0.75rem" ' +
@@ -2675,7 +2675,7 @@ async function addExistingParticipant() {
     if (!tr.ok) throw new Error(((await tr.json().catch(function(){return {};})).detail) || ('HTTP ' + tr.status));
     const tok   = await tr.json();
     const pname = (sel && sel.options[sel.selectedIndex]) ? sel.options[sel.selectedIndex].text : ('id:' + pid);
-    const link  = window.location.origin + '/encounters?token=' + tok.token;
+    const link  = (await _refreshJoinBase()) + '/join/' + tok.token + '?next=/encounters';   // one-time link (batch 7)
     linkBox.innerHTML = '<strong>' + _esc(pname) + '</strong> — access link:<br>' +
       '<code style="word-break:break-all">' + _esc(link) + '</code>' +
       '<button class="sp-btn-ghost" style="margin-left:8px;padding:2px 8px;font-size:0.75rem" ' +
@@ -2703,8 +2703,20 @@ async function revokeToken(tokenId) {
   }
 }
 
+// One-time /join links are built on the https share address when sharing is on
+// (the address a participant's phone can reach), else on this page's origin.
+let _joinBase = location.origin;
+async function _refreshJoinBase() {
+  try {
+    const d = await fetch('/api/sharing/status').then(r => r.ok ? r.json() : {});
+    _joinBase = (d.active && d.url) ? d.url.replace(/\/+$/, '') : location.origin;
+  } catch (_) { _joinBase = location.origin; }
+  return _joinBase;
+}
+_refreshJoinBase();
+
 function copyTokenLink(token, btn) {
-  const link = window.location.origin + '/encounters?token=' + token;
+  const link = _joinBase + '/join/' + token + '?next=/encounters';
   navigator.clipboard.writeText(link).then(function() {
     var prev = btn.textContent;
     btn.textContent = 'Copied ✓';

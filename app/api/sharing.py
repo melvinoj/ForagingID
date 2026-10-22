@@ -1,18 +1,20 @@
 """
-Sharing API — ngrok tunnel management, guest-mode detection, walk export.
+Sharing API — ngrok tunnel management, curator devices, one-time /join links,
+walk export.
 
 POST /api/sharing/start        — start ngrok tunnel (or detect existing)
 POST /api/sharing/stop         — stop tunnel
 GET  /api/sharing/status       — current tunnel URL + active flag
-GET  /api/me                   — { is_guest, ngrok_active } for current request
+GET  /api/me                   — { is_guest, is_local, ngrok_active } for current request
+GET  /api/sharing/devices      — curator devices (curator)
+POST /api/sharing/devices      — add a curator device → one-time /join link + QR (localhost only)
+POST /api/sharing/devices/{id}/revoke — revoke a curator device (curator)
+GET  /join/{token}             — one-time link: sets the device cookie, redirects to a clean URL
 POST /api/sharing/export-walk  — returns self-contained walk summary HTML
 
-Guest detection rule:
-  A request is a guest session when its Host header contains ".ngrok"
-  (covers *.ngrok.io / *.ngrok.app / *.ngrok-free.app) or matches the
-  stored tunnel URL's netloc exactly.
-
-Local access (localhost / 127.0.0.1) is always treated as owner.
+Access (batch 7): decided by app.services.access.resolve_access — localhost,
+a curator device, or a participant device. The Host header only gates which
+hosts may be served at all (host_is_known).
 """
 
 import asyncio
@@ -20,18 +22,26 @@ import html
 import ipaddress
 import logging
 import re
+import secrets
 import socket
 from datetime import datetime, date
 from typing import Optional, List
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Request
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, RedirectResponse
 from pydantic import BaseModel
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.identity import Identity, get_identity
 from app.database import get_db
 from app.models.species import sentence_case_name
+from app.models.workshop import GuestToken, is_curator_token, token_is_live
+from app.services.access import (
+    cookie_kwargs, hash_secret, host_only, is_https, is_local_request,
+    message_page, new_session_secret,
+)
 
 log = logging.getLogger(__name__)
 
@@ -73,72 +83,30 @@ async def stop_ngrok_subprocess() -> None:
 
 
 # ---------------------------------------------------------------------------
-# Guest detection — imported by main.py middleware
+# Known hosts — imported by main.py middleware
 # ---------------------------------------------------------------------------
-def _host_only(request: Request) -> str:
-    """Lowercased Host header with any port stripped (handles IPv6 ``[::1]:8001``)."""
-    host = (request.headers.get("host", "") or "").split(",")[0].strip().lower()
-    if host.startswith("["):
-        end = host.find("]")
-        return host[1:end] if end != -1 else host
-    if ":" in host:
-        return host.rsplit(":", 1)[0]
-    return host
-
-
-def _guest_mode_enabled() -> bool:
-    """Read guest_mode_enabled from the settings cache (zero-overhead dict lookup)."""
-    from app.services.settings_service import get_setting
-    return bool(get_setting("guest_mode_enabled"))
-
-
-def classify_host(request: Request) -> str:
-    """
-    Three-tier host classification for access control:
-
-      'curator' — loopback / private-LAN IP / ``localhost`` / ``*.local`` (the owner's
-                  own devices — full access, always).
-      'guest'   — the ngrok tunnel host WHEN guest_mode_enabled=True.
-                  When guest_mode_enabled=False (default), the ngrok host also
-                  resolves as 'curator' so the owner's phone is unrestricted.
-      'denied'  — anything else (an unrecognised public host) → blocked outright.
-                  The 'denied' tier is NEVER affected by guest_mode_enabled — a host
-                  that is neither private-LAN nor the known tunnel is always rejected.
-
-    guest_mode_enabled (default OFF) is the master switch: flip it ON only when
-    running a workshop so participants get read-only guest access via the tunnel.
-    """
-    host = _host_only(request)
+def host_is_known(request: Request) -> bool:
+    """Hosts the app may be served on at all: localhost, mDNS *.local, a
+    loopback / private IP, or the ngrok tunnel. Anything else (a custom domain,
+    a stray tunnel, DNS rebinding) is refused before any token check. Being
+    known grants nothing by itself — access is resolve_access()'s decision."""
+    host = host_only(request)
     if not host:
-        return "denied"
-    # ngrok tunnel: tier depends on the guest-mode master switch.
-    # OFF (default) → curator so the owner's phone records over the tunnel freely.
-    # ON → guest for workshop participants.
-    if ".ngrok" in host:
-        return "guest" if _guest_mode_enabled() else "curator"
+        return False
+    if ".ngrok" in host or host == "localhost" or host.endswith(".local"):
+        return True
     if _tunnel_url:
         try:
             from urllib.parse import urlparse
-            ngrok_host = urlparse(_tunnel_url).netloc.lower().rsplit(":", 1)[0]
-            if host == ngrok_host:
-                return "guest" if _guest_mode_enabled() else "curator"
+            if host == urlparse(_tunnel_url).netloc.lower().rsplit(":", 1)[0]:
+                return True
         except Exception:
             pass
-    # Owner's own devices: localhost, mDNS *.local (LAN-only), loopback / private IPs.
-    if host == "localhost" or host.endswith(".local"):
-        return "curator"
     try:
         ip = ipaddress.ip_address(host)
-        if ip.is_loopback or ip.is_private:
-            return "curator"
+        return ip.is_loopback or ip.is_private
     except ValueError:
-        pass
-    return "denied"
-
-
-def is_guest_request(request: Request) -> bool:
-    """Return True when the request originates from the ngrok tunnel (guest tier)."""
-    return classify_host(request) == "guest"
+        return False
 
 
 # ---------------------------------------------------------------------------
@@ -299,10 +267,12 @@ async def sharing_status():
 # GET /api/me
 # ---------------------------------------------------------------------------
 @router.get("/api/me")
-async def me(request: Request):
-    guest = is_guest_request(request)
+async def me(request: Request, identity: Identity = Depends(get_identity)):
+    guest = identity.is_guest
     resp = {
         "is_guest": guest,
+        # Only localhost may add curator devices (Settings hides the button elsewhere).
+        "is_local": is_local_request(request),
         "ngrok_active": _tunnel_url is not None,
     }
     # Owner-only: last iNaturalist call status so the UI can warn when an expired
@@ -324,6 +294,121 @@ async def lan_url():
         return {"url": f"http://{ip}:8000", "ip": ip}
     except Exception:
         return {"url": None, "ip": None}
+
+
+# ---------------------------------------------------------------------------
+# Curator devices (batch 7) — Settings → Your devices & sharing
+# ---------------------------------------------------------------------------
+class DeviceCreate(BaseModel):
+    name: str
+
+
+def _device_out(t: GuestToken) -> dict:
+    # Never the link token or the session hash.
+    return {
+        "id":           t.id,
+        "name":         t.name,
+        "created_at":   t.created_at.isoformat() if t.created_at else None,
+        "claimed_at":   t.claimed_at.isoformat() if t.claimed_at else None,
+        "last_used_at": t.last_used_at.isoformat() if t.last_used_at else None,
+        "is_active":    bool(t.is_active),
+    }
+
+
+def _require_curator(identity: Identity) -> None:
+    if identity.is_guest:
+        raise HTTPException(403, "Curator only")
+
+
+@router.get("/api/sharing/devices")
+async def list_devices(identity: Identity = Depends(get_identity), db: AsyncSession = Depends(get_db)):
+    _require_curator(identity)
+    rows = (await db.scalars(
+        select(GuestToken).where(GuestToken.participant_id.is_(None)).order_by(GuestToken.id)
+    )).all()
+    return [_device_out(t) for t in rows]
+
+
+@router.post("/api/sharing/devices", status_code=201)
+async def add_device(body: DeviceCreate, request: Request, db: AsyncSession = Depends(get_db)):
+    """New curator device → its one-time /join link (text + QR), shown once.
+    Localhost only: a curator device can list and revoke devices, never mint."""
+    if not is_local_request(request):
+        raise HTTPException(403, "New device links can only be created on the laptop (localhost)")
+    name = (body.name or "").strip()
+    if not name:
+        raise HTTPException(422, "Give the device a name")
+    if not _tunnel_url or not _tunnel_url.startswith("https://"):
+        raise HTTPException(409, "Start sharing first — curator device links only work over the https share link")
+    tok = GuestToken(token=secrets.token_urlsafe(24), participant_id=None, name=name[:80], expires_at=None)
+    db.add(tok)
+    await db.commit()
+    await db.refresh(tok)
+    join_url = f"{_tunnel_url.rstrip('/')}/join/{tok.token}"
+    from app.api.connections import qr_data_url
+    try:
+        qr = qr_data_url(join_url)
+    except Exception:
+        log.exception("QR generation failed for a device link")
+        qr = None
+    return {**_device_out(tok), "join_url": join_url, "qr_data_url": qr}
+
+
+@router.post("/api/sharing/devices/{device_id}/revoke")
+async def revoke_device(device_id: int, identity: Identity = Depends(get_identity),
+                        db: AsyncSession = Depends(get_db)):
+    _require_curator(identity)
+    tok = await db.get(GuestToken, device_id)
+    if tok is None or not is_curator_token(tok):
+        raise HTTPException(404, "Device not found")
+    tok.is_active = False
+    await db.commit()
+    return _device_out(tok)
+
+
+# ---------------------------------------------------------------------------
+# GET /join/{token} — one-time link → device cookie (curator and participant)
+# ---------------------------------------------------------------------------
+_JOIN_HEADERS = {"Cache-Control": "no-store", "Referrer-Policy": "no-referrer"}
+
+
+def _join_page(title: str, body: str, status: int) -> HTMLResponse:
+    return HTMLResponse(message_page(title, body), status_code=status, headers=_JOIN_HEADERS)
+
+
+def _safe_next(nxt: Optional[str]) -> str:
+    """Same-site path only (no scheme, no //host)."""
+    if nxt and nxt.startswith("/") and not nxt.startswith("//") and "\\" not in nxt:
+        return nxt
+    return "/"
+
+
+@router.get("/join/{token}", include_in_schema=False)
+async def join(token: str, request: Request, next: Optional[str] = None,
+               db: AsyncSession = Depends(get_db)):
+    tok = await db.scalar(select(GuestToken).where(GuestToken.token == token))
+    if tok is None or not token_is_live(tok):
+        return _join_page("This link doesn't work", "Ask Melvin for a new link.", 404)
+    if tok.claimed_at is not None:
+        return _join_page("Link already used", "Each link works once. Ask Melvin for a new one.", 410)
+    if is_curator_token(tok) and not is_https(request):
+        return _join_page("Open the https link",
+                          "Curator device links only work over the secure share link.", 403)
+    secret = new_session_secret()
+    now = datetime.utcnow()
+    # Claim atomically: a second request racing this one finds claimed_at set.
+    res = await db.execute(
+        update(GuestToken)
+        .where(GuestToken.id == tok.id, GuestToken.claimed_at.is_(None))
+        .values(claimed_at=now, session_hash=hash_secret(secret), last_used_at=now)
+    )
+    await db.commit()
+    if res.rowcount != 1:
+        return _join_page("Link already used", "Each link works once. Ask Melvin for a new one.", 410)
+    resp = RedirectResponse(url=_safe_next(next), status_code=303, headers=_JOIN_HEADERS)
+    resp.set_cookie(value=secret, **cookie_kwargs(request, tok))
+    log.info("Device joined: token id %s (%s)", tok.id, "curator" if is_curator_token(tok) else "participant")
+    return resp
 
 
 # ---------------------------------------------------------------------------

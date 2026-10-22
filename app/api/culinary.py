@@ -430,6 +430,8 @@ async def ai_draft_review_queue(
         if draft.field_name in CURATOR_DRAFT_FIELDS:
             _ci = ci_by_sp.get(draft.species_id)
             item["current_text"] = getattr(_ci, draft.field_name, None) if _ci else None
+            # Same rule as remove_warning_field: never for a deadly species.
+            item["removable"] = sp.toxicity_severity != "deadly"
         elif draft.field_name in PFAF_FALLBACK_SOURCES:
             _ci = ci_by_sp.get(draft.species_id)
             if _ci and draft.field_name in _pfaf_fb.get(_ci.id, ()):
@@ -443,6 +445,14 @@ async def ai_draft_review_queue(
         if await is_false_no_uses_claim(db, sp, draft.field_name, draft.draft_text):
             item["false_no_uses"] = FALSE_NO_USES_REASON
         species_map[key]["drafts"].append(item)
+
+    # Species on a saved walk first (21 Oct 2026): their warnings print on walk
+    # handouts and the published page.
+    from app.api.walk import species_on_saved_walks
+    on_walk = await species_on_saved_walks(db)
+    for sci_name, item in species_map.items():
+        item["on_walks"] = on_walk.get(sci_name, [])
+    species_map = OrderedDict(sorted(species_map.items(), key=lambda kv: (not kv[1]["on_walks"], kv[0])))
 
     result = []
     for sci_name, item in species_map.items():
@@ -2285,6 +2295,7 @@ async def _apply_guest_field_mask(
 async def enrich_species_now(
     species_name: str,
     section: Optional[str] = Query(None, description="taste | recipe | medicinal — run only this AI generation"),
+    dry_run: bool = Query(False, description="show what it would do; write nothing"),
     db: AsyncSession = Depends(get_db),
     identity: Identity = Depends(get_identity),
 ):
@@ -2308,20 +2319,29 @@ async def enrich_species_now(
 
     # ── Section-only path ──────────────────────────────────────────────────────
     _SECTION_MAP = {"taste": "taste_notes", "recipe": "recipe", "medicinal": "medicinal_notes"}
+    if dry_run:
+        from app.services.enrichment_plan import plan
+        if section and section not in _SECTION_MAP:
+            raise HTTPException(400, f"Unknown section {section!r}. Use: taste, recipe, medicinal")
+        return await plan(db, [sp.scientific_name], sources=not section, regenerate=True,
+                          only_field=_SECTION_MAP.get(section) if section else None,
+                          note="Single species: new draft versions sit beside the pending ones.")
     if section:
         field_name = _SECTION_MAP.get(section)
         if not field_name:
             raise HTTPException(400, f"Unknown section {section!r}. Use: taste, recipe, medicinal")
 
         from app.services.enrichment import _section_ai_draft
-        queued = await _section_ai_draft(db, sp, field_name)
+        from app.services.draft_gate import summary_scope
+        with summary_scope() as _summ:
+            queued = await _section_ai_draft(db, sp, field_name)
         if not queued:
             # No AI text → PFAF fallback (D2) for this field, or it stays empty.
             from app.services.pfaf_fallback import apply_pfaf_fallback
             _ci = await db.scalar(select(CulinaryInfo).where(CulinaryInfo.species_id == sp.id))
             await apply_pfaf_fallback(db, sp, _ci, fields=[field_name])
         await db.commit()
-        return {"ok": True, "section": section, "section_queued": field_name, "queued": queued}
+        return {"ok": True, "section": section, "section_queued": field_name, "queued": queued, **_summ.as_dict()}
 
     # ── Full enrichment path ───────────────────────────────────────────────────
     ci = await db.scalar(
@@ -2340,14 +2360,20 @@ async def enrich_species_now(
 
     # Run enrichment via the enrichment service — fill_empty_only + protect human edits
     from app.services.enrichment import enrich_species as _enrich_species
-    result_status = await _enrich_species(
-        session=db,
-        species=sp,
-        dry_run=False,
-        re_enrich=True,          # force re-fetch even if already enriched
-        fill_empty_only=True,    # only fill currently-empty fields
-        protected_fields=human_edited_fields,  # never overwrite human corrections
-    )
+    from app.services.draft_gate import summary_scope
+    with summary_scope() as _summ:
+        result_status = await _enrich_species(
+            session=db,
+            species=sp,
+            dry_run=False,
+            re_enrich=True,          # force re-fetch even if already enriched
+            fill_empty_only=True,    # only fill currently-empty fields
+            protected_fields=human_edited_fields,  # never overwrite human corrections
+            regenerate_drafts=True,  # single species: new versions beside pending ones
+        )
+    if result_status == "no_network":
+        await db.rollback()
+        raise HTTPException(503, "No network — every source failed; nothing was changed.")
 
     await db.commit()
 
@@ -2391,12 +2417,68 @@ async def enrich_species_now(
         },
         "pfaf_retrieved_at": ci_new.pfaf_retrieved_at.isoformat() if (ci_new and ci_new.pfaf_retrieved_at) else None,
         "wikidata_retrieved_at": ci_new.wikidata_retrieved_at.isoformat() if (ci_new and ci_new.wikidata_retrieved_at) else None,
+        **_summ.as_dict(),
     }
 
 
 # ---------------------------------------------------------------------------
 # POST /api/species/{species_name}/drafts/{field}/approve
 # ---------------------------------------------------------------------------
+
+def _curator_draft_stale(draft: SpeciesAIDraft, current: Optional[str]) -> bool:
+    """A curator-review draft whose field no longer holds the text it held when
+    the draft was queued (context field_text_at_import). Approving or removing
+    from such a draft would act on text the curator never saw — refused (409)."""
+    try:
+        ctx = json.loads(draft.generation_context_json or "{}")
+    except ValueError:
+        ctx = {}
+    if not isinstance(ctx, dict) or "field_text_at_import" not in ctx:
+        return False
+    norm = lambda t: " ".join((t or "").split())
+    return norm(ctx["field_text_at_import"]) != norm(current)
+
+
+_STALE_DETAIL = ("'{field}' has changed since this draft was queued — reject it; "
+                 "scripts/import_warning_review_drafts.py queues the current text.")
+
+
+async def _retire_other_versions(db: AsyncSession, kept: SpeciesAIDraft) -> int:
+    """Melvin kept this version: every OTHER pending draft for the same species
+    and field is invalidated now (22 Oct 2026 — Regenerate / Repopulate save
+    the new version beside the old one; nothing is invalidated earlier)."""
+    others = (await db.scalars(
+        select(SpeciesAIDraft)
+        .where(SpeciesAIDraft.species_id == kept.species_id)
+        .where(SpeciesAIDraft.field_name == kept.field_name)
+        .where(SpeciesAIDraft.status == "pending")
+        .where(SpeciesAIDraft.id != kept.id)
+    )).all()
+    for o in others:
+        try:
+            ctx = json.loads(o.generation_context_json or "{}")
+        except ValueError:
+            ctx = {"original_context": o.generation_context_json}
+        if not isinstance(ctx, dict):
+            ctx = {"original_context": ctx}
+        ctx["invalidated_reason"] = f"replaced: Melvin kept draft {kept.id}"
+        ctx["invalidated_at"] = datetime.utcnow().isoformat()
+        o.generation_context_json = json.dumps(ctx, ensure_ascii=False)
+        o.status = "invalidated"
+    return len(others)
+
+
+async def _pending_draft(db: AsyncSession, species_id: int, field: str, draft_id: Optional[int]):
+    """The pending draft to act on: the given draft_id (Review sends it — two
+    versions can sit side by side), else the newest pending one."""
+    q = (select(SpeciesAIDraft)
+         .where(SpeciesAIDraft.species_id == species_id)
+         .where(SpeciesAIDraft.field_name == field)
+         .where(SpeciesAIDraft.status == "pending"))
+    if isinstance(draft_id, int):          # (a direct call gets FastAPI's Query default — not an id)
+        q = q.where(SpeciesAIDraft.id == draft_id)
+    return await db.scalar(q.order_by(SpeciesAIDraft.generated_at.desc(), SpeciesAIDraft.id.desc()))
+
 
 class DraftEditApprove(BaseModel):
     edited_text: Optional[str] = Field(None, description="Edited version of the draft (None = approve as-is)")
@@ -2409,11 +2491,13 @@ async def approve_ai_draft(
     species_name: str,
     field: str,
     body: DraftEditApprove,
+    draft_id: Optional[int] = Query(None, description="the version to keep (others for the field are retired)"),
     db: AsyncSession = Depends(get_db),
     identity: Identity = Depends(get_identity),
 ):
     """
-    Approve an AI-drafted field (optionally with edits).
+    Approve an AI-drafted field (optionally with edits). With draft_id, that
+    version; the other pending versions of the field are then invalidated.
 
     - Marks the draft as 'approved' or 'edited_approved'
     - Copies the approved text to culinary_info.{field}
@@ -2430,14 +2514,7 @@ async def approve_ai_draft(
 
     sp = await _get_species_or_404(db, species_name)
 
-    # Find the most recent pending draft for this field
-    draft = await db.scalar(
-        select(SpeciesAIDraft)
-        .where(SpeciesAIDraft.species_id == sp.id)
-        .where(SpeciesAIDraft.field_name == field)
-        .where(SpeciesAIDraft.status == "pending")
-        .order_by(SpeciesAIDraft.generated_at.desc())
-    )
+    draft = await _pending_draft(db, sp.id, field, draft_id)
     if not draft:
         raise HTTPException(404, f"No pending AI draft found for '{field}' on {species_name}")
 
@@ -2479,6 +2556,8 @@ async def approve_ai_draft(
             db.add(ci)
             await db.flush()
         current = getattr(ci, field, None)
+        if _curator_draft_stale(draft, current):
+            raise HTTPException(status_code=409, detail=_STALE_DETAIL.format(field=field))
         latest = (await db.execute(
             select(CulinaryInfoHistory.changed_by, CulinaryInfoHistory.new_value)
             .where(CulinaryInfoHistory.culinary_info_id == ci.id)
@@ -2504,9 +2583,11 @@ async def approve_ai_draft(
             changed_at=datetime.utcnow(),
             changed_by="human",
         ))
+        retired = await _retire_other_versions(db, draft)
         await db.commit()
         return {
             "ok": True,
+            "retired_versions": retired,
             "species": species_name,
             "field": field,
             "status": draft.status,
@@ -2593,9 +2674,11 @@ async def approve_ai_draft(
                 ai_draft_id=draft.id,
             ))
 
+    retired = await _retire_other_versions(db, draft)
     await db.commit()
 
     return {
+        "retired_versions": retired,
         "ok": True,
         "species": species_name,
         "field": field,
@@ -2605,32 +2688,95 @@ async def approve_ai_draft(
 
 
 # ---------------------------------------------------------------------------
-# POST /api/species/{species_name}/drafts/{field}/reject
+# POST /api/species/{species_name}/drafts/{field}/remove
 # ---------------------------------------------------------------------------
-
-@router.post("/api/species/{species_name:path}/drafts/{field}/reject")
-async def reject_ai_draft(
+@router.post("/api/species/{species_name:path}/drafts/{field}/remove")
+async def remove_warning_field(
     species_name: str,
     field: str,
     db: AsyncSession = Depends(get_db),
     identity: Identity = Depends(get_identity),
 ):
-    """Mark a pending AI draft as rejected (does not affect culinary_info)."""
+    """Review → warning card → Remove (21 Oct 2026): the curator decides the
+    source text is not a warning for this species. Clears the field with a
+    history row changed_by='human' (old_value = the text removed, new_value
+    NULL — the human lock keeps enrichment from refilling it) and closes the
+    draft as rejected. Curator-review warning fields only; never for a species
+    whose severity is deadly (safety doctrine: their safety text changes only
+    on explicit instruction); 409 if the field changed since drafting."""
+    if identity.is_guest:
+        raise HTTPException(403, "Curator only")
+    if field not in CURATOR_DRAFT_FIELDS:
+        raise HTTPException(400, f"field must be one of: {sorted(CURATOR_DRAFT_FIELDS)}")
+    sp = await _get_species_or_404(db, species_name)
+    if sp.toxicity_severity == "deadly":
+        raise HTTPException(409, "Deadly species: warning text is never removed here.")
+    draft = await _pending_draft(db, sp.id, field, None)
+    if not draft:
+        raise HTTPException(404, f"No pending draft found for '{field}' on {species_name}")
+    ci = await db.scalar(select(CulinaryInfo).where(CulinaryInfo.species_id == sp.id))
+    current = getattr(ci, field, None) if ci else None
+    if _curator_draft_stale(draft, current):
+        raise HTTPException(status_code=409, detail=_STALE_DETAIL.format(field=field))
+    now = datetime.utcnow()
+    if ci is not None and (current or "").strip():
+        setattr(ci, field, None)
+        db.add(CulinaryInfoHistory(
+            culinary_info_id=ci.id,
+            field_name=field,
+            old_value=current,
+            new_value=None,
+            changed_at=now,
+            changed_by="human",
+        ))
+    try:
+        ctx = json.loads(draft.generation_context_json or "{}")
+    except ValueError:
+        ctx = {}
+    if not isinstance(ctx, dict):
+        ctx = {}
+    ctx["removed_field"] = True
+    ctx["rejected_reason"] = "Removed in Review: not a warning for this species"
+    draft.generation_context_json = json.dumps(ctx, ensure_ascii=False)
+    draft.status = "rejected"
+    draft.approved_at = now
+    draft.approved_by = "human"
+    await db.commit()
+    return {"ok": True, "species": species_name, "field": field, "status": draft.status, "removed": True}
+
+
+# ---------------------------------------------------------------------------
+# POST /api/species/{species_name}/drafts/{field}/reject
+# ---------------------------------------------------------------------------
+class DraftRejectIn(BaseModel):
+    reason: Optional[str] = None      # optional; kept in generation_context_json (rejected_reason)
+
+
+@router.post("/api/species/{species_name:path}/drafts/{field}/reject")
+async def reject_ai_draft(
+    species_name: str,
+    field: str,
+    payload: Optional[DraftRejectIn] = None,
+    draft_id: Optional[int] = Query(None, description="the version to reject (others are untouched)"),
+    db: AsyncSession = Depends(get_db),
+    identity: Identity = Depends(get_identity),
+):
+    """Mark a pending AI draft as rejected (does not affect culinary_info). An
+    optional reason is kept in generation_context_json — the same writer as
+    verdict drafts (verdict_drafts.record_rejection_reason). No body = as before."""
     if identity.is_guest:
         raise HTTPException(403, "Curator only")
     sp = await _get_species_or_404(db, species_name)
-    draft = await db.scalar(
-        select(SpeciesAIDraft)
-        .where(SpeciesAIDraft.species_id == sp.id)
-        .where(SpeciesAIDraft.field_name == field)
-        .where(SpeciesAIDraft.status == "pending")
-        .order_by(SpeciesAIDraft.generated_at.desc())
-    )
+    draft = await _pending_draft(db, sp.id, field, draft_id)
     if not draft:
         raise HTTPException(404, f"No pending AI draft found for '{field}' on {species_name}")
     draft.status = "rejected"
+    reason = ((payload.reason if payload else None) or "").strip()
+    if reason:
+        from app.services.verdict_drafts import record_rejection_reason
+        record_rejection_reason(draft, reason)
     await db.commit()
-    return {"ok": True, "field": field, "status": "rejected"}
+    return {"ok": True, "field": field, "status": "rejected", "draft_id": draft.id, "reason": reason or None}
 
 
 # ---------------------------------------------------------------------------
@@ -2673,10 +2819,10 @@ async def _generate_drafts_for_species(
         that already have a pending/approved/edited_approved draft (and, unless
         reprocess_rejected, a rejected one too).
     re_enrich=True: calls generate_deepseek_drafts directly, bypassing the
-        "already has drafts" guard so a fresh pending draft is always created.
-        Existing pending drafts are invalidated first; approved drafts are
-        left in place (the new pending draft enters the review queue alongside
-        them — the curator chooses whether to replace or discard).
+        "already has drafts" guard so a fresh version is created BESIDE the
+        pending one (22 Oct 2026: nothing is invalidated here — Review shows
+        both, and the old one goes only when Melvin keeps the new one). A
+        failed generation changes nothing. Saved through draft_gate.save_ai_draft.
 
     Returns {"created": N, "blocked": reason|None, "scientific_name": name}
     """
@@ -2716,17 +2862,8 @@ async def _generate_drafts_for_species(
             only_field=field, reprocess_rejected=reprocess_rejected,
         )
     else:
-        # "Regenerate" path: force fresh drafts regardless of existing approved ones.
-        # 1. Invalidate any existing PENDING drafts (so they don't clutter the queue).
-        #    Curator-review drafts are not model output — regenerate never touches them.
-        await db.execute(
-            _upd(SpeciesAIDraft)
-            .where(SpeciesAIDraft.species_id == sp.id)
-            .where(SpeciesAIDraft.status == "pending")
-            .where(SpeciesAIDraft.field_name.notin_(CURATOR_DRAFT_FIELDS))
-            .values(status="invalidated")
-        )
-        await db.flush()
+        # "Regenerate" path: a fresh version beside the pending one — nothing is
+        # invalidated here (the old version goes when Melvin keeps the new one).
 
         # 2. Build conditions caveat for caution species
         edibility_conditions: Optional[str] = None
@@ -2764,7 +2901,8 @@ async def _generate_drafts_for_species(
         )
 
         if draft_result:
-            # Placeholder filter — shared predicate (app/services/ai_placeholder.py)
+            # The shared pre-save check (draft_gate) — refusals are logged and counted.
+            from app.services.draft_gate import save_ai_draft
             field_map = {
                 "taste_notes":    draft_result.taste_notes,
                 "medicinal_notes": draft_result.medicinal_notes,
@@ -2774,17 +2912,7 @@ async def _generate_drafts_for_species(
             for field_name, text in field_map.items():
                 if not text:
                     continue
-                if is_ai_placeholder(field_name, text):
-                    continue
-                db.add(SpeciesAIDraft(
-                    species_id=sp.id,
-                    field_name=field_name,
-                    draft_text=text,
-                    status="pending",
-                    generated_at=datetime.utcnow(),
-                    generation_context_json=ctx_json,
-                    model=draft_result.model,
-                ))
+                save_ai_draft(db, sp, ci, field_name, text, model=draft_result.model, context_json=ctx_json)
         await db.flush()
 
     # Mirror enrich_species(): the PFAF fallback (Melvin D2–D5, 21 Oct 2026)
@@ -2808,6 +2936,7 @@ async def _generate_drafts_for_species(
 @router.post("/api/drafts/generate")
 async def generate_drafts(
     body: DraftGenerateRequest,
+    dry_run: bool = Query(False, description="show what it would create; write nothing"),
     db: AsyncSession = Depends(get_db),
     identity: Identity = Depends(get_identity),
 ):
@@ -2816,49 +2945,63 @@ async def generate_drafts(
 
     re_enrich=False (default): only generates drafts for fields that have no
       existing pending/approved/rejected draft. Safe to call at any time.
-    re_enrich=True: invalidates all existing pending drafts first, then
-      generates fresh drafts. Use this for an explicit "regenerate" action.
+    re_enrich=True: a fresh version beside each pending one (Review shows both;
+      the old one goes only when you keep the new one). Nothing is invalidated.
 
-    Returns immediately with {ok, scientific_name, created, blocked}.
-    New drafts appear in the AI Draft Review queue with status=pending.
+    Returns {ok, scientific_name, created, blocked, drafts_skipped}. Every draft
+    passes the shared pre-save check (draft_gate). dry_run: the plan only.
     """
     if identity.is_guest:
         raise HTTPException(403, "Curator only")
-    result = await _generate_drafts_for_species(body.scientific_name, body.re_enrich, db)
+    if dry_run:
+        from app.services.enrichment_plan import plan
+        return await plan(db, [body.scientific_name], sources=False, regenerate=body.re_enrich)
+    from app.services.draft_gate import summary_scope
+    with summary_scope() as summ:
+        result = await _generate_drafts_for_species(body.scientific_name, body.re_enrich, db)
     await db.commit()
-    return {"ok": True, **result}
+    return {"ok": True, **result, **summ.as_dict()}
 
 
 @router.post("/api/drafts/bulk-generate")
 async def bulk_generate_drafts(
     body: BulkDraftGenerateRequest,
+    dry_run: bool = Query(False, description="show what it would create; write nothing"),
     db: AsyncSession = Depends(get_db),
     identity: Identity = Depends(get_identity),
 ):
     """
-    Generate (or regenerate) AI drafts for multiple species.
+    Generate AI drafts for multiple species — only for fields with no pending
+    draft (22 Oct 2026: a bulk action never replaces or invalidates a pending
+    draft, so body.re_enrich is ignored here).
 
     Processes sequentially; each species is committed independently so a
-    failure on one does not roll back the others. Returns per-species results.
+    failure on one does not roll back the others. Returns per-species results
+    and the shared pre-save check's skip counts.
     """
     if identity.is_guest:
         raise HTTPException(403, "Curator only")
     if not body.species:
         return {"ok": True, "results": [], "total_created": 0}
+    if dry_run:
+        from app.services.enrichment_plan import plan
+        return await plan(db, body.species, sources=False, regenerate=False)
 
+    from app.services.draft_gate import summary_scope
     results = []
     total_created = 0
-    for name in body.species:
-        try:
-            result = await _generate_drafts_for_species(name, body.re_enrich, db)
-            await db.commit()
-            results.append(result)
-            total_created += result.get("created", 0)
-        except Exception as exc:
-            await db.rollback()
-            results.append({"scientific_name": name, "created": 0, "blocked": str(exc)})
+    with summary_scope() as summ:
+        for name in body.species:
+            try:
+                result = await _generate_drafts_for_species(name, False, db)
+                await db.commit()
+                results.append(result)
+                total_created += result.get("created", 0)
+            except Exception as exc:
+                await db.rollback()
+                results.append({"scientific_name": name, "created": 0, "blocked": str(exc)})
 
-    return {"ok": True, "results": results, "total_created": total_created}
+    return {"ok": True, "results": results, "total_created": total_created, **summ.as_dict()}
 
 
 # ---------------------------------------------------------------------------
@@ -2867,31 +3010,35 @@ async def bulk_generate_drafts(
 # ---------------------------------------------------------------------------
 
 class EnrichmentRunRequest(BaseModel):
-    re_enrich: bool = Field(True, description="Re-fetch even if already enriched")
+    # Kept for older clients and ignored for drafts (22 Oct 2026): a bulk run
+    # always re-fetches sources under the safe rules and never replaces or
+    # invalidates a pending draft. The "re-enrich" option is gone from Review.
+    re_enrich: bool = Field(True, description="ignored — bulk runs never invalidate drafts")
 
 
-async def _run_enrichment_job(job_id: str, re_enrich: bool) -> None:
+NO_NETWORK_DETAIL = "paused — no network"
+
+
+async def _run_enrichment_job(job_id: str, re_enrich: bool = True) -> None:
     """
     Background worker: runs the enrichment batch and writes progress updates
     into _enrichment_jobs[job_id] and background_processes table.
     Uses its own DB session (BackgroundTasks run outside the request session lifecycle).
 
-    Resume: if a paused background_processes row exists for 'enrichment_run',
-    the run continues from progress_current rather than restarting from 0.
+    Progress is written after EVERY completed species, with its name in the
+    row's payload ({"resume_after": name}) — a pause, a "paused — no network"
+    stop or a server restart resumes after the last completed species
+    (start_enrichment_run → bp_resume_point).
     """
-    from app.services.background_processes import bp_progress, bp_finish, bp_active_row
+    import asyncio
+    from app.services.background_processes import bp_progress, bp_finish, bp_patch, bp_set_status
     from app.services.enrichment import run_enrichment_batch
 
     job = _enrichment_jobs[job_id]
     process_id = job.get("process_id")
-
-    # Determine resume position from any paused row (set before this task started)
-    start_from = job.get("resume_from", 0)
-
-    _hb_counter = 0
+    resume_after = job.get("resume_after")
 
     def _progress(current: int, total: int, name: str, status: str) -> None:
-        nonlocal _hb_counter
         job["progress"] = {
             "current": current,
             "total": total,
@@ -2899,12 +3046,9 @@ async def _run_enrichment_job(job_id: str, re_enrich: bool) -> None:
             "last_status": status,
         }
         job["log"].append(f"{name} → {status}")
-        _hb_counter += 1
-        # Update DB every 5 items to avoid hammering SQLite on large runs
-        if _hb_counter % 5 == 0 and process_id:
-            import asyncio
-            detail = f"Enriching {name} ({current} of {total})"
-            asyncio.create_task(bp_progress(process_id, current, total, detail))
+        if process_id:
+            asyncio.create_task(bp_progress(process_id, current, total, f"Enriching {name} ({current} of {total})"))
+            asyncio.create_task(bp_patch(process_id, payload=json.dumps({"resume_after": name})))
 
     async def _cancel_check() -> Optional[str]:
         """Read current BP status from DB; return 'paused'/'cancelled' or None."""
@@ -2926,16 +3070,19 @@ async def _run_enrichment_job(job_id: str, re_enrich: bool) -> None:
 
     try:
         # run_enrichment_batch manages its own per-species sessions internally —
-        # do NOT pass a long-lived session here.
+        # do NOT pass a long-lived session here. re_enrich=True = re-fetch
+        # sources; drafts are never regenerated by a bulk run.
         result = await run_enrichment_batch(
             dry_run=False,
-            re_enrich=re_enrich,
+            re_enrich=True,
             progress_cb=_progress,
             cancel_check_fn=_cancel_check,
-            start_from=start_from,
+            resume_after=resume_after,
         )
+        job["summary"] = {k: result.get(k) for k in (
+            "enriched", "partial", "not_found", "skipped", "failed", "no_network", "source_failures",
+            "drafts_created", "drafts_skipped", "drafts_skipped_total", "review_drafts_queued")}
 
-        # Count pending AI drafts — short-lived read session, closed immediately.
         async with AsyncSessionLocal() as _count_sess:
             from sqlalchemy import func as sqlfunc
             draft_count = (await _count_sess.execute(
@@ -2944,36 +3091,28 @@ async def _run_enrichment_job(job_id: str, re_enrich: bool) -> None:
             )).scalar_one() or 0
 
         stopped_at = result.get("stopped_at")
-        prog = job["progress"]
+        last = result.get("last_completed")
+        total = result.get("total", 0)
+        if last and process_id:
+            await bp_patch(process_id, payload=json.dumps({"resume_after": last}))
 
         if stopped_at is not None:
-            # Loop exited due to pause or cancel — leave BP status as-is (already
-            # set by the API). FIX 3: persist the TRUE stopped_at to the bp row's
-            # progress_current so resume survives a restart (the in-memory
-            # resume_from is otherwise the only record). The 5-item heartbeat
-            # cadence means progress_current on disk is a stale multiple of 5;
-            # this overwrites it with the exact resume index. bp_progress is the
-            # progress writer (bp_patch does not carry progress); it updates
-            # progress/detail/heartbeat WITHOUT touching status, so the row stays
-            # 'paused' and is not resurrected to running.
-            await bp_progress(process_id, stopped_at, prog.get("total", 0),
-                              f"Paused at {stopped_at} of {prog.get('total', 0)}")
-            job["status"] = "paused"
-            job["resume_from"] = stopped_at
+            if result.get("stopped_reason") == "no_network":
+                await bp_set_status(process_id, "paused")
+                await bp_progress(process_id, stopped_at, total,
+                                  f"{NO_NETWORK_DETAIL} — {stopped_at} of {total} done; resumes when the network returns")
+                job["status"] = "paused"
+                job["paused_reason"] = "no_network"
+                asyncio.create_task(_resume_when_network_returns(process_id))
+            else:
+                # Pause / cancel from the API — BP status already set by it.
+                await bp_progress(process_id, stopped_at, total, f"Paused at {stopped_at} of {total}")
+                job["status"] = "paused"
         else:
             job["status"] = "complete"
-            job["result"] = {
-                "total":       result.get("total", 0),
-                "enriched":    result.get("enriched", 0),
-                "partial":     result.get("partial", 0),
-                "not_found":   result.get("not_found", 0),
-                "skipped":     result.get("skipped", 0),
-                "failed":      result.get("failed", 0),
-                "ai_drafts_pending": draft_count,
-            }
+            job["result"] = dict(job["summary"], total=total, ai_drafts_pending=draft_count)
             job["finished_at"] = datetime.utcnow().isoformat()
-            await bp_finish(process_id, status="complete",
-                            current=prog.get("current", 0), total=prog.get("total", 0))
+            await bp_finish(process_id, status="complete", current=total, total=total)
 
     except Exception as exc:
         job["status"] = "failed"
@@ -2982,27 +3121,36 @@ async def _run_enrichment_job(job_id: str, re_enrich: bool) -> None:
         await bp_finish(process_id, status="failed", error=str(exc))
 
 
-@router.post("/api/enrichment/run")
-async def start_enrichment_run(
-    body: EnrichmentRunRequest,
-    background_tasks: BackgroundTasks,
-    identity: Identity = Depends(get_identity),
-):
-    """
-    Start a full enrichment batch run in the background.
-    Returns immediately with a job_id.  Poll /api/enrichment/status/{job_id}
-    for progress and the final summary.
+async def _resume_when_network_returns(process_id: int, every_s: float = 60.0) -> None:
+    """"paused — no network": check every minute; when a source host resolves
+    again and the row is still paused for that reason, resume from the last
+    completed species. Stops as soon as Melvin resumes, cancels or restarts."""
+    import asyncio
+    from sqlalchemy import text as _text
+    from app.services import net_health
+    while True:
+        await asyncio.sleep(every_s)
+        async with AsyncSessionLocal() as _db:
+            r = (await _db.execute(_text("SELECT status, detail FROM background_processes WHERE process_id = :p"),
+                                   {"p": process_id})).fetchone()
+        if not r or r[0] != "paused" or not (r[1] or "").startswith(NO_NETWORK_DETAIL):
+            return
+        if await net_health.network_up():
+            log.info("[enrichment] network is back — resuming paused run %s", process_id)
+            try:
+                await _start_enrichment_run()
+            except HTTPException as e:
+                log.warning("[enrichment] automatic resume refused: %s", e.detail)
+            return
 
-    Only one job may run at a time — returns 409 if one is already running
-    (checked via both in-memory state and background_processes table).
-    """
-    if identity.is_guest:
-        raise HTTPException(403, "Curator only")
-    from app.services.background_processes import (
-        bp_active_count, bp_active_row, bp_paused_row, bp_start,
-    )
 
-    # Guard: refuse if already running (in-memory fast path)
+async def _start_enrichment_run(background_tasks: Optional[BackgroundTasks] = None) -> dict:
+    """Start a run, or resume the most recent paused / interrupted one after its
+    last completed species (bp_resume_point). Shared by the route and the
+    no-network watcher."""
+    import asyncio
+    from app.services.background_processes import bp_active_row, bp_resume_point, bp_set_status, bp_start
+
     for existing in _enrichment_jobs.values():
         if existing.get("status") == "running":
             bp_row = await bp_active_row("enrichment_run")
@@ -3017,94 +3165,73 @@ async def start_enrichment_run(
                 },
             )
 
-    # ── Resume precedence (FIX 3) ────────────────────────────────────────────
-    # 1. in-memory resume_from from a paused job (preferred — most authoritative)
-    # 2. else the paused bp row's persisted progress_current (survives a restart
-    #    that cleared _enrichment_jobs)
-    # 3. else genuine fresh start from 0 — the legitimate "Run now" case, logged
-    #    as a fresh start so a lost resume can never masquerade as one silently.
-    resume_from = 0
-    paused_job = None
-    resume_pid = None          # non-None ⇒ reuse this paused bp row instead of bp_start
-    resume_source = "fresh"    # 'memory' | 'bp_row' | 'fresh' — surfaced in the response
-    for existing in reversed(list(_enrichment_jobs.values())):
-        if existing.get("status") == "paused":
-            paused_job = existing
-            resume_from = existing.get("resume_from", 0)
-            resume_pid = existing.get("process_id")
-            resume_source = "memory"
-            break
-
-    if paused_job is None:
-        # Memory has no paused entry (e.g. after a server restart). Recover the
-        # position from a persisted paused bp row rather than silently running
-        # the whole batch again.
-        #
-        # Reads through bp_paused_row, NOT bp_active_row. bp_active_row admits
-        # running-or-paused and returns only the single most recent by
-        # started_at, so a stale 'running' row left by a killed server shadowed
-        # the resumable paused row underneath it and this fell through to a
-        # silent fresh start from 0. The status guard below is KEPT: it is now
-        # redundant against a paused-only query, but it is the check that made
-        # the stale row non-adoptable in the first place, and it keeps this
-        # branch correct regardless of what the read returns.
-        bp_row = await bp_paused_row("enrichment_run")
-        if bp_row and bp_row.get("status") == "paused":
-            resume_pid = bp_row["process_id"]
-            resume_from = bp_row.get("progress_current") or 0
-            resume_source = "bp_row"
-            log.info(
-                "[enrichment] resume recovered from persisted bp row pid=%s at index %d "
-                "(no in-memory job)", resume_pid, resume_from)
-            if resume_from == 0:
-                # A paused row with no usable index — report it rather than
-                # pretend this is a clean resume.
-                log.warning(
-                    "[enrichment] paused bp row pid=%s has progress_current=0 — "
-                    "resume index unknown; this run will re-process from the start",
-                    resume_pid)
-        else:
-            log.info("[enrichment] no paused run found (memory or bp) — fresh start from 0")
-
-    job_id = str(uuid.uuid4())
-    _enrichment_jobs[job_id] = {
-        "job_id":      job_id,
-        "status":      "running",
-        "re_enrich":   body.re_enrich,
-        "resume_from": resume_from,
-        "started_at":  datetime.utcnow().isoformat(),
-        "finished_at": None,
-        "progress":    {"current": resume_from, "total": 0, "current_species": "", "last_status": ""},
-        "log":         [],
-        "result":      None,
-        "error":       None,
-        "process_id":  None,
-    }
-
-    # If resuming (from memory OR a persisted bp row), REUSE that same paused bp
-    # row — flip it back to running — so it is never duplicated. resume_pid is set
-    # by either resume path above.
-    if resume_pid:
-        process_id = resume_pid
-        # Routed through bp_set_status so background_processes.py stays the sole
-        # writer of this table. heartbeat=True reproduces the previous raw UPDATE
-        # exactly (status + updated_at + last_heartbeat).
-        from app.services.background_processes import bp_set_status as _bp_set_status
-        await _bp_set_status(process_id, "running", heartbeat=True)
-        detail = f"Resuming enrichment from item {resume_from}…"
+    point = await bp_resume_point("enrichment_run")
+    resume_after = point["resume_after"] if point else None
+    if point:
+        process_id = point["process_id"]
+        await bp_set_status(process_id, "running", heartbeat=True)
+        detail = f"Resuming enrichment after {resume_after}…"
+        log.info("[enrichment] resuming %s run %s after %r", point["status"], process_id, resume_after)
     else:
         process_id = await bp_start("enrichment_run", detail="Starting enrichment…")
         detail = "Starting enrichment…"
+        log.info("[enrichment] no paused / interrupted run with a resume point — fresh start")
 
-    _enrichment_jobs[job_id]["process_id"] = process_id
+    job_id = str(uuid.uuid4())
+    _enrichment_jobs[job_id] = {
+        "job_id":       job_id,
+        "status":       "running",
+        "re_enrich":    True,
+        "resume_after": resume_after,
+        "started_at":   datetime.utcnow().isoformat(),
+        "finished_at":  None,
+        "progress":     {"current": point["progress_current"] if point else 0, "total": 0,
+                         "current_species": "", "last_status": ""},
+        "log":          [],
+        "result":       None,
+        "error":        None,
+        "process_id":   process_id,
+    }
+    if background_tasks is not None:
+        background_tasks.add_task(_run_enrichment_job, job_id=job_id)
+    else:
+        asyncio.create_task(_run_enrichment_job(job_id))
+    return {"job_id": job_id, "status": "running", "process_id": process_id, "detail": detail,
+            "resume_after": resume_after, "resume_source": point["status"] if point else "fresh"}
 
-    background_tasks.add_task(
-        _run_enrichment_job,
-        job_id=job_id,
-        re_enrich=body.re_enrich,
-    )
-    return {"job_id": job_id, "status": "running", "process_id": process_id,
-            "resume_from": resume_from, "resume_source": resume_source}
+
+@router.post("/api/enrichment/run")
+async def start_enrichment_run(
+    body: EnrichmentRunRequest,
+    background_tasks: BackgroundTasks,
+    dry_run: bool = Query(False, description="show what the run would do; start nothing"),
+    db: AsyncSession = Depends(get_db),
+    identity: Identity = Depends(get_identity),
+):
+    """
+    Start a full enrichment batch run in the background (or resume the most
+    recent paused / interrupted one after its last completed species).
+    Returns immediately with a job_id. Poll /api/enrichment/status/{job_id}.
+
+    dry_run=true: the summary only (species count, fields it may fill, drafts
+    it may create) — nothing starts. Every button shows it first.
+
+    Only one job may run at a time — returns 409 if one is already running.
+    """
+    if identity.is_guest:
+        raise HTTPException(403, "Curator only")
+    if dry_run:
+        from app.services.background_processes import bp_resume_point
+        from app.services.enrichment import batch_species_names
+        from app.services.enrichment_plan import plan
+        names = await batch_species_names()
+        point = await bp_resume_point("enrichment_run")
+        if point:
+            names = [n for n in names if n > point["resume_after"]]
+        note = (f"Resumes the {point['status']} run after {point['resume_after']}." if point else
+                "Fresh run. Pauses by itself if the network fails.")
+        return await plan(db, names, note=note)
+    return await _start_enrichment_run(background_tasks)
 
 
 @router.get("/api/enrichment/status/{job_id}")
@@ -3709,6 +3836,7 @@ async def _run_backfill_all_task() -> None:
 async def start_draft_backfill(
     background_tasks: BackgroundTasks,
     field: Optional[str] = Query(default=None),
+    dry_run: bool = Query(False, description="count what it would do; start nothing"),
     identity: Identity = Depends(get_identity),
 ):
     """
@@ -3726,6 +3854,25 @@ async def start_draft_backfill(
         raise HTTPException(403, "Curator only")
     global _draft_backfill_job
     from sqlalchemy import text
+
+    if dry_run:
+        # The summary every Backfill button shows first — nothing starts.
+        domains = sorted(_DRAFT_FIELD_DOMAINS) + ["identification_notes"] if field == "all" else [field]
+        out = {"dry_run": True, "fields": {}, "note": "only fields with no pending draft; nothing is replaced"}
+        names = set()
+        async with AsyncSessionLocal() as _read_db:
+            for dom in domains:
+                if dom == "identification_notes":
+                    out["fields"]["identification_notes"] = (await _read_db.execute(text(_ID_NOTES_OUTSTANDING_SQL))).scalar() or 0
+                    continue
+                if dom is not None and dom not in _DRAFT_FIELD_DOMAINS:
+                    raise HTTPException(400, detail=f"Unknown backfill field: {dom!r}")
+                tg = await _collect_backfill_targets(_read_db, dom)
+                out["fields"][dom or "taste/medicinal/recipe"] = len(tg)
+                names |= set(tg)
+        out["species_count"] = len(names) or max(list(out["fields"].values()) or [0])
+        out["species_sample"] = sorted(names)[:12]
+        return out
 
     if _draft_backfill_job and _draft_backfill_job.get("status") == "running":
         raise HTTPException(409, detail="A backfill job is already running")

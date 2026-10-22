@@ -544,6 +544,14 @@
     .ai-draft-collapse-icon { margin-left: auto; font-size: 0.75rem; color: #a78bfa; flex-shrink: 0; transition: transform 0.15s; }
     .ai-draft-species-card.collapsed .ai-draft-collapse-icon { transform: rotate(-90deg); }
     .ai-draft-field { border-top: 1px solid #f0eeff; padding-top: 12px; }
+    /* Two pending versions of one field (Regenerate / Repopulate, 22 Oct 2026): side by side, keep one */
+    .ai-draft-versions { border-top: 1px solid #f0eeff; padding-top: 10px; }
+    .ai-draft-versions-h { font-size: 0.74rem; font-weight: 700; color: #6d28d9; margin-bottom: 6px; }
+    .ai-draft-versions-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 10px; }
+    .ai-draft-versions-row > .ai-draft-field { border: 1px solid #e9e3ff; border-radius: 8px; padding: 8px 10px; }
+    .ai-draft-version-label { display: inline-block; font-size: 0.68rem; font-weight: 700; padding: 1px 7px;
+      border-radius: 9px; background: #f3e8ff; color: #6d28d9; margin-bottom: 4px; }
+    .ai-draft-version-label.new { background: #dcfce7; color: #166534; }
     .ai-draft-field:first-child { border-top: none; padding-top: 0; }
     /* Deep-link target highlight (species card from a species.html chip) */
     .ai-draft-species-card.deeplink-highlight {
@@ -1562,10 +1570,9 @@
         <h4>🔄 Run enrichment</h4>
         <div class="run-controls">
           <button id="btn-run-enrich" onclick="startEnrichmentRun()">Run now</button>
-          <label class="run-opt">
-            <input type="checkbox" id="enrich-opt-reenrich" checked>
-            Re-fetch all sources
-          </label>
+          <!-- 22 Oct 2026: the bulk "re-enrich" option is gone — a run always re-fetches
+               under the safe rules (fill empty fields only, changed text → Review) and
+               never replaces a pending draft. It pauses itself if the network fails. -->
         </div>
         <div id="enrich-progress-wrap">
           <div id="enrich-progress-bar-outer">
@@ -1891,11 +1898,11 @@ function _makeCardHtml(obs) {
     // The share button lets the user send the full-res photo to the Android share sheet
     // (where Google Lens appears as a target — the proper Lens bridge on the Pixel PWA).
     const shareBtn = thumbName
-      ? `<button class="btn-share-photo" onclick="shareCardPhoto(${obs.id},'${thumbName}')" title="Share photo — opens Google Lens on Android">📤</button>`
+      ? `<button class="btn-share-photo" onclick="shareCardPhoto(${obs.id},'${_resc(thumbName).replace(/'/g, "\\'")}')" title="Share photo — opens Google Lens on Android">📤</button>`
       : '';
     const thumb = `<div class="thumb-wrap">${
       thumbName
-        ? `<img src="/thumbnails/${thumbName}" alt="photo" loading="lazy"
+        ? `<img src="/thumbnails/${_esc(thumbName)}" alt="photo" loading="lazy"
                onclick="selectModeActive ? toggleCard(${obs.id}, this) : openCardPhoto(${obs.id})"
                onerror="var b=this.parentElement&&this.parentElement.querySelector('.btn-share-photo');if(b)b.remove();this.outerHTML='<div class=&quot;no-thumb&quot;>🌿</div>'">`
         : '<div class="no-thumb">🌿</div>'
@@ -1959,7 +1966,7 @@ function _makeCardHtml(obs) {
           <div class="species-block ${cls}">
             ${hasTopScore ? `<span class="sp-score">${pct}%</span>` : ''}
             <div class="sp-name">${_esc(shownName)} <button class="sp-rename-btn" onclick="openRenameRowForm(${obs.id})" title="Rename species">✎</button></div>
-            ${common ? `<div class="sp-common">${common}</div>` : ''}
+            ${common ? `<div class="sp-common">${_esc(common)}</div>` : ''}
             ${_noneuLabel(topIsShown ? top : null)}
             ${regionalHtml}
             ${alts   ? `<div class="sp-alts">Also: ${alts}</div>` : ''}
@@ -2083,7 +2090,7 @@ function _makeCardHtml(obs) {
     if (obs.itis_name_match === 'synonym' && obs.itis_accepted_name) {
       const itisNameEsc  = _esc(obs.itis_accepted_name);
       const itisNameSafe = (obs.itis_accepted_name).replace(/'/g,"&#39;").replace(/"/g,'&quot;');
-      const spPrimSafe   = (obs.species_primary || '').replace(/'/g,"&#39;").replace(/"/g,'&quot;');
+      const spPrimSafe   = _resc(obs.species_primary || '').replace(/'/g, "\\'");
       itisBannerHtml = `<div class="itis-banner-synonym">
         <span style="flex:1">⚠ ITIS suggests: <em>${itisNameEsc}</em></span>
         <button class="btn-itis-rename"
@@ -2128,7 +2135,7 @@ function _makeCardHtml(obs) {
     }
 
     // ── Notes / scene description ──────────────────────────────────────────
-    const notesVal = (obs.reviewer_notes || '').replace(/"/g, '&quot;');
+    const notesVal = _resc(obs.reviewer_notes || '');
     const notesHtml = isLandscape ? `
       <div class="notes-row">
         <div class="landscape-desc-label">Scene description</div>
@@ -2154,7 +2161,7 @@ function _makeCardHtml(obs) {
         <div class="card-body">
           <div class="card-meta">#${obs.id}</div>
           <div class="card-date">${date}</div>
-          <div class="card-path" title="${obs.file_path}">${fname}</div>
+          <div class="card-path" title="${_esc(obs.file_path)}">${_esc(fname)}</div>
           <div class="card-geo">${geo}</div>
           ${!obs.latitude ? `
           <div class="gps-row" id="gps-row-${obs.id}">
@@ -3944,7 +3951,7 @@ async function loadAIDraftReview() {
     if (!r.ok) throw new Error(`HTTP ${r.status}`);
     data = await r.json();
   } catch (e) {
-    area.innerHTML = `<div style="color:#c0392b;font-size:0.85rem">Error: ${e.message}</div>`;
+    area.innerHTML = `<div style="color:#c0392b;font-size:0.85rem">Error: ${_esc(e.message)}</div>`;
     return;
   }
 
@@ -4051,32 +4058,51 @@ function _renderAIDraftCard(sp) {
     return name ? `<img src="/thumbnails/${_resc(name)}" onerror="this.style.display='none'">` : '';
   }).join('');
 
-  const fieldsHtml = (sp.drafts || []).map(d => _renderAIDraftField(sp.scientific_name, d)).join('');
+  // Group by field: two pending versions of one field (a Regenerate / Repopulate
+  // saves the new one beside the old) render side by side — keep one.
+  const _byField = new Map();
+  for (const d of (sp.drafts || [])) {
+    if (!_byField.has(d.field_name)) _byField.set(d.field_name, []);
+    _byField.get(d.field_name).push(d);
+  }
+  const fieldsHtml = [..._byField.values()].map(group => {
+    if (group.length === 1) return _renderAIDraftField(sp.scientific_name, group[0]);
+    const g = group.slice().sort((a, b) => String(a.generated_at || '').localeCompare(String(b.generated_at || '')) || a.id - b.id);
+    return `<div class="ai-draft-versions">
+      <div class="ai-draft-versions-h">${g.length} versions of ${_resc(_fieldLabel(g[0].field_name))} — keep one; the other is retired</div>
+      <div class="ai-draft-versions-row">${g.map((d, k) => _renderAIDraftField(sp.scientific_name, d,
+        k === g.length - 1 ? 'New version' : 'Pending since ' + String(d.generated_at || '').slice(0, 10))).join('')}</div>
+    </div>`;
+  }).join('');
+  const _versioned = new Set([..._byField.entries()].filter(([, g]) => g.length > 1).map(([f]) => f));
 
   const approveAllId = `approve-all-${_escId(sp.scientific_name)}`;
   const escName      = _resc(sp.scientific_name);
+  const escArg       = escName.replace(/'/g, "\\'");
   const cardId       = `draft-card-${_escId(sp.scientific_name)}`;
 
   const draftCount = (sp.drafts || []).length;
   // Warning drafts are approved one by one — never by "Approve all".
-  const bulkCount  = (sp.drafts || []).filter(d => !_CURATOR_DRAFT_FIELDS.has(d.field_name)).length;
+  // …nor do fields with two versions (you choose one first).
+  const bulkCount  = (sp.drafts || []).filter(d => !_CURATOR_DRAFT_FIELDS.has(d.field_name) && !_versioned.has(d.field_name)).length;
   return `<div class="ai-draft-species-card" id="${cardId}">
-    <div class="ai-draft-species-header" onclick="aiDraftToggleCollapse('${escName}', event)">
+    <div class="ai-draft-species-header" onclick="aiDraftToggleCollapse('${escArg}', event)">
       <div style="display:flex;align-items:center;gap:8px">
         <input type="checkbox" class="ai-draft-select-cb" title="Select for bulk regenerate"
                style="width:16px;height:16px;cursor:pointer;accent-color:#7c3aed;flex-shrink:0"
-               onchange="aiDraftToggleSelect('${escName}', this.checked)"
+               onchange="aiDraftToggleSelect('${escArg}', this.checked)"
                onclick="event.stopPropagation()">
         <div>
           ${sp.common_names.length ? `<div style="font-size:0.95rem;font-weight:700;color:#3b0764">${_resc(spCommon(sp.common_names[0]))}</div>` : ''}
           <div class="ai-draft-sci"${sp.common_names.length ? ' style="font-size:0.78rem;font-weight:400;color:#6d28d9"' : ''}>${escName}</div>
           <div style="font-size:0.69rem;color:#a78bfa;margin-top:1px">${draftCount} draft${draftCount!==1?'s':''} pending</div>
+          ${(sp.on_walks || []).length ? `<div style="font-size:0.69rem;color:#166534;margin-top:1px">🚶 On walk: ${(sp.on_walks || []).map(_resc).join(', ')}</div>` : ''}
         </div>
       </div>
       <div style="display:flex;align-items:center;gap:6px">
         ${thumbsHtml ? `<div class="ai-draft-thumbs">${thumbsHtml}</div>` : ''}
         <button title="Regenerate all drafts for this species from current source data"
-                onclick="event.stopPropagation();aiDraftRegenerate('${escName}', this)"
+                onclick="event.stopPropagation();aiDraftRegenerate('${escArg}', this)"
                 style="padding:4px 10px;border:1px solid #7c3aed;border-radius:6px;
                        background:white;color:#5b21b6;font-size:0.74rem;font-weight:700;
                        cursor:pointer;white-space:nowrap;flex-shrink:0">
@@ -4088,35 +4114,38 @@ function _renderAIDraftCard(sp) {
     <div class="ai-draft-fields">
       ${fieldsHtml}
       ${bulkCount ? `<button class="ai-draft-approve-all-btn" id="${approveAllId}"
-        onclick="approveAllDrafts('${escName}')">
-        ✓ Approve all ${bulkCount} draft${bulkCount !== 1 ? 's' : ''} for this species${bulkCount < draftCount ? ' (not the warning)' : ''}
+        onclick="approveAllDrafts('${escArg}')">
+        ✓ Approve all ${bulkCount} draft${bulkCount !== 1 ? 's' : ''} for this species${bulkCount < draftCount ? ' (not the review cards or two-version fields)' : ''}
       </button>` : ''}
     </div>
   </div>`;
 }
 
 function _fieldLabel(field) {
-  return { taste_notes: 'Taste & Texture', medicinal_notes: 'Medicinal & Herbalism Notes', recipe: 'Recipe', medicinal_folklore: 'Medicinal Folklore', preparation_warnings: 'Preparation warning' }[field] || field;
+  return { taste_notes: 'Taste & Texture', medicinal_notes: 'Medicinal & Herbalism Notes', recipe: 'Recipe', medicinal_folklore: 'Medicinal Folklore', preparation_warnings: 'Preparation warning', look_alike_warnings: 'Look-alike warning', edible_parts: 'Edible parts', id_notes: 'ID notes', seasonal_peak: 'Season' }[field] || field;
 }
 
 // Curator-review drafts (app/models/species.py CURATOR_DRAFT_FIELDS): source
 // text, not AI output. Approving (as-is or edited) makes it the curator's text.
-const _CURATOR_DRAFT_FIELDS = new Set(['preparation_warnings']);
+const _CURATOR_DRAFT_FIELDS = new Set(['preparation_warnings', 'look_alike_warnings', 'edible_parts', 'id_notes', 'seasonal_peak']);
 const _WARNING_DRAFT_ORIGIN = {
-  pfaf:           'From PFAF (Known Hazards). Approve as-is or rewrite it — either way it becomes your text, and the published caution reason.',
-  unknown_origin: 'Text already in this field, origin unknown (machine-written, no history). Check it actually reads as a warning: approve, rewrite, or reject.',
+  pfaf:           'From PFAF (Known Hazards). Approve as-is or rewrite it — either way it becomes your text and prints on handouts. Remove it if it is not a warning for this species.',
+  unknown_origin: 'Text already in this field, origin unknown (machine-written, no history). Check it actually reads as a warning: approve, rewrite, or remove it.',
   marker_confirm: 'Locked as yours on 24 Jun, but the history holds a marker, not this text. Confirm it is your text (approve), or rewrite it.',
 };
 
-function _renderAIDraftField(sciName, d) {
+function _renderAIDraftField(sciName, d, versionLabel) {
   const escName  = _resc(sciName);
+  const escArg   = escName.replace(/'/g, "\\'");
   const editId   = `ai-edit-${d.id}`;
   const isRecipe = d.field_name === 'recipe';
   const isTaste  = d.field_name === 'taste_notes';
   const isCurator = _CURATOR_DRAFT_FIELDS.has(d.field_name);
   const _norm = t => (t || '').trim().replace(/\s+/g, ' ');
   const curatorHtml = isCurator ? `
-    <div class="ai-draft-origin">${_resc(_WARNING_DRAFT_ORIGIN[d.model] || `Source: ${d.model || 'unknown'}`)}</div>
+    <div class="ai-draft-origin">${_resc(_WARNING_DRAFT_ORIGIN[d.model] || ((d.model || '').startsWith('source_update')
+      ? `The source (${(d.model || '').split(':')[1] || 'source'}) now says something different. The field keeps its current text until you choose: approve the new text, edit it, remove the field, or reject this card to keep what is there.`
+      : `Source: ${d.model || 'unknown'}`))}</div>
     ${_norm(d.current_text) !== _norm(d.draft_text) ? `<div class="ai-draft-current"><span class="ai-draft-current-label">In the field now — replaced when you approve:</span>${_resc(_norm(d.current_text) ? d.current_text : '(empty)')}</div>` : ''}` : '';
   // The field holds PFAF text because no AI text was available (D4 chip) —
   // approving this draft replaces it (history keeps the PFAF text as old value).
@@ -4146,7 +4175,7 @@ function _renderAIDraftField(sciName, d) {
           placeholder="Edit command e.g. 'change shoots to flowers'"
           style="flex:1;padding:5px 9px;font-size:0.78rem;border:1px solid #c4b5fd;
                  border-radius:6px;outline:none;font-family:inherit">
-        <button class="btn-ai-edit" onclick="regenerateDraft('${escName}', ${d.id})" id="btn-regen-${d.id}">
+        <button class="btn-ai-edit" onclick="regenerateDraft('${escArg}', ${d.id})" id="btn-regen-${d.id}">
           ↻ Regenerate
         </button>
       </div>
@@ -4156,12 +4185,13 @@ function _renderAIDraftField(sciName, d) {
   const tasteRegenHtml = isTaste ? `
     <div style="margin-bottom:4px">
       <button class="btn-ai-edit" id="btn-taste-regen-${d.id}"
-              onclick="aiDraftRegenerateField('${escName}', 'taste_notes', ${d.id}, this)">
+              onclick="aiDraftRegenerateField('${escArg}', 'taste_notes', ${d.id}, this)">
         ↻ Regenerate taste notes
       </button>
     </div>` : '';
 
-  return `<div class="ai-draft-field${isCurator ? ' ai-draft-safety' : ''}" id="draft-field-${d.id}">
+  return `<div class="ai-draft-field${isCurator ? ' ai-draft-safety' : ''}${versionLabel ? ' ai-draft-version' : ''}" id="draft-field-${d.id}" data-field-name="${d.field_name}">
+    ${versionLabel ? `<span class="ai-draft-version-label${versionLabel === 'New version' ? ' new' : ''}">${_resc(versionLabel)}</span>` : ''}
     <div class="ai-draft-field-label">${_fieldLabel(d.field_name)}</div>
     ${curatorHtml}
     ${falseNoUsesHtml}
@@ -4174,12 +4204,14 @@ function _renderAIDraftField(sciName, d) {
     <div class="ai-draft-actions">
       <button class="btn-ai-approve"
         data-sci="${escName}" data-field="${d.field_name}" data-did="${d.id}"
-        onclick="approveDraftField('${escName}', '${d.field_name}', ${d.id}, false)">✓ Approve as-is</button>
+        onclick="approveDraftField('${escArg}', '${d.field_name}', ${d.id}, false)">✓ Approve as-is</button>
       <button class="btn-ai-edit" onclick="toggleDraftEdit(${d.id})">✎ Edit then approve</button>
       <button class="btn-ai-approve" style="display:none" id="btn-edit-save-${d.id}"
-        onclick="approveDraftField('${escName}', '${d.field_name}', ${d.id}, true)">✓ Save &amp; approve</button>
+        onclick="approveDraftField('${escArg}', '${d.field_name}', ${d.id}, true)">✓ Save &amp; approve</button>
       ${isRecipe ? `<button class="btn-ai-edit" onclick="toggleEditCmd(${d.id})">✦ Edit command</button>` : ''}
-      <button class="btn-ai-reject" onclick="rejectDraftField('${escName}', '${d.field_name}', ${d.id})">✗ Reject</button>
+      ${isCurator && d.removable ? `<button class="btn-ai-reject" title="Clear this warning from the species (recorded as your decision)"
+        onclick="removeWarningField('${escArg}', '${d.field_name}', ${d.id})">🗑 Remove</button>` : ''}
+      <button class="btn-ai-reject" onclick="rejectDraftField('${escArg}', '${d.field_name}', ${d.id})">✗ Reject${isCurator ? ' (keep text)' : ''}</button>
     </div>
     <div class="ai-draft-field-result" id="draft-result-${d.id}"></div>
   </div>`;
@@ -4233,17 +4265,18 @@ async function aiDraftRegenerate(sciName, btnEl) {
   if (btnEl) { btnEl.disabled = true; btnEl.textContent = '⏳ Generating…'; }
 
   try {
-    const r = await fetch('/api/drafts/generate', {
+    const r = await lmDryRunConfirm('/api/drafts/generate', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ scientific_name: sciName, re_enrich: true }),
-    });
+    }, `Regenerate drafts for ${sciName}?`);
+    if (!r) return;
     const d = await r.json();
     if (!r.ok) throw new Error(d.detail || `HTTP ${r.status}`);
     if (d.blocked) {
       toast(`⚠ ${sciName}: ${d.blocked}`);
     } else {
-      toast(`✓ ${sciName}: ${d.created} new draft${d.created !== 1 ? 's' : ''} queued — rescan to review`);
+      toast(`✓ ${sciName}: ${d.created} new version${d.created !== 1 ? 's' : ''} beside the pending draft${d.created !== 1 ? 's' : ''}${d.drafts_skipped_total ? ` · ${d.drafts_skipped_total} not saved by the check` : ''} — rescan to review`);
       _aiDraftLoaded = false;   // force full reload on next open
     }
   } catch (e) {
@@ -4261,17 +4294,18 @@ async function aiDraftRegenerateField(sciName, fieldName, draftId, btnEl) {
   if (resEl) resEl.textContent = '';
 
   try {
-    const r = await fetch('/api/drafts/generate', {
+    const r = await lmDryRunConfirm('/api/drafts/generate', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ scientific_name: sciName, re_enrich: true }),
-    });
+    }, `Regenerate drafts for ${sciName}?`);
+    if (!r) return;
     const d = await r.json();
     if (!r.ok) throw new Error(d.detail || `HTTP ${r.status}`);
     if (d.blocked) {
       if (resEl) { resEl.innerHTML = `<span style="color:#b45309">⚠ ${_resc(d.blocked)}</span>`; }
     } else {
-      if (resEl) { resEl.innerHTML = `<span style="color:#166534">✓ New draft queued (${d.created} created) — rescan to review</span>`; }
+      if (resEl) { resEl.innerHTML = `<span style="color:#166534">✓ ${d.created} new version(s) beside the pending draft${d.drafts_skipped_total ? ` · ${d.drafts_skipped_total} not saved by the check` : ''} — rescan to review</span>`; }
       _aiDraftLoaded = false;
     }
   } catch (e) {
@@ -4289,17 +4323,20 @@ async function aiDraftBulkRegenerate() {
   if (btn) { btn.disabled = true; btn.textContent = `⏳ Generating (${names.length})…`; }
 
   try {
-    const r = await fetch('/api/drafts/bulk-generate', {
+    // Bulk: only fields with no pending draft — nothing is replaced (22 Oct 2026).
+    const r = await lmDryRunConfirm('/api/drafts/bulk-generate', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ species: names, re_enrich: true }),
-    });
+      body: JSON.stringify({ species: names, re_enrich: false }),
+    }, `Generate drafts for ${names.length} species?`);
+    if (!r) return;
     const d = await r.json();
     if (!r.ok) throw new Error(d.detail || `HTTP ${r.status}`);
 
     const blocked = (d.results || []).filter(x => x.blocked);
     const msg = `✓ ${d.total_created} drafts queued for ${names.length} species`
-      + (blocked.length ? ` · ${blocked.length} blocked` : '');
+      + (blocked.length ? ` · ${blocked.length} blocked` : '')
+      + (d.drafts_skipped_total ? ` · ${d.drafts_skipped_total} not saved by the check` : '');
     toast(msg);
 
     _aiDraftSelected.clear();
@@ -4323,11 +4360,12 @@ async function aiDraftGenerateSingle() {
   if (resEl) { resEl.style.display = ''; resEl.textContent = `⏳ Generating drafts for ${sciName}…`; resEl.style.color = '#5b21b6'; }
 
   try {
-    const r = await fetch('/api/drafts/generate', {
+    const r = await lmDryRunConfirm('/api/drafts/generate', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ scientific_name: sciName, re_enrich: false }),
-    });
+    }, `Generate drafts for ${sciName}?`);
+    if (!r) { if (resEl) { resEl.textContent = 'Cancelled — nothing generated'; resEl.style.color = '#888'; } return; }
     const d = await r.json();
     if (!r.ok) throw new Error(d.detail || `HTTP ${r.status}`);
 
@@ -4376,7 +4414,7 @@ async function regenerateDraft(sciName, draftId) {
   if (resEl) resEl.textContent = '';
 
   try {
-    const r = await fetch(`/api/species/${encodeURIComponent(sciName)}/recipes/regenerate`, {
+    const r = await lmDryRunConfirm(`/api/species/${encodeURIComponent(sciName)}/recipes/regenerate`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -4384,10 +4422,11 @@ async function regenerateDraft(sciName, draftId) {
         season: season,
         recipe_id: null,
       }),
-    });
+    }, `Regenerate the recipe for ${sciName}?`);
+    if (!r) return;
     const d = await r.json();
     if (!r.ok) throw new Error(d.detail || `HTTP ${r.status}`);
-    if (resEl) resEl.innerHTML = `<span style="color:#166534">✓ New draft queued (ID ${d.draft_id}). Reload the review queue to see it.</span>`;
+    if (resEl) resEl.innerHTML = `<span style="color:#166534">✓ New version queued beside this one (ID ${d.draft_id}). Reload the review queue to see both.</span>`;
   } catch (e) {
     if (resEl) resEl.innerHTML = `<span style="color:#c0392b">✗ ${_resc(e.message)}</span>`;
   } finally {
@@ -4465,7 +4504,7 @@ async function approveDraftField(sciName, fieldName, draftId, useEdit) {
   if (resultEl) { resultEl.textContent = '⏳ Approving…'; }
 
   try {
-    const r = await fetch(`/api/species/${encodeURIComponent(sciName)}/drafts/${fieldName}/approve`, {
+    const r = await fetch(`/api/species/${encodeURIComponent(sciName)}/drafts/${fieldName}/approve?draft_id=${draftId}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
@@ -4476,8 +4515,11 @@ async function approveDraftField(sciName, fieldName, draftId, useEdit) {
     }
     await r.json();
     if (resultEl) { resultEl.textContent = '✓ Approved'; resultEl.style.color = '#2d8016'; }
+    // The server retired the other versions of this field — drop them too.
+    const _card = fieldEl && fieldEl.closest('.ai-draft-species-card');
+    const _others = _card ? [..._card.querySelectorAll(`.ai-draft-field[data-field-name="${fieldName}"]`)].filter(el => el !== fieldEl) : [];
     // Remove from queue immediately (short flash so user sees the ✓)
-    setTimeout(() => _removeDraftField(sciName, fieldEl), 700);
+    setTimeout(() => { _others.forEach(el => _removeDraftField(sciName, el)); _removeDraftField(sciName, fieldEl); }, 700);
   } catch (e) {
     if (resultEl) { resultEl.textContent = `❌ ${e.message}`; resultEl.style.color = '#c0392b'; }
     btns.forEach(b => { b.disabled = false; });
@@ -4492,7 +4534,7 @@ async function rejectDraftField(sciName, fieldName, draftId) {
   btns.forEach(b => b.disabled = true);
 
   try {
-    const r = await fetch(`/api/species/${encodeURIComponent(sciName)}/drafts/${fieldName}/reject`, {
+    const r = await fetch(`/api/species/${encodeURIComponent(sciName)}/drafts/${fieldName}/reject?draft_id=${draftId}`, {
       method: 'POST',
     });
     if (!r.ok) throw new Error(`HTTP ${r.status}`);
@@ -4505,11 +4547,33 @@ async function rejectDraftField(sciName, fieldName, draftId) {
   }
 }
 
+// Warning cards: Remove clears the field (history row changed_by='human') and
+// closes the draft. Never offered for a deadly species (server rule, `removable`).
+async function removeWarningField(sciName, fieldName, draftId) {
+  if (!confirm(`Remove the ${_fieldLabel(fieldName).toLowerCase()} from ${sciName}?\n\nThe field is cleared and recorded as your decision.`)) return;
+  const fieldEl  = document.getElementById(`draft-field-${draftId}`);
+  const resultEl = document.getElementById(`draft-result-${draftId}`);
+  const btns = fieldEl ? fieldEl.querySelectorAll('button') : [];
+  btns.forEach(b => b.disabled = true);
+  try {
+    const r = await fetch(`/api/species/${encodeURIComponent(sciName)}/drafts/${fieldName}/remove`, { method: 'POST' });
+    if (!r.ok) {
+      const e = await r.json().catch(() => ({}));
+      throw new Error(e.detail || `HTTP ${r.status}`);
+    }
+    if (resultEl) { resultEl.textContent = '🗑 Removed'; resultEl.style.color = '#888'; }
+    setTimeout(() => _removeDraftField(sciName, fieldEl), 500);
+  } catch (e) {
+    btns.forEach(b => b.disabled = false);
+    toast(`❌ Could not remove: ${e.message}`);
+  }
+}
+
 async function approveAllDrafts(sciName) {
   const cardEl        = document.getElementById(`draft-card-${_escId(sciName)}`);
   // Snapshot the field list before any removals start
   // Warning drafts (.ai-draft-safety) are never bulk-approved.
-  const allFields     = cardEl ? [...cardEl.querySelectorAll('.ai-draft-field:not(.ai-draft-safety)')] : [];
+  const allFields     = cardEl ? [...cardEl.querySelectorAll('.ai-draft-field:not(.ai-draft-safety):not(.ai-draft-version)')] : [];
   const approveAllBtn = cardEl ? cardEl.querySelector('.ai-draft-approve-all-btn') : null;
   if (approveAllBtn) approveAllBtn.disabled = true;
 
@@ -4628,13 +4692,12 @@ async function _enrichResumeBg() {
   const btn = document.getElementById('epb-pause-btn');
   if (btn) btn.disabled = true;
   try {
-    const reEnrichEl = document.getElementById('enrich-opt-reenrich');
-    const reEnrich = reEnrichEl ? reEnrichEl.checked : true;
-    const r = await fetch('/api/enrichment/run', {
+    const r = await lmDryRunConfirm('/api/enrichment/run', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ re_enrich: reEnrich }),
-    });
+      body: JSON.stringify({}),
+    }, 'Resume the enrichment run?');
+    if (!r) { if (btn) btn.disabled = false; return; }
     if (r.ok) {
       const data = await r.json();
       // Adopt the resumed job so the inline box's poller tracks it too.
@@ -4653,7 +4716,6 @@ async function _enrichResumeBg() {
 
 async function startEnrichmentRun() {
   const btn          = document.getElementById('btn-run-enrich');
-  const reEnrich     = document.getElementById('enrich-opt-reenrich').checked;
   const progressWrap = document.getElementById('enrich-progress-wrap');
   const progressBar  = document.getElementById('enrich-progress-bar');
   const progressLbl  = document.getElementById('enrich-progress-label');
@@ -4669,11 +4731,17 @@ async function startEnrichmentRun() {
   resultDiv.style.display    = 'none';
   errorDiv.style.display     = 'none';
   try {
-    const r = await fetch('/api/enrichment/run', {
+    const r = await lmDryRunConfirm('/api/enrichment/run', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ re_enrich: reEnrich }),
-    });
+      body: JSON.stringify({}),
+    }, 'Run enrichment?');
+    if (!r) {
+      btn.disabled = false;
+      btn.textContent = 'Run now';
+      progressWrap.style.display = 'none';
+      return;
+    }
     if (!r.ok) {
       const err = await r.json().catch(() => ({}));
       throw new Error(err.detail || `HTTP ${r.status}`);
@@ -4728,9 +4796,9 @@ async function _pollEnrichStatus() {
       _enrichPoller = null;
       const runBtn = document.getElementById('btn-run-enrich');
       if (runBtn) { runBtn.disabled = false; runBtn.textContent = '▶ Resume'; }
-      progressLbl.textContent = total > 0
-        ? `⏸ Paused at ${current}/${total} — Resume to continue`
-        : '⏸ Paused — Resume to continue';
+      progressLbl.textContent = job.paused_reason === 'no_network'
+        ? `⏸ Paused — no network (${current}/${total} done). It resumes by itself when the network returns, or press Resume.`
+        : (total > 0 ? `⏸ Paused at ${current}/${total} — Resume to continue` : '⏸ Paused — Resume to continue');
     }
   } catch (_) { /* ignore transient network errors while polling */ }
 }
@@ -4756,6 +4824,11 @@ function _enrichRunComplete(result) {
     { n: r.skipped   || 0, lbl: 'Skipped',       cls: '' },
     { n: r.failed    || 0, lbl: 'Failures',      cls: r.failed ? 'er-fail' : '' },
     { n: r.ai_drafts_pending || 0, lbl: 'AI drafts ready', cls: 'er-ai' },
+    { n: r.drafts_created || 0, lbl: 'Drafts created', cls: 'er-ai' },
+    { n: r.drafts_skipped_total || 0, lbl: 'Not saved by the check'
+        + (r.drafts_skipped_total ? ' (' + Object.entries(r.drafts_skipped || {}).map(([k, v]) => k.replace(/_/g, ' ') + ' ' + v).join(', ') + ')' : ''), cls: '' },
+    { n: Object.values(r.review_drafts_queued || {}).reduce((a, b) => a + b, 0), lbl: 'Source changes → Review', cls: '' },
+    { n: r.source_failures || 0, lbl: 'Source fetch failures', cls: r.source_failures ? 'er-fail' : '' },
   ].map(s => `
     <div class="er-stat ${s.cls}">
       <div class="er-n">${s.n}</div>
@@ -4960,11 +5033,11 @@ function _renderEnrichCard(sp) {
   const thumbsHtml = (sp.thumbnails || []).map(tp => {
     const name = tp.split('/').pop();
     const url  = `/thumbnails/${name}`;
-    return `<img src="${url}" loading="lazy"
+    return `<img src="${_esc(url)}" loading="lazy"
                  style="width:52px;height:52px;object-fit:cover;border-radius:5px;cursor:zoom-in;
                         border:1px solid #d0dbb8;flex-shrink:0"
                  title="Click to enlarge"
-                 onclick="openEnrichLightbox('${url.replace(/'/g,"\\'")}')"
+                 onclick="openEnrichLightbox('${_resc(url).replace(/'/g, "\\'")}')"
                  onerror="this.style.display='none'">`;
   }).join('');
 
@@ -4974,7 +5047,7 @@ function _renderEnrichCard(sp) {
     <div style="display:flex;align-items:flex-start;gap:10px;margin-bottom:10px">
       <input type="checkbox" class="enrich-card-select-cb"
              style="display:${_enrichSelectMode ? 'block' : 'none'};margin-top:3px"
-             onchange="enrichToggleCard('${_resc(sp.scientific_name)}', this.checked)">
+             onchange="enrichToggleCard('${_resc(sp.scientific_name).replace(/'/g, "\\'")}', this.checked)">
       ${thumbsHtml ? `<div style="display:flex;gap:4px;flex-shrink:0">${thumbsHtml}</div>` : ''}
       <div style="flex:1;min-width:0">
         ${enrichCommonName ? `<div style="font-weight:700;color:#2d5016;font-size:0.92rem">${_resc(enrichCommonName)}</div>` : ''}
@@ -4992,7 +5065,7 @@ function _renderEnrichCard(sp) {
     ${(()=>{
       if (sp.itis_name_match === 'synonym' && sp.itis_accepted_name) {
         const n = _resc(sp.itis_accepted_name);
-        const spSafe = _resc(sp.scientific_name);
+        const spSafe = _resc(sp.scientific_name).replace(/'/g, "\\'");
         return `<div class="itis-banner-synonym">
           <span style="flex:1">⚠ ITIS suggests: <em>${n}</em></span>
           <button class="btn-itis-rename"
@@ -5014,7 +5087,7 @@ function _renderEnrichCard(sp) {
         ${sp.review_requested_at ? ` · ${new Date(sp.review_requested_at).toLocaleString('en-GB')}` : ''}
         ${sp.review_request_note ? `<div style="margin-top:3px;color:#7c5a10;white-space:pre-line">${_resc(sp.review_request_note)}</div>` : ''}
       </div>
-      <button onclick="clearEnrichFlag('${_resc(sp.scientific_name)}', this)"
+      <button onclick="clearEnrichFlag('${_resc(sp.scientific_name).replace(/'/g, "\\'")}', this)"
               style="font-size:0.75rem;border:1px solid #d0a040;border-radius:5px;padding:4px 10px;
                      background:white;color:#92400e;cursor:pointer;flex-shrink:0;white-space:nowrap">
         ✓ Resolve flag
@@ -5031,13 +5104,13 @@ function _renderEnrichCard(sp) {
                 border-radius:5px;padding:4px 10px;background:#f0f9e8">
         View species page ↗
       </a>
-      <button onclick="enrichRepopulateCard('${_resc(sp.scientific_name)}', this)"
+      <button onclick="enrichRepopulateCard('${_resc(sp.scientific_name).replace(/'/g, "\\'")}', this)"
               style="font-size:0.75rem;border:1px solid #a0c070;border-radius:5px;padding:4px 10px;
                      background:white;color:#2d5016;cursor:pointer;white-space:nowrap"
               title="Re-run enrichment for this species">
         ↻ Repopulate
       </button>
-      <button onclick="enrichSendForReId('${_resc(sp.scientific_name)}', this)"
+      <button onclick="enrichSendForReId('${_resc(sp.scientific_name).replace(/'/g, "\\'")}', this)"
               style="font-size:0.75rem;border:1px solid #c0c8e0;border-radius:5px;padding:4px 10px;
                      background:white;color:#3b5080;cursor:pointer;white-space:nowrap"
               title="Send back to Species ID review — use when the species name looks wrong">
@@ -5048,7 +5121,7 @@ function _renderEnrichCard(sp) {
         : `<span style="font-size:0.72rem;color:#f59e0b">⚠ No PFAF data</span>`
       }
       ${!sp.review_requested ? `
-      <button onclick="enrichApproveCard('${_resc(sp.scientific_name)}', this)"
+      <button onclick="enrichApproveCard('${_resc(sp.scientific_name).replace(/'/g, "\\'")}', this)"
               style="font-size:0.75rem;border:1px solid #6aaf3a;border-radius:5px;padding:4px 10px;
                      background:#f0f9e8;color:#2d5016;cursor:pointer;white-space:nowrap;font-weight:600;margin-left:auto"
               title="Approve this species' enrichment text">
@@ -5105,7 +5178,9 @@ async function enrichRepopulateCard(name, btn) {
   btn.disabled = true;
   btn.textContent = '⏳…';
   try {
-    const r = await fetch(`/api/culinary/${encodeURIComponent(name)}/enrich`, { method: 'POST' });
+    const r = await lmDryRunConfirm(`/api/culinary/${encodeURIComponent(name)}/enrich`, { method: 'POST' },
+                                    `Repopulate ${name}?`);
+    if (!r) return;
     const d = await r.json().catch(() => ({}));
     if (!r.ok) throw new Error(d.detail || `HTTP ${r.status}`);
     // Refresh the three field textareas inline
@@ -5293,6 +5368,25 @@ async function enrichApproveCard(name, btn) {
 async function enrichBulkRepopulate() {
   const names = [..._enrichSelected];
   if (!names.length) return;
+
+  // One dry-run summary for the whole selection, then confirm (22 Oct 2026).
+  _enrichNarration(`Checking what Repopulate would do for ${names.length} species…`);
+  const agg = { species_count: 0, new_species: 0, fields_may_fill: {}, fields_may_get_review_draft: {},
+                fields_may_update: {}, drafts_may_create: {}, species_sample: names,
+                drafts_note: 'new draft versions sit beside the pending ones; nothing is replaced until you keep one' };
+  for (const name of names) {
+    try {
+      const r = await fetch(`/api/culinary/${encodeURIComponent(name)}/enrich?dry_run=true`, { method: 'POST' });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) continue;
+      agg.species_count += d.species_count || 0;
+      agg.new_species += d.new_species || 0;
+      for (const k of ['fields_may_fill', 'fields_may_get_review_draft', 'fields_may_update', 'drafts_may_create'])
+        for (const [f, n] of Object.entries(d[k] || {})) agg[k][f] = (agg[k][f] || 0) + n;
+    } catch (_) {}
+  }
+  _enrichNarration(null);
+  if (!confirm(lmDryRunSummaryText(agg, `Repopulate ${names.length} species?`))) return;
 
   let done = 0;
   const total = names.length;
@@ -5644,7 +5738,7 @@ async function loadEdibilityReview() {
     if (!r.ok) throw new Error('HTTP ' + r.status);
     data = await r.json();
   } catch(e) {
-    grid.innerHTML = '<div style="color:#c0392b;padding:20px">❌ Failed to load: ' + e.message + '</div>';
+    grid.innerHTML = '<div style="color:#c0392b;padding:20px">❌ Failed to load: ' + _esc(e.message) + '</div>';
     return;
   }
 
@@ -6352,6 +6446,7 @@ document.getElementById('delete-dialog').addEventListener('show', () => {
 #delete-dialog.show { display: flex !important; }
 </style>
 <script src="/static/js/pwa.js"></script>
+<script src="/static/js/dry-run.js"></script>
 <script src="/static/js/offline.js"></script>
 <script src="/static/js/guest-mode.js"></script>
 <script src="/static/js/seasonal-returns.js"></script>

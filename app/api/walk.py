@@ -188,6 +188,21 @@ async def walk_membership_for(db: AsyncSession, walk: SavedWalk) -> dict:
     return wm.compute(walk, saved, nearby)
 
 
+async def species_on_saved_walks(db: AsyncSession) -> dict:
+    """{scientific name: [walk names]} for every species at a stop of a saved
+    walk — the walk panel's own live membership (walk_membership.compute), so
+    Review's "on a walk" agrees with what the walk shows."""
+    out: dict = {}
+    for walk in (await db.execute(select(SavedWalk).order_by(SavedWalk.id))).scalars().all():
+        mem = await walk_membership_for(db, walk)
+        for st in wm.public_stops(mem):
+            for sp in st.get("species") or []:
+                names = out.setdefault(sp["name"], [])
+                if walk.name not in names:
+                    names.append(walk.name)
+    return out
+
+
 def _require_curator(identity: Identity) -> None:
     if identity.is_guest:
         raise HTTPException(403, "Curator only")
@@ -429,6 +444,25 @@ async def _reroute_snapshot(walk_id: int) -> str:
     return res.get("db_snapshot") or ""
 
 
+async def _route_runs(plan: dict, new_stops: list) -> dict:
+    """ORS for every 'route' leg of a walk_route plan → {(i, j): {"coords"}}.
+    Any failure raises (nothing is written by the callers)."""
+    routed = {}
+    for run in plan["runs"]:
+        res = await _ors_post([[new_stops[k]["lng"], new_stops[k]["lat"]] for k in run])
+        if res.get("fallback"):
+            raise HTTPException(502, f"ORS could not route {'→'.join(new_stops[k]['label'] for k in run)}: "
+                                     f"{res.get('reason')} — nothing written")
+        feat = (res.get("features") or [{}])[0]
+        line = (feat.get("geometry") or {}).get("coordinates") or []
+        wpts = (feat.get("properties") or {}).get("way_points") or []
+        if len(wpts) != len(run) or len(line) < 2:
+            raise HTTPException(502, "ORS returned an unusable route — nothing written")
+        for q in range(len(run) - 1):
+            routed[(run[q], run[q + 1])] = {"coords": line[wpts[q]:wpts[q + 1] + 1]}
+    return routed
+
+
 @router.post("/saves/{walk_id}/reroute")
 async def reroute_walk(
     walk_id: int, body: RerouteBody,
@@ -488,19 +522,7 @@ async def reroute_walk(
         return summary
 
     snapshot = await _reroute_snapshot(walk_id)
-    routed = {}
-    for run in plan["runs"]:
-        res = await _ors_post([[new_stops[k]["lng"], new_stops[k]["lat"]] for k in run])
-        if res.get("fallback"):
-            raise HTTPException(502, f"ORS could not route {'→'.join(new_stops[k]['label'] for k in run)}: "
-                                     f"{res.get('reason')} — nothing written")
-        feat = (res.get("features") or [{}])[0]
-        line = (feat.get("geometry") or {}).get("coordinates") or []
-        wpts = (feat.get("properties") or {}).get("way_points") or []
-        if len(wpts) != len(run) or len(line) < 2:
-            raise HTTPException(502, "ORS returned an unusable route — nothing written")
-        for q in range(len(run) - 1):
-            routed[(run[q], run[q + 1])] = {"coords": line[wpts[q]:wpts[q + 1] + 1]}
+    routed = await _route_runs(plan, new_stops)
     new_route, length, report = walk_route.assemble_reroute(route, new_stops, plan, routed)
     pace = (walk.duration_min / walk.distance_m) if walk.distance_m else 1 / 80
     new_dist, new_dur = round(length), round(length * pace)
@@ -525,6 +547,126 @@ async def reroute_walk(
                     "legs": [{"leg": f"{label[r['i']]}→{label[r['j']]}", **{k: v for k, v in r.items() if k not in ('i', 'j')}}
                              for r in report]})
     out["reroute"] = summary
+    return out
+
+
+class TidyOrderBody(BaseModel):
+    stops: List[dict]                  # [{lat, lng}] — stop 1 first
+    circular: bool = True
+
+
+@router.post("/tidy-order")
+async def tidy_order_endpoint(body: TidyOrderBody):
+    """Build walk's stop order: walk_route.tidy_order (nearest-neighbour from
+    stop 1, then 2-opt). Pure — no DB, no ORS."""
+    from app.services import walk_route
+    try:
+        stops = [{"lat": float(s["lat"]), "lng": float(s["lng"])} for s in body.stops]
+    except (KeyError, TypeError, ValueError):
+        raise HTTPException(422, "each stop needs numeric lat and lng")
+    if len(stops) > 500:
+        raise HTTPException(422, "too many stops")
+    return {"order": walk_route.tidy_order(stops, body.circular, 0)}
+
+
+def _walk_probe(walk: SavedWalk, **override):
+    """A detached stand-in for a saved walk with some fields replaced — for
+    computing membership of a line that is not written yet."""
+    from types import SimpleNamespace
+    fields = {c.key: getattr(walk, c.key) for c in SavedWalk.__table__.columns}
+    fields.update(override)
+    return SimpleNamespace(**fields)
+
+
+@router.post("/saves/{walk_id}/tidy")
+async def tidy_walk(
+    walk_id: int, body: RerouteBody,
+    db: AsyncSession = Depends(get_db), identity: Identity = Depends(get_identity),
+):
+    """"Tidy route order": the saved stops in the order walk_route.tidy_order
+    finds — 2-opt from the current order (fewest legs changed), stop 1 fixed,
+    circular or point-to-point as the walk is set. Stops and members do not
+    change; only the order and the changed legs do. Stored legs — also ones
+    now walked backwards — keep their geometry and dashes; only new legs go to
+    ORS (the Re-route rules: detour → straight dashed leg). Dry run first
+    (confirm=false: before/after distance, legs changed, no ORS, no write);
+    confirm=true takes the Re-route snapshot, routes, REFUSES if the new line
+    would change the walk's members, then writes and reads back by id."""
+    from app.services import walk_route
+    _require_curator(identity)
+    walk = await _load_walk(db, walk_id)
+    old_wps = [w for w in json.loads(walk.waypoints_json or "[]") if isinstance(w, dict)]
+    route = json.loads(walk.route_geojson) if walk.route_geojson else {}
+    meta = route.get("foragingid") or {}
+    circular = bool(meta.get("circular"))
+    if len(old_wps) < 4 or not walk_route.line_coords(route):
+        raise HTTPException(409, "needs a saved line and at least 4 stops")
+    cur = list(range(len(old_wps)))
+    order = walk_route.tidy_order(old_wps, circular, 0, cur)
+    lbl = lambda k: str(k + 1)
+    old_legs = {frozenset(e) for e in walk_route.order_legs(cur, circular)}
+    changed = [e for e in walk_route.order_legs(order, circular) if frozenset(e) not in old_legs]
+    new_stops = [{"lat": old_wps[k]["lat"], "lng": old_wps[k]["lng"], "label": lbl(k), "old_index": k}
+                 for k in order]
+    plan = walk_route.plan_reroute(old_wps, route, new_stops)
+    # Estimate: kept legs at their stored length + new legs as straight lines.
+    straight = {(l["i"], l["j"]): {"coords": [[new_stops[l["i"]]["lng"], new_stops[l["i"]]["lat"]],
+                                              [new_stops[l["j"]]["lng"], new_stops[l["j"]]["lat"]]]}
+                for l in plan["legs"] if l["kind"] == "route"}
+    _r, est_m, _rep = walk_route.assemble_reroute(route, new_stops, plan, straight)
+    summary = {
+        "dry_run": not body.confirm,
+        "circular": circular,
+        "order": [lbl(k) for k in order],
+        "legs_changed": [f"{lbl(a)}→{lbl(b)}" for a, b in changed],
+        "legs_kept": sum(l["kind"] == "keep" for l in plan["legs"]),
+        "legs_kept_reversed": sum(bool(l.get("reverse")) for l in plan["legs"]),
+        "ors_requests": len(plan["runs"]),
+        "crossings_before": len(walk_route.crossing_legs(old_wps, cur, circular)),
+        "crossings_after": len(walk_route.crossing_legs(old_wps, order, circular)),
+        "straight_before_m": round(walk_route.order_length_m(old_wps, cur, circular)),
+        "straight_after_m": round(walk_route.order_length_m(old_wps, order, circular)),
+        "distance_before_m": walk.distance_m,
+        "estimated_distance_m": round(est_m),
+    }
+    if order == cur:
+        raise HTTPException(409, "the stop order is already tidy — nothing to change")
+    if len(plan["runs"]) > walk_route.REROUTE_MAX_REQUESTS:
+        raise HTTPException(409, f"{len(plan['runs'])} separate ORS requests needed (max "
+                                 f"{walk_route.REROUTE_MAX_REQUESTS}) — too many changes for one tidy")
+    if not body.confirm:
+        return summary
+
+    before = await walk_membership_for(db, walk)
+    snapshot = await _reroute_snapshot(walk_id)
+    routed = await _route_runs(plan, new_stops)
+    new_route, length, report = walk_route.assemble_reroute(route, new_stops, plan, routed)
+    new_wps = [old_wps[k] for k in order]
+    pace = (walk.duration_min / walk.distance_m) if walk.distance_m else 1 / 80
+    new_dist, new_dur = round(length), round(length * pace)
+    # Members unchanged (Melvin, 21 Oct 2026): membership depends on the line,
+    # so check the new line before writing anything.
+    after = await walk_membership_for(db, _walk_probe(walk, waypoints_json=json.dumps(new_wps),
+                                                      route_geojson=json.dumps(new_route)))
+    b, a = set(before["member_obs_ids"]), set(after["member_obs_ids"])
+    if a != b:
+        raise HTTPException(409, {"detail": "the tidied line would change the walk's members — nothing written",
+                                  "would_join": sorted(a - b), "would_leave": sorted(b - a),
+                                  "snapshot": snapshot})
+    walk.waypoints_json = json.dumps(new_wps)
+    walk.route_geojson = json.dumps(new_route)
+    walk.distance_m, walk.duration_min = new_dist, new_dur
+    out = await _commit_and_reread(db, walk_id)
+    if (out["waypoints"] != new_wps or out["route_geojson"] != new_route
+            or out["distance_m"] != new_dist or out["duration_min"] != new_dur):
+        raise HTTPException(500, "tidy did not persist as written — restore " + snapshot)
+    if set(out["membership"]["member_obs_ids"]) != b:
+        raise HTTPException(500, "members changed after the write — restore " + snapshot)
+    label = {k: st["label"] for k, st in enumerate(new_stops)}
+    summary.update({"dry_run": False, "snapshot": snapshot, "distance_m": new_dist, "duration_min": new_dur,
+                    "legs": [{"leg": f"{label[r['i']]}→{label[r['j']]}", **{k: v for k, v in r.items() if k not in ('i', 'j')}}
+                             for r in report]})
+    out["tidy"] = summary
     return out
 
 

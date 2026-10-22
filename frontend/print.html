@@ -531,7 +531,7 @@ function _workshopPage(name, prof, baseByName, photos, showPhotos, withFieldBloc
   const recipeHtml = (ct.recipes && key)
     ? `<div class="ws-section-h">Recipe</div><div class="ws-recipe">${_mdLite(key.body)}</div>` : '';
 
-  const medBits = [cul.medicinal_notes, cul.medicinal_folklore,
+  const medBits = [_esc(cul.medicinal_notes), _esc(cul.medicinal_folklore),
     cul.traditional_uses ? '<span class="ws-fl">Traditional uses —</span> ' + _esc(cul.traditional_uses) : '']
     .filter(Boolean);
   const medicinalHtml = (ct.herbal && medBits.length)
@@ -539,7 +539,7 @@ function _workshopPage(name, prof, baseByName, photos, showPhotos, withFieldBloc
 
   const forageBits = [];
   const idn = (cul.id_notes || '').replace(/\[[^\]]*\]\s*/g,'').trim();
-  if (ct.id_notes && idn)               forageBits.push(idn);
+  if (ct.id_notes && idn)               forageBits.push(_esc(idn));
   if (ct.culinary && cul.edible_parts)  forageBits.push('<span class="ws-fl">Edible parts —</span> ' + _esc(cul.edible_parts));
   if (ct.culinary && cul.harvest_stage) forageBits.push('<span class="ws-fl">Harvest —</span> ' + _esc(cul.harvest_stage));
   const forageHtml = (ct.foraging && forageBits.length && !withFieldBlock)

@@ -115,12 +115,15 @@ async def mint_token(
     db:       AsyncSession = Depends(get_db),
 ):
     _require_curator(identity)
-    if body.participant_id is not None:
-        if body.participant_id < 2:
-            raise HTTPException(422, "participant_id=1 is the curator tombstone — use null for a curator token")
-        p = await db.get(WorkshopParticipant, body.participant_id)
-        if p is None:
-            raise HTTPException(422, f"participant_id {body.participant_id} does not exist")
+    # Batch 7: curator device links are minted only by Settings → Share with
+    # Guests (POST /api/sharing/devices, localhost only) — never here.
+    if body.participant_id is None:
+        raise HTTPException(422, "Curator devices are added in Settings → Your devices & sharing")
+    if body.participant_id < 2:
+        raise HTTPException(422, "participant_id=1 is the curator tombstone")
+    p = await db.get(WorkshopParticipant, body.participant_id)
+    if p is None:
+        raise HTTPException(422, f"participant_id {body.participant_id} does not exist")
     days    = min(body.expires_days or _DEFAULT_EXPIRY_DAYS, _MAX_EXPIRY_DAYS)
     expires = datetime.utcnow() + timedelta(days=days)
     tok = GuestToken(
@@ -493,6 +496,10 @@ async def list_tokens(
         stmt = stmt.where(GuestToken.workshop_session_id == workshop_session_id)
     if participant_id is not None:
         stmt = stmt.where(GuestToken.participant_id == participant_id)
+    # Curator devices are listed by Settings (/api/sharing/devices), never with
+    # their link token — a curator device must not be able to pick up an unused
+    # curator link here.
+    stmt = stmt.where(GuestToken.participant_id.isnot(None))
     rows = (await db.execute(stmt)).all()
     return [
         {
@@ -501,9 +508,10 @@ async def list_tokens(
             "participant_id":      t.participant_id,
             "participant_name":    (pname if pname != "__reserved__" else None),
             "workshop_session_id": t.workshop_session_id,
-            "expires_at":          t.expires_at.isoformat(),
+            "expires_at":          t.expires_at.isoformat() if t.expires_at else None,
             "is_active":           t.is_active,
             "created_at":          t.created_at.isoformat(),
+            "claimed_at":          t.claimed_at.isoformat() if t.claimed_at else None,
         }
         for t, pname in rows
     ]

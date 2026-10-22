@@ -46,6 +46,8 @@ This single API call:
 
 Alternatively the user can press **"End session"** in Settings.
 
+The End Session block is always complete and paste-ready. Never placeholders, never instructions for Melvin to edit it.
+
 ---
 
 ## Log Entry Protocol

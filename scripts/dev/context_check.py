@@ -11,8 +11,8 @@ Never fails the prompt: on any error it prints nothing and exits 0.
 import json
 import sys
 
-WARN_TOKENS = 120_000
-LIMIT_TOKENS = 150_000
+WARN_TOKENS = 400_000
+LIMIT_TOKENS = 500_000
 
 
 def context_tokens(transcript_path):

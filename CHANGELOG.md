@@ -7,6 +7,57 @@
 - No app/ or frontend/ changes this session.
 
 ### Done this session (22 Oct)
+- Context-warning hook + status line (config only): scripts/dev/context_check.py — UserPromptSubmit hook prints CONTEXT WARNING at 400k–500k and CONTEXT LIMIT above 500k (raised from 120k/150k: the app shows 141k as 15% of the window); --statusline prints "ctx ~Nk"; one shared context_tokens() helper; never fails a prompt. Wired in .claude/settings.local.json (not committed). Tested on this session's transcript and fake 130k/160k transcripts; the hook fired live (~149k, ~150k at the old thresholds).
+- CLAUDE.md: "If a CONTEXT WARNING or CONTEXT LIMIT note appears, follow it before anything else." (Session Start) and "The End Session block is always complete and paste-ready. Never placeholders, never instructions for Melvin to edit it." (Session End).
+- Enrichment scope / handout rule / prep-warnings-with-recipes: Step 1 recon only → RECON_enrichment_scope_22oct.md (file:line quotes). Nothing built.
+
+### Next (order)
+1. Build from RECON_enrichment_scope_22oct.md (Melvin's 22 Oct prompt, Steps 2–3): scope picker on every bulk enrichment + backfill endpoint through dry-run.js — scopes: a saved walk (walk_membership, same members as the map), "Current list" (the Foraging List species), all eligible (never the default); no scope = nothing runs; per-run cap 25, walk species first, remainder reported in the run summary; persist the scoped list so resume keeps it; id_notes backfill gets a names filter; dry run counts the chosen scope only; handout rule in safety_decision (curator prep OR look-alike warning) + withheld→shown species list; one shared prep-warning-with-recipe helper (JS + Python twin) on every recipe surface incl. encounter field recipes; tests + full suite.
+2. Confirm the walk tidy-order / warning cards / UI fixes report; then Tidy route order on Morning sunshine walk.
+3. Batch 8 (guest visibility), then Stage C publish panel.
+4. Batches 9, 10, 11, 11b, 12, 13, 15, 15b, 16, 17 per REPORT.md section 9.
+
+### Settled (Melvin, 22 Oct)
+- Handout culinary rule: a caution species may print culinary content on handouts when it has a curator-authored preparation_warnings OR look_alike_warnings (to be built, Next #1).
+- "Enrich selected" = a scope called "Current list" (the Foraging List species). No new select mode on the Species page.
+- Encounter field recipes (encounters-main.js:1063, species.html:3348) carry the prep warning too.
+
+### Open decisions (Melvin)
+- None.
+
+### Rules learned
+- Don't run a full enrichment: the dry run shows ~900 new drafts. Run it for walk species only, in small batches (the cap in Next #1 builds this in).
+- Auto-enrichment after an ID correction has no dry run, but goes through the same guards.
+
+### Scope added (keep)
+- 11b: merges 704→457, 758↔757, 708↔412, 608↔589, 103↔531, 600↔749, 82↔200; relink Collybia nuda (obs 8410) and Conyza canadensis; GBIF check 187; genus/family sweep (Aconitum, Alchemilla, Bellis, Erigeron, Imleria, Matricaria, "Rubus subg. Rubus", "Rosa sect. Caninae", 494 puffball) + find the fill that wrote them; non-European card sweep (Rubus occidentalis, Quercus bicolor/velutina, Acer macrophyllum, Juglans nigra, Picea mariana, Tilia americana, Salix barclayi, Erigeron aliceae, Chrysosplenium americanum, Luffa, Ulmus davidiana, Viburnum trilobum, Carpinus caroliniana, Larix lyallii, Pinus radiata, Hydrocotyle, 808 Ambrosia confertiflora); G3-held drafts decided after the sweep; English common-name backfill (Dianthus carthusianorum → Carthusian pink).
+- 15b: empty saved walk stops hide or drop.
+- 17: Lists "Lookalike warnings" toggle dead; reload banner on new app version; thumbnail field on /api/species/; CLAUDE.md Alembic head; scan.html:1795 loadPrefilterThreshold; curator-device list refreshes itself; enrichment species-limit option (covered by the Next #1 cap).
+
+### Melvin's review queue
+- Warning review cards (all verdicts, walk species first).
+- Edit Oxalis grandis 3493.
+- Text tidy-up (on the simmer): 352 edible_parts / 689 id_notes with no history, many long PFAF dumps or "North America" text.
+- 347 Takeout person_animal rejects (mount DIGIERA). Draft #3252 Amaranthus hybridus.
+
+### Browser checks: walkthroughs
+Test species: Conium maculatum, Oenanthe crocata, Sambucus nigra, 229 St John's wort, 295 Ramsons, 97 Aspen, Pineapple weed.
+- A. Species page: three views, safety sort, filters kept, capitalised names, test species pages; species resources load.
+- B. Map + walks: Conium pin full look-alike; Ramsons labelled; ☠ on 155/688/745; walk stop cards; Edit walk → Save → Re-route; Tidy route order; Export summary; published Rümmelsbühl page; Discover/Find cards, ✎ rename, Enrich, note tags.
+- C. Handouts: Lists → print (field guide, workshop) + PDF in 3 layouts: Conium uncut, 229 withheld label, no PFAF Folklore, corners present.
+- D. Review: Critical section; verdict queue; warning cards (Approve / Edit / Remove); Regenerate side by side; Run now dry run + Cancel; AI-draft card buttons; reviewer notes.
+- E. Phone: pair via Add device; installed app signed in; used link → "Link already used"; bare URL → "Ask Melvin"; Revoke works; unpaired shows "not signed in", not "offline"; List view at 390px; proximity alert folds; airplane-mode short walk (outbox).
+- F. Settings/system: "Your devices & sharing"; no guest toggle; device list (no Add device on phone); every enrichment button asks first; paused run shows "paused — no network"; run summary skip counts; DeepSeek key; Jobs pop-up; caffeinate exits.
+- G. Workshops: participant link uses the ngrok address; guest view loads on a second phone; used link refused; revoke works; works on mobile data.
+Rule: Code tests whatever it can; new browser checks go into a walkthrough, not numbered.
+
+## Current State — 22 Oct 2026, afternoon
+
+### Build
+- Alembic head 0056 (CLAUDE.md still states an older head — fix in batch 17). 288 tests pass (24 files). Service worker foragingid-v11 (hard refresh needed once).
+- No app/ or frontend/ changes this session.
+
+### Done this session (22 Oct)
 - Context-warning hook + status line (config only): scripts/dev/context_check.py — UserPromptSubmit hook prints CONTEXT WARNING at 120k–150k and CONTEXT LIMIT above 150k; --statusline prints "ctx ~Nk"; one shared context_tokens() helper; never fails a prompt. Wired in .claude/settings.local.json (not committed). Tested on this session's transcript and fake 130k/160k transcripts; the hook fired live at ~149k. CLAUDE.md: "If a CONTEXT WARNING or CONTEXT LIMIT note appears, follow it before anything else."
 - Enrichment scope / handout rule / prep-warnings-with-recipes: Step 1 recon only → RECON_enrichment_scope_22oct.md (file:line quotes). Nothing built.
 
@@ -93,6 +144,13 @@ Test species: Conium maculatum, Oenanthe crocata, Sambucus nigra, 229 St John's 
 Rule: Code tests whatever it can (real JS via jsc, real PDFs); new browser checks are added to a walkthrough, not numbered.
 
 ## History
+
+### 2026-10-22 13:18
+**Snapshot** — End of session — Context-warning hook + ctx status line (config only; thresholds 400k/500k); CLAUDE.md context + End Session block rules; Step 1 recon for enrichment scope / handout rule / prep warnings with recipes (RECON_enrichment_scope_22oct.md). Settled: 'Current list' scope; encounter field recipes carry prep warnings. No app/ changes.
+DB: `snapshots/db_20261022_131852.sqlite`
+
+### 2026-10-22 13:18
+**Session ended** — Context-warning hook + ctx status line (config only; thresholds 400k/500k); CLAUDE.md context + End Session block rules; Step 1 recon for enrichment scope / handout rule / prep warnings with recipes (RECON_enrichment_scope_22oct.md). Settled: 'Current list' scope; encounter field recipes carry prep warnings. No app/ changes.
 
 ### 2026-10-22 13:16
 **Snapshot** — End of session — Session ended from Settings page

@@ -11,6 +11,8 @@ guest_access.py — what a workshop participant (guest) device may reach
     /media/encounters only for encounters encounter_visible_to that guest;
     /media/recorded-walks never (curator recordings); /media/species-resources
     stays open (published curator material).
+  * Recorded walks: guests may list / read them, never create one or upload
+    its audio (POST /api/recorded-walks and /audio-upload → 403).
 
 The observation and encounter rules themselves live in
 app/models/observation.py and app/models/encounter.py — this module only
@@ -54,11 +56,12 @@ GUEST_GET_API = [re.compile(p) for p in (
 
 # Guest writes (the middleware's list; everything else non-GET is refused).
 # Batch 8: the Lists PDF (prints the guest's own notes); recorded-walk audio
-# upload removed — participant sessions never upload audio.
+# upload removed — participant sessions never upload audio. 22 Oct follow-up:
+# recorded-walk create removed too — guests never record walks. The endpoints
+# in recorded_walks.py also refuse guests (second layer).
 GUEST_WRITE_PATHS = frozenset({
     "/api/sharing/export-walk",
     "/api/encounters",
-    "/api/recorded-walks",
     "/api/lists/pdf",
 })
 

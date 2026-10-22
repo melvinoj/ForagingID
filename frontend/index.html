@@ -1040,6 +1040,8 @@
     .wd-audio-wrap { margin-bottom: 14px; }
     .wd-audio-label { font-size: 0.72rem; color: #888; font-weight: 600; margin-bottom: 6px; }
     .wd-audio-player { width: 100%; }
+    .wd-share { display: flex; align-items: center; gap: 6px; margin: 4px 0 8px; font-size: 0.8rem; color: #2d5016; cursor: pointer; }
+    .wd-share-note { color: #777; font-size: 0.74rem; }
 
     /* ── Thumbnail pins on recorded walk trace ───────────────────────────── */
     .rec-thumb-pin {
@@ -1093,6 +1095,52 @@
     .wts-row:last-child { border-bottom: none; }
     .wts-key  { color: #666; }
     .wts-val  { font-weight: 600; color: #2d5016; }
+    /* Publish block (static/js/walk-publish.js) — its own outlined box below a divider */
+    .wpub-divider { border: none; border-top: 2px solid #d8e2c8; margin: 14px 0 12px; }
+    .wpub-divider-inner { border: none; border-top: 1px dashed #e0d0c8; margin: 12px 0 10px; }
+    .wpub-box { border: 1.5px solid #b8d48a; border-radius: 10px; padding: 10px 12px 12px; background: #fbfdf7;
+                font-size: 0.8rem; color: #333; }
+    .wpub-h { margin: 0 0 8px; font-size: 0.92rem; color: #2d5016; }
+    .wpub-sub { margin: 10px 0 4px; font-weight: 700; color: #2d5016; font-size: 0.78rem; }
+    .wpub-row { display: flex; gap: 8px; align-items: baseline; padding: 3px 0; flex-wrap: wrap; }
+    .wpub-k { color: #666; min-width: 58px; }
+    .wpub-row code, .wpub-box code { font-size: 0.74rem; background: #eef3e6; padding: 0 3px; border-radius: 3px; word-break: break-all; }
+    .wpub-check { display: flex; gap: 6px; align-items: flex-start; cursor: pointer; padding: 4px 0; }
+    .wpub-field { display: block; margin: 6px 0; color: #555; }
+    .wpub-field input, .wpub-field select { display: block; width: 100%; box-sizing: border-box; margin-top: 2px;
+                font: inherit; padding: 5px 7px; border: 1px solid #c8d4b4; border-radius: 6px; }
+    .wpub-slug { font: inherit; padding: 2px 5px; border: 1px solid #c8d4b4; border-radius: 5px; width: 150px; }
+    .wpub-btn, .wpub-btn-sm { font: inherit; cursor: pointer; border-radius: 7px; border: 1px solid #b8d48a;
+                background: #fff; color: #2d5016; }
+    .wpub-btn { padding: 7px 12px; margin-top: 8px; font-weight: 600; }
+    .wpub-btn-sm { padding: 3px 8px; font-size: 0.74rem; }
+    .wpub-btn:disabled, .wpub-btn-sm:disabled { opacity: 0.45; cursor: not-allowed; }
+    .wpub-primary { background: #2d5016; color: #fff; border-color: #2d5016; }
+    .wpub-danger { background: #fff; color: #9b1c1c; border-color: #e3a6a6; }
+    .wpub-danger.wpub-btn:not(:disabled):hover { background: #fdecec; }
+    .wpub-actions { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; margin-top: 6px; }
+    .wpub-muted { color: #777; }
+    .wpub-hint { color: #888; font-size: 0.72rem; margin-bottom: 4px; }
+    .wpub-err { color: #9b1c1c; background: #fdecec; border-radius: 6px; padding: 6px 8px; margin: 6px 0; }
+    .wpub-ok { color: #2d5016; background: #eef6e4; border-radius: 6px; padding: 6px 8px; margin: 6px 0; }
+    .wpub-bad { color: #9b1c1c; }
+    .wpub-warn { color: #8a5a00; background: #fff6e0; border-radius: 6px; padding: 6px 8px; margin: 6px 0; }
+    .wpub-list { margin: 2px 0 4px; padding-left: 18px; }
+    .wpub-ai { display: flex; gap: 8px; padding: 6px; border: 1px solid #e6ecdc; border-radius: 7px; margin: 4px 0; background: #fff; }
+    .wpub-ai.hazard { border-color: #e3a6a6; background: #fff7f7; }
+    .wpub-ai img, .wpub-noimg { width: 52px; height: 52px; object-fit: cover; border-radius: 5px; flex-shrink: 0;
+                display: flex; align-items: center; justify-content: center; background: #f0f4e8; }
+    .wpub-ai-body { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+    .wpub-tag { font-size: 0.68rem; padding: 0 5px; border-radius: 8px; background: #eef3e6; color: #556040; }
+    .wpub-tag.wpub-bad { background: #fdecec; color: #9b1c1c; }
+    .wpub-confirm { border: 1px solid #b8d48a; border-radius: 8px; padding: 8px 10px; margin-top: 10px; background: #fff; }
+    .wpub-confirm p { margin: 0 0 6px; }
+    .wpub-confirm-danger { border-color: #e3a6a6; background: #fffafa; }
+    .wpub-confirm-q { font-weight: 600; }
+    .wpub-steps { list-style: none; padding: 0; margin: 4px 0 8px; }
+    .wpub-steps li { padding: 2px 0; }
+    .wpub-steps .st-ok .wpub-ic { color: #2d5016; } .wpub-steps .st-failed { color: #9b1c1c; }
+    .wpub-steps .st-pending { color: #999; } .wpub-steps .st-running { font-weight: 600; }
 
     /* ── Walk panel: live recording stats ────────────────────────────────── */
     #walk-live-stats {
@@ -2159,10 +2207,11 @@
     <div id="walk-prox-panel"></div>
 
     <!-- ── Floating Record button (phone only, top-right below GPS) ────────── -->
-    <button id="wrec-float-btn" onpointerup="event.stopPropagation(); _wrecToggle();" title="Record walk" aria-label="Record walk">👣</button>
+    <!-- Walk recording is curator only (participants: server refuses; hidden by guest-mode.js). -->
+    <button id="wrec-float-btn" data-guest-hide onpointerup="event.stopPropagation(); _wrecToggle();" title="Record walk" aria-label="Record walk">👣</button>
 
     <!-- ── GPS Recording HUD (phone, recording active) ───────────────────── -->
-    <div id="walk-rec-hud">
+    <div id="walk-rec-hud" data-guest-hide>
       <div class="wrec-dot"></div>
       <div class="wrec-stats">
         <div class="wrec-stat">
@@ -2194,7 +2243,7 @@
     </div>
 
     <!-- ── Save walk modal ───────────────────────────────────────────────── -->
-    <div id="walk-save-modal">
+    <div id="walk-save-modal" data-guest-hide>
       <div class="wsm-box">
         <h3>💾 Save recorded walk</h3>
         <label class="wsm-label">Walk name</label>
@@ -2280,7 +2329,7 @@
         <span class="wbs-qb-label">Create from map</span>
         <span class="wbs-qb-sub">Lasso pins on the map to build a route</span>
       </button>
-      <button class="wbs-qb-btn" onclick="_wbsStartRecording()">
+      <button class="wbs-qb-btn" data-guest-hide onclick="_wbsStartRecording()">
         <span class="wbs-qb-icon">⏺</span>
         <span class="wbs-qb-label">Record live</span>
         <span class="wbs-qb-sub">Start recording as you walk</span>
@@ -2307,7 +2356,7 @@
             <div class="wbs-entry-card-sub">Lasso pins on the map to build a route</div>
           </div>
         </div>
-        <div class="wbs-entry-card" onclick="_wbsStartRecording()">
+        <div class="wbs-entry-card" data-guest-hide onclick="_wbsStartRecording()">
           <span class="wbs-entry-card-icon">⏺</span>
           <div>
             <div class="wbs-entry-card-title">Record live</div>
@@ -2415,7 +2464,10 @@
 
       <!-- Tab: Walk stats -->
       <div id="walk-tab-stats">
-        <!-- Populated by _renderWalkStats() -->
+        <div id="walk-stats-rows"><!-- Populated by _renderWalkStats() --></div>
+        <!-- Publish block (Stage C): loaded saved walk only, curator only, set apart
+             from the walk editing controls — static/js/walk-publish.js -->
+        <div id="walk-publish" data-guest-hide style="display:none"></div>
       </div>
 
       <!-- Upload pending walks — shown when pending count > 0 -->
@@ -2645,6 +2697,7 @@
 <script src="/static/js/walk-record.js"></script>
 <script src="/static/js/reidentify.js"></script>
 <script src="/static/js/lists.js"></script>
+<script src="/static/js/walk-publish.js"></script>
 <script>
 // ── Map init ──────────────────────────────────────────────────────────────
 
@@ -5327,6 +5380,7 @@ window._wbsStartLasso = function() {
 };
 
 window._wbsStartRecording = function() {
+  if (document.body.classList.contains('guest-mode')) return;  // curator only
   if (!isMobile()) {
     // Laptop: open sheet and show info message — no GPS attempt
     var sheet = document.getElementById('walk-bottom-sheet');
@@ -6267,13 +6321,37 @@ function _currentSeason() {
 // medicinal preparation; a dish already shown elsewhere in the summary is
 // skipped. `shown` is the summary-wide set of dish titles (lower case).
 // Recipes arrive already filtered by the toxic guard (empty when blocked).
-// Recipe title, else the body's first non-empty line without Markdown marks
-// (same fallback as the experience export's recipe_title()).
+// Recipe display title — JS twin of app/models/species.recipe_display_title
+// (the one rule, also the experience export's): the recipe's title; else its
+// first heading; else the first line that is not a blockquote, a rule or a
+// safety note (a safety note takes its whole paragraph) — first sentence,
+// capped at 120. A safety note is never a title. Keep the two in step.
+function _recipeMdPlain(line) {
+  return line.trim().replace(/^[#>\s]+/, '').replace(/[*_`]+/g, '').trim()
+    .replace(/^recipe\s*title\s*:\s*/i, '').replace(/:+$/, '').trim();
+}
+function _isSafetyNoteLine(plain) { return /^(safety|caution|warning)\b/i.test(plain.trim()); }
 function _recipeTitle(r) {
   if ((r.title || '').trim()) return r.title.trim();
-  for (const line of String(r.body || '').split('\n')) {
-    const t = line.trim().replace(/^#+/, '').trim().replace(/^\*+|\*+$/g, '').trim();
-    if (t) return t;
+  const lines = String(r.body || '').replace(/\r/g, '').split('\n');
+  for (const line of lines) {
+    if (/^\s*#{1,6}\s/.test(line)) {
+      const t = _recipeMdPlain(line);
+      if (t && !_isSafetyNoteLine(t)) return t;
+    }
+  }
+  let inNote = false;
+  for (const line of lines) {
+    const raw = line.trim();
+    if (!raw || /^([-*_]\s*){3,}$/.test(raw)) { inNote = false; continue; }
+    if (raw.startsWith('>')) continue;
+    let t = _recipeMdPlain(raw);
+    if (t && _isSafetyNoteLine(t)) inNote = true;
+    if (!t || inNote) continue;
+    const m = t.match(/^(.+?[.!?])(\s|$)/);
+    if (m) t = m[1];
+    if (t.length > 120) t = t.slice(0, 119).replace(/\s+\S*$/, '').replace(/[,;:—-]+$/, '') + '…';
+    return t;
   }
   return '';
 }
@@ -7928,6 +8006,8 @@ function _renderProxPanel() {
   // ── Start / toggle ──────────────────────────────────────────────────────
 
   function _wrecToggle() {
+    // Curator only: participants never record walks (the server refuses them too).
+    if (document.body.classList.contains('guest-mode') && !WalkRecorder.isRecording()) return;
     if (WalkRecorder.isRecording()) {
       _wrecStop();
     } else {
@@ -8864,12 +8944,39 @@ function _renderProxPanel() {
         '</div>';
     }
 
+    // "Show to guests" (curator only — hidden for guests by guest-mode.js; the
+    // PATCH refuses them server-side). Off: participants never see this walk.
+    var shareHtml = '<label class="wd-share" data-guest-hide title="Workshop participants see this walk (route and photos) only while this is on. The voice note stays yours.">' +
+      '<input type="checkbox" id="wd-share-cb"' + (walk.shared_with_guests ? ' checked' : '') +
+      ' onchange="_wdSetShared(' + walk.id + ', this)"> Show to guests' +
+      '<span class="wd-share-note" id="wd-share-note"></span></label>';
+
     scroll.innerHTML =
       '<div class="wd-name">' + _esc(walk.name) + '</div>' +
       '<div class="wd-date">' + _fmtDate(walk.started_at) + '</div>' +
+      shareHtml +
       '<div class="wd-stats-row">' + statsHtml + '</div>' +
       elevHtml + photosHtml + audioHtml;
   }
+
+  window._wdSetShared = async function (walkId, cb) {
+    var note = document.getElementById('wd-share-note');
+    cb.disabled = true;
+    try {
+      var r = await fetch('/api/recorded-walks/' + walkId + '/share', {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ shared: cb.checked }),
+      });
+      var d = await r.json().catch(function () { return {}; });
+      if (!r.ok) throw new Error(d.detail || ('HTTP ' + r.status));
+      cb.checked = !!d.shared_with_guests;
+      if (note) note.textContent = cb.checked ? ' — guests can see it' : ' — hidden from guests';
+    } catch (e) {
+      cb.checked = !cb.checked;
+      if (note) note.textContent = ' — not saved: ' + e.message;
+    }
+    cb.disabled = false;
+  };
 
   window._wdBack = function () {
     document.getElementById('walk-detail-view').style.display = 'none';
@@ -8982,7 +9089,7 @@ function _renderProxPanel() {
   };
 
   function _renderWalkStats() {
-    var el = document.getElementById('walk-tab-stats');
+    var el = document.getElementById('walk-stats-rows');
     if (!el) return;
     var distM  = (typeof _walkOrsDistM  !== 'undefined') ? _walkOrsDistM  : null;
     var durMin = (typeof _walkOrsDurMin !== 'undefined') ? _walkOrsDurMin : null;
@@ -8991,6 +9098,11 @@ function _renderProxPanel() {
       '<div class="wts-row"><span class="wts-key">Distance</span><span class="wts-val">' + (distM ? _fmtDist(distM) : '—') + '</span></div>' +
       '<div class="wts-row"><span class="wts-key">Est. duration</span><span class="wts-val">' + (durMin ? durMin + ' min' : '—') + '</span></div>' +
       '<div class="wts-row"><span class="wts-key">Species stops</span><span class="wts-val">' + stops + '</span></div>';
+    // Publish block: a loaded saved walk only (walk-publish.js hides itself otherwise).
+    if (window.WalkPublish) {
+      var sw = (typeof _savedWalkView !== 'undefined' && _savedWalkView && _savedWalkData) ? _savedWalkData : null;
+      WalkPublish.show(sw ? sw.id : null, sw ? sw.name : '');
+    }
   }
 
   // ── Walk panel: live recording stats ─────────────────────────────────────

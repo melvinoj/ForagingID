@@ -3,8 +3,9 @@ recorded_walks.py — GPS recorded walk CRUD + elevation enrichment.
 
 Endpoints:
   POST   /api/recorded-walks                    — save a new recorded walk
-  GET    /api/recorded-walks                    — list all recorded walks
-  GET    /api/recorded-walks/{id}               — walk detail + linked observations
+  GET    /api/recorded-walks                    — list recorded walks (guests: shown ones only)
+  GET    /api/recorded-walks/{id}               — walk detail + linked observations (guests: 404 unless shown)
+  PATCH  /api/recorded-walks/{id}/share         — "Show to guests" on/off (curator only)
   POST   /api/recorded-walks/{id}/elevation     — async elevation enrichment (fire-and-forget)
   DELETE /api/recorded-walks/{id}               — delete walk + linked records
 """
@@ -27,7 +28,8 @@ from sqlalchemy import delete, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import AsyncSessionLocal, get_db
-from app.models.recorded_walk import RecordedWalk, RecordedWalkObservation
+from app.models.recorded_walk import (RecordedWalk, RecordedWalkObservation, recorded_walk_visibility_clause,
+                                      recorded_walk_visible_to)
 from app.api.identity import Identity, get_identity
 from app.models.observation import is_guest_visible_observation
 
@@ -244,7 +246,8 @@ async def create_recorded_walk(
 @router.get("")
 async def list_recorded_walks(db: AsyncSession = Depends(get_db), identity: Identity = Depends(get_identity)):
     rows = await db.execute(
-        select(RecordedWalk).order_by(RecordedWalk.started_at.desc())
+        select(RecordedWalk).where(recorded_walk_visibility_clause(identity))
+        .order_by(RecordedWalk.started_at.desc())
     )
     walks = rows.scalars().all()
     return [
@@ -260,6 +263,7 @@ async def list_recorded_walks(db: AsyncSession = Depends(get_db), identity: Iden
             # Batch 8: curator recordings — guests never get the audio note.
             "audio_note_path":  None if identity.is_guest else w.audio_note_path,
             "created_at":       w.created_at.isoformat() if w.created_at else None,
+            "shared_with_guests": bool(w.shared_with_guests),
         }
         for w in walks
     ]
@@ -273,8 +277,8 @@ async def list_recorded_walks(db: AsyncSession = Depends(get_db), identity: Iden
 async def get_recorded_walk(walk_id: int, db: AsyncSession = Depends(get_db),
                             identity: Identity = Depends(get_identity)):
     walk = await db.get(RecordedWalk, walk_id)
-    if not walk:
-        raise HTTPException(404, detail="Walk not found")
+    if not walk or not recorded_walk_visible_to(walk, identity):
+        raise HTTPException(404, detail="Walk not found")      # hidden from guests = not found
 
     link_rows = await db.execute(
         select(RecordedWalkObservation).where(
@@ -334,8 +338,35 @@ async def get_recorded_walk(walk_id: int, db: AsyncSession = Depends(get_db),
         "track_points":     json.loads(walk.track_points_json or "[]"),
         "audio_note_path":  None if identity.is_guest else walk.audio_note_path,
         "created_at":       walk.created_at.isoformat() if walk.created_at else None,
+        "shared_with_guests": bool(walk.shared_with_guests),
         "observations":     observations_out,
     }
+
+
+# ---------------------------------------------------------------------------
+# PATCH /api/recorded-walks/{id}/share  — "Show to guests" (curator only)
+# ---------------------------------------------------------------------------
+
+class RecordedWalkShare(BaseModel):
+    shared: bool
+
+
+@router.patch("/{walk_id}/share")
+async def set_recorded_walk_shared(walk_id: int, body: RecordedWalkShare, db: AsyncSession = Depends(get_db),
+                                   identity: Identity = Depends(get_identity)):
+    """Guests see this walk (list, detail, trace) only while it is on. The audio
+    note stays curator-only either way. Curator only."""
+    if identity.is_guest:
+        raise HTTPException(403, "Curator only")
+    walk = await db.get(RecordedWalk, walk_id)
+    if not walk:
+        raise HTTPException(404, detail="Walk not found")
+    walk.shared_with_guests = body.shared
+    await db.commit()
+    back = await db.scalar(select(RecordedWalk.shared_with_guests).where(RecordedWalk.id == walk_id))
+    if bool(back) != body.shared:
+        raise HTTPException(500, detail="share flag did not persist")
+    return {"id": walk_id, "shared_with_guests": bool(back)}
 
 
 # ---------------------------------------------------------------------------

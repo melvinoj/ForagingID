@@ -105,22 +105,6 @@ def _log_edit(
     ))
 
 
-def _copy_to_confirmed(obs: Observation) -> None:
-    """
-    Copy the observation's original photo to photos/confirmed_plants/{species-slug}/.
-    Destination is always inside the ForagingID project root so files are git-tracked.
-    Originals are never moved or modified.
-    Best-effort — failure is silent so it never blocks the review action.
-    """
-    try:
-        from app.services.export import copy_single
-        dest = copy_single(obs, settings.confirmed_plants_dir)
-        if dest:
-            obs.confirmed_copy_path = str(dest)
-    except Exception:
-        pass  # non-critical: export_confirmed.py can be re-run to catch any misses
-
-
 @router.get("/confirmed-no-gps")
 async def confirmed_no_gps(
     limit: int = Query(50, le=200),
@@ -788,13 +772,41 @@ async def reject_undo(
 ):
     """
     Undo a reject-photo action within the 30-second window.
-    Restores the file from /tmp/foragingid_undo/ and sets review_status = 'approved'.
+    Restores the file from /tmp/foragingid_undo/ and the review status (and
+    reviewed_at) the row had before the reject, read from the reject's own
+    observation_edits rows (B1-05) — never a blanket 'approved'.
     """
     obs = await db.get(Observation, observation_id)
     if not obs:
         raise HTTPException(status_code=404, detail="Observation not found")
     if obs.review_status != "rejected":
         raise HTTPException(status_code=409, detail="Observation is not in rejected state")
+
+    # The status before the reject: the latest review_status edit into 'rejected'.
+    rej = (await db.execute(
+        select(ObservationEdit).where(ObservationEdit.observation_id == observation_id,
+                                      ObservationEdit.field_name == "review_status",
+                                      ObservationEdit.new_value == "rejected")
+        .order_by(ObservationEdit.id.desc()).limit(1))).scalar_one_or_none()
+    restore_status = rej.old_value if rej else None
+    if restore_status not in ("approved", "manually_verified", "needs_review", "pending"):
+        raise HTTPException(status_code=409, detail="The status before the reject isn't recorded — "
+                                                    "not restored. Review the photo instead.")
+    # reviewed_at as it was: update_observation_status writes its reviewed_at
+    # edit straight after the review_status one, and a rejected row has no
+    # other status change until this undo.
+    ra = (await db.execute(
+        select(ObservationEdit).where(ObservationEdit.observation_id == observation_id,
+                                      ObservationEdit.field_name == "reviewed_at",
+                                      ObservationEdit.id > rej.id)
+        .order_by(ObservationEdit.id).limit(1))).scalar_one_or_none()
+    if ra is not None:
+        restore_reviewed_at = datetime.fromisoformat(ra.old_value) if ra.old_value else None
+    else:
+        # Rejected before reviewed_at was logged: 'approved' comes back as
+        # AI-agreed (no reviewed_at) — the conservative side; a human status
+        # keeps the stamp it has.
+        restore_reviewed_at = None if restore_status == "approved" else obs.reviewed_at
 
     # Cancel the scheduled hard-delete (shared module)
     from app.services.file_cleanup import _pending_deletes as _fc_pending, UNDO_DIR as _FC_UNDO
@@ -824,19 +836,23 @@ async def reject_undo(
         restored = True
 
     prev_status = obs.review_status
-    obs.review_status = "approved"
-    obs.reviewed_at = datetime.utcnow()
-    _log_edit(db, obs, "review_status", prev_status, "approved")
+    _log_edit(db, obs, "review_status", prev_status, restore_status)
+    _log_edit(db, obs, "reviewed_at", obs.reviewed_at.isoformat() if obs.reviewed_at else None,
+              restore_reviewed_at.isoformat() if restore_reviewed_at else None)
+    obs.review_status = restore_status
+    obs.reviewed_at = restore_reviewed_at
     from app.services.species_link import refresh_orphan_markers
     await refresh_orphan_markers(db, obs)               # live again → clear orphan markers
-    from app.services.observation_service import apply_species_category
-    await apply_species_category(db, obs, "human")      # a confirmed fungus is filed as fungi
+    if restore_status in ("approved", "manually_verified"):
+        from app.services.observation_service import apply_species_category
+        await apply_species_category(db, obs, "human")  # a confirmed fungus is filed as fungi
 
     db.add(ProcessingLog(
         observation_id=obs.id,
         stage="manual_review",
         status="success",
-        message=f"action=manual_rejected_from_map_undone triggered_by=user file_restored={restored}",
+        message=(f"action=manual_rejected_from_map_undone triggered_by=user file_restored={restored} "
+                 f"restored_status={restore_status}"),
     ))
     await db.commit()
 
@@ -844,7 +860,7 @@ async def reject_undo(
         "ok": True,
         "observation_id": observation_id,
         "restored": restored,
-        "review_status": "approved",
+        "review_status": restore_status,
     }
 
 

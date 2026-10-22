@@ -1,5 +1,60 @@
 ## Current State
 
+### Build
+- Alembic head 0058 (recorded_walks.shared_with_guests; snapshot db_20261022_210520 before it). CLAUDE.md still says 0050 (batch 17).
+- Full suite passing at last run (27+ test files). Service worker foragingid-v14 (hard refresh once).
+- Committed by this End Session: Stage C publish panel, batch 8 follow-ups, recorded-walk toggle, recipe-title fix, interrupted-publish repair, batch 9/10 code fixes.
+
+### Done 22 Oct (evening)
+- Batch 8 follow-ups: participants cannot record walks or upload walk audio (blocked in guest_access.py and at the endpoint; all four recording entry points guarded); Record tab Photo button hidden for participants.
+- Recorded walks: per-walk "Show to guests" toggle (0058); all 7 walks hidden by default; audio always curator-only.
+- Stage C publish panel (Walk stats, own box): plan → AI-agreed confirms → in-panel confirm → background job (login check, build, EXIF/GPS check, one commit, normal push, live byte-check, record). Unpublish with its own confirm. No token stored. Guests 403.
+- Export: one caution helper gates.caution_warning_shown (builds had been blocked by the old prep-only check). Recipe titles never use a quote/safety-note line. Interrupted publish repaired on server start when the commit is on the remote.
+- Walk 5 published by Melvin (b41435e). Front page and preview.html still show Rümmelsbühl (Next #2).
+- Batch 9/10 code fixes in; data writes B1-02 and C-01 pending (dry run: batch9_10_dryrun_2026-10-22.md).
+- Earlier 22 Oct: walk 5 tidied (3→0 crossings, 7.6 km); enrichment scope picker + cap 25 + scoped resume; handout rule (curator prep OR look-alike warning); look-alike + prep warnings travel with all culinary content; redraft-medicinal eligibility fixed; batch 8 guest visibility and text-only guest notes in their own PDFs; context hook at 400k/500k.
+
+### SAFETY — found 22 Oct
+- Obs #24507 is foxglove (Digitalis purpurea; Melvin + Google Lens). Review proposed Pentanema squarrosum at 90.4%, with Digitalis only in the grey "Also:" line. Not approved. Fix in Next #1.
+
+### Next (order)
+1. Foxglove: correct #24507; diagnose where the 90.4% came from (service vs our processing); hard rule — any deadly/toxic candidate from any source blocks auto-approve, goes to Critical, shows in red by name, Approve needs a second tap naming the hazard; read-only archive report of confirmed observations with a deadly/toxic candidate; card fixes (confidence chip matches %, readable name/date contrast, ITIS banner amber for GBIF-accepted newer names).
+2. Publishing: a publish becomes the front page by default; preview.html (the /b card) is rebuilt from the front-page walk on every publish. Then Melvin republishes walk 5.
+3. Publish panel: bulk confirm for AI-agreed species (hazard species one tap each).
+4. Batch 9/10 data writes B1-02 (re-queue 17052, 17737) and C-01 (copy 131 photos + path update), only if a fresh dry run matches the 22 Oct file (Melvin's OK).
+5. Audit pass 2: batches 11 + 12 + 13 as "what's left" recon. Then 11b (data, with Melvin), 15b (walk edits, Loop/One-way, Start here, route-line bug; GPS recording kept for now), 15, 16 (index.html split), 17.
+
+### Settled (Melvin, 22 Oct)
+- "Enrich selected" = scope "Current list". Handout rule: curator prep OR look-alike warning; all cautionary text travels with culinary content.
+- Pimpinella major/saxifraga keep culinary content on handouts; no carrot-family rule.
+- Guests: confirmed photos (scenes included); shared curator encounters only; text-only notes; no walk recording; recorded walks only when shown.
+- GPS walk recording kept for now (15b removal on hold).
+- Publishing a walk makes it the front page by default.
+
+### Open decisions (Melvin)
+- None.
+
+### Rules learned
+- Don't run a full enrichment; use a scope + the 25 cap.
+- Any app/ save reloads uvicorn and kills running jobs, including a publish.
+- Renaming a helper under app/ crashes the reload until all callers are updated; do it in one pass.
+- The End Session block is always complete and paste-ready.
+
+### Melvin's review queue
+- Warning review cards (walk species first). Edit Oxalis grandis 3493. Text tidy-up (352 edible_parts / 689 id_notes with no history). 347 Takeout person_animal rejects (mount DIGIERA). Draft #3252 Amaranthus hybridus.
+
+### Browser checks: walkthroughs
+Tick-off checklist: "LandMemory Walkthroughs" artifact (A–G, kept in sync with this list).
+Test species: Conium maculatum, Oenanthe crocata, Sambucus nigra, 229 St John's wort, 295 Ramsons, 97 Aspen, Pineapple weed.
+- A. Species page: three views; safety sort; filters kept; capitalised names; test species pages; resources load; culinary, taste, recipes and field recipes show look-alike + prep warnings (uncurated labelled "Source text — not yet reviewed"); a species with none unchanged.
+- B. Map + walks: Conium pin full look-alike; Ramsons labelled; ☠ on 155/688/745; walk stop cards; Edit walk → Save → Re-route; Tidy; Export summary (species warnings once); published pages; Discover/Find (Make? cards carry both warnings); walk 5 tidied (7.6 km, dashed 38→12, 32→27); participant "Add a note" saves; Publish box below a divider; plan with AI-agreed thumbnails and Confirm; Publish disabled until ticked; job steps tick; live pages load; wifi off stops at step 1; Unpublish confirm (test walk only).
+- C. Handouts: Lists print (field guide, workshop) + PDF in 3 layouts; Conium uncut; 229 withheld; no PFAF Folklore; corners; warnings once; Ramsons and a Macrolepiota print culinary content; participant PDF shows only their own notes.
+- D. Review: Critical section; verdict queue; warning cards Approve/Edit/Remove; Regenerate side by side; Run now dry run + Cancel; AI-draft buttons; reviewer notes.
+- E. Phone: pair; signed in; used link refused; bare URL "Ask Melvin"; revoke; "not signed in" vs offline; List at 390px; proximity alert; airplane-mode outbox; participant note box + dictation; pending/rejected photo 404; confirmed photos only; Record tab no 🎙 or Photo; no 👣 / Record live; Start walk doesn't record; your phone still records walks.
+- F. Settings: devices & sharing; no guest toggle; enrichment buttons ask first; paused-no-network; skip counts; DeepSeek key; Jobs pop-up; caffeinate exits; scope dialog on every bulk button; Continue disabled until scope; cap 25 summary; 🍄 and 💊 buttons.
+- G. Workshops: participant link via ngrok; second phone; used link refused; revoke; mobile data; shared encounter visible, unshared hidden; Participant notes grouped, escaped; no walk recording; recorded walks hidden unless shown; no Publish box, panel API 403.
+Rule: Code tests whatever it can; new browser checks go into a walkthrough, not numbered.
+
 ## Current State — 22 Oct 2026, evening
 
 ### Build
@@ -19,18 +74,18 @@
 
 ### Next (order)
 1. Browser walkthroughs for this session's work (A, B, C, E, F, G additions below).
-2. Decide: Pimpinella major/saxifraga (Apiaceae) now print culinary content on Lists/print/PDF via curator look-alike — keep?
-3. Small follow-ups: Record tab Photo button still shown to participants (server refuses participant photos); POST /api/recorded-walks still open to guests (table has no owner column).
-4. Stage C publish panel.
-5. Batches 9, 10, 11, 11b, 12, 13, 15, 15b, 16, 17 per REPORT.md section 9.
+2. Small follow-ups: Record tab Photo button still shown to participants (server refuses participant photos); POST /api/recorded-walks still open to guests (table has no owner column).
+3. Stage C publish panel.
+4. Batches 9, 10, 11, 11b, 12, 13, 15, 15b, 16, 17 per REPORT.md section 9.
 
 ### Settled (Melvin, 22 Oct)
 - "Enrich selected" = scope "Current list" (Foraging List). Encounter field recipes carry the warnings.
 - Handout rule: curator prep OR look-alike warning. All cautionary text travels with culinary content; no duplicate where the species block sits beside it.
 - Redraft-medicinal button on Scan → Backfill. Participant devices: text notes only, no audio.
+- Pimpinella major/saxifraga keep culinary content on handouts via curator look-alike warning; no carrot-family rule (Melvin, 22 Oct).
 
 ### Open decisions (Melvin)
-- Pimpinella major/saxifraga on handouts (Next #2).
+- None.
 
 ### Rules learned
 - Don't run a full enrichment; use a scope + the 25 cap.
@@ -198,6 +253,13 @@ Test species: Conium maculatum, Oenanthe crocata, Sambucus nigra, 229 St John's 
 Rule: Code tests whatever it can (real JS via jsc, real PDFs); new browser checks are added to a walkthrough, not numbered.
 
 ## History
+
+### 2026-10-22 21:11
+**Snapshot** — End of session — Session ended from Settings page
+DB: `snapshots/db_20261022_211159.sqlite`
+
+### 2026-10-22 21:11
+**Session ended** — Session ended from Settings page
 
 ### 2026-10-22 17:27
 **Snapshot** — End of session — Session ended from Settings page

@@ -61,6 +61,8 @@
     'folder_scan':               'Folder ingest',
     'rescan_unknown':            'Rescan unknown',
     'elevation_enrich':          'Elevation',
+    'experience_publish':        'Publish walk',
+    'experience_unpublish':      'Unpublish walk',
   };
 
   // Minimize state — transient, client-side only. Not persisted: a reload

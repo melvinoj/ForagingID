@@ -1618,14 +1618,16 @@ async def _identify_scanned_inner(
             # If the top iNaturalist result has iconic_taxon_name == 'Fungi',
             # store a category suggestion so the reviewer sees it on the card.
             if inat_hits and inat_hits[0].iconic_taxon_name == "Fungi":
-                if obs.obs_category == "plant":   # only suggest, never overwrite
+                if obs.obs_category == "plant" and not terminal:   # only suggest, never overwrite
                     obs.category_suggested = "fungi"
                 # Fungi observations always need human review regardless of confidence
                 force_review = True
 
-            obs.plantnet_raw_json = _json.dumps(
-                pn_result.raw_response if pn_result else {}
-            )
+            # Evidence the reviewer saw stays as it was on a finalized row (B1-06).
+            if not terminal:
+                obs.plantnet_raw_json = _json.dumps(
+                    pn_result.raw_response if pn_result else {}
+                )
 
             # ── No candidates ─────────────────────────────────────────────
             if not candidates:
@@ -1998,7 +2000,10 @@ async def _identify_scanned_inner(
                                  f"kingdom {_card_kingdom} is not Plantae/Fungi"),
                     ))
                     await _ks.commit()
-            elif top["scientific_name"]:
+            elif top["scientific_name"] and not terminal:
+                # B1-06: an API guess on a human-finalized row never creates a
+                # card (and so never queues its enrichment) — the curator's
+                # decision stands; an approve creates the card (ensure_species_row).
                 await _upsert_species_card(obs_id, top, candidates)
 
         _scan_status[obs_id] = "done"

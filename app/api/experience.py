@@ -1,13 +1,20 @@
 """
-experience.py — Publish-as-experience, app side (Stage B2). Curator only on
-EVERY route, GETs included: a guest / participant token gets 403 (checked via
-get_identity, never by host). No publish / unpublish / push here (Stage C).
+experience.py — Publish-as-experience, app side (Stage B2 + Stage C publish
+panel). Curator only on EVERY route, GETs included: a guest / participant token
+gets 403 (checked via get_identity, never by host; the guest middleware refuses
+the writes before they get here). Publish / unpublish / git live in
+app/services/experience_publish.py.
 
   GET   /api/experience/publications          — list
   GET   /api/experience/publications/{id}     — one
   POST  /api/experience/publications          — new draft {saved_walk_id, slug}
   PATCH /api/experience/publications/{id}     — {overrides_json?, slug?, is_default?}
   POST  /api/experience/publications/{id}/plan — export plan (no files written)
+                                                + changes vs the page on the site
+  POST  /api/experience/publications/{id}/publish   — {confirm: true} → background job
+  POST  /api/experience/publications/{id}/unpublish — {confirm: true} → background job
+  GET   /api/experience/jobs/{job_id}         — a publish / unpublish job's steps
+  GET   /api/experience/walks/{walk_id}/panel — the walk's publication + what the panel needs
   POST  /api/experience/verify-species        — {species_id, note}: human-verify an
                                                 edible/caution verdict with toxicity 'none'
   GET   /api/experience/critical              — hazards on a walk that are AI-agreed only
@@ -17,25 +24,20 @@ rather than importing it: export.py edits sys.path and imports top-level
 `gates` / `app_styles`, which must not leak into the server process, and the
 API then returns exactly what the CLI prints.
 """
-import asyncio
 import json
 import logging
 import re
-import sys
-import tempfile
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy import select
-from sqlalchemy.engine import make_url
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.identity import Identity, get_identity
-from app.config import settings
 from app.api.walk import walk_membership_for
 from app.database import get_db
 from app.models.experience import ExperiencePublication
@@ -43,22 +45,14 @@ from app.models.observation import Observation, is_human_confirmed
 from app.models.species import (Species, SpeciesEdibilityHistory, culinary_allowed, display_common_name,
                                 is_toxic_severity)
 from app.models.walk import SavedWalk
+from app.services import experience_publish as xp
 
 log = logging.getLogger(__name__)
 
-REPO = Path(__file__).resolve().parents[2]
-EXPORT_SCRIPT = REPO / "scripts" / "experience_export" / "export.py"
-PLAN_TIMEOUT_S = 180
 # Same rule as export.py SLUG_RE (a subset of [a-z0-9-]+: no leading/trailing or
 # double hyphen) so a draft can never hold a slug the export would refuse.
 SLUG_RE = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 VERIFIABLE_EDIBILITY = ("edible", "caution")
-
-
-def _db_file() -> str:
-    """The app's own SQLite file, so the plan reads the same DB the API does."""
-    db = make_url(settings.database_url).database
-    return str((REPO / db).resolve()) if not Path(db).is_absolute() else db
 
 
 async def require_curator(identity: Identity = Depends(get_identity)) -> Identity:
@@ -128,6 +122,9 @@ async def get_publication(pub_id: int, db: AsyncSession = Depends(get_db)):
 class PublicationCreate(BaseModel):
     saved_walk_id: int
     slug: str
+    # Copy title / intro / where / hidden species from a CLI overrides file
+    # (scripts/experience_export/overrides/) — walk 4 went live that way.
+    overrides_file: Optional[str] = None
 
 
 @router.post("/publications")
@@ -138,8 +135,17 @@ async def create_publication(body: PublicationCreate, db: AsyncSession = Depends
         raise HTTPException(404, f"saved walk {body.saved_walk_id} not found")
     if await db.scalar(select(ExperiencePublication.id).where(ExperiencePublication.slug == slug)):
         raise HTTPException(409, f"slug {slug!r} is already used")
+    overrides_json = None
+    if body.overrides_file:
+        try:
+            ov = xp.read_override_file(body.overrides_file)
+        except ValueError as e:
+            raise HTTPException(400, str(e))
+        ov.pop("slug", None)
+        overrides_json = json.dumps(ov, ensure_ascii=False)
     now = datetime.utcnow()
     p = ExperiencePublication(saved_walk_id=body.saved_walk_id, slug=slug, is_default=False,
+                              overrides_json=overrides_json,
                               status="draft", created_by=identity.user_id, created_at=now, updated_at=now)
     db.add(p)
     await db.flush()
@@ -184,35 +190,90 @@ async def patch_publication(pub_id: int, body: PublicationPatch, db: AsyncSessio
 
 @router.post("/publications/{pub_id}/plan")
 async def plan_publication(pub_id: int, db: AsyncSession = Depends(get_db)):
-    """Runs the export plan for this publication (--plan-json: no files written)."""
+    """Runs the export plan for this publication (--plan-json: no files written).
+    Adds `problems` (why it may not be published), `changes` (vs the page now
+    in the site copy — local, no network) and a thumbnail per AI-agreed photo."""
     p = await _load_pub(db, pub_id)
     if p.saved_walk_id is None:
         raise HTTPException(409, "this publication's walk was deleted")
-    overrides = json.loads(p.overrides_json) if p.overrides_json else {}
-    overrides["slug"] = p.slug
-    with tempfile.TemporaryDirectory(prefix="exp_plan_") as tmp:
-        ov_path = Path(tmp) / "overrides.json"
-        ov_path.write_text(json.dumps(overrides, ensure_ascii=False), encoding="utf-8")
-        cmd = [sys.executable, str(EXPORT_SCRIPT), "--walk-id", str(p.saved_walk_id),
-               "--overrides", str(ov_path), "--plan-json", "--db", _db_file()]
-        if p.is_default:
-            cmd.append("--default")
-        proc = await asyncio.create_subprocess_exec(
-            *cmd, cwd=str(REPO), stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
-        try:
-            out, err = await asyncio.wait_for(proc.communicate(), timeout=PLAN_TIMEOUT_S)
-        except asyncio.TimeoutError:
-            proc.kill()
-            await proc.wait()
-            raise HTTPException(504, f"export plan timed out after {PLAN_TIMEOUT_S}s")
     try:
-        plan = json.loads(out.decode("utf-8"))
-    except ValueError:
-        log.error("export plan produced no JSON (rc=%s): %s", proc.returncode, err.decode("utf-8", "replace")[-2000:])
-        raise HTTPException(500, "export plan failed: " + err.decode("utf-8", "replace").strip()[-500:])
-    plan["returncode"] = proc.returncode
+        plan = await xp.run_plan(p)
+    except xp.PublishStop as e:
+        log.error("export plan failed for publication %s: %s", pub_id, e.message)
+        raise HTTPException(504 if "timed out" in e.message else 500, e.message)
     plan["publication_id"] = p.id
+    plan["problems"] = xp.plan_problems(plan)
+    # Counts only for the panel (it shows no recipe content itself).
+    plan["summary"] = {"species": len(plan.get("public_species", [])), "stops": len(plan.get("stops", [])),
+                       "photo_files": plan.get("images_planned", 0),
+                       "recipe_count": len(plan.get("recipes", {}).get("included", []))}
+    before, where = await xp.site_page(p.slug, bool(p.is_default))
+    plan["changes"] = xp.plan_changes(plan, before, where)
+    ids = [a["obs_id"] for a in plan.get("ai_agreed_obs", [])]
+    if ids:
+        thumbs = dict((await db.execute(select(Observation.id, Observation.thumbnail_path)
+                                        .where(Observation.id.in_(ids)))).all())
+        for a in plan["ai_agreed_obs"]:
+            t = thumbs.get(a["obs_id"])
+            a["thumbnail"] = f"/thumbnails/{Path(t).name}" if t else None
     return plan
+
+
+class PublishBody(BaseModel):
+    confirm: bool = False
+
+
+async def _start(kind: str, pub_id: int, body: PublishBody, background: BackgroundTasks,
+                 db: AsyncSession) -> dict:
+    p = await _load_pub(db, pub_id)
+    if not body.confirm:
+        raise HTTPException(400, "Tick the confirmation first — nothing was started.")
+    if kind == "publish" and p.saved_walk_id is None:
+        raise HTTPException(409, "this publication's walk was deleted")
+    if kind == "unpublish" and p.status != "published":
+        raise HTTPException(409, f"not published (status {p.status})")
+    try:
+        job = xp.start_publish(p.id) if kind == "publish" else xp.start_unpublish(p.id)
+    except xp.PublishStop as e:
+        raise HTTPException(409, e.message)
+    background.add_task(xp.run_publish if kind == "publish" else xp.run_unpublish, job)
+    return job
+
+
+@router.post("/publications/{pub_id}/publish")
+async def publish_publication(pub_id: int, body: PublishBody, background: BackgroundTasks,
+                              db: AsyncSession = Depends(get_db)):
+    return await _start("publish", pub_id, body, background, db)
+
+
+@router.post("/publications/{pub_id}/unpublish")
+async def unpublish_publication(pub_id: int, body: PublishBody, background: BackgroundTasks,
+                                db: AsyncSession = Depends(get_db)):
+    return await _start("unpublish", pub_id, body, background, db)
+
+
+@router.get("/jobs/{job_id}")
+async def publish_job(job_id: str):
+    job = xp.job_status(job_id)
+    if job is None:
+        raise HTTPException(404, "job not found (the server may have restarted — reload the panel)")
+    return job
+
+
+@router.get("/walks/{walk_id}/panel")
+async def walk_panel(walk_id: int, db: AsyncSession = Depends(get_db)):
+    """The Publish block for a loaded saved walk: its publication (latest), the
+    overrides files it can copy from, the running job (if any) and the site."""
+    if await db.get(SavedWalk, walk_id) is None:
+        raise HTTPException(404, "Walk not found")
+    p = (await db.execute(select(ExperiencePublication).where(ExperiencePublication.saved_walk_id == walk_id)
+                          .order_by(ExperiencePublication.id.desc()).limit(1))).scalar_one_or_none()
+    pub = _pub_out(p) if p else None
+    if pub:
+        pub["url"] = xp.site_url() + ("" if p.is_default else f"w/{p.slug}/")
+        pub["last_repair"] = await xp.last_repair(p.id)     # an interrupted run repaired / failed at start
+    return {"walk_id": walk_id, "publication": pub, "override_files": xp.override_files(),
+            "active_job": xp.active_job(), "site_url": xp.site_url()}
 
 
 # ---------------------------------------------------------------------------

@@ -6,6 +6,7 @@ Moves files to /tmp/foragingid_undo/ with a 30s undo window, then hard-deletes.
 
 import asyncio
 import shutil
+import sqlite3
 from pathlib import Path
 from typing import List, Optional
 
@@ -19,6 +20,10 @@ def _print(fmt, *args):
 UNDO_DIR = Path("/tmp/foragingid_undo")
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 _DELETABLE_SEGMENTS = {"/uploads/", "/photos/pipeline2/", "/photos/confirmed_plants/"}
+# The same three folders, anchored to this project (E-05g): a path elsewhere
+# that merely contains "/uploads/" (an archive disk, another checkout) is
+# never deletable.
+_DELETABLE_ROOTS = tuple(_PROJECT_ROOT / seg.strip("/") for seg in sorted(_DELETABLE_SEGMENTS))
 
 _pending_deletes: dict = {}  # {obs_id: asyncio.Task}
 
@@ -36,7 +41,37 @@ async def _hard_delete_after_delay(obs_id: int, temp_paths: List[Path], delay_s:
 
 
 def _is_deletable(path_str: str) -> bool:
-    return any(seg in path_str for seg in _DELETABLE_SEGMENTS)
+    """Only a file inside <project>/uploads, <project>/photos/pipeline2 or
+    <project>/photos/confirmed_plants (E-05g). A relative path is taken
+    against the project root, never the server's working directory; '..'
+    and symlinks are resolved before the check."""
+    p = Path(path_str)
+    if not p.is_absolute():
+        p = _PROJECT_ROOT / p
+    try:
+        p = p.resolve()
+    except (OSError, RuntimeError):
+        return False
+    return any(p.is_relative_to(root.resolve()) and p != root.resolve() for root in _DELETABLE_ROOTS)
+
+
+def _bound_to_encounter(obs_id: int) -> bool:
+    """C-02: is this observation an encounter's photo (encounter_photos)? An
+    encounter photo is often the encounter's only copy, so a reject must not
+    delete it. Read-only lookup on the app's own DB file (the one the current
+    session factory is bound to). Fails CLOSED: any error counts as bound."""
+    try:
+        from app import database
+        db_file = database.AsyncSessionLocal.kw["bind"].url.database
+        con = sqlite3.connect(f"file:{Path(db_file).resolve()}?mode=ro", uri=True, timeout=5)
+        try:
+            return con.execute("SELECT 1 FROM encounter_photos WHERE observation_id = ? LIMIT 1",
+                               (obs_id,)).fetchone() is not None
+        finally:
+            con.close()
+    except Exception as exc:
+        _print("obs %d: encounter check failed (%s) — keeping the file", obs_id, exc)
+        return True
 
 
 def _move_to_undo(obs_id: int, src: Path, label: str) -> Optional[Path]:
@@ -99,6 +134,15 @@ def delete_observation_file(obs) -> None:
     # would leave the other five open.
     if is_phone_origin(obs):
         _print("obs %d: REFUSED file delete — phone-origin (P1/syncthing), no second copy", obs_id)
+        return
+
+    # Encounter veto (audit C-02) — an encounter's photo is stored as an ordinary
+    # observation in uploads/, often its only copy (encounters 14 and 15 lost
+    # theirs to a review reject). Same place, same reason as the two vetoes
+    # above: every reject path funnels through here. The reject still marks
+    # the row; only the files are kept.
+    if _bound_to_encounter(obs_id):
+        _print("obs %d: REFUSED file delete — photo of an encounter (encounter_photos)", obs_id)
         return
 
     paths_to_check = []

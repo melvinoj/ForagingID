@@ -23,7 +23,7 @@ from sqlalchemy import select, func, or_, and_, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.models.observation import Observation, ObservationEdit
+from app.models.observation import Observation, ObservationEdit, is_terminal_review_status
 from app.models.species import Species, SpeciesAIDraft
 from app.models.culinary import CulinaryInfo
 from app.services.write_lock import db_write_lock
@@ -538,7 +538,9 @@ async def kingdom_audit(
     the top iNaturalist candidate is outside Plantae/Fungi at ≥5% confidence.
 
     - apply=false (default): report only, no changes
-    - apply=true: send flagged observations to review with kingdom note
+    - apply=true: send flagged observations to review with kingdom note —
+      only rows still in review; human-finalized ones (is_terminal_review_status)
+      are listed in terminal_listed_not_changed and never changed (B1-03)
 
     Works by looking at species_candidates_json for stored iNat candidates.
     For observations where iconic_taxon_name isn't stored yet (pre-fix data),
@@ -601,6 +603,11 @@ async def kingdom_audit(
                 "kingdom": kingdom,
             })
 
+    # B1-03 (audit batch 9): a human-finalized row (approved / manually_verified /
+    # rejected) is never changed by this automated pass — it is listed only.
+    obs_status = {obs.id: obs.review_status for obs in rows}
+    terminal_ids = sorted(f["obs_id"] for f in flagged if is_terminal_review_status(obs_status.get(f["obs_id"])))
+
     if not apply:
         # Report only
         species_summary: dict[str, dict] = {}
@@ -613,6 +620,7 @@ async def kingdom_audit(
         return {
             "dry_run": True,
             "total_flagged": len(flagged),
+            "terminal_listed_not_changed": terminal_ids,
             "species": [
                 {"species": k, "kingdom": v["kingdom"], "count": v["count"], "obs_ids": v["obs_ids"]}
                 for k, v in sorted(species_summary.items(), key=lambda x: -x[1]["count"])
@@ -624,8 +632,8 @@ async def kingdom_audit(
     sent = 0
     for f in flagged:
         obs = obs_map.get(f["obs_id"])
-        if not obs:
-            continue
+        if not obs or is_terminal_review_status(obs.review_status):
+            continue                                # B1-03: finalized rows are listed, never demoted
         note = (
             f"Kingdom audit: iNaturalist returned {f['kingdom']}"
             f" ({f['species_name']} {f['score']:.1f}%)"
@@ -660,6 +668,7 @@ async def kingdom_audit(
         "ok": True,
         "total_flagged": len(flagged),
         "sent_to_review": sent,
+        "terminal_listed_not_changed": terminal_ids,
         "species": [
             {"species": k, "kingdom": v["kingdom"], "count": v["count"]}
             for k, v in sorted(species_summary.items(), key=lambda x: -x[1]["count"])

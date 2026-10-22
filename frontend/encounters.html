@@ -423,8 +423,9 @@
         </div>
         <canvas id="rec-wave" width="200" height="40" style="flex:1;max-width:200px;display:none"></canvas>
       </div>
-      <!-- Photo -->
-      <div style="display:flex;gap:8px;align-items:center;margin-bottom:12px">
+      <!-- Photo — curator only, like voice: the server refuses participant
+           photos. Hidden by guest-mode.js. -->
+      <div id="rec-photo-row" data-guest-hide style="display:flex;gap:8px;align-items:center;margin-bottom:12px">
         <label style="display:inline-flex;align-items:center;gap:6px;padding:8px 14px;
                       border:1px solid #4a6e38;border-radius:8px;background:#283830;color:#c8ddb0;
                       font-size:0.85rem;cursor:pointer">

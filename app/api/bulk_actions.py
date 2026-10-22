@@ -51,15 +51,8 @@ def _log_edit(session, obs, field_name, old_value, new_value):
     ))
 
 
-def _copy_to_confirmed(obs):
-    """Copy photo to confirmed_plants/. Best-effort, never blocks."""
-    try:
-        from app.services.export import copy_single
-        dest = copy_single(obs, settings.confirmed_plants_dir)
-        if dest:
-            obs.confirmed_copy_path = str(dest)
-    except Exception:
-        pass
+# _copy_to_confirmed: the one copy lives in observation_service (E-05c).
+from app.services.observation_service import _copy_to_confirmed  # noqa: E402
 
 
 # ---------------------------------------------------------------------------

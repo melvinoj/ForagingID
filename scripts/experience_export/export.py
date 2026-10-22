@@ -46,7 +46,7 @@ import app_styles  # noqa: E402
 # app's own rule, imported, not re-implemented (pure Python, no DB access).
 from app.services import walk_membership as wm  # noqa: E402
 from app.services import walk_route  # noqa: E402
-from app.models.species import display_common_name  # noqa: E402  — names rule, one definition  — straight (dashed) legs: one reading rule with the app
+from app.models.species import display_common_name, recipe_display_title  # noqa: E402  — names rule, one definition  — straight (dashed) legs: one reading rule with the app
 
 DB_PATH   = REPO / "data" / "foragingid.db"
 DIST      = REPO / "dist"
@@ -140,13 +140,9 @@ def load_print_pdf_texts() -> dict:
 # ── recipe teaser (approved text only — never newly written) ─────────────────
 
 def recipe_title(rec: dict) -> str:
-    if (rec.get("title") or "").strip():
-        return rec["title"].strip()
-    for line in (rec.get("body") or "").splitlines():
-        t = line.strip().strip("#").strip().strip("*").strip()
-        if t:
-            return t
-    return ""
+    """The app's one rule (app/models/species.recipe_display_title): never a
+    blockquote or safety-note line."""
+    return recipe_display_title(rec.get("title"), rec.get("body"))
 
 
 # Sentences that only make sense after the previous one ("That quality…").
@@ -621,6 +617,25 @@ def main(argv=None):
                 blockers.append(f"hazard at stop {st_m['label']} not human-confirmed: {sp_m['name']} "
                                 f"(obs {', '.join(str(b) for b in bad)})")
     _PARTIAL["blockers"] = blockers
+    # Per member observation that no human has confirmed (Stage C publish panel:
+    # one row per photo with a "Confirm species" button). hazard is the per-stop
+    # rule 7 test above (gates.obs_unconfirmed_hazard), so the panel's list and
+    # the blockers can never disagree; shown is rule 1/1b (gates.obs_passes).
+    ai_agreed_obs = []
+    for st_m in mem_stops:
+        for sp_m in st_m["species"]:
+            for oid in sp_m["obs_ids"]:
+                o = rows.get(oid)
+                if o is not None and gates.is_human_confirmed(o):
+                    continue
+                sp_row = _species_row(o["species_id"]) if o is not None else None
+                ai_agreed_obs.append({
+                    "obs_id": oid, "species_id": o["species_id"] if o else None, "name": sp_m["name"],
+                    "stop": st_m["label"],
+                    "toxicity_severity": sp_row.get("toxicity_severity") if sp_row else None,
+                    "hazard": o is None or gates.obs_unconfirmed_hazard(o, sp_row),
+                    "shown": o is not None and gates.obs_passes(o, hide, hide_sp, sp_row),
+                })
 
     unknown_hide = sorted(hide_sp - set(mem_species))
     if unknown_hide:
@@ -735,7 +750,7 @@ def main(argv=None):
             continue
         caution_report.append({
             "species_id": sid, "scientific_name": sp["scientific_name"], "badge": pub[sid]["badge"]["kind"],
-            "approved_warning": "caution" in pub[sid]["safety"],
+            "approved_warning": gates.caution_warning_shown(pub[sid]["safety"]),
             "recipes_kept": [r["recipe_id"] for r in recipes_out if r["species_id"] == sid],
             "recipes_withheld": [rid for rid, name, why in recipe_excluded
                                  if name == sp["scientific_name"] and why == gates.CAUTION_WITHHELD],
@@ -838,6 +853,9 @@ def main(argv=None):
     if datenschutz_placeholder:
         warnings.append("datenschutz_url is a PLACEHOLDER — footer shows 'Datenschutz (link to follow)'. Do not publish until set.")
     data = {
+        # Which publication this page is (Stage C: unpublish reads it back from the
+        # site to know whether the front page belongs to this walk). Not shown.
+        "slug": ov["slug"],
         "title": ov["title_en"], "title_de": ov["title_de"],
         "intro": ov["intro_en"], "intro_de": ov["intro_de"],
         "where": ov["where_en"], "where_de": ov["where_de"],
@@ -884,7 +902,7 @@ def main(argv=None):
             die(f"recipe {r['recipe_id']} for Apiaceae: {sp['scientific_name']}")
         if gates.is_toxic(sp) or not gates.toxicity_known_safe(sp) or not gates.human_verified(sp):
             die(f"recipe {r['recipe_id']} for non-eligible species {sp['scientific_name']}")
-        if gates.is_caution(sp) and "caution" not in pub[r["species_id"]]["safety"]:
+        if gates.is_caution(sp) and not gates.caution_warning_shown(pub[r["species_id"]]["safety"]):
             die(f"recipe {r['recipe_id']} for caution species without an approved warning: {sp['scientific_name']}")
     for sid in hide_sp:
         if sid in pub or any(sid in st["species"] for st in stops) or any(r["species_id"] == sid for r in recipes_out):
@@ -959,6 +977,7 @@ def main(argv=None):
             } for p in data["species"]],
             "caution": caution_report,
             "ai_agreed_excluded": ai_agreed_out,
+            "ai_agreed_obs": ai_agreed_obs,
             "hidden": [{"species_id": sid, "why": why} for sid, why in hidden_species.items()],
             "recipes": {"included": [{"recipe_id": r["recipe_id"], "species_id": r["species_id"], "dish": r["dish"],
                                       "source": r["source"]} for r in recipes_out],

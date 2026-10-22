@@ -727,6 +727,65 @@ def _raw_common_name(preferred: Optional[str], common_names) -> str:
 
 
 # ---------------------------------------------------------------------------
+# Recipe display title — the ONLY rule (Melvin, 22 Oct 2026): the recipe's own
+# title; else its first Markdown heading; else the first line that is not a
+# blockquote, a horizontal rule or a safety note (its first sentence, capped).
+# A safety note is never a title — it stays in the body, and the curator
+# warnings still print beside the recipe (Fix B). Used by the experience export
+# (scripts/experience_export/export.py recipe_title). JS twin: _recipeTitle()
+# in frontend/index.html (Export summary) — keep the two in step.
+# ---------------------------------------------------------------------------
+_RECIPE_TITLE_CAP = 120
+
+
+def _md_plain(line: str) -> str:
+    """A line without its leading heading / quote marks and emphasis."""
+    import re as _re
+    t = _re.sub(r"^[#>\s]+", "", line.strip())
+    t = _re.sub(r"[*_`]+", "", t).strip()
+    t = _re.sub(r"^recipe\s*title\s*:\s*", "", t, flags=_re.I)    # "Recipe Title: Marsh Willowherb…"
+    return t.rstrip(":").strip()
+
+
+def is_safety_note_line(plain: str) -> bool:
+    import re as _re
+    # "Safety note", "Safety notice:", "SAFETY WARNING — READ FIRST", "Caution:", "Warning –" …
+    return bool(_re.match(r"(safety|caution|warning)\b", plain.strip(), _re.I))
+
+
+def recipe_display_title(title: Optional[str], body: Optional[str]) -> str:
+    import re as _re
+    if (title or "").strip():
+        return title.strip()
+    lines = (body or "").replace("\r", "").split("\n")
+    for line in lines:                                   # first heading
+        if _re.match(r"^\s*#{1,6}\s", line):
+            t = _md_plain(line)
+            if t and not is_safety_note_line(t):
+                return t
+    in_note = False                                      # a safety note takes its whole paragraph
+    for line in lines:                                   # first plain line
+        raw = line.strip()
+        if not raw or _re.fullmatch(r"([-*_]\s*){3,}", raw):
+            in_note = False
+            continue
+        if raw.startswith(">"):
+            continue
+        t = _md_plain(raw)
+        if t and is_safety_note_line(t):
+            in_note = True
+        if not t or in_note:
+            continue
+        m = _re.match(r"(.+?[.!?])(\s|$)", t)
+        if m:
+            t = m.group(1)
+        if len(t) > _RECIPE_TITLE_CAP:
+            t = t[:_RECIPE_TITLE_CAP - 1].rsplit(" ", 1)[0].rstrip(",;:—-") + "…"
+        return t
+    return ""
+
+
+# ---------------------------------------------------------------------------
 # Fungal species — the ONLY definition of "this species is a fungus" for the
 # observation category rule (observation_service.apply_species_category).
 # ---------------------------------------------------------------------------

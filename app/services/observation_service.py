@@ -1,9 +1,12 @@
 from datetime import datetime
+import logging
 from typing import Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.observation import Observation, ObservationEdit, qualifies_as_identified
 from app.services.species_link import set_observation_species
 from app.config import settings
+
+_log = logging.getLogger(__name__)
 
 async def apply_species_category(session: AsyncSession, obs: Observation, edited_by: str = "human") -> bool:
     """A CONFIRMED observation of a fungal species is filed as fungi (Melvin,
@@ -44,18 +47,22 @@ def _log_edit(
 
 def _copy_to_confirmed(obs: Observation) -> None:
     """
-    Copy the observation's original photo to photos/confirmed_plants/{species-slug}/.
-    Destination is always inside the ForagingID project root so files are git-tracked.
-    Originals are never moved or modified.
-    Best-effort — failure is silent so it never blocks the review action.
+    Copy the observation's original photo to photos/confirmed_plants/{species-slug}/
+    — the ONE copy of this helper (E-05c: bulk_actions imports it). The folder is
+    inside the project but NOT git-tracked (.gitignore ignores
+    photos/confirmed_plants/*). Originals are never moved or modified.
+    Best-effort — it never blocks the review action, but a failure or a missing
+    original is logged (obs id, path, reason) so a skipped copy leaves a trace.
     """
     try:
         from app.services.export import copy_single
         dest = copy_single(obs, settings.confirmed_plants_dir)
         if dest:
             obs.confirmed_copy_path = str(dest)
-    except Exception:
-        pass  # non-critical: export_confirmed.py can be re-run to catch any misses
+        else:
+            _log.warning("confirmed copy skipped for obs %s: original not found at %s", obs.id, obs.file_path)
+    except Exception as exc:
+        _log.warning("confirmed copy FAILED for obs %s (%s): %s", obs.id, obs.file_path, exc)
 
 
 async def update_observation_status(
@@ -103,7 +110,13 @@ async def update_observation_status(
     if prev_status != review_status:
         _log_edit(session, obs, "review_status", prev_status, review_status, edited_by)
         obs.review_status = review_status
-        obs.reviewed_at = datetime.utcnow()
+        # reviewed_at is what makes a confirmed row human-confirmed
+        # (is_human_confirmed), so its old value is logged too: reject-undo
+        # restores it (B1-05) instead of turning an AI-agreed row into a human one.
+        new_reviewed_at = datetime.utcnow()
+        _log_edit(session, obs, "reviewed_at",
+                  obs.reviewed_at.isoformat() if obs.reviewed_at else None, new_reviewed_at.isoformat(), edited_by)
+        obs.reviewed_at = new_reviewed_at
         # Reject → orphan-GC the cards it pointed at; un-reject → clear markers.
         from app.services.species_link import refresh_orphan_markers
         await refresh_orphan_markers(session, obs)

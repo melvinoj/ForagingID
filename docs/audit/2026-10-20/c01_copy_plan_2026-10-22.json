@@ -1,0 +1,1312 @@
+[
+ {
+  "id": 8197,
+  "review_status": "approved",
+  "species": "Tubaria furfuracea",
+  "src": "/Users/melvinjarman/Local(unsynced)/PhoneForaging/PXL_20260208_111748642.jpg",
+  "dest": "/Users/melvinjarman/ForagingID/photos/confirmed_plants/tubaria-furfuracea/PXL_20260208_111748642.jpg",
+  "sha256": "4e7c70dbbf4066359115f8cf18f605db4009f9512193aa044e2248988e7e2287",
+  "bytes": 2128131,
+  "dest_exists_now": false
+ },
+ {
+  "id": 8198,
+  "review_status": "approved",
+  "species": "Crocus",
+  "src": "/Users/melvinjarman/Local(unsynced)/PhoneForaging/PXL_20260224_155716853.jpg",
+  "dest": "/Users/melvinjarman/ForagingID/photos/confirmed_plants/crocus/PXL_20260224_155716853.jpg",
+  "sha256": "3e223ccf81d2fa9bdd99d34653b9d346eb945cdbe2fda52e4a6219405b399050",
+  "bytes": 2776460,
+  "dest_exists_now": false
+ },
+ {
+  "id": 8223,
+  "review_status": "manually_verified",
+  "species": "Quercus petraea",
+  "src": "/Users/melvinjarman/Local(unsynced)/PhoneForaging/PXL_20260406_060809511.jpg",
+  "dest": "/Users/melvinjarman/ForagingID/photos/confirmed_plants/quercus-petraea/PXL_20260406_060809511.jpg",
+  "sha256": "b202412fcd1b04edefe7839a48e8306e26cf31a8afe8f51cdc3d7c6ab9f3ee9f",
+  "bytes": 1283063,
+  "dest_exists_now": false
+ },
+ {
+  "id": 8266,
+  "review_status": "approved",
+  "species": "Laetiporus sulphureus",
+  "src": "/Users/melvinjarman/Local(unsynced)/PhoneForaging/PXL_20260428_100406606.jpg",
+  "dest": "/Users/melvinjarman/ForagingID/photos/confirmed_plants/laetiporus-sulphureus/PXL_20260428_100406606.jpg",
+  "sha256": "deab57c7a1fc2f960c5e58f99af4cb281ceff25c70485ef136f9e58bf2f86f48",
+  "bytes": 2301075,
+  "dest_exists_now": false
+ },
+ {
+  "id": 8267,
+  "review_status": "approved",
+  "species": "Laetiporus sulphureus",
+  "src": "/Users/melvinjarman/Local(unsynced)/PhoneForaging/PXL_20260428_100408871.MP.jpg",
+  "dest": "/Users/melvinjarman/ForagingID/photos/confirmed_plants/laetiporus-sulphureus/PXL_20260428_100408871.MP.jpg",
+  "sha256": "7f9ce0ffddc24c229ad5664b16dd2dbb71f3993ee1b92f16796a536c685ffc2c",
+  "bytes": 3050489,
+  "dest_exists_now": false
+ },
+ {
+  "id": 8290,
+  "review_status": "approved",
+  "species": "Berula erecta",
+  "src": "/Users/melvinjarman/Local(unsynced)/PhoneForaging/PXL_20260522_141918090.jpg",
+  "dest": "/Users/melvinjarman/ForagingID/photos/confirmed_plants/berula-erecta/PXL_20260522_141918090.jpg",
+  "sha256": "d390c3d3273c56e9f97fce9186e3d9c754e4bedc57433e336cc7acc1b5ab725e",
+  "bytes": 2660399,
+  "dest_exists_now": false
+ },
+ {
+  "id": 8307,
+  "review_status": "manually_verified",
+  "species": "Crataegus monogyna",
+  "src": "/Users/melvinjarman/Local(unsynced)/PhoneForaging/PXL_20260525_180145670.jpg",
+  "dest": "/Users/melvinjarman/ForagingID/photos/confirmed_plants/crataegus-monogyna/PXL_20260525_180145670.jpg",
+  "sha256": "5135814e14f5226624d7a14ed061eea112172e438f46f3839ecaa8d298df5e2a",
+  "bytes": 1404531,
+  "dest_exists_now": false
+ },
+ {
+  "id": 8308,
+  "review_status": "manually_verified",
+  "species": "Crataegus monogyna",
+  "src": "/Users/melvinjarman/Local(unsynced)/PhoneForaging/PXL_20260525_180153679.MP.jpg",
+  "dest": "/Users/melvinjarman/ForagingID/photos/confirmed_plants/crataegus-monogyna/PXL_20260525_180153679.MP.jpg",
+  "sha256": "1b7e1388f2b8a5df3483346c34ed5034046945d6b6726896a6db73389318ca6b",
+  "bytes": 4779845,
+  "dest_exists_now": false
+ },
+ {
+  "id": 8314,
+  "review_status": "approved",
+  "species": "Conopodium majus",
+  "src": "/Users/melvinjarman/Local(unsynced)/PhoneForaging/PXL_20260525_184655593.jpg",
+  "dest": "/Users/melvinjarman/ForagingID/photos/confirmed_plants/conopodium-majus/PXL_20260525_184655593.jpg",
+  "sha256": "e7e25dccbc4df893d36434f8bbf0445c268b6e78ddf6aa50532954ff04c62772",
+  "bytes": 3096231,
+  "dest_exists_now": false
+ },
+ {
+  "id": 8319,
+  "review_status": "manually_verified",
+  "species": "Silene dioica",
+  "src": "/Users/melvinjarman/Local(unsynced)/PhoneForaging/PXL_20260527_062709018.jpg",
+  "dest": "/Users/melvinjarman/ForagingID/photos/confirmed_plants/silene-dioica/PXL_20260527_062709018.jpg",
+  "sha256": "dff204c18c2cbac90423e1cd5c3c116b3c682ed0d8f839aeef8ba76e18efab87",
+  "bytes": 1101460,
+  "dest_exists_now": false
+ },
+ {
+  "id": 8341,
+  "review_status": "manually_verified",
+  "species": "Anthriscus sylvestris",
+  "src": "/Users/melvinjarman/Local(unsynced)/PhoneForaging/PXL_20260527_064324121.jpg",
+  "dest": "/Users/melvinjarman/ForagingID/photos/confirmed_plants/anthriscus-sylvestris/PXL_20260527_064324121.jpg",
+  "sha256": "c0b89da5c42e778ec2b1675bf13bcd19b84177f70a08046eea02f882a73a7628",
+  "bytes": 2052590,
+  "dest_exists_now": false
+ },
+ {
+  "id": 8346,
+  "review_status": "approved",
+  "species": "Hydnum repandum",
+  "src": "/Users/melvinjarman/Local(unsynced)/PhoneForaging/PXL_20250905_113834951.jpg",
+  "dest": "/Users/melvinjarman/ForagingID/photos/confirmed_plants/hydnum-repandum/PXL_20250905_113834951.jpg",
+  "sha256": "0b9ae152b34ddb9c665a37ac8992970a8b989e2ea7c423d4299a4447695a1a30",
+  "bytes": 3136750,
+  "dest_exists_now": false
+ },
+ {
+  "id": 8347,
+  "review_status": "manually_verified",
+  "species": "Alnus glutinosa",
+  "src": "/Users/melvinjarman/Local(unsynced)/PhoneForaging/PXL_20250905_105011970.jpg",
+  "dest": "/Users/melvinjarman/ForagingID/photos/confirmed_plants/alnus-glutinosa/PXL_20250905_105011970.jpg",
+  "sha256": "aca2526bd09c2ae44dffd2b10759bcfe98d767d91e1bdec2023ab10f388dcee0",
+  "bytes": 1299141,
+  "dest_exists_now": false
+ },
+ {
+  "id": 8349,
+  "review_status": "approved",
+  "species": "Hydnum repandum",
+  "src": "/Users/melvinjarman/Local(unsynced)/PhoneForaging/PXL_20250905_130135731.jpg",
+  "dest": "/Users/melvinjarman/ForagingID/photos/confirmed_plants/hydnum-repandum/PXL_20250905_130135731.jpg",
+  "sha256": "a682a01eb7b422eda90fd5841cf078746d657c18959a5dd82d45188f76a78a2b",
+  "bytes": 2275224,
+  "dest_exists_now": false
+ },
+ {
+  "id": 8355,
+  "review_status": "approved",
+  "species": "Macrolepiota procera",
+  "src": "/Users/melvinjarman/Local(unsynced)/PhoneForaging/PXL_20250913_123608913.jpg",
+  "dest": "/Users/melvinjarman/ForagingID/photos/confirmed_plants/macrolepiota-procera/PXL_20250913_123608913.jpg",
+  "sha256": "cc33552cf84b84d1b7577cdb4912710a72b06bf4500ff2bb910b807f737a845f",
+  "bytes": 3350342,
+  "dest_exists_now": false
+ },
+ {
+  "id": 8360,
+  "review_status": "approved",
+  "species": "Apioperdon pyriforme",
+  "src": "/Users/melvinjarman/Local(unsynced)/PhoneForaging/PXL_20250916_121957886.jpg",
+  "dest": "/Users/melvinjarman/ForagingID/photos/confirmed_plants/apioperdon-pyriforme/PXL_20250916_121957886.jpg",
+  "sha256": "79b029d05f93985d4c16e97b959c3fb7166e334ff0203e3c7ef38749960400dc",
+  "bytes": 2168793,
+  "dest_exists_now": false
+ },
+ {
+  "id": 8361,
+  "review_status": "approved",
+  "species": "Oudemansiella mucida",
+  "src": "/Users/melvinjarman/Local(unsynced)/PhoneForaging/PXL_20250916_132417825.jpg",
+  "dest": "/Users/melvinjarman/ForagingID/photos/confirmed_plants/oudemansiella-mucida/PXL_20250916_132417825.jpg",
+  "sha256": "4d0c428c7fe14ae365b769f1281cf71414725ea2baedbccef80729ec22dc8d37",
+  "bytes": 1678259,
+  "dest_exists_now": false
+ },
+ {
+  "id": 8362,
+  "review_status": "approved",
+  "species": "Oudemansiella mucida",
+  "src": "/Users/melvinjarman/Local(unsynced)/PhoneForaging/PXL_20250916_132436505.jpg",
+  "dest": "/Users/melvinjarman/ForagingID/photos/confirmed_plants/oudemansiella-mucida/PXL_20250916_132436505.jpg",
+  "sha256": "ae216f0c25df7dbd16f74190fccf99e1b8c38ef6669966566afbc7f0ea8a25b8",
+  "bytes": 1101617,
+  "dest_exists_now": false
+ },
+ {
+  "id": 8364,
+  "review_status": "approved",
+  "species": "Amanita muscaria",
+  "src": "/Users/melvinjarman/Local(unsynced)/PhoneForaging/PXL_20250917_125123838.jpg",
+  "dest": "/Users/melvinjarman/ForagingID/photos/confirmed_plants/amanita-muscaria/PXL_20250917_125123838.jpg",
+  "sha256": "698f3b752e53be4644a092461bc36967d092adbccd69718c3b1b5a2775d103f2",
+  "bytes": 1600700,
+  "dest_exists_now": false
+ },
+ {
+  "id": 8365,
+  "review_status": "approved",
+  "species": "Tricholomopsis rutilans",
+  "src": "/Users/melvinjarman/Local(unsynced)/PhoneForaging/PXL_20250921_123214458.jpg",
+  "dest": "/Users/melvinjarman/ForagingID/photos/confirmed_plants/tricholomopsis-rutilans/PXL_20250921_123214458.jpg",
+  "sha256": "361e608f33b851603953f7ab37a65327eb3cde6a3d865a1a0e111da60e62ceb5",
+  "bytes": 2086877,
+  "dest_exists_now": false
+ },
+ {
+  "id": 8368,
+  "review_status": "approved",
+  "species": "Leccinum scabrum",
+  "src": "/Users/melvinjarman/Local(unsynced)/PhoneForaging/PXL_20250927_113951639.jpg",
+  "dest": "/Users/melvinjarman/ForagingID/photos/confirmed_plants/leccinum-scabrum/PXL_20250927_113951639.jpg",
+  "sha256": "aeff78806b0e95d541ddd677c6768a004969ba518c03511ff773fab2b458a241",
+  "bytes": 871109,
+  "dest_exists_now": false
+ },
+ {
+  "id": 8369,
+  "review_status": "approved",
+  "species": "Amanita muscaria",
+  "src": "/Users/melvinjarman/Local(unsynced)/PhoneForaging/PXL_20250927_115832177.MP.jpg",
+  "dest": "/Users/melvinjarman/ForagingID/photos/confirmed_plants/amanita-muscaria/PXL_20250927_115832177.MP.jpg",
+  "sha256": "8707c4aa6aa515f88fb25bc7959a010cbeeda93262f2fb5c84e5eeb975df625b",
+  "bytes": 6427859,
+  "dest_exists_now": false
+ },
+ {
+  "id": 8370,
+  "review_status": "approved",
+  "species": "Pyxine albovirens",
+  "src": "/Users/melvinjarman/Local(unsynced)/PhoneForaging/PXL_20250928_092839605.jpg",
+  "dest": "/Users/melvinjarman/ForagingID/photos/confirmed_plants/pyxine-albovirens/PXL_20250928_092839605.jpg",
+  "sha256": "cb73024a243f6b5d8d319451e3c068286a9c503c593823645f38d7f4422b8acf",
+  "bytes": 2031179,
+  "dest_exists_now": false
+ },
+ {
+  "id": 8371,
+  "review_status": "approved",
+  "species": "Clitocybe nebularis",
+  "src": "/Users/melvinjarman/Local(unsynced)/PhoneForaging/PXL_20250928_094603043.jpg",
+  "dest": "/Users/melvinjarman/ForagingID/photos/confirmed_plants/clitocybe-nebularis/PXL_20250928_094603043.jpg",
+  "sha256": "f476d56dd0c78cd5d3ab6d2337e1e51e67ab37ea4893d5f7cce17b56ad0a9f26",
+  "bytes": 1754453,
+  "dest_exists_now": false
+ },
+ {
+  "id": 8376,
+  "review_status": "approved",
+  "species": "Fistulina hepatica",
+  "src": "/Users/melvinjarman/Local(unsynced)/PhoneForaging/PXL_20250928_161410897.jpg",
+  "dest": "/Users/melvinjarman/ForagingID/photos/confirmed_plants/fistulina-hepatica/PXL_20250928_161410897.jpg",
+  "sha256": "ff896836453b5d3bf9a603390eef07ae868fad08ab52f88bc3803ba00cd1e70b",
+  "bytes": 1724445,
+  "dest_exists_now": false
+ },
+ {
+  "id": 8378,
+  "review_status": "approved",
+  "species": "Coprinus comatus",
+  "src": "/Users/melvinjarman/Local(unsynced)/PhoneForaging/PXL_20250928_162302205.jpg",
+  "dest": "/Users/melvinjarman/ForagingID/photos/confirmed_plants/coprinus-comatus/PXL_20250928_162302205.jpg",
+  "sha256": "499a3d23991fec36865b859d07ba31ea926d162e179e11326b994f58fdbf7dd6",
+  "bytes": 1223411,
+  "dest_exists_now": false
+ },
+ {
+  "id": 8379,
+  "review_status": "approved",
+  "species": "Leccinum versipelle",
+  "src": "/Users/melvinjarman/Local(unsynced)/PhoneForaging/PXL_20250929_124805558.jpg",
+  "dest": "/Users/melvinjarman/ForagingID/photos/confirmed_plants/leccinum-versipelle/PXL_20250929_124805558.jpg",
+  "sha256": "c35212f14bd8a22957153e986eb2504a38654b1c2bf8aa2e899eb7b169be12c3",
+  "bytes": 986897,
+  "dest_exists_now": false
+ },
+ {
+  "id": 8380,
+  "review_status": "approved",
+  "species": "Leccinum versipelle",
+  "src": "/Users/melvinjarman/Local(unsynced)/PhoneForaging/PXL_20250929_124810537.jpg",
+  "dest": "/Users/melvinjarman/ForagingID/photos/confirmed_plants/leccinum-versipelle/PXL_20250929_124810537.jpg",
+  "sha256": "0d9e121b8dea29d29f9ab2c241698873e83026f83e93ad68934c07e5e5ee7682",
+  "bytes": 888601,
+  "dest_exists_now": false
+ },
+ {
+  "id": 8381,
+  "review_status": "approved",
+  "species": "Leccinum versipelle",
+  "src": "/Users/melvinjarman/Local(unsynced)/PhoneForaging/PXL_20250929_124818266.jpg",
+  "dest": "/Users/melvinjarman/ForagingID/photos/confirmed_plants/leccinum-versipelle/PXL_20250929_124818266.jpg",
+  "sha256": "f61744f242f7dc2aeccddf9cc9d14423454f2c06ea0be5ff3a45fbaffc70b624",
+  "bytes": 1683942,
+  "dest_exists_now": false
+ },
+ {
+  "id": 8383,
+  "review_status": "approved",
+  "species": "Amanita rubescens",
+  "src": "/Users/melvinjarman/Local(unsynced)/PhoneForaging/PXL_20250929_125430448.jpg",
+  "dest": "/Users/melvinjarman/ForagingID/photos/confirmed_plants/amanita-rubescens/PXL_20250929_125430448.jpg",
+  "sha256": "cf48e250cf89de82ce09900e8d7783973b70f966bb337b8f61dace2f7a5df53c",
+  "bytes": 1580934,
+  "dest_exists_now": false
+ },
+ {
+  "id": 8384,
+  "review_status": "approved",
+  "species": "Amanita muscaria",
+  "src": "/Users/melvinjarman/Local(unsynced)/PhoneForaging/PXL_20250929_130519130.jpg",
+  "dest": "/Users/melvinjarman/ForagingID/photos/confirmed_plants/amanita-muscaria/PXL_20250929_130519130.jpg",
+  "sha256": "400c265934a7706cb0b3538c76c8c39b4075aa3fd8a9d9a2146f1933e9058ff2",
+  "bytes": 1649421,
+  "dest_exists_now": false
+ },
+ {
+  "id": 8385,
+  "review_status": "approved",
+  "species": "Leccinum scabrum",
+  "src": "/Users/melvinjarman/Local(unsynced)/PhoneForaging/PXL_20250930_153216748.jpg",
+  "dest": "/Users/melvinjarman/ForagingID/photos/confirmed_plants/leccinum-scabrum/PXL_20250930_153216748.jpg",
+  "sha256": "fe2d9b657641e65a214c1c52e1c0b22e5f1ca179d880419cb1db5a68aee5b5cc",
+  "bytes": 1489878,
+  "dest_exists_now": false
+ },
+ {
+  "id": 8386,
+  "review_status": "approved",
+  "species": "Leccinum scabrum",
+  "src": "/Users/melvinjarman/Local(unsynced)/PhoneForaging/PXL_20250930_153227441.jpg",
+  "dest": "/Users/melvinjarman/ForagingID/photos/confirmed_plants/leccinum-scabrum/PXL_20250930_153227441.jpg",
+  "sha256": "a34b240b73c9f509c338aaf5c880d78d29c4e6bf90bc75e866a9e9f9726c5d28",
+  "bytes": 1406212,
+  "dest_exists_now": false
+ },
+ {
+  "id": 8387,
+  "review_status": "approved",
+  "species": "Imleria badia",
+  "src": "/Users/melvinjarman/Local(unsynced)/PhoneForaging/PXL_20250930_153352887.jpg",
+  "dest": "/Users/melvinjarman/ForagingID/photos/confirmed_plants/imleria-badia/PXL_20250930_153352887.jpg",
+  "sha256": "36419af322060846fd66e21928a03117ed28d60880c5be27317f25dee04968be",
+  "bytes": 1284730,
+  "dest_exists_now": false
+ },
+ {
+  "id": 8388,
+  "review_status": "approved",
+  "species": "Xerocomellus chrysenteron",
+  "src": "/Users/melvinjarman/Local(unsynced)/PhoneForaging/PXL_20250930_153748041.MP.jpg",
+  "dest": "/Users/melvinjarman/ForagingID/photos/confirmed_plants/xerocomellus-chrysenteron/PXL_20250930_153748041.MP.jpg",
+  "sha256": "ed870bb070cb4bed1b3b84f4191dc4b99900b19b9ed598655715a024499bf36d",
+  "bytes": 4336873,
+  "dest_exists_now": false
+ },
+ {
+  "id": 8389,
+  "review_status": "approved",
+  "species": "Imleria badia",
+  "src": "/Users/melvinjarman/Local(unsynced)/PhoneForaging/PXL_20250930_153952599.jpg",
+  "dest": "/Users/melvinjarman/ForagingID/photos/confirmed_plants/imleria-badia/PXL_20250930_153952599.jpg",
+  "sha256": "82c0575defc095e3c490bc953dc0b5dc1e14309806c1796c18de3db56c0a2c93",
+  "bytes": 1257653,
+  "dest_exists_now": false
+ },
+ {
+  "id": 8390,
+  "review_status": "approved",
+  "species": "Imleria badia",
+  "src": "/Users/melvinjarman/Local(unsynced)/PhoneForaging/PXL_20250930_153958605.jpg",
+  "dest": "/Users/melvinjarman/ForagingID/photos/confirmed_plants/imleria-badia/PXL_20250930_153958605.jpg",
+  "sha256": "928845ffe4b32274756206972b247e5e8216617721420d0b6fda29a054a82545",
+  "bytes": 1608436,
+  "dest_exists_now": false
+ },
+ {
+  "id": 8391,
+  "review_status": "approved",
+  "species": "Boletus edulis",
+  "src": "/Users/melvinjarman/Local(unsynced)/PhoneForaging/PXL_20251005_142402240.jpg",
+  "dest": "/Users/melvinjarman/ForagingID/photos/confirmed_plants/boletus-edulis/PXL_20251005_142402240.jpg",
+  "sha256": "b2f747464bcb0f15211b477eb238d4ece1069f225776135501168830c5ca5f5e",
+  "bytes": 1200133,
+  "dest_exists_now": false
+ },
+ {
+  "id": 8392,
+  "review_status": "approved",
+  "species": "Boletus subtomentosus",
+  "src": "/Users/melvinjarman/Local(unsynced)/PhoneForaging/PXL_20251005_142514331.MP.jpg",
+  "dest": "/Users/melvinjarman/ForagingID/photos/confirmed_plants/boletus-subtomentosus/PXL_20251005_142514331.MP.jpg",
+  "sha256": "25f5a930e8a19aaf48aeed4721175cf8bb43809be602dcc0b92f89a752e0a4b9",
+  "bytes": 4205156,
+  "dest_exists_now": false
+ },
+ {
+  "id": 8393,
+  "review_status": "approved",
+  "species": "Boletus subtomentosus",
+  "src": "/Users/melvinjarman/Local(unsynced)/PhoneForaging/PXL_20251005_142551209.jpg",
+  "dest": "/Users/melvinjarman/ForagingID/photos/confirmed_plants/boletus-subtomentosus/PXL_20251005_142551209.jpg",
+  "sha256": "0217c5dbdf4dd4dba7509912d278fc6f0b1fd81d2ee51a42106ffe0eb1b7df63",
+  "bytes": 1114896,
+  "dest_exists_now": false
+ },
+ {
+  "id": 8394,
+  "review_status": "approved",
+  "species": "Boletus edulis",
+  "src": "/Users/melvinjarman/Local(unsynced)/PhoneForaging/PXL_20251005_142913495.MP.jpg",
+  "dest": "/Users/melvinjarman/ForagingID/photos/confirmed_plants/boletus-edulis/PXL_20251005_142913495.MP.jpg",
+  "sha256": "f9dfb7080f90bf6bfbc61d6c6ee06bc56f371da6486e1920bec3bf3c43420fab",
+  "bytes": 6564375,
+  "dest_exists_now": false
+ },
+ {
+  "id": 8395,
+  "review_status": "approved",
+  "species": "Boletus edulis",
+  "src": "/Users/melvinjarman/Local(unsynced)/PhoneForaging/PXL_20251005_142923406.jpg",
+  "dest": "/Users/melvinjarman/ForagingID/photos/confirmed_plants/boletus-edulis/PXL_20251005_142923406.jpg",
+  "sha256": "bf3f16b3ef2a74294626e14066328626ddc8e629b48b0c02136bf2f5faf133cd",
+  "bytes": 1540414,
+  "dest_exists_now": false
+ },
+ {
+  "id": 8396,
+  "review_status": "approved",
+  "species": "Boletus edulis",
+  "src": "/Users/melvinjarman/Local(unsynced)/PhoneForaging/PXL_20251005_143046387.jpg",
+  "dest": "/Users/melvinjarman/ForagingID/photos/confirmed_plants/boletus-edulis/PXL_20251005_143046387.jpg",
+  "sha256": "ece7f3665031f6de2d856b7ee429c1c6b7acf288fcc6129f0edf7612b6e578a1",
+  "bytes": 1141598,
+  "dest_exists_now": false
+ },
+ {
+  "id": 8398,
+  "review_status": "approved",
+  "species": "Boletus edulis",
+  "src": "/Users/melvinjarman/Local(unsynced)/PhoneForaging/PXL_20251005_143430483.jpg",
+  "dest": "/Users/melvinjarman/ForagingID/photos/confirmed_plants/boletus-edulis/PXL_20251005_143430483.jpg",
+  "sha256": "35dd07d2cdb3dcbe18ee8f726fe6142fd76b84271a672466080bf2225df5c064",
+  "bytes": 1855072,
+  "dest_exists_now": false
+ },
+ {
+  "id": 8400,
+  "review_status": "approved",
+  "species": "Armillaria mellea",
+  "src": "/Users/melvinjarman/Local(unsynced)/PhoneForaging/PXL_20251011_121229208.jpg",
+  "dest": "/Users/melvinjarman/ForagingID/photos/confirmed_plants/armillaria-mellea/PXL_20251011_121229208.jpg",
+  "sha256": "3f4fc0dc9c5df2eb0939783e5157f8051d6fe7e2c1e422fc0ccd43ee988a785e",
+  "bytes": 2532261,
+  "dest_exists_now": false
+ },
+ {
+  "id": 8401,
+  "review_status": "approved",
+  "species": "Armillaria mellea",
+  "src": "/Users/melvinjarman/Local(unsynced)/PhoneForaging/PXL_20251011_121250989.jpg",
+  "dest": "/Users/melvinjarman/ForagingID/photos/confirmed_plants/armillaria-mellea/PXL_20251011_121250989.jpg",
+  "sha256": "8e160d674787b955171da37387e5c2232896a6a5dadf892a02e5c83145392aa2",
+  "bytes": 1553428,
+  "dest_exists_now": false
+ },
+ {
+  "id": 8402,
+  "review_status": "approved",
+  "species": "Amanita citrina",
+  "src": "/Users/melvinjarman/Local(unsynced)/PhoneForaging/PXL_20251011_121413069.jpg",
+  "dest": "/Users/melvinjarman/ForagingID/photos/confirmed_plants/amanita-citrina/PXL_20251011_121413069.jpg",
+  "sha256": "38a0b0ff6fb0140a9d72e44a4d90db7717f9094f2ce767bfabb3e5849ee9514e",
+  "bytes": 1196810,
+  "dest_exists_now": false
+ },
+ {
+  "id": 8403,
+  "review_status": "approved",
+  "species": "Amanita citrina",
+  "src": "/Users/melvinjarman/Local(unsynced)/PhoneForaging/PXL_20251011_121416153.jpg",
+  "dest": "/Users/melvinjarman/ForagingID/photos/confirmed_plants/amanita-citrina/PXL_20251011_121416153.jpg",
+  "sha256": "cb772074ae340a0c155d3c6840ba7fee1d3a1519d0f8cebb70bbf35a416ee2a4",
+  "bytes": 1282897,
+  "dest_exists_now": false
+ },
+ {
+  "id": 8404,
+  "review_status": "approved",
+  "species": "Amanita citrina",
+  "src": "/Users/melvinjarman/Local(unsynced)/PhoneForaging/PXL_20251011_121526215.jpg",
+  "dest": "/Users/melvinjarman/ForagingID/photos/confirmed_plants/amanita-citrina/PXL_20251011_121526215.jpg",
+  "sha256": "4473b513bfcb9f300f5a6698ae441a961a454380ebbe2b6ff1446f4872dc8413",
+  "bytes": 1397373,
+  "dest_exists_now": false
+ },
+ {
+  "id": 8405,
+  "review_status": "approved",
+  "species": "Trametes versicolor",
+  "src": "/Users/melvinjarman/Local(unsynced)/PhoneForaging/PXL_20251011_121648345.jpg",
+  "dest": "/Users/melvinjarman/ForagingID/photos/confirmed_plants/trametes-versicolor/PXL_20251011_121648345.jpg",
+  "sha256": "b72df0a9cc8370eb1e79352682999c55d963382c470e1ddd55a422ad6be42deb",
+  "bytes": 1348590,
+  "dest_exists_now": false
+ },
+ {
+  "id": 8406,
+  "review_status": "approved",
+  "species": "Amanita rubescens",
+  "src": "/Users/melvinjarman/Local(unsynced)/PhoneForaging/PXL_20251011_122652911.jpg",
+  "dest": "/Users/melvinjarman/ForagingID/photos/confirmed_plants/amanita-rubescens/PXL_20251011_122652911.jpg",
+  "sha256": "e6302e0606cd010f97ba6c4446970fab2440edeb6e5d59e0692065ed36f173b8",
+  "bytes": 1304925,
+  "dest_exists_now": false
+ },
+ {
+  "id": 8407,
+  "review_status": "approved",
+  "species": "Amanita muscaria",
+  "src": "/Users/melvinjarman/Local(unsynced)/PhoneForaging/PXL_20251011_122907738.jpg",
+  "dest": "/Users/melvinjarman/ForagingID/photos/confirmed_plants/amanita-muscaria/PXL_20251011_122907738.jpg",
+  "sha256": "dfcefaec38f4e79ab2a5ce9f9315f52db878cb364fac4a068b3a4f5fb82c565b",
+  "bytes": 1955858,
+  "dest_exists_now": false
+ },
+ {
+  "id": 8408,
+  "review_status": "approved",
+  "species": "Populus tremuloides",
+  "src": "/Users/melvinjarman/Local(unsynced)/PhoneForaging/PXL_20251024_151904477.MP.jpg",
+  "dest": "/Users/melvinjarman/ForagingID/photos/confirmed_plants/populus-tremuloides/PXL_20251024_151904477.MP.jpg",
+  "sha256": "5d5ffb95c6c1208e8786a5093c997a25129326faf3d58b0398f8f7aa0a4ec829",
+  "bytes": 5910921,
+  "dest_exists_now": false
+ },
+ {
+  "id": 8410,
+  "review_status": "approved",
+  "species": "Collybia nuda",
+  "src": "/Users/melvinjarman/Local(unsynced)/PhoneForaging/PXL_20251025_141957510.jpg",
+  "dest": "/Users/melvinjarman/ForagingID/photos/confirmed_plants/collybia-nuda/PXL_20251025_141957510.jpg",
+  "sha256": "8fc23c0310871ea82334b5cce2864590f2abf7b834cc561a5174be995055bb07",
+  "bytes": 1397154,
+  "dest_exists_now": false
+ },
+ {
+  "id": 8411,
+  "review_status": "approved",
+  "species": "Amanita rubescens",
+  "src": "/Users/melvinjarman/Local(unsynced)/PhoneForaging/PXL_20251025_145228996.jpg",
+  "dest": "/Users/melvinjarman/ForagingID/photos/confirmed_plants/amanita-rubescens/PXL_20251025_145228996.jpg",
+  "sha256": "07c784eb77738b339ac4fbd9c5b642570101df19350c12c4386a45acd1ab1c54",
+  "bytes": 2115430,
+  "dest_exists_now": false
+ },
+ {
+  "id": 8412,
+  "review_status": "approved",
+  "species": "Amanita rubescens",
+  "src": "/Users/melvinjarman/Local(unsynced)/PhoneForaging/PXL_20251025_145241360.MP.jpg",
+  "dest": "/Users/melvinjarman/ForagingID/photos/confirmed_plants/amanita-rubescens/PXL_20251025_145241360.MP.jpg",
+  "sha256": "60551af21375833a43c5b43d3ed652dd47cfc0ba4da33ab6941c21ecbf24ca64",
+  "bytes": 3846825,
+  "dest_exists_now": false
+ },
+ {
+  "id": 8413,
+  "review_status": "approved",
+  "species": "Amanita rubescens",
+  "src": "/Users/melvinjarman/Local(unsynced)/PhoneForaging/PXL_20251025_145249282.MP.jpg",
+  "dest": "/Users/melvinjarman/ForagingID/photos/confirmed_plants/amanita-rubescens/PXL_20251025_145249282.MP.jpg",
+  "sha256": "78956bfb8dbd0e2056778d8513408b732944b7088980ceb219fe946102c8c2f9",
+  "bytes": 2976902,
+  "dest_exists_now": false
+ },
+ {
+  "id": 8414,
+  "review_status": "approved",
+  "species": "Amanita rubescens",
+  "src": "/Users/melvinjarman/Local(unsynced)/PhoneForaging/PXL_20251025_145310785.MP.jpg",
+  "dest": "/Users/melvinjarman/ForagingID/photos/confirmed_plants/amanita-rubescens/PXL_20251025_145310785.MP.jpg",
+  "sha256": "81479cfb001e54292f651f1fdf6cc312bb65d227634f3405362b470f2b8b45c1",
+  "bytes": 5209490,
+  "dest_exists_now": false
+ },
+ {
+  "id": 8416,
+  "review_status": "approved",
+  "species": "Boletus reticulatus",
+  "src": "/Users/melvinjarman/Local(unsynced)/PhoneForaging/PXL_20251031_154249381.jpg",
+  "dest": "/Users/melvinjarman/ForagingID/photos/confirmed_plants/boletus-reticulatus/PXL_20251031_154249381.jpg",
+  "sha256": "ff8b066e63d8501ecf556423968b6cb2a966d9d38de7eea28bc961ce9e85be6c",
+  "bytes": 1466886,
+  "dest_exists_now": false
+ },
+ {
+  "id": 8417,
+  "review_status": "approved",
+  "species": "Boletus reticulatus",
+  "src": "/Users/melvinjarman/Local(unsynced)/PhoneForaging/PXL_20251031_154259559.jpg",
+  "dest": "/Users/melvinjarman/ForagingID/photos/confirmed_plants/boletus-reticulatus/PXL_20251031_154259559.jpg",
+  "sha256": "be8c4306910f438f13e5be692fec7081577e3977c609ab232e031aad5e749876",
+  "bytes": 1532377,
+  "dest_exists_now": false
+ },
+ {
+  "id": 8418,
+  "review_status": "approved",
+  "species": "Amanita muscaria",
+  "src": "/Users/melvinjarman/Local(unsynced)/PhoneForaging/PXL_20251101_151331393.jpg",
+  "dest": "/Users/melvinjarman/ForagingID/photos/confirmed_plants/amanita-muscaria/PXL_20251101_151331393.jpg",
+  "sha256": "27bd940a8173da10e2531a73b95f7d042f1eb17d70c6178a70748aba4a3683d1",
+  "bytes": 2222371,
+  "dest_exists_now": false
+ },
+ {
+  "id": 8420,
+  "review_status": "approved",
+  "species": "Pluteus romellii",
+  "src": "/Users/melvinjarman/Local(unsynced)/PhoneForaging/PXL_20251106_151315639.jpg",
+  "dest": "/Users/melvinjarman/ForagingID/photos/confirmed_plants/pluteus-romellii/PXL_20251106_151315639.jpg",
+  "sha256": "f5a0a1a9de22cc723061d12f2e4ab263fc299c6a34ac508cd2cf700946a4506c",
+  "bytes": 1187134,
+  "dest_exists_now": false
+ },
+ {
+  "id": 8421,
+  "review_status": "approved",
+  "species": "Pluteus romellii",
+  "src": "/Users/melvinjarman/Local(unsynced)/PhoneForaging/PXL_20251106_151318644.jpg",
+  "dest": "/Users/melvinjarman/ForagingID/photos/confirmed_plants/pluteus-romellii/PXL_20251106_151318644.jpg",
+  "sha256": "ee42e0155b3a79495b6baab54a788df15823f21baf8ec2f6dc1aee69879fad2e",
+  "bytes": 1088991,
+  "dest_exists_now": false
+ },
+ {
+  "id": 9414,
+  "review_status": "manually_verified",
+  "species": "Hypochaeris radicata",
+  "src": "/Users/melvinjarman/Local(unsynced)/PhoneForaging/PXL_20260529_084909182.jpg",
+  "dest": "/Users/melvinjarman/ForagingID/photos/confirmed_plants/hypochaeris-radicata/PXL_20260529_084909182.jpg",
+  "sha256": "92ef03698642dbc3ad94c37750e3c261ca1dabf69d72367453ef361479d46bb8",
+  "bytes": 1059794,
+  "dest_exists_now": false
+ },
+ {
+  "id": 9425,
+  "review_status": "manually_verified",
+  "species": "Anthriscus sylvestris",
+  "src": "/Users/melvinjarman/Local(unsynced)/PhoneForaging/PXL_20260529_090342953.jpg",
+  "dest": "/Users/melvinjarman/ForagingID/photos/confirmed_plants/anthriscus-sylvestris/PXL_20260529_090342953.jpg",
+  "sha256": "2a94890ef6ec59f11030609b9299ee7d2b49295785befa0405ba2510ccbe2202",
+  "bytes": 2243901,
+  "dest_exists_now": false
+ },
+ {
+  "id": 9438,
+  "review_status": "approved",
+  "species": "Urtica dioica",
+  "src": "/Users/melvinjarman/Local(unsynced)/PhoneForaging/PXL_20260529_092811570.MP.jpg",
+  "dest": "/Users/melvinjarman/ForagingID/photos/confirmed_plants/urtica-dioica/PXL_20260529_092811570.MP.jpg",
+  "sha256": "1148ed9ba0ef9d627f6656f550f16a2d4f2f2e284bad900d8f90f5ee72780cbd",
+  "bytes": 5148794,
+  "dest_exists_now": false
+ },
+ {
+  "id": 9463,
+  "review_status": "manually_verified",
+  "species": "Dipsacus fullonum",
+  "src": "/Users/melvinjarman/Local(unsynced)/PhoneForaging/PXL_20260529_154851009.jpg",
+  "dest": "/Users/melvinjarman/ForagingID/photos/confirmed_plants/dipsacus-fullonum/PXL_20260529_154851009.jpg",
+  "sha256": "3fd1189778f0fa91afc9d5f8e3283088daf55cbad2eba4f29fb6c0953f0348b5",
+  "bytes": 1776827,
+  "dest_exists_now": false
+ },
+ {
+  "id": 9472,
+  "review_status": "manually_verified",
+  "species": "Achillea millefolium",
+  "src": "/Users/melvinjarman/Local(unsynced)/PhoneForaging/PXL_20260529_182331768.jpg",
+  "dest": "/Users/melvinjarman/ForagingID/photos/confirmed_plants/achillea-millefolium/PXL_20260529_182331768.jpg",
+  "sha256": "30863d54b6e4dabbda6e77cced501a6931898cd77a90f03380ed456155d52bca",
+  "bytes": 2507739,
+  "dest_exists_now": false
+ },
+ {
+  "id": 9484,
+  "review_status": "approved",
+  "species": "Rumex acetosella",
+  "src": "/Users/melvinjarman/Local(unsynced)/PhoneForaging/PXL_20260529_184631184.jpg",
+  "dest": "/Users/melvinjarman/ForagingID/photos/confirmed_plants/rumex-acetosella/PXL_20260529_184631184.jpg",
+  "sha256": "460fadeabeb251aee4b647dc2c5aff1ce092289dc908a06eedf648017070fe2e",
+  "bytes": 1235349,
+  "dest_exists_now": false
+ },
+ {
+  "id": 9492,
+  "review_status": "approved",
+  "species": "Rumex acetosella",
+  "src": "/Users/melvinjarman/Local(unsynced)/PhoneForaging/PXL_20260529_184620126.MP.jpg",
+  "dest": "/Users/melvinjarman/ForagingID/photos/confirmed_plants/rumex-acetosella/PXL_20260529_184620126.MP.jpg",
+  "sha256": "017e7f26303cd9e30211dd18bbb32973188294e4412dd8264581914733c683a8",
+  "bytes": 4614864,
+  "dest_exists_now": false
+ },
+ {
+  "id": 9508,
+  "review_status": "approved",
+  "species": "Daucus carota",
+  "src": "/Users/melvinjarman/Local(unsynced)/PhoneForaging/PXL_20260529_182144404.jpg",
+  "dest": "/Users/melvinjarman/ForagingID/photos/confirmed_plants/daucus-carota/PXL_20260529_182144404.jpg",
+  "sha256": "81e551480918ee096737392c0bcaed31e87d15dee1e168b58fe568d401657125",
+  "bytes": 2460839,
+  "dest_exists_now": false
+ },
+ {
+  "id": 9510,
+  "review_status": "manually_verified",
+  "species": "Artemisia vulgaris",
+  "src": "/Users/melvinjarman/Local(unsynced)/PhoneForaging/PXL_20260529_185017064.jpg",
+  "dest": "/Users/melvinjarman/ForagingID/photos/confirmed_plants/artemisia-vulgaris/PXL_20260529_185017064.jpg",
+  "sha256": "df97cc8517f8acf3af604739495366182343d9fcd50af88c1c560421c58539cb",
+  "bytes": 1592334,
+  "dest_exists_now": false
+ },
+ {
+  "id": 9511,
+  "review_status": "manually_verified",
+  "species": "Petrosedum ochroleucum",
+  "src": "/Users/melvinjarman/Local(unsynced)/PhoneForaging/PXL_20260529_185230596.jpg",
+  "dest": "/Users/melvinjarman/ForagingID/photos/confirmed_plants/petrosedum-ochroleucum/PXL_20260529_185230596.jpg",
+  "sha256": "99d28e5d239564e33d0397683f605ffc1fd3b794fc9e706fd5cf6929953889e0",
+  "bytes": 1457963,
+  "dest_exists_now": false
+ },
+ {
+  "id": 9512,
+  "review_status": "manually_verified",
+  "species": "Prunus avium",
+  "src": "/Users/melvinjarman/Local(unsynced)/PhoneForaging/PXL_20260529_181552982.MP.jpg",
+  "dest": "/Users/melvinjarman/ForagingID/photos/confirmed_plants/prunus-avium/PXL_20260529_181552982.MP.jpg",
+  "sha256": "fd366d183570ada631211a717b10f2eb6d56aeadf535308484814c5bb51665d2",
+  "bytes": 4556248,
+  "dest_exists_now": false
+ },
+ {
+  "id": 9514,
+  "review_status": "approved",
+  "species": "Taraxacum clemens",
+  "src": "/Users/melvinjarman/Local(unsynced)/PhoneForaging/PXL_20260529_184724050.MP.jpg",
+  "dest": "/Users/melvinjarman/ForagingID/photos/confirmed_plants/taraxacum-clemens/PXL_20260529_184724050.MP.jpg",
+  "sha256": "e8e18a7e868eac04028b1e21e19f65f0d19225efa2e03d0b39dc8a2f8ed9423e",
+  "bytes": 4240207,
+  "dest_exists_now": false
+ },
+ {
+  "id": 9516,
+  "review_status": "manually_verified",
+  "species": "Silene vulgaris",
+  "src": "/Users/melvinjarman/Local(unsynced)/PhoneForaging/PXL_20260529_185946705.jpg",
+  "dest": "/Users/melvinjarman/ForagingID/photos/confirmed_plants/silene-vulgaris/PXL_20260529_185946705.jpg",
+  "sha256": "c88fbda66130b3a0f6bee9bae642b2d7063d3b618310317f3b9386969857f4e3",
+  "bytes": 1444034,
+  "dest_exists_now": false
+ },
+ {
+  "id": 9528,
+  "review_status": "approved",
+  "species": "Thymus serpyllum",
+  "src": "/Users/melvinjarman/Local(unsynced)/PhoneForaging/PXL_20260529_185241866.jpg",
+  "dest": "/Users/melvinjarman/ForagingID/photos/confirmed_plants/thymus-serpyllum/PXL_20260529_185241866.jpg",
+  "sha256": "44f1d027a3bdbcb80b0afaf759dbdc2321e1b7b6623f8e8739ae6b70b0c24aa4",
+  "bytes": 1457834,
+  "dest_exists_now": false
+ },
+ {
+  "id": 9537,
+  "review_status": "approved",
+  "species": "Prunus syriaca",
+  "src": "/Users/melvinjarman/Local(unsynced)/PhoneForaging/PXL_20260530_061222128.jpg",
+  "dest": "/Users/melvinjarman/ForagingID/photos/confirmed_plants/prunus-syriaca/PXL_20260530_061222128.jpg",
+  "sha256": "6ed964c26ed99a366706b3da41e4494985bbfa79972c5f4ef3150a1a25eb0a62",
+  "bytes": 1199265,
+  "dest_exists_now": false
+ },
+ {
+  "id": 10529,
+  "review_status": "approved",
+  "species": "Thymus pulegioides",
+  "src": "/Users/melvinjarman/Local(unsynced)/PhoneForaging/PXL_20260530_172150203.jpg",
+  "dest": "/Users/melvinjarman/ForagingID/photos/confirmed_plants/thymus-pulegioides/PXL_20260530_172150203.jpg",
+  "sha256": "b1b9ef1f77d713356458eadf43da1c50756dd3bb29c36cabdc9cef772b4ee78f",
+  "bytes": 2480055,
+  "dest_exists_now": false
+ },
+ {
+  "id": 10534,
+  "review_status": "manually_verified",
+  "species": "Melilotus albus",
+  "src": "/Users/melvinjarman/Local(unsynced)/PhoneForaging/PXL_20260530_172705566.jpg",
+  "dest": "/Users/melvinjarman/ForagingID/photos/confirmed_plants/melilotus-albus/PXL_20260530_172705566.jpg",
+  "sha256": "b6970e9fcef4d5980379f313f8762a694d64e3eec73a3593f1bcc4218b97ce3a",
+  "bytes": 1957922,
+  "dest_exists_now": false
+ },
+ {
+  "id": 10535,
+  "review_status": "manually_verified",
+  "species": "Thymus pulegioides",
+  "src": "/Users/melvinjarman/Local(unsynced)/PhoneForaging/PXL_20260530_172718966.jpg",
+  "dest": "/Users/melvinjarman/ForagingID/photos/confirmed_plants/thymus-pulegioides/PXL_20260530_172718966.jpg",
+  "sha256": "4d61ff46f2fded767b7592533b52a0922edc0816aebbd3bdaf2409736f3536e2",
+  "bytes": 1788365,
+  "dest_exists_now": false
+ },
+ {
+  "id": 10540,
+  "review_status": "approved",
+  "species": "Daucus carota",
+  "src": "/Users/melvinjarman/Local(unsynced)/PhoneForaging/PXL_20260530_173241352.jpg",
+  "dest": "/Users/melvinjarman/ForagingID/photos/confirmed_plants/daucus-carota/PXL_20260530_173241352.jpg",
+  "sha256": "8449fec203cd400b3db5019521ab08ad656bc81c5b29b5069a1c1ec4d2bbac8a",
+  "bytes": 1651929,
+  "dest_exists_now": false
+ },
+ {
+  "id": 10541,
+  "review_status": "approved",
+  "species": "Verbascum nigrum",
+  "src": "/Users/melvinjarman/Local(unsynced)/PhoneForaging/PXL_20260530_173342617.jpg",
+  "dest": "/Users/melvinjarman/ForagingID/photos/confirmed_plants/verbascum-nigrum/PXL_20260530_173342617.jpg",
+  "sha256": "d9704de72be0e4e5c0667cbfc719fd572a25ca7ee8ebe294260d247e2a70da17",
+  "bytes": 1928791,
+  "dest_exists_now": false
+ },
+ {
+  "id": 10542,
+  "review_status": "approved",
+  "species": "Alchemilla alpina",
+  "src": "/Users/melvinjarman/Local(unsynced)/PhoneForaging/PXL_20260530_173326330.jpg",
+  "dest": "/Users/melvinjarman/ForagingID/photos/confirmed_plants/alchemilla-alpina/PXL_20260530_173326330.jpg",
+  "sha256": "48eaa008115912aa18a3223c8b586832c2087a03d3ef6f8e55dcfa19f40a709b",
+  "bytes": 1948900,
+  "dest_exists_now": false
+ },
+ {
+  "id": 10546,
+  "review_status": "approved",
+  "species": "Mentha longifolia",
+  "src": "/Users/melvinjarman/Local(unsynced)/PhoneForaging/PXL_20260530_174054233.jpg",
+  "dest": "/Users/melvinjarman/ForagingID/photos/confirmed_plants/mentha-longifolia/PXL_20260530_174054233.jpg",
+  "sha256": "dc1cc05f63957112ad02dee0dd4de969c3f07c07a074e91a02dfeb2343d6ed0f",
+  "bytes": 1775161,
+  "dest_exists_now": false
+ },
+ {
+  "id": 10549,
+  "review_status": "manually_verified",
+  "species": "Sanguisorba minor",
+  "src": "/Users/melvinjarman/Local(unsynced)/PhoneForaging/PXL_20260530_174218522.jpg",
+  "dest": "/Users/melvinjarman/ForagingID/photos/confirmed_plants/sanguisorba-minor/PXL_20260530_174218522.jpg",
+  "sha256": "8fcabf0549c7550e8fbfcee2c2d6c162655f1874e03caf7438e6a9cbe5c80a38",
+  "bytes": 1878646,
+  "dest_exists_now": false
+ },
+ {
+  "id": 10551,
+  "review_status": "manually_verified",
+  "species": "Erigeron annuus",
+  "src": "/Users/melvinjarman/Local(unsynced)/PhoneForaging/PXL_20260530_174452278.MP.jpg",
+  "dest": "/Users/melvinjarman/ForagingID/photos/confirmed_plants/erigeron-annuus/PXL_20260530_174452278.MP.jpg",
+  "sha256": "7fdee2f3ac81820f0581480164c282f4d17e67aff53d17a3f052694472bb47a3",
+  "bytes": 3362709,
+  "dest_exists_now": false
+ },
+ {
+  "id": 10562,
+  "review_status": "approved",
+  "species": "Lysimachia punctata",
+  "src": "/Users/melvinjarman/Local(unsynced)/PhoneForaging/PXL_20260530_175245127.MP.jpg",
+  "dest": "/Users/melvinjarman/ForagingID/photos/confirmed_plants/lysimachia-punctata/PXL_20260530_175245127.MP.jpg",
+  "sha256": "875b52731043f5cb8e3accca6dd10b0ac5203523276176a4509b209642e80182",
+  "bytes": 6459490,
+  "dest_exists_now": false
+ },
+ {
+  "id": 10565,
+  "review_status": "approved",
+  "species": "Sambucus nigra",
+  "src": "/Users/melvinjarman/Local(unsynced)/PhoneForaging/PXL_20260530_175423426.jpg",
+  "dest": "/Users/melvinjarman/ForagingID/photos/confirmed_plants/sambucus-nigra/PXL_20260530_175423426.jpg",
+  "sha256": "09ce327891721a467690d86704a9075ff5956b9d00f2552a812165823635c929",
+  "bytes": 2438348,
+  "dest_exists_now": false
+ },
+ {
+  "id": 10569,
+  "review_status": "manually_verified",
+  "species": "Heracleum sphondylium",
+  "src": "/Users/melvinjarman/Local(unsynced)/PhoneForaging/PXL_20260530_181034755.jpg",
+  "dest": "/Users/melvinjarman/ForagingID/photos/confirmed_plants/heracleum-sphondylium/PXL_20260530_181034755.jpg",
+  "sha256": "8f45f2b54969fbf99ae2ba5caff02c74db475ed4e2c5a0a26726587bc3366e8e",
+  "bytes": 2008673,
+  "dest_exists_now": false
+ },
+ {
+  "id": 10578,
+  "review_status": "approved",
+  "species": "Sambucus nigra",
+  "src": "/Users/melvinjarman/Local(unsynced)/PhoneForaging/PXL_20260530_180858826.MP.jpg",
+  "dest": "/Users/melvinjarman/ForagingID/photos/confirmed_plants/sambucus-nigra/PXL_20260530_180858826.MP.jpg",
+  "sha256": "43ddeea18c1e3b68b690bec2966bbc822b56493e1757cf7c7d42043edab9ee6f",
+  "bytes": 3854764,
+  "dest_exists_now": false
+ },
+ {
+  "id": 10583,
+  "review_status": "manually_verified",
+  "species": "Thymus serpyllum",
+  "src": "/Users/melvinjarman/Local(unsynced)/PhoneForaging/PXL_20260530_181910430.jpg",
+  "dest": "/Users/melvinjarman/ForagingID/photos/confirmed_plants/thymus-serpyllum/PXL_20260530_181910430.jpg",
+  "sha256": "63174dcea6f6c57e30327695fb74c7cefed121751715808d5f32018e2716d2aa",
+  "bytes": 1771450,
+  "dest_exists_now": false
+ },
+ {
+  "id": 10584,
+  "review_status": "approved",
+  "species": "Epilobium hirsutum",
+  "src": "/Users/melvinjarman/Local(unsynced)/PhoneForaging/PXL_20260530_181927268.jpg",
+  "dest": "/Users/melvinjarman/ForagingID/photos/confirmed_plants/epilobium-hirsutum/PXL_20260530_181927268.jpg",
+  "sha256": "d905df2aa6789aa157a7dcc91dda591f06171bc75651a9b02703aefbf84b44c6",
+  "bytes": 1407357,
+  "dest_exists_now": false
+ },
+ {
+  "id": 15932,
+  "review_status": "approved",
+  "species": "Erigeron canadensis",
+  "src": "/Users/melvinjarman/Local(unsynced)/PhoneForaging/PXL_20260531_162231955.jpg",
+  "dest": "/Users/melvinjarman/ForagingID/photos/confirmed_plants/erigeron-canadensis/PXL_20260531_162231955.jpg",
+  "sha256": "97d0dc7c22bdf4bd93781335ed0a46d6fb6af3066610d34f0ce5976d97f6f40c",
+  "bytes": 1194957,
+  "dest_exists_now": false
+ },
+ {
+  "id": 15933,
+  "review_status": "approved",
+  "species": "Matricaria discoidea",
+  "src": "/Users/melvinjarman/Local(unsynced)/PhoneForaging/PXL_20260531_161927631.MP.jpg",
+  "dest": "/Users/melvinjarman/ForagingID/photos/confirmed_plants/matricaria-discoidea/PXL_20260531_161927631.MP.jpg",
+  "sha256": "f4c61dc9f0b47874ae809a45742546dd5700b51ebefe83fc931f7ee3afc6fc0a",
+  "bytes": 3345360,
+  "dest_exists_now": false
+ },
+ {
+  "id": 15934,
+  "review_status": "approved",
+  "species": "Capsella bursa-pastoris",
+  "src": "/Users/melvinjarman/Local(unsynced)/PhoneForaging/PXL_20260531_161934759.jpg",
+  "dest": "/Users/melvinjarman/ForagingID/photos/confirmed_plants/capsella-bursa-pastoris/PXL_20260531_161934759.jpg",
+  "sha256": "8c88bd9742413737382fe63cbea001cb2a248155a55c354f79e9b8f050f68d2f",
+  "bytes": 1804961,
+  "dest_exists_now": false
+ },
+ {
+  "id": 15935,
+  "review_status": "approved",
+  "species": "Matricaria discoidea",
+  "src": "/Users/melvinjarman/Local(unsynced)/PhoneForaging/PXL_20260531_162130185.jpg",
+  "dest": "/Users/melvinjarman/ForagingID/photos/confirmed_plants/matricaria-discoidea/PXL_20260531_162130185.jpg",
+  "sha256": "6e6364ef83832a1f5bcab6d5f13b502d67ea387608cb2f7c2652598ed9026cbf",
+  "bytes": 1472280,
+  "dest_exists_now": false
+ },
+ {
+  "id": 15936,
+  "review_status": "approved",
+  "species": "Papaver setiferum",
+  "src": "/Users/melvinjarman/Local(unsynced)/PhoneForaging/PXL_20260531_162332932.MP.jpg",
+  "dest": "/Users/melvinjarman/ForagingID/photos/confirmed_plants/papaver-setiferum/PXL_20260531_162332932.MP.jpg",
+  "sha256": "aa020d1f59e55913e990c0e5920915c9f462458fad2b015dfd4474d20b28ae5b",
+  "bytes": 3282480,
+  "dest_exists_now": false
+ },
+ {
+  "id": 15937,
+  "review_status": "approved",
+  "species": "Thlaspi arvense",
+  "src": "/Users/melvinjarman/Local(unsynced)/PhoneForaging/PXL_20260531_161912984.MP.jpg",
+  "dest": "/Users/melvinjarman/ForagingID/photos/confirmed_plants/thlaspi-arvense/PXL_20260531_161912984.MP.jpg",
+  "sha256": "65f4e90ef18918ff0d12cfaba139b15363111f15f2a15e5fde4e936067941fc1",
+  "bytes": 5367829,
+  "dest_exists_now": false
+ },
+ {
+  "id": 15938,
+  "review_status": "approved",
+  "species": "Sisymbrium officinale",
+  "src": "/Users/melvinjarman/Local(unsynced)/PhoneForaging/PXL_20260531_162309406.MP.jpg",
+  "dest": "/Users/melvinjarman/ForagingID/photos/confirmed_plants/sisymbrium-officinale/PXL_20260531_162309406.MP.jpg",
+  "sha256": "7f1be52b98108168b54639158401330d91ddbb0c5d78828c8c8860296109b362",
+  "bytes": 4487155,
+  "dest_exists_now": false
+ },
+ {
+  "id": 15947,
+  "review_status": "approved",
+  "species": "Rosa canina",
+  "src": "/Users/melvinjarman/Local(unsynced)/PhoneForaging/PXL_20260601_055938845.jpg",
+  "dest": "/Users/melvinjarman/ForagingID/photos/confirmed_plants/rosa-canina/PXL_20260601_055938845.jpg",
+  "sha256": "f3646e02857cfd090885c957630c385235bb36ec30b4a4513761c382868fac30",
+  "bytes": 2644724,
+  "dest_exists_now": false
+ },
+ {
+  "id": 15950,
+  "review_status": "approved",
+  "species": "Rhamnus cathartica",
+  "src": "/Users/melvinjarman/Local(unsynced)/PhoneForaging/PXL_20260601_060056746.jpg",
+  "dest": "/Users/melvinjarman/ForagingID/photos/confirmed_plants/rhamnus-cathartica/PXL_20260601_060056746.jpg",
+  "sha256": "70f43bb97137aa2fe97e9472e12c0a5aa254b58b9f5d5d6285578b4982f92940",
+  "bytes": 1908464,
+  "dest_exists_now": false
+ },
+ {
+  "id": 15952,
+  "review_status": "approved",
+  "species": "Heracleum sphondylium",
+  "src": "/Users/melvinjarman/Local(unsynced)/PhoneForaging/PXL_20260601_060124499.MP.jpg",
+  "dest": "/Users/melvinjarman/ForagingID/photos/confirmed_plants/heracleum-sphondylium/PXL_20260601_060124499.MP.jpg",
+  "sha256": "b7d79bc1f192ef3ce93ff6971d7b14ef90c39fed735d0a2e46e14c237fff08a6",
+  "bytes": 3765075,
+  "dest_exists_now": false
+ },
+ {
+  "id": 15955,
+  "review_status": "manually_verified",
+  "species": "Leucanthemum vulgare",
+  "src": "/Users/melvinjarman/Local(unsynced)/PhoneForaging/PXL_20260601_060231874.jpg",
+  "dest": "/Users/melvinjarman/ForagingID/photos/confirmed_plants/leucanthemum-vulgare/PXL_20260601_060231874.jpg",
+  "sha256": "a6a302468eaaa8513b4a4de8b7d8c2a04b3c13400760ad5cfb2014b8639ac6cb",
+  "bytes": 1018173,
+  "dest_exists_now": false
+ },
+ {
+  "id": 15960,
+  "review_status": "approved",
+  "species": "Taraxacum officinale",
+  "src": "/Users/melvinjarman/Local(unsynced)/PhoneForaging/PXL_20260601_060558599.MP.jpg",
+  "dest": "/Users/melvinjarman/ForagingID/photos/confirmed_plants/taraxacum-officinale/PXL_20260601_060558599.MP.jpg",
+  "sha256": "cdb342861dd9da2363a8362cf2b274e28aa8349b33c3ae57904e7065094aa01d",
+  "bytes": 3026026,
+  "dest_exists_now": false
+ },
+ {
+  "id": 15961,
+  "review_status": "manually_verified",
+  "species": "Rubus fruticosus",
+  "src": "/Users/melvinjarman/Local(unsynced)/PhoneForaging/PXL_20260601_060622491.jpg",
+  "dest": "/Users/melvinjarman/ForagingID/photos/confirmed_plants/rubus-fruticosus/PXL_20260601_060622491.jpg",
+  "sha256": "2fab3790ea81c9ee9dc898081f1b710a1e4d3eefdba400e0abd0ae5eda191329",
+  "bytes": 2017960,
+  "dest_exists_now": false
+ },
+ {
+  "id": 15962,
+  "review_status": "manually_verified",
+  "species": "Sonchus asper",
+  "src": "/Users/melvinjarman/Local(unsynced)/PhoneForaging/PXL_20260601_060749562.jpg",
+  "dest": "/Users/melvinjarman/ForagingID/photos/confirmed_plants/sonchus-asper/PXL_20260601_060749562.jpg",
+  "sha256": "69c20f4ccdafed673db516ada8992bfe42ccde867c042e14b6b26db40bd6a2ca",
+  "bytes": 1231254,
+  "dest_exists_now": false
+ },
+ {
+  "id": 15963,
+  "review_status": "approved",
+  "species": "Epilobium angustifolium",
+  "src": "/Users/melvinjarman/Local(unsynced)/PhoneForaging/PXL_20260601_060758151.MP.jpg",
+  "dest": "/Users/melvinjarman/ForagingID/photos/confirmed_plants/epilobium-angustifolium/PXL_20260601_060758151.MP.jpg",
+  "sha256": "a156a1512d790abaa273338efe09a8ca57432a7f43cf25ca6db157a42cd3d185",
+  "bytes": 4817893,
+  "dest_exists_now": false
+ },
+ {
+  "id": 15964,
+  "review_status": "approved",
+  "species": "Cytisus scoparius",
+  "src": "/Users/melvinjarman/Local(unsynced)/PhoneForaging/PXL_20260601_061635326.MP.jpg",
+  "dest": "/Users/melvinjarman/ForagingID/photos/confirmed_plants/cytisus-scoparius/PXL_20260601_061635326.MP.jpg",
+  "sha256": "7387d24c4cfcee58473d01ff7a48a15f3c2320f67ef04c9762d798e9f976f1e2",
+  "bytes": 4383972,
+  "dest_exists_now": false
+ },
+ {
+  "id": 15965,
+  "review_status": "approved",
+  "species": "Artemisia vulgaris",
+  "src": "/Users/melvinjarman/Local(unsynced)/PhoneForaging/PXL_20260601_063334082.MP.jpg",
+  "dest": "/Users/melvinjarman/ForagingID/photos/confirmed_plants/artemisia-vulgaris/PXL_20260601_063334082.MP.jpg",
+  "sha256": "02e16e196d450cca98515cca509ba268391cbc4d59dc8ab15a275b2979d92d31",
+  "bytes": 5077786,
+  "dest_exists_now": false
+ },
+ {
+  "id": 15966,
+  "review_status": "manually_verified",
+  "species": "Nasturtium officinale",
+  "src": "/Users/melvinjarman/Local(unsynced)/PhoneForaging/PXL_20260601_063620268.jpg",
+  "dest": "/Users/melvinjarman/ForagingID/photos/confirmed_plants/nasturtium-officinale/PXL_20260601_063620268.jpg",
+  "sha256": "5f06aa129b97e31621b432220cd57c28d88e8f7b1a431c879ff05cf1b9166dfc",
+  "bytes": 1819626,
+  "dest_exists_now": false
+ },
+ {
+  "id": 15967,
+  "review_status": "approved",
+  "species": "Rumex obtusifolius",
+  "src": "/Users/melvinjarman/Local(unsynced)/PhoneForaging/PXL_20260601_063950278.jpg",
+  "dest": "/Users/melvinjarman/ForagingID/photos/confirmed_plants/rumex-obtusifolius/PXL_20260601_063950278.jpg",
+  "sha256": "1f9cabc0a8a1e9f3f1339777c6401e0df90dfa81f34d98f786506b5ed6200018",
+  "bytes": 1752505,
+  "dest_exists_now": false
+ },
+ {
+  "id": 15968,
+  "review_status": "approved",
+  "species": "Sambucus nigra",
+  "src": "/Users/melvinjarman/Local(unsynced)/PhoneForaging/PXL_20260601_064503625.jpg",
+  "dest": "/Users/melvinjarman/ForagingID/photos/confirmed_plants/sambucus-nigra/PXL_20260601_064503625.jpg",
+  "sha256": "d7bb942a3746ddaa7b3d74050c7cc1a928c60d3fa0c1e8c0d2c4b884a9c1cd81",
+  "bytes": 2106409,
+  "dest_exists_now": false
+ },
+ {
+  "id": 15972,
+  "review_status": "approved",
+  "species": "Galium aparine",
+  "src": "/Users/melvinjarman/Local(unsynced)/PhoneForaging/PXL_20260601_060844587.MP.jpg",
+  "dest": "/Users/melvinjarman/ForagingID/photos/confirmed_plants/galium-aparine/PXL_20260601_060844587.MP.jpg",
+  "sha256": "e3a11a754d62666ee87dbfb717faaab3650cc5597dc4e5f6383b66b2d8f92eb0",
+  "bytes": 4688468,
+  "dest_exists_now": false
+ },
+ {
+  "id": 15974,
+  "review_status": "approved",
+  "species": "Cytisus scoparius",
+  "src": "/Users/melvinjarman/Local(unsynced)/PhoneForaging/PXL_20260601_061616689.MP.jpg",
+  "dest": "/Users/melvinjarman/ForagingID/photos/confirmed_plants/cytisus-scoparius/PXL_20260601_061616689.MP.jpg",
+  "sha256": "6605954b203c899926c33bc232886bc94ddd39bcb56cc9d986b4c418eb6969f1",
+  "bytes": 4372509,
+  "dest_exists_now": false
+ },
+ {
+  "id": 15975,
+  "review_status": "manually_verified",
+  "species": "Plantago lanceolata",
+  "src": "/Users/melvinjarman/Local(unsynced)/PhoneForaging/PXL_20260601_063354087.MP.jpg",
+  "dest": "/Users/melvinjarman/ForagingID/photos/confirmed_plants/plantago-lanceolata/PXL_20260601_063354087.MP.jpg",
+  "sha256": "e098074978e1ddeab72b117516008a39ad4aa7588794035b7ff4b100a2b84978",
+  "bytes": 3274916,
+  "dest_exists_now": false
+ },
+ {
+  "id": 15976,
+  "review_status": "approved",
+  "species": "Plantago lanceolata",
+  "src": "/Users/melvinjarman/Local(unsynced)/PhoneForaging/PXL_20260601_063427268.MP.jpg",
+  "dest": "/Users/melvinjarman/ForagingID/photos/confirmed_plants/plantago-lanceolata/PXL_20260601_063427268.MP.jpg",
+  "sha256": "c411b666fd0e230d2f4cf1c4558e783f4c7c07d12fd85c80df2453f304fe8af5",
+  "bytes": 3721357,
+  "dest_exists_now": false
+ },
+ {
+  "id": 15977,
+  "review_status": "approved",
+  "species": "Rumex crispus",
+  "src": "/Users/melvinjarman/Local(unsynced)/PhoneForaging/PXL_20260601_063515008.MP.jpg",
+  "dest": "/Users/melvinjarman/ForagingID/photos/confirmed_plants/rumex-crispus/PXL_20260601_063515008.MP.jpg",
+  "sha256": "c9da25aa843fdd0fcf5ac0e1bdefdd3fbf60898e4fe2b4aee3e499d24664c1f5",
+  "bytes": 4296706,
+  "dest_exists_now": false
+ },
+ {
+  "id": 15978,
+  "review_status": "approved",
+  "species": "Sambucus nigra",
+  "src": "/Users/melvinjarman/Local(unsynced)/PhoneForaging/PXL_20260601_064452400.jpg",
+  "dest": "/Users/melvinjarman/ForagingID/photos/confirmed_plants/sambucus-nigra/PXL_20260601_064452400.jpg",
+  "sha256": "9c12deb081003cbba7a0637339430d0d3a34bc0c55915676c6aa57433213efbc",
+  "bytes": 2244943,
+  "dest_exists_now": false
+ },
+ {
+  "id": 15980,
+  "review_status": "approved",
+  "species": "Castanea sativa",
+  "src": "/Users/melvinjarman/Local(unsynced)/PhoneForaging/PXL_20260601_060444367.jpg",
+  "dest": "/Users/melvinjarman/ForagingID/photos/confirmed_plants/castanea-sativa/PXL_20260601_060444367.jpg",
+  "sha256": "e48bdd84ac6e8b4821ce904fe77033cced53fd2f1404e8f40041b7944b8ec899",
+  "bytes": 1836479,
+  "dest_exists_now": false
+ },
+ {
+  "id": 15981,
+  "review_status": "approved",
+  "species": "Hieracium sabaudum",
+  "src": "/Users/melvinjarman/Local(unsynced)/PhoneForaging/PXL_20260601_061121756.PORTRAIT.jpg",
+  "dest": "/Users/melvinjarman/ForagingID/photos/confirmed_plants/hieracium-sabaudum/PXL_20260601_061121756.PORTRAIT.jpg",
+  "sha256": "cac2e75f58efbf763e80fadfda433ea75a4c6e2d87c8e8809d4113b34a2755d5",
+  "bytes": 6483307,
+  "dest_exists_now": false
+ },
+ {
+  "id": 15982,
+  "review_status": "approved",
+  "species": "Trifolium campestre",
+  "src": "/Users/melvinjarman/Local(unsynced)/PhoneForaging/PXL_20260601_061153022.PORTRAIT.jpg",
+  "dest": "/Users/melvinjarman/ForagingID/photos/confirmed_plants/trifolium-campestre/PXL_20260601_061153022.PORTRAIT.jpg",
+  "sha256": "b3ee14f78dcae28faceff404d98f02e25f30aa560e2bb07c9a0104f94b198b5d",
+  "bytes": 4874422,
+  "dest_exists_now": false
+ },
+ {
+  "id": 15984,
+  "review_status": "manually_verified",
+  "species": "Lapsana communis",
+  "src": "/Users/melvinjarman/Local(unsynced)/PhoneForaging/PXL_20260601_063825687.jpg",
+  "dest": "/Users/melvinjarman/ForagingID/photos/confirmed_plants/lapsana-communis/PXL_20260601_063825687.jpg",
+  "sha256": "ea52f7b8fc8f9dee79d3bd51daf975cbd79eadfe25deba05bcfdc6e7f0a2f81e",
+  "bytes": 1559687,
+  "dest_exists_now": false
+ },
+ {
+  "id": 15992,
+  "review_status": "approved",
+  "species": "Sambucus nigra",
+  "src": "/Users/melvinjarman/Local(unsynced)/PhoneForaging/PXL_20260602_125006573.jpg",
+  "dest": "/Users/melvinjarman/ForagingID/photos/confirmed_plants/sambucus-nigra/PXL_20260602_125006573.jpg",
+  "sha256": "61e03b719da3af8978b98d85d1f29193945f770cb87328ca91221904497a3276",
+  "bytes": 1363517,
+  "dest_exists_now": false
+ },
+ {
+  "id": 15993,
+  "review_status": "approved",
+  "species": "Sonchus oleraceus",
+  "src": "/Users/melvinjarman/Local(unsynced)/PhoneForaging/PXL_20260602_130711854.jpg",
+  "dest": "/Users/melvinjarman/ForagingID/photos/confirmed_plants/sonchus-oleraceus/PXL_20260602_130711854.jpg",
+  "sha256": "54842805a704d3ecd628e078f6b0a73b499f3fe68e0aee2bf5addb092a7641dc",
+  "bytes": 1407722,
+  "dest_exists_now": false
+ },
+ {
+  "id": 15995,
+  "review_status": "manually_verified",
+  "species": "Geranium pyrenaicum",
+  "src": "/Users/melvinjarman/Local(unsynced)/PhoneForaging/PXL_20260603_055354141.jpg",
+  "dest": "/Users/melvinjarman/ForagingID/photos/confirmed_plants/geranium-pyrenaicum/PXL_20260603_055354141.jpg",
+  "sha256": "edac7806c95ddf38b06ae737372aa23a206c7d6e4b1d85f2f0c4550a4d64b56d",
+  "bytes": 1455746,
+  "dest_exists_now": false
+ },
+ {
+  "id": 15996,
+  "review_status": "approved",
+  "species": "Lapsana communis",
+  "src": "/Users/melvinjarman/Local(unsynced)/PhoneForaging/PXL_20260602_123645204.MP.jpg",
+  "dest": "/Users/melvinjarman/ForagingID/photos/confirmed_plants/lapsana-communis/PXL_20260602_123645204.MP.jpg",
+  "sha256": "732927100e1420e2121806b841857001ff5711325688e7c4c50f676f0af9e7c2",
+  "bytes": 3991645,
+  "dest_exists_now": false
+ },
+ {
+  "id": 15998,
+  "review_status": "approved",
+  "species": "Lapsana communis",
+  "src": "/Users/melvinjarman/Local(unsynced)/PhoneForaging/PXL_20260602_123712980.MP.jpg",
+  "dest": "/Users/melvinjarman/ForagingID/photos/confirmed_plants/lapsana-communis/PXL_20260602_123712980.MP.jpg",
+  "sha256": "253ed36bc09f1eeb59e43d23f30cf3243bd8a5c5c8367ad42f55ca04d3489e34",
+  "bytes": 3533055,
+  "dest_exists_now": false
+ },
+ {
+  "id": 16001,
+  "review_status": "approved",
+  "species": "Allium ursinum",
+  "src": "/Users/melvinjarman/Local(unsynced)/PhoneForaging/PXL_20260602_123838977.jpg",
+  "dest": "/Users/melvinjarman/ForagingID/photos/confirmed_plants/allium-ursinum/PXL_20260602_123838977.jpg",
+  "sha256": "4e72e08fa8dadf924f579351351f84d084479679678ab5ed4fbb717a55f6045d",
+  "bytes": 851292,
+  "dest_exists_now": false
+ },
+ {
+  "id": 16002,
+  "review_status": "approved",
+  "species": "Sonchus oleraceus",
+  "src": "/Users/melvinjarman/Local(unsynced)/PhoneForaging/PXL_20260602_130707574.MP.jpg",
+  "dest": "/Users/melvinjarman/ForagingID/photos/confirmed_plants/sonchus-oleraceus/PXL_20260602_130707574.MP.jpg",
+  "sha256": "f4919ca797492b7eb4a0dd638d17a94684a3db9431c7d5372ffff0ead204767c",
+  "bytes": 3964164,
+  "dest_exists_now": false
+ },
+ {
+  "id": 16003,
+  "review_status": "approved",
+  "species": "Sonchus oleraceus",
+  "src": "/Users/melvinjarman/Local(unsynced)/PhoneForaging/PXL_20260602_130728348.jpg",
+  "dest": "/Users/melvinjarman/ForagingID/photos/confirmed_plants/sonchus-oleraceus/PXL_20260602_130728348.jpg",
+  "sha256": "ac5b57cc00b9a76ef9a9c7c540024eb72b00c5ee64a6fc2e22fc48ffbf90d59a",
+  "bytes": 972424,
+  "dest_exists_now": false
+ }
+]

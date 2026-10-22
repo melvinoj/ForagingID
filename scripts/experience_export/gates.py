@@ -205,6 +205,16 @@ def caution_lookalike(sp: dict, ci: dict, conn: sqlite3.Connection):
     return look["text"] if look and look["reviewed"] else None
 
 
+def caution_warning_shown(safety: dict) -> bool:
+    """Rule 8 read from the page's own safety block (safety_texts): a caution
+    species prints with a curator prep warning ("caution") OR look-alike
+    warning — the same either/or as caution_warning / caution_lookalike in
+    recipe_allowed. export.py's cross-check and caution report ask this, so
+    they cannot fall back to prep-only again (22 Oct 2026: they had, and every
+    build with a look-alike-only caution recipe died)."""
+    return "caution" in safety or "look_alike" in safety
+
+
 def may_claim_edible(sp: dict, ci: dict, conn: sqlite3.Connection, cfg: dict) -> bool:
     """May the page call this species edible (or edible-with-caution)?"""
     if is_apiaceae(sp):

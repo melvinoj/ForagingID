@@ -154,6 +154,11 @@ async def lifespan(app: FastAPI):
     # otherwise stay 'running' forever and never leave /api/processes/active.
     from app.services.background_processes import recover_stale_processes
     await recover_stale_processes()
+    # Stage C: a publish / unpublish killed by a restart — record it if its
+    # commit reached GitHub, else mark it failed. Network (git fetch), so it
+    # runs in the background; it never pushes.
+    from app.services.experience_publish import repair_interrupted
+    repair_task = asyncio.create_task(repair_interrupted())
     _ls5 = _time.perf_counter()
     print(f"[TIMING] lifespan: recover_stale_jobs: {_ls5 - _ls4:.1f}s", flush=True)
 
@@ -171,6 +176,7 @@ async def lifespan(app: FastAPI):
     yield
     task.cancel()
     sweep_task.cancel()
+    repair_task.cancel()
 
     # Stop the ngrok tunnel this server started (Settings → Start sharing), so
     # no graceful shutdown — including a --reload worker restart — leaves it
@@ -303,7 +309,7 @@ async def _access_middleware(request: Request, call_next) -> Response:
             return RedirectResponse(url="/", status_code=302)
         # Batch 8 (app.services.guest_access): API reads are deny-by-default —
         # only the paths guest pages use; writes only the guest write list
-        # (walk export, encounter / note creation, recorded-walk sync, Lists PDF).
+        # (walk export, encounter / note creation, Lists PDF).
         from app.api.identity import get_identity
         from app.services.guest_access import GUEST_MEDIA_PREFIXES, guest_api_allowed, guest_media_allowed
         if path.startswith("/api/") and not guest_api_allowed(request.method, path):

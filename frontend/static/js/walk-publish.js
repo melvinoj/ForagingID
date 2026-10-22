@@ -8,6 +8,11 @@
  * the site, blockers) → AI-agreed photos with "Confirm species" → in-panel
  * confirm (tick + button; no browser dialogs) → background job with steps
  * (also in the Jobs pop-up). Unpublish has its own button and confirm.
+ * AI-agreed list select mode (22 Oct 2026): tick several (or Select all) and
+ * "Confirm selected" — the same confirm path, one row at a time, then a
+ * summary. Hazard rows (toxic/deadly species, or a hazard candidate) are never
+ * bulk-confirmed: each needs its own tap, and a hazard candidate other than
+ * the species needs a second tap naming it.
  *
  * Server: app/api/experience.py + app/services/experience_publish.py.
  */
@@ -15,7 +20,8 @@
   'use strict';
 
   var state = { walkId: null, walkName: '', panel: null, plan: null, planning: false,
-                confirmOpen: false, unpubOpen: false, confirmObs: null, job: null, error: '' };
+                confirmOpen: false, unpubOpen: false, confirmObs: null, job: null, error: '',
+                selectMode: false, selected: {}, bulk: null };
   var pollTimer = null;
 
   function esc(s) {
@@ -39,8 +45,10 @@
                                body: body ? JSON.stringify(body) : undefined });
     var d = await r.json().catch(function () { return {}; });
     if (!r.ok) {
-      var e = new Error(typeof d.detail === 'string' ? d.detail : ('HTTP ' + r.status));
+      var e = new Error(typeof d.detail === 'string' ? d.detail
+                        : (d.detail && d.detail.message) || ('HTTP ' + r.status));
       e.status = r.status;
+      e.detail = d.detail;
       throw e;
     }
     return d;
@@ -53,7 +61,8 @@
     if (!walkId || isGuest()) { box.style.display = 'none'; box.innerHTML = ''; return; }
     if (walkId !== state.walkId) {
       state = { walkId: walkId, walkName: walkName || '', panel: null, plan: null, planning: false,
-                confirmOpen: false, unpubOpen: false, confirmObs: null, job: null, error: '' };
+                confirmOpen: false, unpubOpen: false, confirmObs: null, job: null, error: '',
+                selectMode: false, selected: {}, bulk: null };
     }
     box.style.display = '';
     await reload();
@@ -138,10 +147,11 @@
                 : '<input id="wpub-slug" class="wpub-slug" value="' + esc(p.slug) + '" autocomplete="off"> ' +
                   '<button class="wpub-btn-sm" onclick="WalkPublish.saveSlug()">Save</button>') +
       '</span></div>' +
-      '<label class="wpub-row wpub-check"><input type="checkbox" id="wpub-default"' + (p.is_default ? ' checked' : '') +
-        (state.job ? ' disabled' : '') + ' onchange="WalkPublish.setDefault(this.checked)"> ' +
-        '<span>Front page of the site (default walk)' +
-        (locked ? ' — takes effect when you republish' : '') + '</span></label>';
+      // Front page is chosen at publish time (the tick in the confirm step, on
+      // by default — Melvin, 22 Oct 2026); this line only reports it.
+      '<div class="wpub-row"><span class="wpub-k">Front page</span><span>' +
+        (p.is_default ? 'Yes — this walk is the site\'s front page and the /b card'
+                      : 'No — publishing ticks it on by default') + '</span></div>';
   }
 
   function renderPlan(p) {
@@ -190,23 +200,66 @@
     return h;
   }
 
+  // Names of the hazard candidates other than the species (plan: hazard_candidates).
+  function hazardNames(a) {
+    return (a.hazard_candidates || []).map(function (h) { return h.label || h.scientific_name; }).join(' / ');
+  }
+
+  function renderBulkBar(items) {
+    var okIds = items.filter(function (a) { return a.bulk_ok; }).map(function (a) { return a.obs_id; });
+    var h = '<div class="wpub-actions">';
+    if (state.bulk && state.bulk.running) {
+      return h + '<span class="wpub-muted">Confirming ' + esc(state.bulk.done) + ' of ' + esc(state.bulk.total) + '…</span></div>';
+    }
+    if (!state.selectMode) {
+      h += okIds.length ? '<button class="wpub-btn-sm" onclick="WalkPublish.setSelectMode(true)">Select…</button>' : '';
+    } else {
+      var n = Object.keys(state.selected).length;
+      h += '<button class="wpub-btn-sm" onclick="WalkPublish.selectAll()">Select all (' + okIds.length + ')</button> ' +
+           '<button class="wpub-btn-sm wpub-primary"' + (n ? '' : ' disabled') +
+             ' onclick="WalkPublish.confirmSelected()">✓ Confirm selected (' + n + ')</button> ' +
+           '<button class="wpub-btn-sm" onclick="WalkPublish.setSelectMode(false)">Cancel</button>';
+    }
+    h += '</div>';
+    if (state.bulk && state.bulk.summary) h += '<div class="' + (state.bulk.failed.length ? 'wpub-err' : 'wpub-ok') + '">' + esc(state.bulk.summary) + '</div>';
+    return h;
+  }
+
   function renderAiAgreed(items) {
-    if (!items.length) return '<div class="wpub-sub">AI-agreed photos</div><div class="wpub-muted">None — every photo on this walk is human-confirmed.</div>';
+    if (!items.length) {
+      return '<div class="wpub-sub">AI-agreed photos</div><div class="wpub-muted">None — every photo on this walk is human-confirmed.</div>' +
+        (state.bulk && state.bulk.summary ? '<div class="wpub-ok">' + esc(state.bulk.summary) + '</div>' : '');
+    }
     var h = '<div class="wpub-sub">AI-agreed photos (' + items.length + ') — shown on the page only because both ID services agreed</div>';
+    h += renderBulkBar(items);
     h += items.map(function (a) {
       var img = a.thumbnail ? '<img src="' + esc(a.thumbnail) + '" alt="" loading="lazy">' : '<div class="wpub-noimg">🌿</div>';
       var tag = a.hazard ? '<span class="wpub-tag wpub-bad">☠ hazard — blocks publishing</span>'
                          : (a.shown ? '<span class="wpub-tag">shown</span>' : '<span class="wpub-tag">not shown</span>');
-      var act;
+      var hz = (a.hazard_candidates || []).map(function (c) {
+        return '<div class="wpub-bad"><strong>☠ ' + esc(c.label || c.scientific_name) + ' — candidate</strong></div>';
+      }).join('');
+      var act, others = hazardNames(a);
       if (state.confirmObs === a.obs_id) {
-        act = '<span class="wpub-confirm-q">Confirm #' + esc(a.obs_id) + ' is ' + esc(a.name) + '?</span> ' +
-              '<button class="wpub-btn-sm wpub-primary" onclick="WalkPublish.confirmSpecies(' + a.obs_id + ')">Yes, confirm</button> ' +
+        // Second tap: names any hazard candidate the confirm would rule out.
+        act = '<span class="wpub-confirm-q">Confirm #' + esc(a.obs_id) + ' is ' + esc(a.name) +
+                (others ? ' — not ☠ ' + esc(others) : '') + '?</span> ' +
+              '<button class="wpub-btn-sm wpub-primary" onclick="WalkPublish.confirmSpecies(' + a.obs_id + ')">' +
+                (others ? 'Yes — not ' + esc(others) : 'Yes, confirm') + '</button> ' +
               '<button class="wpub-btn-sm" onclick="WalkPublish.askConfirm(null)">Cancel</button>';
       } else {
         act = '<button class="wpub-btn-sm" onclick="WalkPublish.askConfirm(' + a.obs_id + ')">✓ Confirm species</button>';
       }
-      return '<div class="wpub-ai' + (a.hazard ? ' hazard' : '') + '">' + img + '<div class="wpub-ai-body">' +
-        '<strong>' + esc(a.name) + '</strong> ' + tag +
+      var pick = '';
+      if (state.selectMode) {
+        pick = a.bulk_ok
+          ? '<input type="checkbox" class="wpub-pick"' + (state.selected[a.obs_id] ? ' checked' : '') +
+            ' onchange="WalkPublish.toggleSelect(' + a.obs_id + ', this.checked)" aria-label="Select #' + esc(a.obs_id) + '">'
+          : '<span class="wpub-tag wpub-bad" title="Hazard species are confirmed one at a time">☠ own tap</span>';
+      }
+      var hazardRow = a.hazard || a.hazard_species || (a.hazard_candidates || []).length;
+      return '<div class="wpub-ai' + (hazardRow ? ' hazard' : '') + '">' + pick + img + '<div class="wpub-ai-body">' +
+        '<strong>' + esc(a.name) + '</strong> ' + tag + hz +
         '<div class="wpub-muted">Stop ' + esc(a.stop) + ' · #' + esc(a.obs_id) +
           (a.toxicity_severity ? ' · toxicity ' + esc(a.toxicity_severity) : '') + '</div>' +
         '<div>' + act + '</div></div></div>';
@@ -221,7 +274,9 @@
     }
     return '<div class="wpub-confirm">' +
       '<p><strong>This makes the exact route line and every stop location public</strong> at ' + esc(url) +
-        (p.is_default ? ' and on the site\'s front page' : '') + '.</p>' +
+        ' — and on the site\'s front page if the box below is ticked.</p>' +
+      '<label class="wpub-check"><input type="checkbox" id="wpub-front" checked> Front page — make this walk the site\'s ' +
+        'front page and the melvinjarman.co.uk/b card (untick to keep the current front page; the card is then rebuilt from it)</label>' +
       '<p>Unpublishing later removes the page from the site, but not from the site\'s git history or from copies other people, browsers or search engines have already saved.</p>' +
       '<label class="wpub-check"><input type="checkbox" id="wpub-tick" onchange="WalkPublish._tick(this)"> I understand — ' + esc(again.toLowerCase()) + ' this walk</label>' +
       '<div class="wpub-actions"><button id="wpub-go" class="wpub-btn wpub-primary" disabled onclick="WalkPublish.publish()">' + esc(again) + ' now</button> ' +
@@ -305,14 +360,63 @@
 
   function askConfirm(obsId) { state.confirmObs = obsId; render(); }
 
+  function _row(obsId) {
+    return ((state.plan && state.plan.ai_agreed_obs) || []).filter(function (a) { return a.obs_id === obsId; })[0];
+  }
+
   // The existing manual-verify path (as the Review page's Critical section):
-  // PATCH review → manually_verified, which makes it human-confirmed.
+  // PATCH review → manually_verified, which makes it human-confirmed. A hazard
+  // candidate other than the species goes as hazard_ack — this is the second
+  // tap, whose button named it (renderAiAgreed).
+  function _confirmUrl(a, obsId) {
+    var url = '/api/observations/' + obsId + '/review?status=manually_verified';
+    var hz = (a && a.hazard_candidates) || [];
+    if (hz.length) url += '&hazard_ack=' + encodeURIComponent(hz.map(function (h) { return h.scientific_name; }).join(','));
+    return url;
+  }
+
   async function confirmSpecies(obsId) {
     try {
-      await api('PATCH', '/api/observations/' + obsId + '/review?status=manually_verified');
+      await api('PATCH', _confirmUrl(_row(obsId), obsId));
       state.confirmObs = null;
       await plan();                                           // the blocker list comes from the plan
     } catch (e) { state.error = 'Confirm failed for #' + obsId + ': ' + e.message; render(); }
+  }
+
+  function setSelectMode(on) { state.selectMode = !!on; state.selected = {}; if (on) state.bulk = null; render(); }
+  function toggleSelect(obsId, on) {
+    var a = _row(obsId);
+    if (on && a && a.bulk_ok) state.selected[obsId] = true; else delete state.selected[obsId];
+    render();
+  }
+  function selectAll() {
+    ((state.plan && state.plan.ai_agreed_obs) || []).forEach(function (a) { if (a.bulk_ok) state.selected[a.obs_id] = true; });
+    render();
+  }
+
+  // Bulk confirm: the same path as one Confirm, one row at a time; hazard rows
+  // are never sent (bulk_ok is false for them) — each needs its own tap.
+  async function confirmSelected() {
+    var ids = Object.keys(state.selected).map(Number).filter(function (id) {
+      var a = _row(id); return a && a.bulk_ok;
+    });
+    if (!ids.length) return;
+    state.bulk = { running: true, total: ids.length, done: 0, ok: [], failed: [], summary: '' };
+    render();
+    for (var i = 0; i < ids.length; i++) {
+      try {
+        await api('PATCH', '/api/observations/' + ids[i] + '/review?status=manually_verified');
+        state.bulk.ok.push(ids[i]);
+      } catch (e) { state.bulk.failed.push('#' + ids[i] + ' (' + e.message + ')'); }
+      state.bulk.done = i + 1;
+      render();
+    }
+    var b = state.bulk;
+    b.running = false;
+    b.summary = 'Confirmed ' + b.ok.length + ' of ' + b.total + '.' +
+      (b.failed.length ? ' Not confirmed: ' + b.failed.join('; ') + '.' : '');
+    state.selectMode = false; state.selected = {};
+    await plan();
   }
 
   function openConfirm(on) { state.confirmOpen = !!on; render(); }
@@ -334,8 +438,13 @@
 
   async function startJob(kind) {
     var p = state.panel.publication;
+    var body = { confirm: true };
+    if (kind === 'publish') {
+      var fp = document.getElementById('wpub-front');
+      body.front_page = fp ? fp.checked : true;              // on by default
+    }
     try {
-      state.job = await api('POST', '/api/experience/publications/' + p.id + '/' + kind, { confirm: true });
+      state.job = await api('POST', '/api/experience/publications/' + p.id + '/' + kind, body);
       state.confirmOpen = false; state.unpubOpen = false; state.error = '';
       render();
       poll();
@@ -368,6 +477,8 @@
 
   window.WalkPublish = { show: show, create: create, saveSlug: saveSlug, setDefault: setDefault, plan: plan,
                          askConfirm: askConfirm, confirmSpecies: confirmSpecies, openConfirm: openConfirm,
+                         setSelectMode: setSelectMode, toggleSelect: toggleSelect, selectAll: selectAll,
+                         confirmSelected: confirmSelected,
                          openUnpublish: openUnpublish, publish: publish, unpublish: unpublish, closeJob: closeJob,
                          _tick: _tick, _untick: _untick, _ovPicked: _ovPicked };
 })();

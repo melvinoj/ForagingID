@@ -1,57 +1,54 @@
 ## Current State
 
 ### Build
-- Alembic head 0058 (recorded_walks.shared_with_guests; snapshot db_20261022_210520 before it). CLAUDE.md still says 0050 (batch 17).
-- Full suite passing at last run (27+ test files). Service worker foragingid-v14 (hard refresh once).
-- Committed by this End Session: Stage C publish panel, batch 8 follow-ups, recorded-walk toggle, recipe-title fix, interrupted-publish repair, batch 9/10 code fixes.
+- Alembic head 0058. CLAUDE.md still says 0050 (batch 17).
+- 29 test files pass. Service worker foragingid-v15 (hard refresh once).
+- Committed by this End Session: hazard-candidate rule, review card fixes, publish front page + preview, bulk confirm, batch 9/10 data, hazard contact sheets.
 
-### Done 22 Oct (evening)
-- Batch 8 follow-ups: participants cannot record walks or upload walk audio (blocked in guest_access.py and at the endpoint; all four recording entry points guarded); Record tab Photo button hidden for participants.
-- Recorded walks: per-walk "Show to guests" toggle (0058); all 7 walks hidden by default; audio always curator-only.
-- Stage C publish panel (Walk stats, own box): plan → AI-agreed confirms → in-panel confirm → background job (login check, build, EXIF/GPS check, one commit, normal push, live byte-check, record). Unpublish with its own confirm. No token stored. Guests 403.
-- Export: one caution helper gates.caution_warning_shown (builds had been blocked by the old prep-only check). Recipe titles never use a quote/safety-note line. Interrupted publish repaired on server start when the commit is on the remote.
-- Walk 5 published by Melvin (b41435e). Front page and preview.html still show Rümmelsbühl (Next #2).
-- Batch 9/10 code fixes in; data writes B1-02 and C-01 pending (dry run: batch9_10_dryrun_2026-10-22.md).
-- Earlier 22 Oct: walk 5 tidied (3→0 crossings, 7.6 km); enrichment scope picker + cap 25 + scoped resume; handout rule (curator prep OR look-alike warning); look-alike + prep warnings travel with all culinary content; redraft-medicinal eligibility fixed; batch 8 guest visibility and text-only guest notes in their own PDFs; context hook at 400k/500k.
-
-### SAFETY — found 22 Oct
-- Obs #24507 is foxglove (Digitalis purpurea; Melvin + Google Lens). Review proposed Pentanema squarrosum at 90.4%, with Digitalis only in the grey "Also:" line. Not approved. Fix in Next #1.
+### Done 22 Oct (late evening)
+- #24507 corrected to Digitalis purpurea. Diagnosis: PlantNet itself ranked Pentanema squarrosum 90.4% (foxglove #3 at 0.76%); iNat vision only 31.7%, so auto-approve held. Our processing raised no score; the card hid the hazard in "Also:". Log message now prints both scores.
+- Hazard-candidate rule (is_hazard_species + app/services/hazard_candidates.py): any deadly/toxic species in any source's list (raw lists, stored list, synonyms) blocks auto-approve, lists the photo in Review Critical, shows a red named line above the proposed name, and needs a second named tap to approve (server-enforced on approve, correct, confirm-species, retry-confirm; bulk approve and Data Trust accept skip these).
+- Review card: confidence chip matches the shown %; name/date readable; ITIS banner amber when GBIF matches the name exactly (an exact old synonym also shows amber).
+- Publishing: a publish becomes the front page by default; preview.html (/b card) is rebuilt from the front-page walk (hero = non-toxic species with photo; teasers = that walk's gated recipes); fixed config values removed. Walk 5's first publish (b41435e) went in as non-default, so the site still shows Rümmelsbühl.
+- Publish panel: Select / Select all / Confirm selected for AI-agreed species; hazard rows need their own tap.
+- Batch 9/10 data: B1-02 (17052, 17737 → needs_review; 17737 off walk 4 stop 3 until confirmed); C-01 (131 photos copied, sha256 verified, originals untouched).
+- Recorded walks: "Show to guests" toggle (0058), all hidden by default; recipe titles never a quote/safety line; interrupted publish repaired on start.
+- Hazard archive: HAZARD_ARCHIVE_REPORT_2026-10-22.md (398 confirmed photos with a hazard candidate; 260 after skipping confirmed-hazard species). Contact sheets + CSV indexes in ~/Documents/ForagingID/hazard_review/ (scripts/make_hazard_sheets.py). All 260 reviewed by Melvin + Claude.
 
 ### Next (order)
-1. Foxglove: correct #24507; diagnose where the 90.4% came from (service vs our processing); hard rule — any deadly/toxic candidate from any source blocks auto-approve, goes to Critical, shows in red by name, Approve needs a second tap naming the hazard; read-only archive report of confirmed observations with a deadly/toxic candidate; card fixes (confidence chip matches %, readable name/date contrast, ITIS banner amber for GBIF-accepted newer names).
-2. Publishing: a publish becomes the front page by default; preview.html (the /b card) is rebuilt from the front-page walk on every publish. Then Melvin republishes walk 5.
-3. Publish panel: bulk confirm for AI-agreed species (hazard species one tap each).
-4. Batch 9/10 data writes B1-02 (re-queue 17052, 17737) and C-01 (copy 131 photos + path update), only if a fresh dry run matches the 22 Oct file (Melvin's OK).
-5. Audit pass 2: batches 11 + 12 + 13 as "what's left" recon. Then 11b (data, with Melvin), 15b (walk edits, Loop/One-way, Start here, route-line bug; GPS recording kept for now), 15, 16 (index.html split), 17.
+1. Hazard review write (prompt written 22 Oct; check History for whether it ran): correct 8262 → Chaerophyllum hirsutum; send to Review with label hazard_review: 24512, 21687, 21688, 21689, 24120, 8341, 9434, 24195, 24196, 24197, 21227, 21246, 21691, 19824, 8291, 24272, 24338, 21776. Keep 9425, 17579, 16763, 16782. Report walks losing stops; check whether Pastinaca sativa (wild parsnip, phototoxic) has a card and hazard status.
+2. Melvin works the hazard_review cards in Review, then republishes walk 5 with Front page ticked.
+3. Audit pass 2: batches 11 + 12 + 13 as "what's left" recon. Then 11b (data, with Melvin), 15b (walk edits, Loop/One-way, Start here, route-line bug; GPS recording kept), 15, 16 (index.html split), 17.
 
 ### Settled (Melvin, 22 Oct)
 - "Enrich selected" = scope "Current list". Handout rule: curator prep OR look-alike warning; all cautionary text travels with culinary content.
 - Pimpinella major/saxifraga keep culinary content on handouts; no carrot-family rule.
 - Guests: confirmed photos (scenes included); shared curator encounters only; text-only notes; no walk recording; recorded walks only when shown.
-- GPS walk recording kept for now (15b removal on hold).
-- Publishing a walk makes it the front page by default.
+- GPS walk recording kept for now. A publish makes the walk the front page by default.
+- Any deadly/toxic candidate blocks auto-approve and needs a named second tap.
 
 ### Open decisions (Melvin)
 - None.
 
 ### Rules learned
+- A confident single-service score can be wrong; never present one service's % alone when a hazard sits lower in any list.
 - Don't run a full enrichment; use a scope + the 25 cap.
 - Any app/ save reloads uvicorn and kills running jobs, including a publish.
 - Renaming a helper under app/ crashes the reload until all callers are updated; do it in one pass.
 - The End Session block is always complete and paste-ready.
 
 ### Melvin's review queue
-- Warning review cards (walk species first). Edit Oxalis grandis 3493. Text tidy-up (352 edible_parts / 689 id_notes with no history). 347 Takeout person_animal rejects (mount DIGIERA). Draft #3252 Amaranthus hybridus.
+- hazard_review cards (Next #1). Warning review cards (walk species first). Edit Oxalis grandis 3493. Text tidy-up (352 edible_parts / 689 id_notes with no history). 347 Takeout person_animal rejects (mount DIGIERA). Draft #3252 Amaranthus hybridus. 17052, 17737 back in Review (B1-02).
 
 ### Browser checks: walkthroughs
 Tick-off checklist: "LandMemory Walkthroughs" artifact (A–G, kept in sync with this list).
 Test species: Conium maculatum, Oenanthe crocata, Sambucus nigra, 229 St John's wort, 295 Ramsons, 97 Aspen, Pineapple weed.
 - A. Species page: three views; safety sort; filters kept; capitalised names; test species pages; resources load; culinary, taste, recipes and field recipes show look-alike + prep warnings (uncurated labelled "Source text — not yet reviewed"); a species with none unchanged.
-- B. Map + walks: Conium pin full look-alike; Ramsons labelled; ☠ on 155/688/745; walk stop cards; Edit walk → Save → Re-route; Tidy; Export summary (species warnings once); published pages; Discover/Find (Make? cards carry both warnings); walk 5 tidied (7.6 km, dashed 38→12, 32→27); participant "Add a note" saves; Publish box below a divider; plan with AI-agreed thumbnails and Confirm; Publish disabled until ticked; job steps tick; live pages load; wifi off stops at step 1; Unpublish confirm (test walk only).
+- B. Map + walks: Conium pin full look-alike; Ramsons labelled; ☠ on 155/688/745; walk stop cards; Edit walk → Save → Re-route; Tidy; Export summary (warnings once); Find Make? cards carry both warnings; walk 5 tidied (7.6 km, dashed 38→12, 32→27); participant "Add a note" saves; Publish box below a divider; plan with AI-agreed thumbnails; Front page ticked by default; Select / Select all / Confirm selected with summary, hazard rows "☠ own tap"; Publish disabled until ticked; job steps tick; after republishing walk 5 the front page and /b show walk 5; acorn recipe has its real title; wifi off stops at step 1; Unpublish confirm (test walk only).
 - C. Handouts: Lists print (field guide, workshop) + PDF in 3 layouts; Conium uncut; 229 withheld; no PFAF Folklore; corners; warnings once; Ramsons and a Macrolepiota print culinary content; participant PDF shows only their own notes.
-- D. Review: Critical section; verdict queue; warning cards Approve/Edit/Remove; Regenerate side by side; Run now dry run + Cancel; AI-draft buttons; reviewer notes.
+- D. Review: Critical section incl. "☠ Hazard candidate" with Open card links; hazard card red named line above the name, not in "Also:"; Approve asks the named second tap; bulk approve leaves hazard cards with a toast; chip matches %; ITIS banner amber on a Pentanema-type card; verdict queue; warning cards Approve/Edit/Remove; Regenerate side by side; Run now dry run + Cancel; AI-draft buttons; reviewer notes.
 - E. Phone: pair; signed in; used link refused; bare URL "Ask Melvin"; revoke; "not signed in" vs offline; List at 390px; proximity alert; airplane-mode outbox; participant note box + dictation; pending/rejected photo 404; confirmed photos only; Record tab no 🎙 or Photo; no 👣 / Record live; Start walk doesn't record; your phone still records walks.
-- F. Settings: devices & sharing; no guest toggle; enrichment buttons ask first; paused-no-network; skip counts; DeepSeek key; Jobs pop-up; caffeinate exits; scope dialog on every bulk button; Continue disabled until scope; cap 25 summary; 🍄 and 💊 buttons.
+- F. Settings: devices & sharing; no guest toggle; enrichment buttons ask first; paused-no-network; skip counts; DeepSeek key; Jobs pop-up; caffeinate exits; scope dialog on every bulk button; Continue disabled until scope; cap 25 summary; 🍄 and 💊 buttons; Data Trust accept reports skipped hazard photos.
 - G. Workshops: participant link via ngrok; second phone; used link refused; revoke; mobile data; shared encounter visible, unshared hidden; Participant notes grouped, escaped; no walk recording; recorded walks hidden unless shown; no Publish box, panel API 403.
 Rule: Code tests whatever it can; new browser checks go into a walkthrough, not numbered.
 
@@ -253,6 +250,37 @@ Test species: Conium maculatum, Oenanthe crocata, Sambucus nigra, 229 St John's 
 Rule: Code tests whatever it can (real JS via jsc, real PDFs); new browser checks are added to a walkthrough, not numbered.
 
 ## History
+
+### 2026-10-22 22:09
+**Snapshot** — End of session — Session ended from Settings page
+DB: `snapshots/db_20261022_220927.sqlite`
+
+### 2026-10-22 22:09
+**Session ended** — Session ended from Settings page
+
+### 2026-10-22 21:40
+**Foxglove #24507 safety (correct + diagnose + hazard-candidate rule + archive report + card fixes); publish = front page by default + preview.html from the front-page walk; publish-panel bulk confirm; batch 9/10 data writes B1-02 and C-01**
+
+**Built:**
+- #24507 corrected to Digitalis purpurea via confirm-species (manually_verified, species 376)
+- Hazard candidates: one predicate (app/services/hazard_candidates.py + species.is_hazard_species); any source, any rank, raw lists, name_key + synonyms
+- Hazard blocks auto-approve (decide_agreement hazard=True; label hazard_candidate)
+- Review Critical section lists undecided hazard-candidate rows (76 today)
+- Review card: red ☠ line per hazard species above the name, excluded from Also:
+- Approve as another species needs a second tap naming the hazard (hazard_ack; server 409 backstop in update_observation_status + retry-confirm; bulk approve and trust accept skip hazard rows)
+- Archive report: HAZARD_ARCHIVE_REPORT_2026-10-22.md (399 rows; scripts/hazard_archive_report.py)
+- Card: confidence chip from the shown % (confClass), sp-name/date ink colour, ITIS amber 'may be a newer name' when GBIF matched EXACT
+- Publish: front_page tick (default on) in the confirm; unticked rebuilds root preview.html from the front-page publication or stops
+- export.py preview_choice: hero non-toxic with photo from the walk, teasers = walk's gated recipes, fails otherwise; preview_* config keys removed
+- Publish panel: Select / Select all / Confirm selected (one PATCH at a time, summary); hazard rows own tap only
+**Fixed:**
+- Syncthing 'below threshold' reason now shows PN and iNat scores (was '90% < 70%')
+**Files:** `app/services/hazard_candidates.py`, `app/models/species.py`, `app/services/agreement.py`, `app/api/scan.py`, `app/api/observations.py`, `app/api/reidentify.py`, `app/api/bulk_actions.py`, `app/api/trust.py`, `app/api/experience.py`, `app/services/observation_service.py`, `app/services/experience_publish.py`, `frontend/review.html`, `frontend/index.html`, `frontend/scan.html`, `frontend/static/js/hazard-ack.js`, `frontend/static/js/reidentify.js`, `frontend/static/js/walk-publish.js`, `frontend/static/sw.js`, `scripts/experience_export/export.py`, `scripts/experience_export/config.json`, `scripts/hazard_archive_report.py`, `tests/test_hazard_candidates.py`, `tests/test_stage_c_publish.py`, `tests/test_batch5_safety_gate.py`, `tests/test_second_opinion_merge.py`, `HAZARD_ARCHIVE_REPORT_2026-10-22.md`
+**Pending:**
+- Melvin republishes walk 5 (Front page ticked)
+- Browser walkthrough additions (D, B, F)
+- Review the 399-row hazard archive report
+- 17052 / 17737 back in Review (17737 is walk 4 stop 3)
 
 ### 2026-10-22 21:11
 **Snapshot** — End of session — Session ended from Settings page

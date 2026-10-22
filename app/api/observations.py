@@ -53,6 +53,12 @@ class ObservationOut(BaseModel):
     itis_name_match: Optional[str] = None
     itis_accepted_name: Optional[str] = None
     itis_tsn: Optional[int] = None
+    # GBIF backbone match type of the linked card (EXACT / FUZZY / HIGHERRANK /
+    # NONE) — the ITIS "no match" banner turns amber when GBIF matches exactly.
+    gbif_match_type: Optional[str] = None
+    # Hazard species named by any source (app/services/hazard_candidates.py);
+    # filled by list_observations for the Review card.
+    hazard_candidates: Optional[list] = None
 
     model_config = {"from_attributes": True}
 
@@ -251,6 +257,7 @@ async def list_observations(
             Species.itis_name_match,
             Species.itis_accepted_name,
             Species.itis_tsn,
+            Species.gbif_match_type,
         )
         .outerjoin(Species, Observation.species_id == Species.id)
     )
@@ -342,6 +349,8 @@ async def list_observations(
     order = sort_map.get(sort, sort_map["date_desc"])
     stmt = stmt.order_by(order).limit(limit).offset(offset)
     rows = (await db.execute(stmt)).all()
+    from app.services.hazard_candidates import load_hazard_index, observation_hazards
+    hazard_index = await load_hazard_index(db)
     out = []
     for row in rows:
         obs = row[0]
@@ -349,6 +358,8 @@ async def list_observations(
         d["itis_name_match"]    = row[1]
         d["itis_accepted_name"] = row[2]
         d["itis_tsn"]           = row[3]
+        d["gbif_match_type"]    = row[4]
+        d["hazard_candidates"]  = observation_hazards(obs, hazard_index)
         out.append(d)
     return out
 
@@ -438,7 +449,10 @@ async def get_observation(observation_id: int, db: AsyncSession = Depends(get_db
     # Batch 8: a guest sees confirmed observations only (scenes included).
     if not obs or (identity.is_guest and not is_guest_visible_observation(obs)):
         raise HTTPException(status_code=404, detail="Observation not found")
-    return obs
+    from app.services.hazard_candidates import load_hazard_index, observation_hazards
+    d = ObservationOut.model_validate(obs).model_dump()
+    d["hazard_candidates"] = observation_hazards(obs, await load_hazard_index(db))
+    return d
 
 
 @router.patch("/{observation_id}/review")
@@ -448,6 +462,7 @@ async def update_review(
     status: str = Query(..., pattern="^(approved|rejected|needs_review|pending|manually_verified)$"),
     notes: Optional[str] = None,
     workshop_suitable: Optional[bool] = None,
+    hazard_ack: Optional[str] = None,
     db: AsyncSession = Depends(get_db),
 ):
     obs = await db.get(Observation, observation_id)
@@ -455,6 +470,7 @@ async def update_review(
         raise HTTPException(status_code=404, detail="Observation not found")
 
     prev_status = obs.review_status
+
 
     if notes is not None and obs.reviewer_notes != notes:
         _log_edit(db, obs, "reviewer_notes", obs.reviewer_notes, notes)
@@ -490,7 +506,8 @@ async def update_review(
         review_status=status,
         species_name=species_to_set,
         update_species=update_species,
-        edited_by="human"
+        edited_by="human",
+        hazard_ack=hazard_ack,
     )
 
     await db.commit()
@@ -512,6 +529,7 @@ async def correct_species(
     observation_id: int,
     background_tasks: BackgroundTasks,
     body: SpeciesCorrection,
+    hazard_ack: Optional[str] = None,
     db: AsyncSession = Depends(get_db),
 ):
     """
@@ -539,7 +557,8 @@ async def correct_species(
         review_status="manually_verified",
         species_name=corrected,
         update_species=True,
-        edited_by="human"
+        edited_by="human",
+        hazard_ack=hazard_ack,
     )
 
     async with db_write_lock():

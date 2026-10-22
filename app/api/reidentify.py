@@ -856,6 +856,7 @@ async def retry_confirm(
     observation_id: int,
     background_tasks: BackgroundTasks,
     body: RetryConfirmRequest,
+    hazard_ack: Optional[str] = None,
     db: AsyncSession = Depends(get_db),
 ) -> dict:
     """
@@ -870,6 +871,10 @@ async def retry_confirm(
     new_species = body.scientific_name.strip()
     if not new_species:
         raise HTTPException(status_code=400, detail="scientific_name is required")
+
+    # Second tap naming any other hazard candidate (Melvin, 22 Oct 2026).
+    from app.services.hazard_candidates import check_hazard_ack
+    await check_hazard_ack(db, obs, new_species, None, hazard_ack)
 
     old_species = obs.species_primary
     old_id_status = obs.identification_status
@@ -939,6 +944,7 @@ async def confirm_species(
     observation_id: int,
     background_tasks: BackgroundTasks,
     body: ConfirmSpeciesRequest,
+    hazard_ack: Optional[str] = None,
     db: AsyncSession = Depends(get_db),
 ) -> dict:
     """
@@ -963,6 +969,7 @@ async def confirm_species(
         update_species=True,
         edited_by="human",
         common_name=body.common_name,
+        hazard_ack=hazard_ack,
     )
 
     db.add(ProcessingLog(

@@ -428,7 +428,8 @@ window.ReID = (() => {
     el.classList.add('selected');
 
     try {
-      const r = await fetch(`/api/observations/${obsId}/confirm-species`, {
+      // Second tap naming any hazard candidate (hazard-ack.js; server-enforced).
+      const r = await (window.HazardAck ? HazardAck.fetch : fetch)(`/api/observations/${obsId}/confirm-species`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

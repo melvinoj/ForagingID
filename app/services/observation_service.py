@@ -74,12 +74,25 @@ async def update_observation_status(
     edited_by: str = "human",
     update_species: bool = False,
     common_name: Optional[str] = None,
+    hazard_ack: Optional[str] = None,
 ) -> None:
     """
     Canonical helper to update an observation's status, species, and metadata consistently.
     Applies constraints, logs changes to observation_edits, clears review labels, and copies files.
     common_name: only used to label a confirmed species no API listed (B1-08).
+    hazard_ack: the second tap — comma-separated scientific names of the hazard
+    candidates the curator was shown. Approving as any species other than a
+    hazard candidate raises 409 hazard_ack_required without it (Melvin, 22 Oct
+    2026; app/services/hazard_candidates.py). Checked before any write.
     """
+    if review_status in ("approved", "manually_verified"):
+        from app.services.hazard_candidates import check_hazard_ack
+        if update_species:
+            await check_hazard_ack(session, obs, species_name, None, hazard_ack)
+        else:
+            await check_hazard_ack(session, obs, obs.species_primary or obs.species_suggested,
+                                   obs.species_id if obs.species_primary else None, hazard_ack)
+
     prev_status = obs.review_status
     prev_species = obs.species_primary
     prev_id_status = obs.identification_status

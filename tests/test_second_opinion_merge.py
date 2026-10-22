@@ -156,8 +156,9 @@ def test_gbif_only_name_reaches_no_agreement_or_auto_approve_input():
     import inspect
     from app.services import agreement
     params = list(inspect.signature(agreement.decide_agreement).parameters)
+    # hazard (22 Oct 2026): a bool that can only refuse auto-approve, never a name input.
     assert params == ["pn_candidates", "inat_hits", "demote_for_approve", "force_review",
-                      "use_pn", "use_inat", "threshold"], params
+                      "use_pn", "use_inat", "threshold", "hazard"], params
     src = inspect.getsource(agreement)
     assert "gbif" not in src.lower()
     # scan writes dual_source_agreement from decide_agreement only, and builds

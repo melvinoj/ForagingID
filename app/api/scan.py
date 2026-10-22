@@ -62,6 +62,8 @@ from app.services.file_cleanup import delete_observation_file
 from app.services.ingest_guard import blacklisted_skip
 from app.services.prefilter import classify_plant_likelihood
 from app.services.agreement import decide_agreement
+from app.services.hazard_candidates import (hazard_hits, inat_hit_entries, load_hazard_index,
+                                             plantnet_raw_entries)
 from app.utils.caffeinate import server_watch_pid
 from app.services.species_link import set_observation_species
 from app.services.taxonomy import collapse_autonym, normalize_taxon_key
@@ -1595,6 +1597,19 @@ async def _identify_scanned_inner(
             # demotion existed.
             _demote_for_approve = bool(_gs("regional_demotion_affects_auto_approve"))
             UPLOAD_AUTO_APPROVE_THRESHOLD = _gs("upload_auto_approve_threshold")
+            # ── Hazard candidates (Melvin, 22 Oct 2026 — foxglove #24507) ──────
+            # Any species card that is_hazard_species() named by ANY source, at
+            # any rank, in the RAW lists (PlantNet's own order before demotion,
+            # iNat's own list) blocks auto-approve. One rule:
+            # app/services/hazard_candidates.py.
+            _hazards = hazard_hits(
+                plantnet_raw_entries(pn_result.raw_response if pn_result else None)
+                + [{"name": c.scientific_name, "source": "plantnet", "score": c.score,
+                    "rank": getattr(c, "raw_rank", None)}
+                   for c in (pn_result.candidates if _pn_any else [])]
+                + inat_hit_entries(inat_hits),
+                await load_hazard_index(session),
+            )
             # The whole agreement rule lives in app/services/agreement.py (pure,
             # unit-tested, and the same function the read-only dry run uses).
             _agreement = decide_agreement(
@@ -1605,6 +1620,7 @@ async def _identify_scanned_inner(
                 use_pn=use_pn,
                 use_inat=use_inat,
                 threshold=UPLOAD_AUTO_APPROVE_THRESHOLD,
+                hazard=bool(_hazards),
             )
             if not terminal:
                 if _pn_any and _inat_any:
@@ -1929,10 +1945,26 @@ async def _identify_scanned_inner(
                     elif not use_pn or not use_inat:
                         _reason = "dual API confirmation not available (check API tokens)"
                         _label = "failed_id"
+                    elif (_hazards and _pn_top_score >= UPLOAD_AUTO_APPROVE_THRESHOLD
+                          and _inat_top_score >= UPLOAD_AUTO_APPROVE_THRESHOLD):
+                        _reason = (f"both APIs agree at PN {_pn_top_score:.0%}, iNat "
+                                   f"{_inat_top_score:.0%}, but a hazard species was a candidate")
+                        _label = "hazard_candidate"
                     else:
-                        _reason = f"below threshold ({top['score']:.0%} < {UPLOAD_AUTO_APPROVE_THRESHOLD:.0%})"
+                        # Report the two scores the agreement rule compared — not
+                        # top['score'] (#24507 logged "90% < 70%": PlantNet's 90%
+                        # passed, iNat's 32% did not).
+                        _reason = (f"below threshold (PN {_pn_top_score:.0%}, "
+                                   f"iNat {_inat_top_score:.0%}; both need "
+                                   f"≥ {UPLOAD_AUTO_APPROVE_THRESHOLD:.0%})")
                         _label = "low_confidence"
                     flag = f"Review queue — {_reason}"
+
+            if _hazards:
+                # decide_agreement(hazard=True) already refused auto-approve; say why.
+                _hz = "; ".join(f"☠ {h['label']} ({h['level']})" for h in _hazards)
+                flag += f" [hazard candidate: {_hz} — never auto-approved]"
+                _label = "hazard_candidate"
 
             # ── Single apply point for review_label / reviewer_notes ─────────
             # Every label and note write in this function funnels through here,

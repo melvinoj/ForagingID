@@ -12,7 +12,9 @@ Rule (unchanged since 15 Oct 2026, plus the regional-demotion switch):
   * that species must reach `threshold` on its OWN PlantNet score and its OWN
     iNat score;
   * a promoted iNat candidate (iNat #1 ≠ PlantNet #1 but inside PlantNet's
-    top 5, evaluated in the decision view) never counts as agreement.
+    top 5, evaluated in the decision view) never counts as agreement;
+  * never when any source named a hazard species at any rank (`hazard` —
+    app/services/hazard_candidates.py; Melvin, 22 Oct 2026, foxglove #24507).
 
 Decision view: PlantNet's raw order unless demote_for_approve is True, in which
 case the regionally demoted order (European-listed first) is used. With
@@ -53,6 +55,7 @@ def decide_agreement(
     use_pn: bool,
     use_inat: bool,
     threshold: float,
+    hazard: bool = False,
 ) -> AgreementDecision:
     pn_raw = raw_order(pn_candidates) if pn_candidates else []
     pn_dec = list(pn_candidates) if demote_for_approve else pn_raw
@@ -72,6 +75,7 @@ def decide_agreement(
 
     dual_agree = (
         not force_review
+        and not hazard
         and not promoted
         and use_pn
         and use_inat

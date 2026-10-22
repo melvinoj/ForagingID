@@ -15,6 +15,12 @@ repo's git.
   * Unpublish removes the walk's page in one commit and keeps the saved walk;
     the front page goes only when it is this walk's.
   * Guests never see the Publish block or reach its endpoints.
+  * Front page (Melvin, 22 Oct 2026): a publish makes the walk the front page
+    unless unticked; unticked keeps the old front page and rebuilds the root
+    preview.html card from it; with a front page that is not an app
+    publication, an unticked publish stops (the card is never filled from
+    another walk). export.preview_choice: hero = a non-toxic plant with a photo
+    from this walk, teasers = this walk's gated recipes, else the build fails.
 
 Run: python tests/test_stage_c_publish.py
 """
@@ -67,9 +73,11 @@ def page_html(slug, title="T", impressum="https://x.test/impressum"):
 
 
 class Site:
-    """A bare 'GitHub' repo + the clone the app publishes from, with a legacy
-    front page (no slug) and another walk's page already live."""
-    def __init__(self):
+    """A bare 'GitHub' repo + the clone the app publishes from, with another
+    walk's page ('other') already live. front='other': the front page is that
+    walk's page (an app publication — _env adds it as the default); front=None:
+    a legacy front page (no slug), as walk 4's page is today."""
+    def __init__(self, front="other"):
         self.tmp = Path(tempfile.mkdtemp(prefix="stagec_"))
         self.remote = self.tmp / "remote.git"
         self.clone = self.tmp / "clone"
@@ -82,7 +90,8 @@ class Site:
         for rel, slug in (("", None), ("w/other", "other")):
             d = self.clone / rel
             d.mkdir(parents=True, exist_ok=True)
-            (d / "index.html").write_text(page_html(slug) if slug else "<html><script>window.DATA = {\"title\": \"legacy\"};</script></html>")
+            root_slug = front if rel == "" else slug
+            (d / "index.html").write_text(page_html(root_slug) if root_slug else "<html><script>window.DATA = {\"title\": \"legacy\"};</script></html>")
             (d / "preview.html").write_text("p")
             (d / "tree.html").write_text("t")
             (d / "photos").mkdir(exist_ok=True)
@@ -158,7 +167,7 @@ class Fakes:
         for d in xp.page_dirs(Path(out), pub.slug, bool(pub.is_default)):
             (d / "photos").mkdir(parents=True, exist_ok=True)
             (d / "index.html").write_text(page_html(pub.slug, title=f"build {self.builds}", impressum=self.impressum))
-            (d / "preview.html").write_text(f"preview {pub.slug} {self.builds}")
+            (d / "preview.html").write_text(f'<a><img src="photos/1.jpg" alt="x"></a> preview {pub.slug} {self.builds}')
             (d / "tree.html").write_text(f"tree {pub.slug}")
             self.photo(d / "photos" / "1.jpg")
             clean_jpeg(d / "photos" / "1_t.jpg")
@@ -176,11 +185,17 @@ class Fakes:
 
 
 def _env(is_default=False, status="draft", slug="sunny-walk"):
+    """Publication 1 (walk 5) under test, plus publication 2 ('other', walk 6,
+    published) — the front page whenever publication 1 is not."""
     env = Env()
     _job_queue(env)
     _add(env, [SavedWalk(id=5, name="Morning sunshine", distance_m=7600, duration_min=93),
+               SavedWalk(id=6, name="Other walk"),
                ExperiencePublication(id=1, saved_walk_id=5, slug=slug, is_default=is_default, status=status,
-                                     created_at=datetime(2026, 10, 22), updated_at=datetime(2026, 10, 22))])
+                                     created_at=datetime(2026, 10, 22), updated_at=datetime(2026, 10, 22)),
+               ExperiencePublication(id=2, saved_walk_id=6, slug="other", is_default=not is_default,
+                                     status="published", created_at=datetime(2026, 10, 21),
+                                     updated_at=datetime(2026, 10, 21))])
     return env
 
 
@@ -194,10 +209,14 @@ def _foragingid_git():
             subprocess.run(["git", "rev-list", "--count", "HEAD"], cwd=ROOT, capture_output=True, text=True).stdout)
 
 
-def _publish(env, fakes, confirm=True, kind="publish"):
+def _publish(env, fakes, confirm=True, kind="publish", front_page=False):
+    """front_page=None sends no front_page (the API default: on)."""
+    body = {"confirm": confirm}
+    if kind == "publish" and front_page is not None:
+        body["front_page"] = front_page
     with _curator_device(env), fakes.patch():
         c = _app_client(env, CURATOR)
-        r = c.post(f"/api/experience/publications/1/{kind}", json={"confirm": confirm})
+        r = c.post(f"/api/experience/publications/1/{kind}", json=body)
         if r.status_code != 200:
             return r, None
         return r, xp.job_status(r.json()["job_id"])
@@ -275,14 +294,17 @@ def test_publish_makes_one_site_commit_and_none_in_foragingid():
         assert [s["state"] for s in job["steps"]] == ["ok"] * 8, job["steps"]
         assert site.remote_count() == n + 1 and site.head() == site.remote_head() and site.clean()
         changed = sh(site.clone, "show", "--name-only", "--format=", "HEAD").split()
-        assert changed and all(p.startswith("w/sunny-walk/") for p in changed), changed
-        assert site.remote_file("index.html").startswith(b"<html><script>window.DATA = {\"title\": \"legacy\"")
+        assert changed and all(p.startswith("w/sunny-walk/") or p in ("preview.html", "photos/1.jpg")
+                               for p in changed), changed
+        assert b'"slug": "other"' in site.remote_file("index.html")             # front page kept
+        assert b"preview other" in site.remote_file("preview.html")             # its card, rebuilt
         assert site.remote_file("w/other/index.html") is not None                  # other walks untouched
         status, commit, published, unpublished, is_def = _pub(env)
         assert (status, commit, published, unpublished) == ("published", site.remote_head(), 1, 0)
         assert job["result"]["live"]["ok"] and job["result"]["publication"]["published_commit"] == commit
         snap = json.loads(env.q("SELECT public_species_json FROM experience_publications WHERE id = 1")[0][0])
         assert [s["id"] for s in snap["species"]] == [1, 2] and snap["is_default"] is False
+        assert env.q("SELECT id FROM experience_publications WHERE is_default = 1") == [(2,)]
         assert _foragingid_git() == fid_before                                     # no commit in ForagingID
         # Republishing an identical build changes nothing: no new commit, nothing pushed.
         _, job = _publish(env, Fakes(site))
@@ -308,6 +330,180 @@ def test_default_publish_replaces_the_front_page_and_mirror():
                                                          SITE + "w/sunny-walk/tree.html"}
     finally:
         _done(env, site)
+
+
+# ══ front page (22 Oct 2026) ═════════════════════════════════════════════════
+
+def test_publish_becomes_the_front_page_by_default():
+    site, env = Site(), _env()
+    try:
+        _, job = _publish(env, Fakes(site), front_page=None)            # the tick's default
+        assert job["status"] == "done", job
+        assert env.q("SELECT id, is_default FROM experience_publications ORDER BY id") == [(1, 1), (2, 0)]
+        assert b'"slug": "sunny-walk"' in site.remote_file("index.html")
+        assert b"preview sunny-walk" in site.remote_file("preview.html")       # the /b card is this walk's
+        assert site.remote_file("w/sunny-walk/preview.html") == site.remote_file("preview.html")
+        js = _src("frontend/static/js/walk-publish.js")
+        assert '<input type="checkbox" id="wpub-front" checked>' in js
+        assert "body.front_page = fp ? fp.checked : true;" in js
+    finally:
+        _done(env, site)
+
+
+def test_untick_keeps_the_old_front_page_and_rebuilds_its_card():
+    site, env = Site(), _env()
+    try:
+        root_before = site.remote_file("index.html")
+        _, job = _publish(env, Fakes(site), front_page=False)
+        assert job["status"] == "done", job
+        assert env.q("SELECT id, is_default FROM experience_publications ORDER BY id") == [(1, 0), (2, 1)]
+        assert site.remote_file("index.html") == root_before                     # front page unchanged
+        card = site.remote_file("preview.html")
+        assert b"preview other" in card and b"sunny-walk" not in card           # built from the front-page walk
+        assert site.remote_file("photos/1.jpg") != b"old"                        # with its hero photo
+        assert {s["key"]: s["detail"] for s in job["steps"]}["build"] == "front-page card rebuilt from other"
+    finally:
+        _done(env, site)
+
+
+def test_untick_with_a_legacy_front_page_stops_and_commits_nothing():
+    site, env = Site(front=None), _env()
+    try:
+        before = (site.head(), site.remote_count())
+        _, job = _publish(env, Fakes(site), front_page=False)
+        assert job["status"] == "stopped" and job["stop_kind"] == "build", job
+        assert "Tick 'Front page'" in job["message"] and "not published from the app" in job["message"]
+        assert (site.head(), site.remote_count()) == before and site.clean() and _pub(env)[0] == "draft"
+    finally:
+        _done(env, site)
+
+
+def test_preview_card_is_filled_from_its_own_walk_or_fails():
+    import export as ex
+    cfg = {"recipe_source_priority": ["curator", "ai_generated"]}
+    pub = {1: {"id": 1, "sci": "Digitalis purpurea", "en": "Foxglove", "photo": "photos/1.jpg", "toxic": True},
+           2: {"id": 2, "sci": "Rumex acetosa", "en": "Sorrel", "photo": None, "toxic": False},
+           3: {"id": 3, "sci": "Urtica dioica", "en": "Nettle", "photo": "photos/3.jpg", "toxic": False}}
+    data = {"species": [pub[1], pub[2], pub[3]],
+            "recipes": [{"recipe_id": 9, "species_id": 2, "dish": "Sorrel soup", "source": "ai_generated"},
+                        {"recipe_id": 8, "species_id": 3, "dish": "Nettle pesto", "source": "curator"}]}
+    chosen, hero = ex.preview_choice(cfg, data, pub)
+    assert [r["recipe_id"] for r in chosen] == [8, 9] and hero["id"] == 3     # curator first; no photo → skip
+    chosen, hero = ex.preview_choice(cfg, {**data, "recipes": data["recipes"][:1]}, pub)
+    assert hero["id"] == 3                                                     # walk order, never toxic
+    for bad in ({**data, "recipes": []},
+                {"species": [pub[1], pub[2]], "recipes": data["recipes"][:1]}):
+        try:
+            ex.preview_choice(cfg, bad, {1: pub[1], 2: pub[2]})
+            raise AssertionError("expected a build failure")
+        except ex.BuildError as e:
+            assert "never filled from another walk" in str(e)
+    src = _src("scripts/experience_export/export.py") + _src("scripts/experience_export/config.json")
+    assert "preview_hero_species_id" not in src and "preview_recipe_ids" not in src
+
+
+# ══ bulk confirm (22 Oct 2026) ════════════════════════════════════════════════
+
+def _bulk_plan():
+    p = good_plan()
+    p["ai_agreed_obs"] = [
+        {"obs_id": 55, "species_id": 650, "name": "Conium maculatum", "stop": "2",
+         "toxicity_severity": "deadly", "hazard": True, "shown": False},
+        {"obs_id": 56, "species_id": 3, "name": "Rumex acetosa", "stop": "1",
+         "toxicity_severity": "none", "hazard": False, "shown": True},
+        {"obs_id": 57, "species_id": 858, "name": "Pentanema squarrosum", "stop": "3",
+         "toxicity_severity": "unknown", "hazard": False, "shown": True},
+        {"obs_id": 58, "species_id": 2, "name": "Urtica dioica", "stop": "3",
+         "toxicity_severity": "none", "hazard": False, "shown": True}]
+    return p
+
+
+def _bulk_env():
+    from app.models.observation import Observation
+    from app.models.species import Species
+    env = _env()
+    raw = json.dumps({"results": [{"score": 0.9, "species": {"scientificNameWithoutAuthor": "Pentanema squarrosum"}},
+                                  {"score": 0.0076, "species": {"scientificNameWithoutAuthor": "Digitalis purpurea"}}]})
+    _add(env, [Species(id=650, scientific_name="Conium maculatum", name_key="conium maculatum",
+                       edibility_status="toxic", toxicity_severity="deadly"),
+               Species(id=376, scientific_name="Digitalis purpurea", name_key="digitalis purpurea",
+                       edibility_status="toxic", toxicity_severity="deadly", preferred_common_name="Foxglove"),
+               Species(id=858, scientific_name="Pentanema squarrosum", name_key="pentanema squarrosum",
+                       edibility_status="unknown", toxicity_severity="unknown")])
+    for oid, sid, name, pn in ((55, 650, "Conium maculatum", None), (56, 3, "Rumex acetosa", None),
+                               (57, 858, "Pentanema squarrosum", raw), (58, 2, "Urtica dioica", None)):
+        _add(env, [Observation(id=oid, file_path=f"/x/{oid}.jpg", species_primary=name, species_id=sid,
+                               review_status="approved", identification_status="identified",
+                               plantnet_raw_json=pn, upload_source="syncthing")])
+    return env
+
+
+def test_plan_marks_hazard_rows_not_bulk_confirmable():
+    site, env = Site(), _bulk_env()
+    try:
+        with _curator_device(env), Fakes(site, plan=_bulk_plan()).patch():
+            c = _app_client(env, CURATOR)
+            rows = {a["obs_id"]: a for a in c.post("/api/experience/publications/1/plan").json()["ai_agreed_obs"]}
+            # The confirm path itself refuses 57 without the named second tap.
+            r = c.patch("/api/observations/57/review?status=manually_verified")
+            assert r.status_code == 409 and r.json()["detail"]["code"] == "hazard_ack_required"
+            r = c.patch("/api/observations/57/review?status=manually_verified&hazard_ack=Digitalis%20purpurea")
+            assert r.status_code == 200, r.text
+        assert {i for i, a in rows.items() if a["bulk_ok"]} == {56, 58}
+        assert rows[55]["hazard_species"] == "deadly" and rows[55]["hazard_candidates"] == []
+        assert [h["label"] for h in rows[57]["hazard_candidates"]] == ["Foxglove (Digitalis purpurea)"]
+    finally:
+        _done(env, site)
+
+
+JSC = "/System/Library/Frameworks/JavaScriptCore.framework/Versions/Current/Helpers/jsc"
+
+
+def test_bulk_confirm_sends_only_safe_rows_one_at_a_time():
+    plan = _bulk_plan()
+    flags = {55: (False, "deadly", []), 56: (True, None, []), 58: (True, None, []),
+             57: (False, None, [{"scientific_name": "Digitalis purpurea", "label": "Foxglove (Digitalis purpurea)",
+                                 "level": "deadly"}])}
+    for a in plan["ai_agreed_obs"]:
+        a["bulk_ok"], a["hazard_species"], a["hazard_candidates"] = flags[a["obs_id"]]
+    panel = {"walk_id": 5, "site_url": SITE, "override_files": [], "active_job": None,
+             "publication": {"id": 1, "slug": "sunny-walk", "status": "draft", "is_default": False, "url": SITE + "w/sunny-walk/"}}
+    js = "\n".join([
+        "var calls = [], box = { innerHTML: '', style: {} }, window = this;",
+        "var document = { body: { classList: { contains: function () { return false; } } },",
+        "                 getElementById: function (id) { return id === 'walk-publish' ? box : null; } };",
+        "function setTimeout() { return 0; } function clearTimeout() {}",
+        "var PANEL = %s, PLAN = %s;" % (json.dumps(panel), json.dumps(plan)),
+        "function fetch(url, o) { var m = (o && o.method) || 'GET'; calls.push(m + ' ' + url);",
+        "  var b = url.indexOf('/panel') >= 0 ? PANEL : (url.indexOf('/plan') >= 0 ? PLAN : { ok: true });",
+        "  return Promise.resolve({ ok: true, status: 200, json: function () { return Promise.resolve(b); } }); }",
+        _src("frontend/static/js/walk-publish.js"),
+        "var out = {};",
+        "WalkPublish.show(5, 'W').then(function () { return WalkPublish.plan(); }).then(function () {",
+        "  WalkPublish.setSelectMode(true); out.select = box.innerHTML; WalkPublish.selectAll();",
+        "  out.selectedHtml = box.innerHTML; calls = []; return WalkPublish.confirmSelected();",
+        "}).then(function () { out.calls = calls; out.after = box.innerHTML; WalkPublish.askConfirm(57);",
+        "  out.ask57 = box.innerHTML; print(JSON.stringify(out)); },",
+        "  function (e) { print(JSON.stringify({ err: String(e) })); });",
+    ])
+    with tempfile.NamedTemporaryFile("w", suffix=".js", delete=False, encoding="utf-8") as f:
+        f.write(js)
+        path = f.name
+    try:
+        r = subprocess.run([JSC, path], capture_output=True, text=True, timeout=60)
+    finally:
+        os.unlink(path)
+    assert r.returncode == 0, r.stderr or r.stdout
+    out = json.loads(r.stdout.strip().splitlines()[-1])
+    assert "err" not in out, out
+    patches = [c for c in out["calls"] if c.startswith("PATCH")]
+    assert patches == ["PATCH /api/observations/56/review?status=manually_verified",
+                       "PATCH /api/observations/58/review?status=manually_verified"]      # in order, hazards never sent
+    assert out["select"].count('class="wpub-pick"') == 2 and out["select"].count("☠ own tap") == 2
+    assert "Confirm selected (2)" in out["selectedHtml"]
+    assert "Confirmed 2 of 2." in out["after"]
+    assert "☠ Foxglove (Digitalis purpurea) — candidate" in out["after"]
+    assert "Yes — not Foxglove (Digitalis purpurea)" in out["ask57"]                         # its own named tap
 
 
 # ══ remote moved / offline ════════════════════════════════════════════════════
@@ -397,7 +593,7 @@ def test_unpublish_removes_the_page_in_one_commit_and_keeps_the_walk():
 
 
 def test_unpublish_of_the_default_also_removes_the_front_page():
-    site, env = Site(), _env(is_default=True)
+    site, env = Site(front=None), _env(is_default=True)
     try:
         _publish(env, Fakes(site))
         n = site.remote_count()

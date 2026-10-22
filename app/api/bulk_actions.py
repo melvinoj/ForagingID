@@ -83,7 +83,9 @@ async def _bulk_review_task(obs_ids: List[int], status: str, pid: Optional[int])
     """Background worker: apply review status to each observation sequentially."""
     total = len(obs_ids)
     errors = 0
+    hazard_skipped = 0
     confirmed_statuses = ("approved", "manually_verified")
+    hazard_index = None
 
     for i, obs_id in enumerate(obs_ids):
         try:
@@ -113,6 +115,27 @@ async def _bulk_review_task(obs_ids: List[int], status: str, pid: Optional[int])
                                     "recognised scientific name", obs_id, obs.species_suggested)
                         errors += 1
                         await bp_progress(pid, i + 1, total, f"obs {obs_id}: unrecognised name")
+                        continue
+
+                # Hazard candidates (Melvin, 22 Oct 2026): approving a photo whose
+                # candidates name a hazard species as ANOTHER species needs its
+                # own second tap on the card — never a bulk approve.
+                if status in confirmed_statuses:
+                    from app.services.hazard_candidates import (
+                        hazards_other_than, load_hazard_index, observation_hazards,
+                    )
+                    if hazard_index is None:
+                        hazard_index = await load_hazard_index(session)
+                    _approving = promote_to or obs.species_primary
+                    _others = hazards_other_than(
+                        observation_hazards(obs, hazard_index), _approving,
+                        obs.species_id if promote_to is None else None, hazard_index)
+                    if _others:
+                        log.warning("[bulk_review] obs %d not approved: hazard candidate %s",
+                                    obs_id, ", ".join(h["scientific_name"] for h in _others))
+                        hazard_skipped += 1
+                        await bp_progress(pid, i + 1, total,
+                                          f"obs {obs_id}: ☠ hazard candidate — approve on its card")
                         continue
 
                 if prev_status != status:
@@ -192,9 +215,15 @@ async def _bulk_review_task(obs_ids: List[int], status: str, pid: Optional[int])
 
         await bp_progress(pid, i + 1, total, f"Processed obs {obs_id}")
 
-    error_msg = f"{errors} failed" if errors else ""
+    parts = []
+    if errors:
+        parts.append(f"{errors} failed")
+    if hazard_skipped:
+        parts.append(f"{hazard_skipped} skipped — ☠ hazard candidate, approve each on its card")
+    error_msg = "; ".join(parts)
     await bp_finish(pid, "complete", error=error_msg, current=total, total=total)
-    log.info("[bulk_review] done — %d processed, %d errors", total, errors)
+    log.info("[bulk_review] done — %d processed, %d errors, %d hazard-skipped",
+             total, errors, hazard_skipped)
 
 
 # ---------------------------------------------------------------------------

@@ -509,6 +509,26 @@ def is_toxic_severity(toxicity_severity: Optional[str]) -> bool:
 
 
 # ---------------------------------------------------------------------------
+# Hazard species (Melvin, 22 Oct 2026 — foxglove #24507) — the ONLY definition
+# of "a candidate naming this species makes the photo a hazard case": severity
+# toxic/deadly OR verdict toxic. Used by app/services/hazard_candidates.py (the
+# auto-approve guard, Review's Critical section, the hazard line on the card,
+# the second-tap approve, the archive report and the publish-panel bulk
+# confirm). Extend it here; never copy the comparison into a call site.
+# ---------------------------------------------------------------------------
+def is_hazard_species(toxicity_severity: Optional[str], edibility_status: Optional[str]) -> bool:
+    return (is_toxic_severity(toxicity_severity)
+            or (edibility_status or "").strip().lower() == "toxic")
+
+
+def hazard_level(toxicity_severity: Optional[str], edibility_status: Optional[str]) -> Optional[str]:
+    """'deadly' / 'toxic' for a hazard species, else None."""
+    if not is_hazard_species(toxicity_severity, edibility_status):
+        return None
+    return "deadly" if toxicity_severity == "deadly" else "toxic"
+
+
+# ---------------------------------------------------------------------------
 # Safety gate (audit P1 / batch 5, 21 Oct 2026) — the ONLY definition of the
 # decision every output shows: may culinary content (edible parts, taste notes,
 # recipes) appear, and which safety label goes with the species.

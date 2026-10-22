@@ -184,7 +184,7 @@
 
     .obs-card .card-body { padding: 9px; }
     .card-meta { font-size: 0.75rem; color: #999; }
-    .card-date { font-size: 0.82rem; font-weight: 500; margin: 2px 0 2px; }
+    .card-date { font-size: 0.82rem; font-weight: 500; margin: 2px 0 2px; color: var(--ink, #1E2A22); }
     .card-path { font-size: 0.71rem; color: #888; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .card-geo  { font-size: 0.74rem; color: #2d5016; margin-top: 3px; }
 
@@ -199,7 +199,7 @@
     .species-block.conf-high { border-left-color: #2d8016; }
     .species-block.conf-mid  { border-left-color: #e6a817; }
     .species-block.conf-low  { border-left-color: #c0392b; }
-    .sp-name  { font-size: 0.81rem; font-weight: 600; font-style: italic; padding-right: 36px; }
+    .sp-name  { font-size: 0.81rem; font-weight: 600; font-style: italic; padding-right: 36px; color: var(--ink, #1E2A22); }
     .sp-common { font-size: 0.74rem; color: #555; }
     .sp-score {
       font-size: 0.73rem; font-weight: 700;
@@ -230,6 +230,10 @@
       border-radius: 10px; background: #f1f5f9; color: #64748b;
       border: 1px solid #e2e8f0; margin-top: 3px; white-space: nowrap;
     }
+    /* Confidence chip — same band (confClass) and colour as the % it describes */
+    .review-label-pill.conf-high { background:#e8f5e9; color:#2d6a16; border-color:#b7dcb0; }
+    .review-label-pill.conf-mid  { background:#fff8e6; color:#8a5a00; border-color:#f0d9a0; }
+    .review-label-pill.conf-low  { background:#fdecea; color:#a42a1f; border-color:#f5c6c6; }
 
     /* Prefilter category badges */
     .badge-cat { font-size: 0.68rem; padding: 1px 6px; border-radius: 8px; }
@@ -1294,6 +1298,10 @@
       background: #fef2f2; border: 1px solid #f5c6c6; border-radius: 6px;
       padding: 7px 10px; margin-top: 6px; font-size: 0.8rem; color: #991b1b;
     }
+    .itis-banner-newer {
+      background: #fff8e6; border: 1px solid #f0c060; border-radius: 6px;
+      padding: 7px 10px; margin-top: 6px; font-size: 0.8rem; color: #92400e;
+    }
     .itis-badge-accepted {
       font-size: 0.68rem; font-weight: 700; padding: 1px 7px;
       border-radius: 10px; background: #dcfce7; color: #166534;
@@ -1328,7 +1336,15 @@
   .crit-actions { display:flex; gap:6px; flex-wrap:wrap; margin-top:4px; }
   .crit-actions button { font-size:0.78rem; padding:4px 8px; border-radius:5px; cursor:pointer; border:1px solid #999; background:#f5f5f5; }
   .crit-actions .crit-confirm { background:#2d8016; color:#fff; border-color:#2d8016; }
+  /* Hazard candidates (22 Oct 2026, foxglove #24507) — red, by name, above the proposed name */
+  .hazard-line { color:#b71c1c; background:#fdecea; border-left:3px solid #c62828; font-weight:700;
+                 font-size:0.8rem; padding:3px 7px; border-radius:4px; margin-top:6px; }
+  .hazard-line.hazard-deadly { border-left-color:#000; }
+  #critical-section h3 { color:#b71c1c; font-size:0.92rem; margin:14px 0 4px; }
+  .crit-card .hazard-line { margin-top:2px; }
+  .confirm-msg.hazard-msg { color:#b71c1c; font-weight:700; }
 </style>
+<script src="/static/js/hazard-ack.js"></script>
 </head>
 <body>
 
@@ -1374,6 +1390,13 @@
   <h2>☠ Critical — hazard on a walk, not human-confirmed</h2>
   <p class="crit-help">These are on a saved walk but only AI-agreed, so a published walk page would leave them off with no ☠ at their stop. Confirm the species if it is right, or re-identify it. Pins stay on the map either way.</p>
   <div id="critical-grid"></div>
+  <!-- Hazard candidates (22 Oct 2026): any source named a toxic/deadly species
+       for a photo no human has decided (candidate_items, same endpoint). -->
+  <h3 id="crit-cand-head" style="display:none"></h3>
+  <p id="crit-cand-help" class="crit-help" style="display:none">A toxic or deadly species was among the
+    identification candidates (any source, any rank). These never auto-approve. Open each card: approving it
+    as anything else needs a second tap that names the hazard.</p>
+  <div id="critical-cand-grid"></div>
 </section>
 <div id="toolbar">
   <!-- Group 1: Status -->
@@ -1802,6 +1825,9 @@ function topScore(obs) {
   try { const c = JSON.parse(obs.species_candidates_json || '[]'); return c.length ? c[0].score : 0; }
   catch { return 0; }
 }
+// ONE confidence rule for the card: the % colour, the block border and the
+// confidence chip all take their band from confClass() of the same shown score.
+const CONF_BAND_LABEL = { 'conf-high': 'High confidence', 'conf-mid': 'Medium confidence', 'conf-low': 'Low confidence' };
 function confClass(score) {
   return score >= 0.65 ? 'conf-high' : score >= 0.35 ? 'conf-mid' : 'conf-low';
 }
@@ -1886,6 +1912,10 @@ async function loadPage(offset) {
 
 // ── Rendering ──────────────────────────────────────────────────────────────
 
+// Hazard candidates per rendered card: id → { hazards, proposed } (_makeCardHtml;
+// read by _inlineConfirm and bulkAction).
+const _cardHazards = new Map();
+
 function _makeCardHtml(obs) {
     const date = obs.photo_taken_at
       ? new Date(obs.photo_taken_at).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'})
@@ -1933,8 +1963,20 @@ function _makeCardHtml(obs) {
     let candidates = [];
     try { candidates = JSON.parse(obs.species_candidates_json || '[]'); } catch {}
 
+    // ── Hazard candidates (server: app/services/hazard_candidates.py) ─────
+    // Any source naming a toxic/deadly species: shown in red by name above the
+    // proposed name, never in the grey "Also:" line; Approve as another
+    // species needs a second tap naming it (_inlineConfirm).
+    const hazards = obs.hazard_candidates || [];
+    const _hazKeys = new Set(hazards.map(h => (h.scientific_name || '').trim().toLowerCase()));
+    _cardHazards.set(obs.id, { hazards, proposed: obs.species_primary || obs.species_suggested || '' });
+    const hazardHtml = HazardAck.lineHtml(hazards);
+
     // ── Species block (plant / fungi only) ────────────────────────────────
     let speciesHtml = '';
+    // The % the card shows (null = none shown) and, when iNat scored that same
+    // species, iNat's gating score — read by the confidence chip below.
+    let shownScore = null, shownInat = null;
     if (!isLandscape && obs.identification_status === 'identified') {
       if (candidates.length) {
         // The block names the observation's species (species_primary) — before
@@ -1950,10 +1992,16 @@ function _makeCardHtml(obs) {
         const topIsShown  = _nk(top.scientific_name) === _nk(shownName);
         const hasTopScore = topIsShown && typeof top.score === 'number';
         const score = hasTopScore ? top.score : 0;
+        if (hasTopScore) {
+          shownScore = score;
+          const iv = [top.inat_vision_score, top.inat_combined_score].filter(v => typeof v === 'number');
+          if (iv.length && top.source !== 'inaturalist') shownInat = Math.min(...iv);
+        }
         const pct   = (score * 100).toFixed(1);
         const cls   = hasTopScore ? confClass(score) : '';
         const common = (topIsShown && top.common_names && top.common_names.length) ? spCommonList(top.common_names) : '';
-        const alts   = candidates.filter(c => _nk(c.scientific_name) !== _nk(shownName)).slice(0, 2)
+        const alts   = candidates.filter(c => _nk(c.scientific_name) !== _nk(shownName)
+                                          && !_hazKeys.has(_nk(c.scientific_name))).slice(0, 2)
           .map(c => _esc(c.scientific_name)
           + (c.non_european ? ` <span class="noneu-inline">(${NON_EUROPEAN_LABEL})</span>` : '')).join(', ');
         const sciSafe = shownName.replace(/"/g,'&quot;').replace(/'/g,'&#39;');
@@ -2005,6 +2053,7 @@ function _makeCardHtml(obs) {
       // Show the score only when a candidate actually backs it.
       const hasScore  = !!sugMatch;
       const sugScore  = hasScore ? (sugMatch.score || 0) : 0;
+      if (hasScore) shownScore = sugScore;
       const sugPct    = (sugScore * 100).toFixed(1);
       const sugCls    = hasScore ? confClass(sugScore) : '';
       const sciSafe   = (obs.species_suggested || '').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
@@ -2096,6 +2145,9 @@ function _makeCardHtml(obs) {
         <button class="btn-itis-rename"
                 onclick="itisAcceptRename('${spPrimSafe}', 'species_id')">Rename to accepted name</button>
       </div>`;
+    } else if (obs.itis_name_match === 'no_match' && obs.gbif_match_type === 'EXACT') {
+      // GBIF's backbone has this exact name: most often a newer name ITIS lacks.
+      itisBannerHtml = `<div class="itis-banner-newer">⚠ Name not in ITIS — may be a newer name</div>`;
     } else if (obs.itis_name_match === 'no_match') {
       itisBannerHtml = `<div class="itis-banner-no-match">⚠ No ITIS match found — may indicate misidentification or recent taxonomy change</div>`;
     } else if (obs.itis_name_match === 'accepted') {
@@ -2171,9 +2223,10 @@ function _makeCardHtml(obs) {
             <div id="gps-result-${obs.id}" class="gps-result"></div>
           </div>` : ''}
           ${catToggleHtml}
+          ${hazardHtml}
           ${speciesHtml}
           ${itisBannerHtml}
-          ${obs.review_label && obs.review_status !== 'approved' && obs.review_status !== 'manually_verified' ? `<div><span class="review-label-pill">${_LABEL_DISPLAY[obs.review_label] || obs.review_label}</span></div>` : ''}
+          ${obs.review_label && obs.review_status !== 'approved' && obs.review_status !== 'manually_verified' ? `<div>${_reviewLabelChip(obs.review_label, shownScore, shownInat)}</div>` : ''}
           <div class="badges">
             <span class="badge badge-${obs.review_status || 'pending'}" id="badge-${obs.id}">${(obs.review_status || 'pending').replace('_',' ')}</span>
             ${obs.upload_source === 'phone' ? '<span class="badge badge-phone-upload" title="Uploaded directly from a phone or browser">📱 Phone upload</span>' : ''}
@@ -2222,17 +2275,46 @@ async function loadCritical() {
   } catch (_) { d = null; }
   if (window.__refreshCriticalBadge) window.__refreshCriticalBadge();
   const items = (d && d.items) || [];
-  if (!items.length) {
+  const cand  = (d && d.candidate_items) || [];
+  const candHead = document.getElementById('crit-cand-head');
+  const candHelp = document.getElementById('crit-cand-help');
+  const candGrid = document.getElementById('critical-cand-grid');
+  if (!items.length && !cand.length) {
     section.style.display = 'none';
     banner.style.display = 'none';
     grid.innerHTML = '';
+    candGrid.innerHTML = '';
     return;
   }
   const n = d.count;
-  banner.textContent = `☠ ${n} critical item${n === 1 ? '' : 's'} in review — hazard on a walk, not human-confirmed`;
+  banner.textContent = `☠ ${n} critical item${n === 1 ? '' : 's'} in review — hazard not human-confirmed`;
   banner.style.display = '';
   section.style.display = '';
   grid.innerHTML = items.map(_critCardHtml).join('');
+  candHead.style.display = candHelp.style.display = cand.length ? '' : 'none';
+  candHead.textContent = `☠ Hazard candidate — not decided by a human (${cand.length})`;
+  candGrid.className = 'crit-grid';
+  candGrid.style.cssText = 'display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:10px';
+  candGrid.innerHTML = cand.map(_critCandCardHtml).join('');
+}
+
+function _critCandCardHtml(it) {
+  const deadly = it.level === 'deadly';
+  const img = it.thumbnail
+    ? `<img src="${_esc(it.thumbnail)}" alt="photo" loading="lazy" onclick="_critOpenPhoto(${it.obs_id}, '#${it.obs_id}')">`
+    : '<div class="no-thumb">🌿</div>';
+  return `<div class="crit-card" id="crit-cand-${it.obs_id}">
+    ${img}
+    <div class="crit-body">
+      <span class="crit-badge ${deadly ? 'deadly' : ''}">☠ ${deadly ? 'Deadly' : 'Toxic'} candidate</span>
+      ${HazardAck.lineHtml(it.hazards)}
+      <span>Proposed: ${it.proposed ? `<em>${_esc(it.proposed)}</em>` : 'no name'}</span>
+      <span style="color:#888">#${it.obs_id} · ${_esc(it.review_status)}${it.ai_approved ? ' (AI-approved — on the map)' : ''}</span>
+      <div class="crit-actions">
+        <a href="/review?id=${it.obs_id}"><button>Open card</button></a>
+      </div>
+    </div>
+  </div>`;
 }
 
 function _critCardHtml(it) {
@@ -2264,7 +2346,7 @@ async function critConfirm(obsId, species, sev, btn) {
   if (!confirm(`Confirm #${obsId} is ${species} (${sev})?\n\nIt becomes human-confirmed and will be shown with ☠ on a published walk page.`)) return;
   btn.disabled = true;
   try {
-    const r = await fetch(`/api/observations/${obsId}/review?status=manually_verified`, { method: 'PATCH' });
+    const r = await HazardAck.fetch(`/api/observations/${obsId}/review?status=manually_verified`, { method: 'PATCH' });
     if (!r.ok) {
       const e = await r.json().catch(() => ({}));
       throw new Error(e.detail || `HTTP ${r.status}`);
@@ -2563,7 +2645,7 @@ function _sopApply(obsId, sciName, commonName, confidence) {
       // 1. Confirm species on the observation. confidence is logged only; the
       //    server scores the chosen species from its stored evidence (B1-08),
       //    and a GBIF name-match-only pick sends null.
-      const r = await fetch(`/api/observations/${obsId}/confirm-species`, {
+      const r = await HazardAck.fetch(`/api/observations/${obsId}/confirm-species`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -2703,7 +2785,7 @@ function _retryApprove(obsId, sciName, commonName, confidence, sourceApi, btn) {
 
   return _trackNameSave(obsId, (async () => {
     try {
-      const r = await fetch(`/api/observations/${obsId}/confirm-species`, {
+      const r = await HazardAck.fetch(`/api/observations/${obsId}/confirm-species`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ scientific_name: sciName, common_name: commonName || null, source: 'manual_entry' }),
@@ -2866,7 +2948,7 @@ function _corrSaveFromLookup(id, sci, common) {
 
   return _trackNameSave(id, (async () => {
     try {
-      const r = await fetch(`/api/observations/${id}/confirm-species`, {
+      const r = await HazardAck.fetch(`/api/observations/${id}/confirm-species`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ scientific_name: sci, common_name: common || null, source: 'manual_entry' }),
@@ -3191,7 +3273,7 @@ async function _rerenderCard(id) {
 
 // ── Single-card action ─────────────────────────────────────────────────────
 
-async function setStatus(id, status) {
+async function setStatus(id, status, ackHazards) {
   // Never send the status while a name save on this card is still in flight
   // (C-04). Wait first: the save re-renders the card, so look the card up after.
   const pendingName = _nameSaves.get(id);
@@ -3205,10 +3287,12 @@ async function setStatus(id, status) {
   }
 
   try {
-    const r = await fetch(`/api/observations/${id}/review?status=${status}`, { method: 'PATCH' });
+    let url = `/api/observations/${id}/review?status=${status}`;
+    if (ackHazards && ackHazards.length) url = HazardAck.withAck(url, ackHazards);
+    const r = await HazardAck.fetch(url, { method: 'PATCH' });
     if (!r.ok) {
       const err = await r.json().catch(() => ({}));
-      throw new Error(err.detail || `HTTP ${r.status}`);
+      throw new Error((err.detail && err.detail.message) || err.detail || `HTTP ${r.status}`);
     }
   } catch (e) {
     // Revert flash on failure
@@ -3523,8 +3607,22 @@ function updateBulkBar() {
 }
 
 async function bulkAction(status) {
-  const ids = [...selectedIds];
+  let ids = [...selectedIds];
   if (!ids.length) return;
+  // Hazard candidates are never bulk-approved (the server skips them too): they
+  // stay on the page for their own named second tap.
+  if (status === 'approved') {
+    const held = ids.filter(id => {
+      const hz = _cardHazards.get(id);
+      return hz && HazardAck.others(hz.hazards, hz.proposed).length;
+    });
+    if (held.length) {
+      ids = ids.filter(id => !held.includes(id));
+      held.forEach(id => { selectedIds.delete(id); const c = document.getElementById(`chk-${id}`); if (c) c.checked = false; });
+      toast(`☠ ${held.length} not approved — a hazard species was a candidate. Approve each on its card.`, 6000);
+      if (!ids.length) { updateBulkBar(); return; }
+    }
+  }
 
   const label = status === 'approved' ? 'Approved' : 'Rejected';
   toast(`${label} ${ids.length} photo${ids.length > 1 ? 's' : ''}…`);
@@ -3612,7 +3710,18 @@ function _inlineConfirm(obsId, action) {
   if (!actEl) return;
   // If already in confirm state for this card, cancel it
   if (_confirmState.has(obsId)) { _inlineConfirmNo(obsId); return; }
-  _confirmState.set(obsId, { origHtml: actEl.innerHTML, action });
+  // Approving as another species than a hazard candidate: the second tap names it.
+  const hz = _cardHazards.get(obsId);
+  const others = (action === 'approved' && hz) ? HazardAck.others(hz.hazards, hz.proposed) : [];
+  _confirmState.set(obsId, { origHtml: actEl.innerHTML, action, hazards: others });
+  if (others.length) {
+    const names = others.map(h => h.label || h.scientific_name).join(' / ');
+    actEl.innerHTML =
+      `<span class="confirm-msg hazard-msg">☠ ${_esc(names)} was a candidate. Not ${_esc(names)} — approve as ${_esc(hz.proposed || 'this')}?</span>` +
+      `<button class="confirm-yes-btn" onclick="_inlineConfirmYes(${obsId})">✓ Yes — not ${_esc(names)}</button>` +
+      `<button class="confirm-no-btn"  onclick="_inlineConfirmNo(${obsId})">✕ No</button>`;
+    return;
+  }
   actEl.innerHTML =
     `<span class="confirm-msg">${_esc(_confirmMsg[action] || 'Are you sure?')}</span>` +
     `<button class="confirm-yes-btn" onclick="_inlineConfirmYes(${obsId})">✓ Yes</button>` +
@@ -3626,7 +3735,7 @@ function _inlineConfirmYes(obsId) {
   if (state.action === 'delete') {
     _doDeleteObs(obsId);
   } else {
-    setStatus(obsId, state.action);
+    setStatus(obsId, state.action, state.hazards);
   }
 }
 
@@ -3764,7 +3873,21 @@ const aiDraftSid   = params.get('sid');
 const aiDraftField = params.get('field');
 loadDefaultFolder();
 
+// The confidence chip states the band of the % the card shows (confClass) — never
+// a different number's verdict. A low_confidence label on a high % means the
+// second source scored it lower: the chip says so with iNat's score.
+function _reviewLabelChip(label, shownScore, shownInat) {
+  if (label === 'low_confidence' && shownScore != null) {
+    const cls = confClass(shownScore);
+    const inat = (shownInat != null && confClass(shownInat) !== cls)
+      ? ` · iNat ${(shownInat * 100).toFixed(1)}%` : '';
+    return `<span class="review-label-pill ${cls}">${CONF_BAND_LABEL[cls]}${inat}</span>`;
+  }
+  return `<span class="review-label-pill">${_esc(_LABEL_DISPLAY[label] || label)}</span>`;
+}
+
 const _LABEL_DISPLAY = {
+  hazard_candidate:  '☠ Hazard candidate',
   low_confidence:    'Low confidence',
   non_plant:         'Non-plant / fungi',
   no_gps:            'No GPS',
@@ -6253,7 +6376,7 @@ async function saveLocAndApprove(obsId) {
     }
 
     // 2. Mark approved
-    const r2 = await fetch(`/api/observations/${obsId}/review?status=approved`, { method: 'PATCH' });
+    const r2 = await HazardAck.fetch(`/api/observations/${obsId}/review?status=approved`, { method: 'PATCH' });
     if (!r2.ok) throw new Error(`Status update failed: HTTP ${r2.status}`);
 
     // 3. Remove card
@@ -6270,8 +6393,11 @@ async function approveNoLoc(obsId) {
   if (resultEl) resultEl.textContent = '⏳ Approving…';
 
   try {
-    const r = await fetch(`/api/observations/${obsId}/review?status=approved`, { method: 'PATCH' });
-    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    const r = await HazardAck.fetch(`/api/observations/${obsId}/review?status=approved`, { method: 'PATCH' });
+    if (!r.ok) {
+      const e = await r.json().catch(() => ({}));
+      throw new Error((e.detail && e.detail.message) || e.detail || `HTTP ${r.status}`);
+    }
     _locRemoveCard(obsId);
     toast('✓ Approved (gallery only — no map pin)');
   } catch(e) {

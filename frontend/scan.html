@@ -5282,7 +5282,10 @@ async function trAcceptSpecies(species) {
       document.getElementById('trust-top10').innerHTML =
         '<p style="color:#888;font-size:0.82rem;padding:8px 0">No low-confidence auto-approved species.</p>';
     }
-    alert('Accepted ' + _n(n) + ' observation(s) as manually verified.');
+    const hz = d.hazard_skipped || [];
+    alert('Accepted ' + _n(n) + ' observation(s) as manually verified.'
+      + (hz.length ? '\n\n☠ ' + _n(hz.length) + ' not accepted — a hazard species was a candidate'
+        + ' (#' + hz.join(', #') + '). Approve each on its Review card.' : ''));
     loadTrustStats();
   } catch (e) { alert('Request failed: ' + e.message); }
 }

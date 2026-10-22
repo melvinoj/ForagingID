@@ -37,9 +37,7 @@
   "_teaser_note": "Teaser = first self-contained sentence of the approved recipe text; sentences matching these regexes (case-insensitive) are skipped.",
   "teaser_skip_patterns": ["\\bSheffield\\b", "\\bmedic", "\\bremed", "\\bheal(s|ing|er)?\\b", "\\bcures?\\b", "\\btonic\\b", "\\btherap", "\\bdiuretic", "\\bailment", "\\bdigestion"],
 
-  "_preview_note": "preview.html — embed card for melvinjarman.co.uk/b (place line = overrides where_en). Empty/null = automatic (hero = first teaser's plant; teasers = first 3 by recipe_source_priority).",
-  "preview_hero_species_id": null,
-  "preview_recipe_ids": [],
+  "_preview_note": "preview.html — embed card for melvinjarman.co.uk/b (place line = overrides where_en). Always built from the walk itself (export.py preview_choice): teasers = its gated recipes, first 3 by recipe_source_priority; hero = first non-toxic teaser plant with a photo, else first non-toxic plant with a photo. No fixed hero/recipe ids (22 Oct 2026). The site's root card is the front-page walk's.",
 
   "photo_long_edge": 1200,
   "_extra_photos_note": "Plants preview panel: up to N more photos per species from this walk's approved observations.",

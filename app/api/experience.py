@@ -152,6 +152,19 @@ async def create_publication(body: PublicationCreate, db: AsyncSession = Depends
     return await _commit_and_reread(db, p.id)
 
 
+async def _set_default(db: AsyncSession, p) -> None:
+    """One default: clear the current one first (the partial unique index is
+    the backstop if this ever races), then make p the default. No commit."""
+    for other in (await db.execute(select(ExperiencePublication).where(
+            ExperiencePublication.is_default.is_(True),
+            ExperiencePublication.id != p.id))).scalars().all():
+        other.is_default = False
+        other.updated_at = datetime.utcnow()
+    await db.flush()
+    p.is_default = True
+    p.updated_at = datetime.utcnow()
+
+
 class PublicationPatch(BaseModel):
     overrides_json: Optional[dict] = None
     slug: Optional[str] = None
@@ -175,14 +188,7 @@ async def patch_publication(pub_id: int, body: PublicationPatch, db: AsyncSessio
         p.overrides_json = json.dumps(body.overrides_json, ensure_ascii=False)
     if body.is_default is not None:
         if body.is_default and not p.is_default:
-            # One default: clear the current one first (the partial unique index
-            # is the backstop if this ever races).
-            for other in (await db.execute(select(ExperiencePublication).where(
-                    ExperiencePublication.is_default.is_(True),
-                    ExperiencePublication.id != p.id))).scalars().all():
-                other.is_default = False
-                other.updated_at = datetime.utcnow()
-            await db.flush()
+            await _set_default(db, p)
         p.is_default = body.is_default
     p.updated_at = datetime.utcnow()
     return await _commit_and_reread(db, p.id)
@@ -211,16 +217,31 @@ async def plan_publication(pub_id: int, db: AsyncSession = Depends(get_db)):
     plan["changes"] = xp.plan_changes(plan, before, where)
     ids = [a["obs_id"] for a in plan.get("ai_agreed_obs", [])]
     if ids:
-        thumbs = dict((await db.execute(select(Observation.id, Observation.thumbnail_path)
-                                        .where(Observation.id.in_(ids)))).all())
+        from app.services.hazard_candidates import (hazards_other_than, load_hazard_index,
+                                                    observation_hazards)
+        hidx = await load_hazard_index(db)
+        rows = {o.id: o for o in (await db.execute(select(Observation)
+                                                   .where(Observation.id.in_(ids)))).scalars().all()}
         for a in plan["ai_agreed_obs"]:
-            t = thumbs.get(a["obs_id"])
+            o = rows.get(a["obs_id"])
+            t = o.thumbnail_path if o else None
             a["thumbnail"] = f"/thumbnails/{Path(t).name}" if t else None
+            # Hazard species / hazard candidates (Melvin, 22 Oct 2026): never
+            # bulk-confirmed — each needs its own tap; a candidate other than
+            # the species needs the second tap naming it (hazard_ack).
+            own = hidx.resolve(o.species_primary) if o else None
+            a["hazard_species"] = own.level if own else None
+            a["hazard_candidates"] = (hazards_other_than(observation_hazards(o, hidx), o.species_primary,
+                                                         o.species_id, hidx) if o else [])
+            a["bulk_ok"] = bool(o) and not (a["hazard"] or own or a["hazard_candidates"])
     return plan
 
 
 class PublishBody(BaseModel):
     confirm: bool = False
+    # Publish only: make this walk the site's front page (Melvin, 22 Oct 2026 —
+    # the tick defaults on). False leaves the front-page assignment unchanged.
+    front_page: bool = True
 
 
 async def _start(kind: str, pub_id: int, body: PublishBody, background: BackgroundTasks,
@@ -232,6 +253,11 @@ async def _start(kind: str, pub_id: int, body: PublishBody, background: Backgrou
         raise HTTPException(409, "this publication's walk was deleted")
     if kind == "unpublish" and p.status != "published":
         raise HTTPException(409, f"not published (status {p.status})")
+    if kind == "publish" and body.front_page and not p.is_default and xp.active_job() is None:
+        # Committed before the job loads the row, so the build is the root page.
+        # (A running job refuses the start below and nothing changes.)
+        await _set_default(db, p)
+        await db.commit()
     try:
         job = xp.start_publish(p.id) if kind == "publish" else xp.start_unpublish(p.id)
     except xp.PublishStop as e:
@@ -342,7 +368,10 @@ async def critical_hazards(db: AsyncSession = Depends(get_db)):
     whose observation is AI-agreed only (confirmed, not is_human_confirmed) and
     whose species is toxic/deadly (is_toxic_severity). Unknown toxicity is not
     listed here — it is an export blocker only. review_status is never changed,
-    so the map pin stays visible."""
+    so the map pin stays visible.
+
+    candidate_items: observations no human has decided whose candidate lists
+    name a hazard species (app/services/hazard_candidates.py)."""
     walks = (await db.execute(select(SavedWalk).order_by(SavedWalk.id))).scalars().all()
     placements = []                       # (walk, stop label, obs_id)
     for w in walks:
@@ -373,4 +402,9 @@ async def critical_hazards(db: AsyncSession = Depends(get_db)):
             "review_status": o.review_status,
         })
     items.sort(key=lambda i: (0 if i["severity"] == "deadly" else 1, i["walk_id"], i["obs_id"]))
-    return {"count": len({i["obs_id"] for i in items}), "items": items}
+    # Hazard candidates (Melvin, 22 Oct 2026 — foxglove #24507): any undecided
+    # observation whose candidates from any source name a hazard species.
+    from app.services.hazard_candidates import undecided_hazard_items
+    candidate_items = await undecided_hazard_items(db)
+    ids = {i["obs_id"] for i in items} | {i["obs_id"] for i in candidate_items}
+    return {"count": len(ids), "items": items, "candidate_items": candidate_items}

@@ -2695,6 +2695,7 @@
 <script src="/static/js/gps.js"></script>
 <script src="/static/js/guest-notes.js"></script>
 <script src="/static/js/walk-record.js"></script>
+<script src="/static/js/hazard-ack.js"></script>
 <script src="/static/js/reidentify.js"></script>
 <script src="/static/js/lists.js"></script>
 <script src="/static/js/walk-publish.js"></script>
@@ -4917,7 +4918,7 @@ async function saveSpeciesCorrection(obsId) {
   if (!value) return;
 
   try {
-    const r = await fetch(`/api/observations/${obsId}/review?status=approved`, {
+    const r = await HazardAck.fetch(`/api/observations/${obsId}/review?status=approved`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ species_primary: value }),

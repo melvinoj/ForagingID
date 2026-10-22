@@ -542,6 +542,42 @@ async def _load(pub_id: int):
         return p, w
 
 
+async def _front_publication():
+    """The default (front-page) publication row, or None."""
+    from sqlalchemy import select
+    async with database.AsyncSessionLocal() as db:
+        return (await db.execute(select(ExperiencePublication)
+                                 .where(ExperiencePublication.is_default.is_(True)))).scalar_one_or_none()
+
+
+_PREVIEW_IMG = re.compile(r'<img src="(photos/[^"/]+\.jpg)"')
+
+
+async def build_front_preview(clone: Path, out_dir: Path) -> tuple[Path, Optional[Path], str]:
+    """preview.html (the melvinjarman.co.uk/b card) is always the front-page
+    walk's (Melvin, 22 Oct 2026). Publishing a walk that is NOT the front page
+    rebuilds the root card from the front-page publication — never from this
+    walk, never a fallback. Stops when the site's front page is not that
+    publication's page (e.g. the legacy walk-4 page). Returns (preview.html,
+    its hero photo, front slug) built in out_dir."""
+    front = await _front_publication()
+    exists, root_slug = await front_page_slug(clone)
+    if front is None or front.status != "published" or not exists or root_slug != front.slug:
+        now = (f"the page for '{root_slug}'" if root_slug else "the old Rümmelsbühl page (not published from the app)") \
+            if exists else "empty"
+        raise PublishStop("build", "Not published: the site's front page is " + now + ", not a front-page walk "
+                          "published from here, so its preview card can't be rebuilt from it. Tick 'Front page' "
+                          "to make this walk the front page (or republish the front-page walk first).")
+    if front.saved_walk_id is None:
+        raise PublishStop("build", f"Not published: the front-page walk ({front.slug}) was deleted.")
+    await run_build(front, out_dir)
+    preview = out_dir / "preview.html"
+    m = _PREVIEW_IMG.search(preview.read_text(encoding="utf-8"))
+    if not m:
+        raise PublishStop("build", "Not published: the front-page walk's preview card has no hero photo.")
+    return preview, out_dir / m.group(1), front.slug
+
+
 async def _record(pub_id: int, **fields) -> dict:
     """Write the publication row, then read it back by id; raise if any field
     did not land."""
@@ -641,12 +677,18 @@ async def run_publish(job: dict, clone: Optional[Path] = None) -> None:
             out = Path(tmp)
             await progress("build", "running")
             await run_build(pub, out)
-            await progress("build", "ok")
+            front_card = None
+            if not pub.is_default:
+                front_out = Path(tmp) / "_front"
+                front_out.mkdir()
+                front_card = await build_front_preview(clone, front_out)
+            await progress("build", "ok", "" if front_card is None
+                           else f"front-page card rebuilt from {front_card[2]}")
 
             await progress("checks", "running")
             dirs = page_dirs(out, pub.slug, bool(pub.is_default))
             photos = sorted({p for d in dirs for p in (d / "photos").glob("*.jpg")}) if dirs else []
-            bad = check_pages(dirs) + await check_photos(photos)
+            bad = check_pages(dirs) + await check_photos(photos + ([front_card[1]] if front_card else []))
             if bad:
                 raise PublishStop("check", "Checks failed — nothing was pushed: " + "; ".join(bad[:8])
                                   + (f" (+{len(bad) - 8} more)" if len(bad) > 8 else ""))
@@ -662,10 +704,17 @@ async def run_publish(job: dict, clone: Optional[Path] = None) -> None:
                 _replace_page(dirs, [wt / r if r else wt for r in rels])
                 if drop_root:
                     _remove_page(wt, root=True)
+                if front_card is not None:
+                    # The root card is the front-page walk's: its preview.html + hero photo.
+                    shutil.copy2(front_card[0], wt / "preview.html")
+                    (wt / "photos").mkdir(exist_ok=True)
+                    shutil.copy2(front_card[1], wt / "photos" / front_card[1].name)
                 return rels
             allowed = [r for r in rels if r]
             if "" in rels or drop_root:
                 allowed += ["index.html", "preview.html", "tree.html", "photos"]
+            if front_card is not None:
+                allowed += ["preview.html", "photos"]
             msg = (f"Publish walk {walk.id} '{walk.name}' → {', '.join(r or '/' for r in rels)}\n\n"
                    f"{len(plan['public_species'])} species, {len(plan['stops'])} stops. "
                    f"From ForagingID experience publication #{pub.id}.")
@@ -684,6 +733,8 @@ async def run_publish(job: dict, clone: Optional[Path] = None) -> None:
             for (url, rel), d in zip(_page_urls(pub.slug, bool(pub.is_default)), dirs):
                 for name in OWNED_FILES:
                     expect[url + ("" if name == "index.html" else name)] = (d / name).read_bytes()
+            if front_card is not None:
+                expect[site_url() + "preview.html"] = front_card[0].read_bytes()
 
         await progress("record", "running")
         row = await _record(pub.id, status="published", published_at=datetime.utcnow(), unpublished_at=None,

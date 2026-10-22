@@ -355,25 +355,32 @@ def route_svg(line, stops, straight_ranges=(), size=100, pad=8) -> str:
             f'{polys}{dots}{start}</svg>')
 
 
-def build_preview(cfg: dict, ov: dict, data: dict, pub: dict, app_css: str) -> tuple[str, dict]:
-    recipes = data["recipes"]
-    want = cfg.get("preview_recipe_ids") or []
-    if want:
-        chosen = [r for rid in want for r in recipes if r["recipe_id"] == rid]
-        missing = [rid for rid in want if rid not in {r["recipe_id"] for r in chosen}]
-        if missing:
-            die(f"preview_recipe_ids not among the page's gated recipes: {missing}")
-    else:
-        prio = {src: i for i, src in enumerate(cfg.get("recipe_source_priority", []))}
-        chosen = sorted(recipes, key=lambda r: prio.get(r["source"], len(prio)))
-    chosen = chosen[:3]
+def preview_choice(cfg: dict, data: dict, pub: dict) -> tuple[list, dict]:
+    """(teaser recipes, hero) for preview.html — always THIS walk's own data
+    (Melvin, 22 Oct 2026: no fixed config values; the card is never filled from
+    another walk). Teasers: this walk's gated recipes, first 3 by
+    recipe_source_priority. Hero: the first teaser plant that is not toxic and
+    has a photo on this walk, else the first such plant in walk order. Either
+    missing → the build fails."""
+    prio = {src: i for i, src in enumerate(cfg.get("recipe_source_priority", []))}
+    chosen = sorted(data["recipes"], key=lambda r: prio.get(r["source"], len(prio)))[:3]
+    if not chosen:
+        die("preview.html: this walk has no gated recipes for the card's teasers "
+            "(the card is never filled from another walk)")
 
-    hero_sid = cfg.get("preview_hero_species_id") or (chosen[0]["species_id"] if chosen else None)
-    hero = pub.get(hero_sid) if hero_sid is not None else None
-    if hero is None or not hero["photo"]:
-        die(f"preview hero species {hero_sid} has no photo on this walk (hidden, or not human-confirmed?)")
-    if hero["toxic"]:
-        die(f"preview hero must not be a toxic species ({hero['sci']})")
+    def ok(p):
+        return p is not None and p["photo"] and not p["toxic"]
+    hero = next((pub.get(r["species_id"]) for r in chosen if ok(pub.get(r["species_id"]))), None)
+    if hero is None:
+        hero = next((p for p in data["species"] if ok(p)), None)
+    if hero is None:
+        die("preview.html: no non-toxic species with a photo on this walk for the card's hero "
+            "(the card is never filled from another walk)")
+    return chosen, hero
+
+
+def build_preview(cfg: dict, ov: dict, data: dict, pub: dict, app_css: str) -> tuple[str, dict]:
+    chosen, hero = preview_choice(cfg, data, pub)
 
     km = f"{data['walk']['distance_m'] / 1000:.1f}" if data["walk"]["distance_m"] else None
     stats = [f"<span><b>{len(pub)}</b> species</span>", f"<span><b>{len(data['walk']['stops'])}</b> stops</span>"]

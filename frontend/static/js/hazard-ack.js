@@ -1,9 +1,11 @@
 // hazard-ack.js — hazard candidates on approve (Melvin, 22 Oct 2026, foxglove #24507).
 //
-// The rule lives server-side (app/services/hazard_candidates.py): any candidate
-// from any source naming a toxic/deadly species makes the photo a hazard case.
-// This file only SHOWS it and carries the second tap:
-//   HazardAck.lineHtml(hazards)        red ☠ line per hazard species, by name
+// The rule lives server-side (app/services/hazard_candidates.py): a toxic/deadly
+// candidate in the top 3 or at >= 5% of any source gates an undecided card
+// (hazard_candidates); one named lower is DEEP (hazard_deep). This file only
+// SHOWS them and carries the second tap:
+//   HazardAck.lineHtml(hazards)        red ☠ line per GATE-tier hazard, by name
+//   HazardAck.deepLineHtml(hazards)    one grey "Also listed deep in …" line
 //   HazardAck.others(hazards, name)    the hazards that are not the approving species
 //   HazardAck.ackParam(hazards)        query-string value naming them
 //   HazardAck.fetch(url, opts)         fetch; on 409 hazard_ack_required asks a
@@ -23,6 +25,26 @@
       `<div class="hazard-line hazard-${h.level === 'deadly' ? 'deadly' : 'toxic'}"` +
       ` title="${esc(h.level)} — named by ${esc((h.sources || []).map(s => s.source).join(' + '))}">` +
       `☠ ${esc(h.label || h.scientific_name)} — candidate</div>`).join('');
+  }
+
+  const SOURCE_LABEL = { plantnet: 'PlantNet', inaturalist: 'iNaturalist' };
+
+  function pct(score) {
+    if (score == null || isNaN(score)) return '';
+    const p = Number(score) * 100;
+    return ' ' + (p < 1 ? p.toFixed(1) : Math.round(p)) + '%';
+  }
+
+  // DEEP tier: one grey line, each species with the source that ranked it
+  // highest (best score), e.g. "Also listed deep in PlantNet: Conium maculatum 0.1%".
+  function deepLineHtml(hazards) {
+    if (!hazards || !hazards.length) return '';
+    const parts = hazards.map(h => {
+      const best = (h.sources || []).slice().sort((a, b) => (b.score || 0) - (a.score || 0))[0] || {};
+      const src = SOURCE_LABEL[best.source] || best.source || 'a source';
+      return `${esc(src)}: ${esc(h.scientific_name)}${esc(pct(best.score))}`;
+    });
+    return `<div class="hazard-deep-line">Also listed deep in ${parts.join('; ')}</div>`;
   }
 
   function others(hazards, approvingName) {
@@ -57,5 +79,5 @@
     return fetch(withAck(url, d.hazards), opts);
   }
 
-  window.HazardAck = { lineHtml, others, ackParam, withAck, fetch: hazardFetch };
+  window.HazardAck = { lineHtml, deepLineHtml, others, ackParam, withAck, fetch: hazardFetch };
 })();

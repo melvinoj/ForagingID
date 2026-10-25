@@ -92,7 +92,7 @@ class Site:
             d.mkdir(parents=True, exist_ok=True)
             root_slug = front if rel == "" else slug
             (d / "index.html").write_text(page_html(root_slug) if root_slug else "<html><script>window.DATA = {\"title\": \"legacy\"};</script></html>")
-            (d / "preview.html").write_text("p")
+            (d / "preview.html").write_text(f'<html><body><a href="index.html"><img src="photos/1.jpg">preview {root_slug or "legacy"}</a></body></html>')
             (d / "tree.html").write_text("t")
             (d / "photos").mkdir(exist_ok=True)
             (d / "photos" / "1.jpg").write_bytes(b"old")
@@ -287,95 +287,81 @@ def test_unticked_confirm_is_refused():
 def test_publish_makes_one_site_commit_and_none_in_foragingid():
     site, env = Site(), _env()
     try:
-        fid_before = _foragingid_git()
-        n = site.remote_count()
-        r, job = _publish(env, Fakes(site))
-        assert job["status"] == "done", job
-        assert [s["state"] for s in job["steps"]] == ["ok"] * 8, job["steps"]
-        assert site.remote_count() == n + 1 and site.head() == site.remote_head() and site.clean()
-        changed = sh(site.clone, "show", "--name-only", "--format=", "HEAD").split()
-        assert changed and all(p.startswith("w/sunny-walk/") or p in ("preview.html", "photos/1.jpg")
-                               for p in changed), changed
-        assert b'"slug": "other"' in site.remote_file("index.html")             # front page kept
-        assert b"preview other" in site.remote_file("preview.html")             # its card, rebuilt
-        assert site.remote_file("w/other/index.html") is not None                  # other walks untouched
+        fid_before = _foragingid_git(); n = site.remote_count()
+        _, job = _publish(env, Fakes(site))
+        assert job['status'] == 'done', job
+        assert [s['state'] for s in job['steps']] == ['ok'] * 8
+        assert site.remote_count() == n+1 and site.head() == site.remote_head() and site.clean()
+        catalogue = json.loads(site.remote_file('walks.json'))
+        assert catalogue['featured'] == 'sunny-walk'
+        assert {w['slug'] for w in catalogue['walks']} == {'sunny-walk','other'}
+        assert b'w/sunny-walk/' in site.remote_file('preview.html')
+        assert site.remote_file('w/other/index.html') is not None
         status, commit, published, unpublished, is_def = _pub(env)
-        assert (status, commit, published, unpublished) == ("published", site.remote_head(), 1, 0)
-        assert job["result"]["live"]["ok"] and job["result"]["publication"]["published_commit"] == commit
-        snap = json.loads(env.q("SELECT public_species_json FROM experience_publications WHERE id = 1")[0][0])
-        assert [s["id"] for s in snap["species"]] == [1, 2] and snap["is_default"] is False
-        assert env.q("SELECT id FROM experience_publications WHERE is_default = 1") == [(2,)]
-        assert _foragingid_git() == fid_before                                     # no commit in ForagingID
-        # Republishing an identical build changes nothing: no new commit, nothing pushed.
-        _, job = _publish(env, Fakes(site))
-        assert job["status"] == "done", job
-        assert site.remote_count() == n + 1 and site.clean()
-        assert {s["key"]: s["detail"] for s in job["steps"]}["push"].endswith("nothing to push")
+        assert (status,commit,published,unpublished) == ('published',site.remote_head(),1,0)
+        assert job['result']['live']['ok'] and _foragingid_git() == fid_before
+        snap=json.loads(env.q('SELECT public_species_json FROM experience_publications WHERE id = 1')[0][0])
+        assert [s['id'] for s in snap['species']] == [1,2]
+        _,job=_publish(env,Fakes(site))
+        assert job['status']=='done',job
+        assert site.remote_count()==n+1 and site.clean()
     finally:
-        _done(env, site)
+        _done(env,site)
 
 
-def test_default_publish_replaces_the_front_page_and_mirror():
-    site, env = Site(), _env(is_default=True)
+def test_default_publish_updates_catalogue_and_walk():
+    site,env=Site(),_env(is_default=True)
     try:
-        n = site.remote_count()
-        _, job = _publish(env, Fakes(site))
-        assert job["status"] == "done", job
-        assert site.remote_count() == n + 1
-        root, mirror = site.remote_file("index.html"), site.remote_file("w/sunny-walk/index.html")
-        assert root == mirror and b'"slug": "sunny-walk"' in root
-        assert site.remote_file("README.md") == b"site\n" and site.remote_file("w/other/index.html") is not None
-        assert set(job["result"]["live"]["detail"]) == {SITE, SITE + "preview.html", SITE + "tree.html",
-                                                         SITE + "w/sunny-walk/", SITE + "w/sunny-walk/preview.html",
-                                                         SITE + "w/sunny-walk/tree.html"}
-    finally:
-        _done(env, site)
+        n=site.remote_count();_,job=_publish(env,Fakes(site))
+        assert job['status']=='done',job
+        assert site.remote_count()==n+1
+        assert b'Foraging walks' in site.remote_file('index.html')
+        assert b'"slug": "sunny-walk"' in site.remote_file('w/sunny-walk/index.html')
+        assert site.remote_file('README.md')==b'site\n'
+        assert job['result']['live']['ok']
+        assert SITE+'walks.json' in job['result']['live']['detail']
+    finally:_done(env,site)
 
 
 # ══ front page (22 Oct 2026) ═════════════════════════════════════════════════
 
 def test_publish_becomes_the_front_page_by_default():
-    site, env = Site(), _env()
+    site,env=Site(),_env()
     try:
-        _, job = _publish(env, Fakes(site), front_page=None)            # the tick's default
-        assert job["status"] == "done", job
-        assert env.q("SELECT id, is_default FROM experience_publications ORDER BY id") == [(1, 1), (2, 0)]
-        assert b'"slug": "sunny-walk"' in site.remote_file("index.html")
-        assert b"preview sunny-walk" in site.remote_file("preview.html")       # the /b card is this walk's
-        assert site.remote_file("w/sunny-walk/preview.html") == site.remote_file("preview.html")
-        js = _src("frontend/static/js/walk-publish.js")
-        assert '<input type="checkbox" id="wpub-front" checked>' in js
-        assert "body.front_page = fp ? fp.checked : true;" in js
-    finally:
-        _done(env, site)
+        _,job=_publish(env,Fakes(site),front_page=None)
+        assert job['status']=='done',job
+        assert env.q('SELECT id, is_default FROM experience_publications ORDER BY id')==[(1,1),(2,0)]
+        assert json.loads(site.remote_file('walks.json'))['featured']=='sunny-walk'
+        assert b'w/sunny-walk/' in site.remote_file('preview.html')
+        js=_src('frontend/static/js/walk-publish.js')
+        assert 'body.front_page = true;' in js
+        assert 'all-walks collection' in js
+    finally:_done(env,site)
 
 
-def test_untick_keeps_the_old_front_page_and_rebuilds_its_card():
-    site, env = Site(), _env()
+def test_legacy_false_flag_still_refreshes_latest_preview():
+    # Legacy API callers may still pass false. Latest published now wins,
+    # independently of the former root-page assignment.
+    site,env=Site(),_env()
     try:
-        root_before = site.remote_file("index.html")
-        _, job = _publish(env, Fakes(site), front_page=False)
-        assert job["status"] == "done", job
-        assert env.q("SELECT id, is_default FROM experience_publications ORDER BY id") == [(1, 0), (2, 1)]
-        assert site.remote_file("index.html") == root_before                     # front page unchanged
-        card = site.remote_file("preview.html")
-        assert b"preview other" in card and b"sunny-walk" not in card           # built from the front-page walk
-        assert site.remote_file("photos/1.jpg") != b"old"                        # with its hero photo
-        assert {s["key"]: s["detail"] for s in job["steps"]}["build"] == "front-page card rebuilt from other"
-    finally:
-        _done(env, site)
+        _,job=_publish(env,Fakes(site),front_page=False)
+        assert job['status']=='done',job
+        assert json.loads(site.remote_file('walks.json'))['featured']=='sunny-walk'
+        assert b'w/sunny-walk/' in site.remote_file('preview.html')
+        assert site.remote_file('w/other/index.html')
+    finally:_done(env,site)
 
 
-def test_untick_with_a_legacy_front_page_stops_and_commits_nothing():
-    site, env = Site(front=None), _env()
+def test_legacy_root_is_preserved_when_catalogue_is_created():
+    # The old root walk is preserved at its own address before root becomes a list.
+    site,env=Site(front=None),_env()
     try:
-        before = (site.head(), site.remote_count())
-        _, job = _publish(env, Fakes(site), front_page=False)
-        assert job["status"] == "stopped" and job["stop_kind"] == "build", job
-        assert "Tick 'Front page'" in job["message"] and "not published from the app" in job["message"]
-        assert (site.head(), site.remote_count()) == before and site.clean() and _pub(env)[0] == "draft"
-    finally:
-        _done(env, site)
+        _,job=_publish(env,Fakes(site),front_page=False)
+        assert job['status']=='done',job
+        assert site.remote_file('w/legacy/index.html')
+        assert b'Foraging walks' in site.remote_file('index.html')
+        assert b'w/sunny-walk/' in site.remote_file('preview.html')
+    finally:_done(env,site)
 
 
 def test_preview_card_is_filled_from_its_own_walk_or_fails():
@@ -592,20 +578,19 @@ def test_unpublish_removes_the_page_in_one_commit_and_keeps_the_walk():
         _done(env, site)
 
 
-def test_unpublish_of_the_default_also_removes_the_front_page():
-    site, env = Site(front=None), _env(is_default=True)
+def test_unpublish_of_latest_keeps_catalogue_and_falls_back():
+    site,env=Site(front=None),_env(is_default=True)
     try:
-        _publish(env, Fakes(site))
-        n = site.remote_count()
-        _, job = _publish(env, Fakes(site), kind="unpublish")
-        assert job["status"] == "done", job
-        files = site.remote_files()
-        assert site.remote_count() == n + 1
-        assert not ({"index.html", "preview.html", "tree.html"} & files) and not any(f.startswith("photos/") for f in files)
-        assert "README.md" in files and "w/other/index.html" in files
-        assert env.q("SELECT COUNT(*) FROM saved_walks WHERE id = 5")[0][0] == 1
-    finally:
-        _done(env, site)
+        _publish(env,Fakes(site));n=site.remote_count()
+        _,job=_publish(env,Fakes(site),kind='unpublish')
+        assert job['status']=='done',job
+        assert site.remote_count()==n+1
+        assert not any(f.startswith('w/sunny-walk/') for f in site.remote_files())
+        assert b'Foraging walks' in site.remote_file('index.html')
+        assert json.loads(site.remote_file('walks.json'))['featured'] != 'sunny-walk'
+        assert env.q('SELECT COUNT(*) FROM saved_walks WHERE id = 5')[0][0]==1
+        assert job['result']['live']['ok']
+    finally:_done(env,site)
 
 
 # ══ guests ════════════════════════════════════════════════════════════════════

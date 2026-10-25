@@ -337,6 +337,16 @@ class SpeciesRecipe(Base):
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="approved", index=True)
     # notes: free-text flag set by system events (e.g. "species renamed — recipe may be incorrect")
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    # Recipes page + public Recipes tab (migration 0059, Melvin 25 Oct 2026).
+    # summary: one-line preview (recipe_summary_line backfill; curator-editable).
+    # recipe_type: RECIPE_TYPES, NULL shows "Other". hide_from_public: keeps an
+    # approved recipe off the public walk page only (the app still shows it).
+    # website_url: https link on melvinjarman.co.uk (recipe_website_url_ok).
+    summary: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    recipe_type: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
+    hide_from_public: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False,
+                                                   server_default="0")
+    website_url: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
     # ai_draft_id: FK back to the originating draft (nullable — human-added recipes have none)
     ai_draft_id: Mapped[Optional[int]] = mapped_column(
         Integer, ForeignKey("species_ai_drafts.id"), nullable=True
@@ -763,7 +773,7 @@ def _md_plain(line: str) -> str:
     import re as _re
     t = _re.sub(r"^[#>\s]+", "", line.strip())
     t = _re.sub(r"[*_`]+", "", t).strip()
-    t = _re.sub(r"^recipe\s*title\s*:\s*", "", t, flags=_re.I)    # "Recipe Title: Marsh Willowherb…"
+    t = _re.sub(r"^(recipe\s*title|recipe|title)\s*:\s*", "", t, flags=_re.I)    # "Recipe Title: Marsh Willowherb…", "Recipe: …", "Title: …"
     return t.rstrip(":").strip()
 
 
@@ -771,6 +781,17 @@ def is_safety_note_line(plain: str) -> bool:
     import re as _re
     # "Safety note", "Safety notice:", "SAFETY WARNING — READ FIRST", "Caution:", "Warning –" …
     return bool(_re.match(r"(safety|caution|warning)\b", plain.strip(), _re.I))
+
+
+# A section heading inside a recipe ("## Ingredients", "### Method") is never its title.
+_RECIPE_SECTION_HEADINGS = {"ingredients", "ingredient", "method", "methods", "instructions", "directions",
+                            "steps", "notes", "note", "serves", "to serve", "serving", "preparation",
+                            "equipment", "tips", "variations", "you will need", "for the dressing",
+                            "for the sauce", "storage", "makes"}
+
+
+def _is_section_heading(t: str) -> bool:
+    return t.strip().rstrip(":").lower() in _RECIPE_SECTION_HEADINGS
 
 
 def recipe_display_title(title: Optional[str], body: Optional[str]) -> str:
@@ -781,7 +802,7 @@ def recipe_display_title(title: Optional[str], body: Optional[str]) -> str:
     for line in lines:                                   # first heading
         if _re.match(r"^\s*#{1,6}\s", line):
             t = _md_plain(line)
-            if t and not is_safety_note_line(t):
+            if t and not is_safety_note_line(t) and not _is_section_heading(t):
                 return t
     in_note = False                                      # a safety note takes its whole paragraph
     for line in lines:                                   # first plain line
@@ -794,7 +815,7 @@ def recipe_display_title(title: Optional[str], body: Optional[str]) -> str:
         t = _md_plain(raw)
         if t and is_safety_note_line(t):
             in_note = True
-        if not t or in_note:
+        if not t or in_note or _is_section_heading(t) or _re.match(r"^\s*#{1,6}\s", raw):
             continue
         m = _re.match(r"(.+?[.!?])(\s|$)", t)
         if m:
@@ -803,6 +824,195 @@ def recipe_display_title(title: Optional[str], body: Optional[str]) -> str:
             t = t[:_RECIPE_TITLE_CAP - 1].rsplit(" ", 1)[0].rstrip(",;:—-") + "…"
         return t
     return ""
+
+
+def recipe_title_source(title: Optional[str], body: Optional[str]) -> Optional[str]:
+    """Where recipe_display_title() got its text: 'own' (the stored title),
+    'heading' (the body's first usable heading), 'line' (a first prose sentence
+    — not a real title; the Recipes page flags it "needs a title"), or None."""
+    import re as _re
+    if (title or "").strip():
+        return "own"
+    shown = recipe_display_title(None, body)
+    if not shown:
+        return None
+    lines = (body or "").replace("\r", "").split("\n")
+    for line in lines:
+        if _re.match(r"^\s*#{1,6}\s", line) and _md_plain(line) == shown:
+            return "heading"
+    # A title written as the body's first line on its own (after any safety-note
+    # paragraph, which recipe_display_title skips too): wholly bold
+    # ("**Spruce-Tip & Caramelised Onion Tart**") or labelled ("Title: …",
+    # "Recipe: …"), with no sentence full stop — a heading in all but syntax.
+    first, in_note = "", False
+    for line in lines:
+        raw = line.strip()
+        if not raw or _re.fullmatch(r"([-*_]\s*){3,}", raw):
+            in_note = False
+            continue
+        if raw.startswith(">"):
+            continue
+        if is_safety_note_line(_md_plain(raw)):
+            in_note = True
+        if in_note:
+            continue
+        first = raw
+        break
+    labelled = bool(_re.match(r"^\**\s*(recipe\s*title|recipe|title)\s*:", first, _re.I))
+    bold = bool(_re.fullmatch(r"\*\*[^*]+\*\*", first))
+    if (labelled or bold) and _md_plain(first) == shown and not shown.endswith("."):
+        return "heading"
+    return "line"
+
+
+# ---------------------------------------------------------------------------
+# Recipe page fields (Melvin, 25 Oct 2026 — Recipes page + public Recipes tab).
+# The ONLY rules for a recipe's one-line summary, its proposed type, its plant
+# parts and its public website link. Used by the app's Recipes page
+# (app/api/recipes.py), the backfill (scripts/recipe_fields_backfill.py) and the
+# experience export's Recipes tab.
+#   recipe_summary_line — the first sentence of the body (>= 25 chars, capped
+#       at ~120) that is not a heading, rule, blockquote, list item, byline,
+#       "Ingredients:"-style label, the title itself, or any line of a safety
+#       note paragraph; and that carries no hazard / medicinal wording and no
+#       source citation ("[76]") — a one-line summary is never a partial
+#       safety statement (the full warnings sit beside the recipe). Text is
+#       copied, only trimmed — never rewritten.
+#   propose_recipe_type — the dish noun of the title's head before "with" /
+#       "—" / ":" ("Raspberry Leaf Tea with Burnt Honey" → "Raspberry Leaf
+#       Tea"): the type word that ends it ("Red Clover Tea Cake" is a cake),
+#       else its last type word that is not an ingredient's modifier or a
+#       plain ingredient ("Wild Salsa Verde"; "Watercress, Burnt Butter &
+#       Hazelnut" names no dish). No match → None ("Other"). A proposal,
+#       editable by the curator.
+#   recipe_plant_parts  — plant parts named in title + body (display grouping).
+#   recipe_website_url_ok — https on melvinjarman.co.uk (or a subdomain) only.
+# ---------------------------------------------------------------------------
+RECIPE_TYPES = ("drink", "ferment", "condiment", "preserve", "main", "side", "sweet", "other")
+_RECIPE_SUMMARY_CAP = 120
+_SUMMARY_SKIP = None     # compiled on first use (below)
+_SUMMARY_SKIP_WORDS = (r"toxic|toxin|poison|avoid|never|do not|don't|allerg|pregnan|breastfeed|caution|"
+                       r"warning|safety|safe|danger|irritat|contraindicat|sensiti[sz]|react|deadly|fatal|"
+                       r"look-?alikes?|medic|remed|heal(s|ing|er)?|cures?|tonic|therap|diuretic|ailment|"
+                       r"digestion|dose|doses")
+# Most specific first: "Elderflower cordial" is a drink, "Pickled walnuts" a
+# preserve, "Birch syrup sorbet" a sweet, "Harebell salad with … dressing" a
+# side (the dish, not its dressing).
+_RECIPE_TYPE_KEYWORDS = (
+    ("ferment",   r"ferment|kimchi|sauerkraut|kraut|lacto|kvass|kombucha|kefir|miso|garum"),
+    ("drink",     r"tea|tisane|cordial|lemonade|infusion|infused water|wine|beer|ale|cocktail|gin|"
+                  r"vodka|liqueur|schnapps|soda|juice|smoothie|punch|spritz|champagne|mead|cider|"
+                  r"latte|coffee|drink|sharbat|switchel|shrub"),
+    ("sweet",     r"cake|biscuit|biscuits|cookie|cookies|ice cream|sorbet|granita|dessert|"
+                  r"pudding|panna cotta|crumble|muffin|muffins|brownie|meringue|custard|parfait|mousse|"
+                  r"fudge|truffle|shortbread|scone|scones|pancake|pancakes|crêpe|crepe|cheesecake|"
+                  r"caramel|fool|syllabub|mochi|trifle|posset|jelly sweets|sweets"),
+    ("preserve",  r"jam|jelly|jellies|pickle|pickled|pickles|chutney|preserve|preserved|marmalade|"
+                  r"compote|candied|cured|confit|curd|leather|paste|syrup"),
+    ("main",      r"soup|risotto|pasta|pie|tart|tartlet|curry|stew|omelette|frittata|quiche|gnocchi|ravioli|"
+                  r"tagliatelle|spaghetti|linguine|pizza|tart tatin|burger|fritters|tempura|bake|"
+                  r"casserole|dumplings|pierogi|lasagne|lasagna|broth|ramen|noodles|tortilla|"
+                  r"galette|stir-fry|stir fry|risotto|polenta|dal|dhal|chowder|bisque|stuffed|porridge|"
+                  r"barley|pilaf|stew"),
+    ("side",      r"salad|slaw|coleslaw|side|gratin|roasted|sautéed|sauteed|wilted|greens|chips|"
+                  r"crisps|bhaji|bhajis|bread|focaccia|flatbread|crackers"),
+    ("condiment", r"pesto|salt|sauce|oil|butter|mayonnaise|mayo|aioli|dressing|vinaigrette|relish|"
+                  r"mustard|seasoning|spice|rub|dukkah|za'atar|zaatar|vinegar|ketchup|salsa|dip|"
+                  r"hummus|tapenade|gremolata|chimichurri|crumb|crumbs|powder|sprinkle|glaze"),
+)
+_TYPE_FALLBACK_SKIP = {"preserved", "pickled", "cured", "candied", "butter", "oil", "salt", "crumb", "crumbs",
+                       "paste", "curd", "syrup", "honey"}
+_RECIPE_PARTS = (
+    ("flower", r"flowers?|blossoms?|petals?|buds?|florets?|catkins?"),
+    ("leaf",   r"leaf|leaves|greens|tops"),
+    ("shoot",  r"shoots?|stems?|stalks?|tips?|fronds?|spears?"),
+    ("berry",  r"berry|berries|fruits?|hips?|haws?|drupes?"),
+    ("seed",   r"seeds?|nuts?|acorns?|kernels?"),
+    ("root",   r"roots?|rhizomes?|tubers?|bulbs?|corms?"),
+    ("bark",   r"bark|sap|resin|needles?"),
+    ("whole",  r"caps?|mushrooms?|fruiting bod(y|ies)"),
+)
+
+
+def _word_re(alts: str):
+    import re as _re
+    return _re.compile(r"(?<![\w'])(" + alts + r")(?![\w'])", _re.I)
+
+
+def recipe_summary_line(title: Optional[str], body: Optional[str]) -> str:
+    import re as _re
+    title_key = (recipe_display_title(title, body) or "").strip().lower()
+    for para in _re.split(r"\n\s*\n", (body or "").replace("\r", "")):
+        lines = [l for l in para.split("\n") if l.strip()]
+        if not lines:
+            continue
+        if is_safety_note_line(_md_plain(lines[0])):
+            continue                                   # a safety note takes its whole paragraph
+        for raw in lines:
+            r = raw.strip()
+            if (r.startswith(("#", ">", "|")) or _re.fullmatch(r"([-*_]\s*){3,}", r)
+                    or _re.match(r"^([-*+•]|\d+[.)])\s", r)):
+                continue                               # heading, quote, table, rule, list item
+            t = _md_plain(r)
+            if (not t or is_safety_note_line(t) or t.lower() == title_key
+                    or t.lower().startswith("by ") or r.rstrip().endswith(":")):
+                continue
+            for s in _re.split(r"(?<=[.!?])\s+(?=[A-Z\"'‘“])", t):
+                s = s.strip()
+                if len(s) < 25 or is_safety_note_line(s) or s.lower() == title_key:
+                    continue
+                if _summary_skip().search(s) or _re.search(r"\[\d+\]", s):
+                    continue
+                if len(s) > _RECIPE_SUMMARY_CAP:
+                    s = s[:_RECIPE_SUMMARY_CAP - 1].rsplit(" ", 1)[0].rstrip(",;:—-") + "…"
+                return s
+    return ""
+
+
+def _summary_skip():
+    global _SUMMARY_SKIP
+    if _SUMMARY_SKIP is None:
+        _SUMMARY_SKIP = _word_re(_SUMMARY_SKIP_WORDS)
+    return _SUMMARY_SKIP
+
+
+def propose_recipe_type(title: Optional[str]) -> Optional[str]:
+    import re as _re
+    t = (title or "").strip()
+    if not t:
+        return None
+    head = _re.split(r"\s+with\s+|\s+[—–-]\s+|:\s+|\s+served\s+", t, maxsplit=1, flags=_re.I)[0]
+    head = head.strip().rstrip(".!?,;:)")
+    # 1. The dish noun ends the name: "Nettle, White Miso & Hazelnut Soup" is a soup.
+    for kind, alts in _RECIPE_TYPE_KEYWORDS:
+        if _re.search(r"(?<![\w'])(" + alts + r")$", head, _re.I):
+            return kind
+    # 2. Else the last type word in the name ("Wild Salsa Verde", "Wild Thyme
+    #    Roasted Carrots") — never an ingredient's modifier or a plain
+    #    ingredient ("Preserved Lemon", "Burnt Butter" name no dish → Other).
+    best, best_end = None, -1
+    for kind, alts in _RECIPE_TYPE_KEYWORDS:
+        for m in _word_re(alts).finditer(head):
+            if m.group(0).lower() in _TYPE_FALLBACK_SKIP:
+                continue
+            if m.end() > best_end:            # ties keep the earlier (more specific) type
+                best, best_end = kind, m.end()
+    return best
+
+
+def recipe_plant_parts(title: Optional[str], body: Optional[str]) -> list:
+    text = f"{title or ''}\n{body or ''}"
+    return [part for part, alts in _RECIPE_PARTS if _word_re(alts).search(text)]
+
+
+def recipe_website_url_ok(url: Optional[str]) -> bool:
+    from urllib.parse import urlparse
+    u = (url or "").strip()
+    if not u:
+        return False
+    p = urlparse(u)
+    host = (p.hostname or "").lower()
+    return p.scheme == "https" and (host == "melvinjarman.co.uk" or host.endswith(".melvinjarman.co.uk"))
 
 
 # ---------------------------------------------------------------------------

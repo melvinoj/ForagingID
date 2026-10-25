@@ -16,8 +16,8 @@ Publish, in order; nothing is pushed until the push step:
   3. build     — export.py into a temp folder (the gates run inside the build).
   4. checks    — every photo: no EXIF / GPS / XMP / IPTC (exiftool + PIL);
                  every page: no unfilled {{X}}, Impressum + Datenschutz set.
-  5. commit    — in a temporary detached worktree of the clone: only this
-                 walk's files change; one commit.
+  5. commit    — in a temporary detached worktree of the clone: the walk and its catalogue/preview
+                 update together; one commit.
   6. push      — normal `git push origin HEAD:refs/heads/main` (never --force).
                  Rejected → the remote moved on: stop and report. Then the clone's
                  main fast-forwards to the pushed commit (--ff-only).
@@ -48,6 +48,7 @@ from pathlib import Path
 from typing import Callable, Optional
 
 from app import database
+from app.services.experience_catalogue import rebuild_catalogue, preserve_root_walk, ROOT_FILES
 from app.models.experience import ExperiencePublication
 from app.models.walk import SavedWalk
 from app.services.background_processes import bp_finish, bp_patch, bp_progress, bp_start
@@ -393,9 +394,35 @@ async def front_page_slug(clone: Optional[Path] = None) -> tuple[bool, Optional[
     return True, d.get("slug")
 
 
+def recipe_bank_changes(plan: dict, before: Optional[dict]) -> dict:
+    """The Recipes tab for review before publishing (Melvin, 25 Oct 2026):
+    every public recipe the build will list, and which are new since the page
+    now on the site (its window.DATA.recipe_bank). A page published before the
+    Recipes tab existed has none — then every recipe is new (first=True)."""
+    bank = (plan.get("recipe_bank") or {}).get("list", [])
+    had = None if before is None else before.get("recipe_bank")
+    was = {r.get("recipe_id") for r in (had or [])}
+    label = lambda r: f"{r['dish']} — {r.get('en') or r.get('sci')}"
+    return {"count": len(bank), "first": had is None,
+            "new": sorted(label(r) for r in bank if r["recipe_id"] not in was),
+            "removed": sorted(f"{r.get('dish')} — {r.get('en') or r.get('sci')}" for r in (had or [])
+                              if r.get("recipe_id") not in {b["recipe_id"] for b in bank}),
+            "list": [{"recipe_id": r["recipe_id"], "label": label(r), "season": r["season"], "type": r["type"],
+                      "caution": r["caution"], "url": r["url"]} for r in bank],
+            "not_public": (plan.get("recipe_bank") or {}).get("excluded", [])}
+
+
 def plan_changes(plan: dict, before: Optional[dict], where: str) -> dict:
     """Added / removed species, badge changes, recipes in/out vs the page on the
-    site; plus the recipes this plan withholds (caution without a warning)."""
+    site; plus the recipes this plan withholds (caution without a warning) and
+    the Recipes tab list (recipe_bank_changes)."""
+    out = _plan_changes(plan, before, where)
+    if plan.get("ok"):
+        out["recipe_bank"] = recipe_bank_changes(plan, before)
+    return out
+
+
+def _plan_changes(plan: dict, before: Optional[dict], where: str) -> dict:
     withheld = [{"species": c["scientific_name"], "recipe_ids": c["recipes_withheld"]}
                 for c in plan.get("caution", []) if c.get("recipes_withheld")]
     if not plan.get("ok"):
@@ -528,8 +555,6 @@ def _page_urls(slug: str, is_default: bool) -> list[tuple[str, str]]:
     """(url, relative dir) for each place the page is served."""
     base = site_url()
     out = [(f"{base}w/{slug}/", f"w/{slug}")]
-    if is_default:
-        out.insert(0, (base, ""))
     return out
 
 
@@ -540,42 +565,6 @@ async def _load(pub_id: int):
         p = await db.get(ExperiencePublication, pub_id)
         w = await db.get(SavedWalk, p.saved_walk_id) if p is not None and p.saved_walk_id else None
         return p, w
-
-
-async def _front_publication():
-    """The default (front-page) publication row, or None."""
-    from sqlalchemy import select
-    async with database.AsyncSessionLocal() as db:
-        return (await db.execute(select(ExperiencePublication)
-                                 .where(ExperiencePublication.is_default.is_(True)))).scalar_one_or_none()
-
-
-_PREVIEW_IMG = re.compile(r'<img src="(photos/[^"/]+\.jpg)"')
-
-
-async def build_front_preview(clone: Path, out_dir: Path) -> tuple[Path, Optional[Path], str]:
-    """preview.html (the melvinjarman.co.uk/b card) is always the front-page
-    walk's (Melvin, 22 Oct 2026). Publishing a walk that is NOT the front page
-    rebuilds the root card from the front-page publication — never from this
-    walk, never a fallback. Stops when the site's front page is not that
-    publication's page (e.g. the legacy walk-4 page). Returns (preview.html,
-    its hero photo, front slug) built in out_dir."""
-    front = await _front_publication()
-    exists, root_slug = await front_page_slug(clone)
-    if front is None or front.status != "published" or not exists or root_slug != front.slug:
-        now = (f"the page for '{root_slug}'" if root_slug else "the old Rümmelsbühl page (not published from the app)") \
-            if exists else "empty"
-        raise PublishStop("build", "Not published: the site's front page is " + now + ", not a front-page walk "
-                          "published from here, so its preview card can't be rebuilt from it. Tick 'Front page' "
-                          "to make this walk the front page (or republish the front-page walk first).")
-    if front.saved_walk_id is None:
-        raise PublishStop("build", f"Not published: the front-page walk ({front.slug}) was deleted.")
-    await run_build(front, out_dir)
-    preview = out_dir / "preview.html"
-    m = _PREVIEW_IMG.search(preview.read_text(encoding="utf-8"))
-    if not m:
-        raise PublishStop("build", "Not published: the front-page walk's preview card has no hero photo.")
-    return preview, out_dir / m.group(1), front.slug
 
 
 async def _record(pub_id: int, **fields) -> dict:
@@ -672,23 +661,19 @@ async def run_publish(job: dict, clone: Optional[Path] = None) -> None:
                     "species": [{"id": p["id"], "scientific_name": p["scientific_name"], "en": p["en"],
                                  "badge": p["badge"]} for p in plan["public_species"]],
                     "recipes": [{"recipe_id": r["recipe_id"], "species_id": r["species_id"], "dish": r["dish"]}
-                                for r in plan["recipes"]["included"]]}
+                                for r in plan["recipes"]["included"]],
+                    # Recipes tab (25 Oct 2026): the ids it lists, for the record.
+                    "recipe_bank": [b["recipe_id"] for b in (plan.get("recipe_bank") or {}).get("list", [])]}
         with tempfile.TemporaryDirectory(prefix="exp_build_") as tmp:
             out = Path(tmp)
             await progress("build", "running")
             await run_build(pub, out)
-            front_card = None
-            if not pub.is_default:
-                front_out = Path(tmp) / "_front"
-                front_out.mkdir()
-                front_card = await build_front_preview(clone, front_out)
-            await progress("build", "ok", "" if front_card is None
-                           else f"front-page card rebuilt from {front_card[2]}")
+            await progress("build", "ok", "walk built; catalogue and latest preview update in the same commit")
 
             await progress("checks", "running")
-            dirs = page_dirs(out, pub.slug, bool(pub.is_default))
+            dirs = page_dirs(out, pub.slug, False)
             photos = sorted({p for d in dirs for p in (d / "photos").glob("*.jpg")}) if dirs else []
-            bad = check_pages(dirs) + await check_photos(photos + ([front_card[1]] if front_card else []))
+            bad = check_pages(dirs) + await check_photos(photos)
             if bad:
                 raise PublishStop("check", "Checks failed — nothing was pushed: " + "; ".join(bad[:8])
                                   + (f" (+{len(bad) - 8} more)" if len(bad) > 8 else ""))
@@ -700,21 +685,13 @@ async def run_publish(job: dict, clone: Optional[Path] = None) -> None:
             rels = [rel for _, rel in _page_urls(pub.slug, bool(pub.is_default))]
             drop_root = root_was_ours and not pub.is_default      # no longer the default: its old front page goes
 
+            catalogue_expected = {}
             def change(wt: Path) -> list[str]:
-                _replace_page(dirs, [wt / r if r else wt for r in rels])
-                if drop_root:
-                    _remove_page(wt, root=True)
-                if front_card is not None:
-                    # The root card is the front-page walk's: its preview.html + hero photo.
-                    shutil.copy2(front_card[0], wt / "preview.html")
-                    (wt / "photos").mkdir(exist_ok=True)
-                    shutil.copy2(front_card[1], wt / "photos" / front_card[1].name)
-                return rels
-            allowed = [r for r in rels if r]
-            if "" in rels or drop_root:
-                allowed += ["index.html", "preview.html", "tree.html", "photos"]
-            if front_card is not None:
-                allowed += ["preview.html", "photos"]
+                preserve_root_walk(wt)
+                _replace_page(dirs, [wt / r for r in rels])
+                catalogue_expected.update(rebuild_catalogue(wt, published_slug=pub.slug))
+                return rels + list(ROOT_FILES)
+            allowed = ["w", *ROOT_FILES]
             msg = (f"Publish walk {walk.id} '{walk.name}' → {', '.join(r or '/' for r in rels)}\n\n"
                    f"{len(plan['public_species'])} species, {len(plan['stops'])} stops. "
                    f"From ForagingID experience publication #{pub.id}.")
@@ -732,9 +709,9 @@ async def run_publish(job: dict, clone: Optional[Path] = None) -> None:
             expect = {}
             for (url, rel), d in zip(_page_urls(pub.slug, bool(pub.is_default)), dirs):
                 for name in OWNED_FILES:
-                    expect[url + ("" if name == "index.html" else name)] = (d / name).read_bytes()
-            if front_card is not None:
-                expect[site_url() + "preview.html"] = front_card[0].read_bytes()
+                    expect[url + ("" if name == "index.html" else name)] = (await git(clone, "show", f"HEAD:w/{pub.slug}/{name}"))[1].encode()
+            expect.update({site_url() + ("" if name == "index.html" else name): body
+                           for name, body in catalogue_expected.items()})
 
         await progress("record", "running")
         row = await _record(pub.id, status="published", published_at=datetime.utcnow(), unpublished_at=None,
@@ -746,6 +723,8 @@ async def run_publish(job: dict, clone: Optional[Path] = None) -> None:
         await progress("live", "ok" if live["ok"] else "failed",
                        "live pages match the build" if live["ok"] else
                        f"not live yet after {LIVE_TIMEOUT_S}s: {live['pending'][:3]} — pushed and recorded; check again")
+        if not live["ok"]:
+            raise PublishStop("live", "Files were pushed and recorded, but the live walk/catalogue/preview did not match within five minutes. GitHub Pages may still be caching; check the live URLs before treating this publish as verified.")
         url = _page_urls(pub.slug, bool(pub.is_default))[0][0]
         return {"message": f"Published {url} at {sha[:7]}." + ("" if live["ok"] else " The live page isn't showing it yet."),
                 "commit": sha, "url": url, "live": live, "publication": row}
@@ -772,13 +751,14 @@ async def run_unpublish(job: dict, clone: Optional[Path] = None) -> None:
         root_ours = exists and (root_slug == pub.slug if root_slug is not None else bool(pub.is_default))
         removed: list[str] = []
 
+        catalogue_expected = {}
         def change(wt: Path) -> list[str]:
+            preserve_root_walk(wt)
             removed.extend(f"w/{pub.slug}/" for _ in _remove_page(wt / "w" / pub.slug, root=False))
-            if root_ours:
-                removed.extend(_remove_page(wt, root=True))
-            return removed
-        allowed = [f"w/{pub.slug}"] + (["index.html", "preview.html", "tree.html", "photos"] if root_ours else [])
-        msg = (f"Unpublish {pub.slug}" + (" (and the front page)" if root_ours else "")
+            catalogue_expected.update(rebuild_catalogue(wt))
+            return removed + list(ROOT_FILES)
+        allowed = ["w", *ROOT_FILES]
+        msg = (f"Unpublish {pub.slug} and refresh the walk collection"
                + (f" — walk {walk.id} '{walk.name}'" if walk else "")
                + f"\n\nFrom ForagingID experience publication #{pub.id}. The saved walk is kept.")
         async def committed(c):
@@ -799,7 +779,7 @@ async def run_unpublish(job: dict, clone: Optional[Path] = None) -> None:
 
         await progress("live", "running", "waiting for GitHub Pages")
         gone = [u for u, rel in _page_urls(pub.slug, root_ours)]
-        live = await wait_live({u: None for u in gone}, sha)
+        live = await wait_live({**{u: None for u in gone}, **{site_url() + ("" if n == "index.html" else n): b for n, b in catalogue_expected.items()}}, sha)
         await progress("live", "ok" if live["ok"] else "failed",
                        "the page returns 404" if live["ok"] else f"still served after {LIVE_TIMEOUT_S}s: {live['pending'][:3]}")
         return {"message": f"Unpublished {pub.slug} ({', '.join(removed) or 'nothing was on the site'}). "

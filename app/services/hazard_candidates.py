@@ -10,13 +10,22 @@ ONE rule, used everywhere:
   which is_hazard_species() (severity toxic/deadly OR verdict toxic) makes the
   observation a hazard case, at any rank and any score.
 
-A hazard case:
-  * can never auto-approve        — scan._identify_scanned / decide_agreement;
-  * is listed in Review's Critical section while no human has decided it;
-  * shows the hazard species by name, in red with ☠, on its review card;
-  * needs a second explicit tap naming the hazard to approve it as any OTHER
-    species (hazard_ack — require_hazard_ack() below, server-side backstop);
-  * is never bulk-approved / bulk-confirmed.
+A hazard case can never auto-approve, at any rank (scan._identify_scanned /
+decide_agreement — every hit, hazard_hits()).
+
+Tiers (Melvin, 22 Oct 2026 evening — cut the noise, keep human decisions):
+  * GATE — a hazard candidate within the top GATE_TOP_RANK of any source, or
+    scoring >= GATE_MIN_SCORE in any source (hit["gate"]). On a card no human
+    has decided (gating_hazards()): red ☠ line by name on the review card,
+    a second explicit tap naming it to approve as any OTHER species
+    (hazard_ack — require_hazard_ack(), server-side backstop), never
+    bulk-approved / bulk-confirmed, listed by Review's "Hazard candidates"
+    status filter.
+  * DEEP — named lower than that: one grey "Also listed deep in …" line on the
+    card (deep_hazards()), no gate.
+  * A human decision stands: a photo a human has decided (manually_verified,
+    human-approved, rejected — is_undecided_by_human() False) gets no red line
+    and no gate; the rule never reopens or re-flags it.
 
 Read-only: builds an index from species / species_synonyms and inspects
 candidate lists. Never writes.
@@ -161,9 +170,28 @@ def observation_entries(obs) -> List[dict]:
 
 # ── The predicate ────────────────────────────────────────────────────────────
 
+GATE_TOP_RANK = 3          # top 3 of any source …
+GATE_MIN_SCORE = 0.05      # … or >= 5% in any source (scores are 0–1)
+
+
+def entry_gates(e: dict) -> bool:
+    """Is this one source's listing high enough to gate (GATE tier)?"""
+    rank, score = e.get("rank"), e.get("score")
+    try:
+        if rank is not None and int(rank) <= GATE_TOP_RANK:
+            return True
+    except (TypeError, ValueError):
+        pass
+    try:
+        return score is not None and float(score) >= GATE_MIN_SCORE
+    except (TypeError, ValueError):
+        return False
+
+
 def hazard_hits(entries: Iterable[dict], index: HazardIndex) -> List[dict]:
     """One hit per hazard species (deadly first), with every source that named
-    it. Empty list = no hazard."""
+    it. Empty list = no hazard. hit["gate"]: any listing of it, in any source,
+    is in the GATE tier (entry_gates)."""
     found: Dict[int, dict] = {}
     for e in entries:
         hs = index.resolve(e.get("name"))
@@ -172,7 +200,9 @@ def hazard_hits(entries: Iterable[dict], index: HazardIndex) -> List[dict]:
         hit = found.setdefault(hs.species_id, {
             "species_id": hs.species_id, "scientific_name": hs.scientific_name,
             "common": hs.common, "level": hs.level, "label": hs.label, "sources": [],
+            "gate": False,
         })
+        hit["gate"] = hit["gate"] or entry_gates(e)
         # One entry per source; the first seen wins (collectors put the raw
         # lists first, so PlantNet's unrounded raw score is the one kept).
         if any(s["source"] == e.get("source") for s in hit["sources"]):
@@ -183,7 +213,25 @@ def hazard_hits(entries: Iterable[dict], index: HazardIndex) -> List[dict]:
 
 
 def observation_hazards(obs, index: HazardIndex) -> List[dict]:
+    """Every hazard hit, any tier, decided or not (archive report)."""
     return hazard_hits(observation_entries(obs), index)
+
+
+def gating_hazards(obs, index: HazardIndex) -> List[dict]:
+    """The hits that gate THIS card: GATE tier, and only while no human has
+    decided the photo. The red line, the second tap, bulk skips, the publish
+    panel and Review's "Hazard candidates" filter all read this."""
+    if not is_undecided_by_human(obs):
+        return []
+    return [h for h in observation_hazards(obs, index) if h["gate"]]
+
+
+def deep_hazards(obs, index: HazardIndex) -> List[dict]:
+    """DEEP tier hits for the card's grey "Also listed deep in …" line (no
+    gate). Empty for a photo a human has decided."""
+    if not is_undecided_by_human(obs):
+        return []
+    return [h for h in observation_hazards(obs, index) if not h["gate"]]
 
 
 def hazards_other_than(hits: Sequence[dict], approving_name: Optional[str],
@@ -218,7 +266,7 @@ def require_hazard_ack(hits: Sequence[dict], approving_name: Optional[str],
         })
 
 
-# ── Review's Critical section ────────────────────────────────────────────────
+# ── Review's "Hazard candidates" filter ─────────────────────────────────────
 
 def is_undecided_by_human(obs) -> bool:
     """Still waiting for a human: in the queue (pending / needs_review), or
@@ -233,8 +281,9 @@ def is_undecided_by_human(obs) -> bool:
 
 
 async def undecided_hazard_items(session: AsyncSession) -> List[dict]:
-    """Every observation no human has decided whose candidates name a hazard
-    species — deadly first. Read-only."""
+    """Every observation no human has decided with a GATE-tier hazard
+    candidate (gating_hazards) — deadly first. Read-only. Backs Review's
+    "Hazard candidates" status filter."""
     from pathlib import Path
     from sqlalchemy import and_, or_
     from app.models.observation import Observation
@@ -253,7 +302,7 @@ async def undecided_hazard_items(session: AsyncSession) -> List[dict]:
              "review_status": st, "reviewed_at": rv}
         if not is_undecided_by_human(d):
             continue
-        hits = observation_hazards(d, index)
+        hits = gating_hazards(d, index)
         if not hits:
             continue
         name = Path(thumb).name if thumb else None
@@ -271,7 +320,8 @@ async def check_hazard_ack(session: AsyncSession, obs, approving_name: Optional[
                            approving_species_id: Optional[int], hazard_ack: Optional[str]) -> None:
     """require_hazard_ack() for one observation row — called by the shared
     approve helper (observation_service.update_observation_status) and by
-    retry-confirm, before any write."""
+    retry-confirm, before any write. GATE tier only, and never on a photo a
+    human has already decided (gating_hazards)."""
     index = await load_hazard_index(session)
-    require_hazard_ack(observation_hazards(obs, index), approving_name,
+    require_hazard_ack(gating_hazards(obs, index), approving_name,
                        approving_species_id, index, hazard_ack)

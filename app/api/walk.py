@@ -188,19 +188,26 @@ async def walk_membership_for(db: AsyncSession, walk: SavedWalk) -> dict:
     return wm.compute(walk, saved, nearby)
 
 
-async def species_on_saved_walks(db: AsyncSession) -> dict:
-    """{scientific name: [walk names]} for every species at a stop of a saved
+async def saved_walks_by_species(db: AsyncSession) -> dict:
+    """{scientific name: [{id, name}]} for every species at a stop of a saved
     walk — the walk panel's own live membership (walk_membership.compute), so
-    Review's "on a walk" agrees with what the walk shows."""
+    Review's "on a walk" and the Recipes page's walk view agree with what the
+    walk shows."""
     out: dict = {}
     for walk in (await db.execute(select(SavedWalk).order_by(SavedWalk.id))).scalars().all():
         mem = await walk_membership_for(db, walk)
         for st in wm.public_stops(mem):
             for sp in st.get("species") or []:
-                names = out.setdefault(sp["name"], [])
-                if walk.name not in names:
-                    names.append(walk.name)
+                walks = out.setdefault(sp["name"], [])
+                if all(w["id"] != walk.id for w in walks):
+                    walks.append({"id": walk.id, "name": walk.name})
     return out
+
+
+async def species_on_saved_walks(db: AsyncSession) -> dict:
+    """{scientific name: [walk names]} — saved_walks_by_species, names only."""
+    return {name: [w["name"] for w in walks]
+            for name, walks in (await saved_walks_by_species(db)).items()}
 
 
 def _require_curator(identity: Identity) -> None:

@@ -15,6 +15,7 @@
     { href: '/seasons',    label: 'Seasons' },
     { href: '/taxonomy',   label: 'Taxonomy' },
     { href: '/species',    label: 'Species' },
+    { href: '/recipes',    label: 'Recipes' },
     { href: '/sightings',  label: 'Sightings' },
     { href: '/encounters', label: 'Encounters', badgeId: 'nav-badge-encounters' },
     { href: '/lists',      label: 'Booklets' },

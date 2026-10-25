@@ -119,16 +119,17 @@ async def _bulk_review_task(obs_ids: List[int], status: str, pid: Optional[int])
 
                 # Hazard candidates (Melvin, 22 Oct 2026): approving a photo whose
                 # candidates name a hazard species as ANOTHER species needs its
-                # own second tap on the card — never a bulk approve.
+                # own second tap on the card — never a bulk approve. GATE tier,
+                # undecided photos only (gating_hazards).
                 if status in confirmed_statuses:
                     from app.services.hazard_candidates import (
-                        hazards_other_than, load_hazard_index, observation_hazards,
+                        gating_hazards, hazards_other_than, load_hazard_index,
                     )
                     if hazard_index is None:
                         hazard_index = await load_hazard_index(session)
                     _approving = promote_to or obs.species_primary
                     _others = hazards_other_than(
-                        observation_hazards(obs, hazard_index), _approving,
+                        gating_hazards(obs, hazard_index), _approving,
                         obs.species_id if promote_to is None else None, hazard_index)
                     if _others:
                         log.warning("[bulk_review] obs %d not approved: hazard candidate %s",

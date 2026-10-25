@@ -150,7 +150,8 @@ def test_fix_b_species_page_culinary_taste_recipes_and_field_recipes():
     sp = _src("frontend/species.html")
     assert "SafetyGate.culinaryWarnings(data.safety) + _renderFields(ci, culFields" in sp            # Culinary section
     assert '<div id="taste-notes-warnings"></div>' in sp and "twEl.innerHTML = SafetyGate.culinaryWarnings(data.safety)" in sp
-    bank = _extract(sp, "function _renderRecipeBank(", "function setRecipeSeason(")
+    bank = _extract(sp, "function _renderRecipeBank(", "function setRecipeSeason(") + "\n" + \
+        _extract(sp, "const _RECIPE_TYPES = ", "function toggleRecipeEdit(")      # card's curator line (25 Oct)
     card = _extract(sp, "function _renderFieldRecipeCard(", "async function loadYourEncounters(")
     d = _jsc("var window = this; var document = { querySelectorAll: function () { return []; } };\n" + SG + """
 function _esc(s) { return String(s == null ? '' : s); } function _renderMd(s) { return s; } var _SEASON_ICON = {};
@@ -193,13 +194,14 @@ def test_fix_b_lists_print_workshop_and_panels_carry_the_warnings():
     for s in (lists, prn):
         assert "SafetyGate.culinaryWarnings(prof && prof.safety, { handout: true })" in s
         assert '<div class="ws-section-h">Recipe</div>${_printCulinaryWarnings(prof)}<div class="ws-recipe">' in s
-    find = _extract(_src("frontend/index.html"), "async function _findRecipes(", "async function _findMedicinal(")
-    assert "${SafetyGate.culinaryWarnings(sp.safety)}" in find
+    # Find → Make? is the Recipes page now (25 Oct 2026): its tiles carry the warnings.
+    rec = _extract(_src("frontend/recipes.html"), "function tileHtml(r) {", "function _visible() {")
+    assert "SafetyGate.culinaryWarnings(safety)" in rec
     enc = _src("frontend/static/js/encounters-main.js")
     assert "SafetyGate.culinaryWarnings(enc.field_recipe_safety)" in enc
     assert "if ((d.recipe && d.recipe.body) || notes.taste_notes) html += SafetyGate.culinaryWarnings(d.safety);" in enc
     exp = _src("scripts/experience_export/templates/index.html")
-    tab = _extract(exp, "// ── recipes: teaser", "// ── footer")
+    tab = _extract(exp, "// ── recipes: every public recipe", "// ── footer")
     assert "recipeWarn(r)" in tab
 
 

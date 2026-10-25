@@ -2599,8 +2599,10 @@
       <div class="find-mode-row" id="find-mode-row">
         <button class="find-mode-btn active" id="find-mode-season"
                 onclick="setFindMode('season')">🗓 In season</button>
+        <!-- "What can I make?" is the Recipes page now (25 Oct 2026): opens it,
+             on the open saved walk's recipes when a walk is loaded. -->
         <button class="find-mode-btn" id="find-mode-recipes"
-                onclick="setFindMode('recipes')">🍳 Make?</button>
+                onclick="_openRecipesPage()">🍳 Make?</button>
         <button class="find-mode-btn" id="find-mode-medicinal"
                 onclick="setFindMode('medicinal')">🌿 Medicinal</button>
       </div>
@@ -6329,16 +6331,21 @@ function _currentSeason() {
 // capped at 120. A safety note is never a title. Keep the two in step.
 function _recipeMdPlain(line) {
   return line.trim().replace(/^[#>\s]+/, '').replace(/[*_`]+/g, '').trim()
-    .replace(/^recipe\s*title\s*:\s*/i, '').replace(/:+$/, '').trim();
+    .replace(/^(recipe\s*title|recipe|title)\s*:\s*/i, '').replace(/:+$/, '').trim();
 }
 function _isSafetyNoteLine(plain) { return /^(safety|caution|warning)\b/i.test(plain.trim()); }
+// A section heading ("## Ingredients", "Method:") is never a title (_RECIPE_SECTION_HEADINGS).
+const _RECIPE_SECTION_HEADINGS = new Set(['ingredients', 'ingredient', 'method', 'methods', 'instructions',
+  'directions', 'steps', 'notes', 'note', 'serves', 'to serve', 'serving', 'preparation', 'equipment', 'tips',
+  'variations', 'you will need', 'for the dressing', 'for the sauce', 'storage', 'makes']);
+function _isSectionHeading(t) { return _RECIPE_SECTION_HEADINGS.has(t.trim().replace(/:+$/, '').toLowerCase()); }
 function _recipeTitle(r) {
   if ((r.title || '').trim()) return r.title.trim();
   const lines = String(r.body || '').replace(/\r/g, '').split('\n');
   for (const line of lines) {
     if (/^\s*#{1,6}\s/.test(line)) {
       const t = _recipeMdPlain(line);
-      if (t && !_isSafetyNoteLine(t)) return t;
+      if (t && !_isSafetyNoteLine(t) && !_isSectionHeading(t)) return t;
     }
   }
   let inNote = false;
@@ -6348,7 +6355,7 @@ function _recipeTitle(r) {
     if (raw.startsWith('>')) continue;
     let t = _recipeMdPlain(raw);
     if (t && _isSafetyNoteLine(t)) inNote = true;
-    if (!t || inNote) continue;
+    if (!t || inNote || _isSectionHeading(t) || /^\s*#{1,6}\s/.test(raw)) continue;
     const m = t.match(/^(.+?[.!?])(\s|$)/);
     if (m) t = m[1];
     if (t.length > 120) t = t.slice(0, 119).replace(/\s+\S*$/, '').replace(/[,;:—-]+$/, '') + '…';
@@ -9601,7 +9608,7 @@ loadNotes();
 
 // ── Find Tab (Phase 10.6 — Intent-Based Search) ───────────────────────────
 
-let _findMode = 'season';   // 'season' | 'recipes' | 'medicinal' | 'nearby'
+let _findMode = 'season';   // 'season' | 'medicinal' | 'nearby' (Make? opens /recipes)
 
 const _FIND_EDIB_STYLE = {
   edible:   'background:#d1f5da;color:#166534',
@@ -9614,7 +9621,7 @@ const _FIND_EDIB_STYLE = {
 function setFindMode(mode) {
   _findMode = mode;
   // Update mode buttons
-  ['season','recipes','medicinal'].forEach(m => {
+  ['season','medicinal'].forEach(m => {
     const btn = document.getElementById(`find-mode-${m}`);
     if (btn) btn.classList.toggle('active', m === mode);
   });
@@ -9622,11 +9629,7 @@ function setFindMode(mode) {
   const inputRow = document.getElementById('find-input-row');
   const optsRow  = document.getElementById('find-opts-row');
   const input    = document.getElementById('find-input');
-  if (mode === 'recipes') {
-    inputRow.classList.add('visible');
-    optsRow.classList.remove('visible');
-    if (input) input.placeholder = 'Type an ingredient…';
-  } else if (mode === 'medicinal') {
+  if (mode === 'medicinal') {
     inputRow.classList.add('visible');
     optsRow.classList.remove('visible');
     if (input) input.placeholder = 'Type a symptom or use…';
@@ -9639,7 +9642,7 @@ function setFindMode(mode) {
     _runFindMode(mode);
   } else {
     document.getElementById('discover-results').innerHTML =
-      `<div class="find-state">Enter a ${mode === 'recipes' ? 'ingredient' : 'symptom or use'} and press Go.</div>`;
+      '<div class="find-state">Enter a symptom or use and press Go.</div>';
   }
 }
 
@@ -9652,7 +9655,6 @@ async function _runFindMode(mode) {
   resultsEl.innerHTML = '<div class="find-state">🔎 Searching…</div>';
 
   if (mode === 'season')    { await _findInSeason(); return; }
-  if (mode === 'recipes')   { await _findRecipes();  return; }
   if (mode === 'medicinal') { await _findMedicinal(); return; }
 }
 
@@ -9690,48 +9692,15 @@ async function _findInSeason() {
   resultsEl.innerHTML = html;
 }
 
-// ── Mode 2: What can I make? ──────────────────────────────────────────────
+// ── Mode 2: What can I make? → the Recipes page (25 Oct 2026) ────────────
+// Replaces the old in-panel ingredient search (_findRecipes, /api/find/recipes):
+// the Recipes page has the same search plus season / walk / type views, and its
+// tiles carry the same look-alike + preparation warnings. With a saved walk
+// open, it opens on that walk's recipes.
 
-async function _findRecipes() {
-  const q = (document.getElementById('find-input')?.value || '').trim();
-  if (q.length < 2) {
-    document.getElementById('discover-results').innerHTML =
-      '<div class="find-state">Enter at least 2 characters.</div>'; return;
-  }
-  const resultsEl = document.getElementById('discover-results');
-  let data;
-  try {
-    const r = await fetch(`/api/find/recipes?q=${encodeURIComponent(q)}`);
-    if (!r.ok) throw new Error(`HTTP ${r.status}`);
-    data = await r.json();
-  } catch (e) {
-    resultsEl.innerHTML = `<div class="find-state">❌ ${_esc(e.message)}</div>`;
-    return;
-  }
-
-  if (!data.results.length) {
-    resultsEl.innerHTML = `<div class="find-state">No recipes found containing "${_escHtml(q)}".</div>`;
-    return;
-  }
-
-  let html = `<div class="find-section-hdr">🍳 ${data.recipe_count} recipe${data.recipe_count !== 1 ? 's' : ''} across ${data.species_count} species</div>`;
-  for (const sp of data.results) {
-    html += `<div style="margin-bottom:10px">`;
-    html += `<div style="font-size:0.78rem;font-weight:700;font-style:italic;color:#2d5016;margin-bottom:4px;padding:0 2px">
-      ${_escHtml(sp.scientific_name)}${sp.common_name ? ' <span style="font-style:normal;color:#888;font-weight:400">· ' + _escHtml(spCommon(sp.common_name)) + '</span>' : ''}
-    </div>`;
-    for (const rec of sp.recipes) {
-      html += `<div class="find-card" onclick="_discoverShowSpecies('${encodeURIComponent(sp.scientific_name).replace(/'/g, "\\'")}')">
-        <div class="find-info">
-          <div class="find-name">${_escHtml(rec.title || 'Recipe')}</div>
-          ${SafetyGate.culinaryWarnings(sp.safety)}
-          <div class="find-snippet">${_escHtml(rec.snippet)}</div>
-        </div>
-      </div>`;
-    }
-    html += `</div>`;
-  }
-  resultsEl.innerHTML = html;
+function _openRecipesPage() {
+  const walkId = (typeof _walkSaved !== 'undefined' && _walkSaved && _walkSaved.id) ? _walkSaved.id : null;
+  location.href = walkId ? `/recipes?walk=${encodeURIComponent(walkId)}` : '/recipes';
 }
 
 // ── Mode 3: Medicinal use ─────────────────────────────────────────────────

@@ -1340,8 +1340,8 @@
   .hazard-line { color:#b71c1c; background:#fdecea; border-left:3px solid #c62828; font-weight:700;
                  font-size:0.8rem; padding:3px 7px; border-radius:4px; margin-top:6px; }
   .hazard-line.hazard-deadly { border-left-color:#000; }
-  #critical-section h3 { color:#b71c1c; font-size:0.92rem; margin:14px 0 4px; }
-  .crit-card .hazard-line { margin-top:2px; }
+  /* DEEP-tier hazard candidate: one grey line, no gate (hazard-ack.js deepLineHtml) */
+  .hazard-deep-line { color:#666; font-size:0.76rem; margin-top:4px; }
   .confirm-msg.hazard-msg { color:#b71c1c; font-weight:700; }
 </style>
 <script src="/static/js/hazard-ack.js"></script>
@@ -1390,13 +1390,9 @@
   <h2>☠ Critical — hazard on a walk, not human-confirmed</h2>
   <p class="crit-help">These are on a saved walk but only AI-agreed, so a published walk page would leave them off with no ☠ at their stop. Confirm the species if it is right, or re-identify it. Pins stay on the map either way.</p>
   <div id="critical-grid"></div>
-  <!-- Hazard candidates (22 Oct 2026): any source named a toxic/deadly species
-       for a photo no human has decided (candidate_items, same endpoint). -->
-  <h3 id="crit-cand-head" style="display:none"></h3>
-  <p id="crit-cand-help" class="crit-help" style="display:none">A toxic or deadly species was among the
-    identification candidates (any source, any rank). These never auto-approve. Open each card: approving it
-    as anything else needs a second tap that names the hazard.</p>
-  <div id="critical-cand-grid"></div>
+  <!-- Hazard candidates are not listed here (Melvin, 22 Oct 2026 evening): the
+       red line sits on the card in the normal queue; Status → "Hazard
+       candidates" shows just those cards. -->
 </section>
 <div id="toolbar">
   <!-- Group 1: Status -->
@@ -1409,6 +1405,7 @@
         <option value="">All</option>
         <option value="approved">Approved</option>
         <option value="rejected">Manually rejected</option>
+        <option value="hazard_candidates">☠ Hazard candidates</option>
       </select>
     </label>
   </div>
@@ -1876,6 +1873,12 @@ function getFilteredCount(stats, obsCount) {
       : currentOffset + obsCount + PAGE_SIZE;  // conservative forward estimate
   }
   if (phoneOnly) return stats.phone_uploads || 0;
+  // Hazard candidates: computed per card (not in stats) — same page estimate.
+  if (status === 'hazard_candidates') {
+    return obsCount < PAGE_SIZE
+      ? currentOffset + obsCount
+      : currentOffset + obsCount + PAGE_SIZE;
+  }
   if (!status) return stats.total;                        // "All" filter
   const byStatus = stats.by_status || {};
   // manually_verified observations count toward the queue when filter is empty
@@ -1964,13 +1967,16 @@ function _makeCardHtml(obs) {
     try { candidates = JSON.parse(obs.species_candidates_json || '[]'); } catch {}
 
     // ── Hazard candidates (server: app/services/hazard_candidates.py) ─────
-    // Any source naming a toxic/deadly species: shown in red by name above the
-    // proposed name, never in the grey "Also:" line; Approve as another
-    // species needs a second tap naming it (_inlineConfirm).
+    // GATE tier (top 3 or >= 5% in any source) on an undecided card: red by
+    // name above the proposed name; Approve as another species needs a second
+    // tap naming it (_inlineConfirm). DEEP tier: one grey "Also listed deep in
+    // …" line, no gate. Neither repeats in the grey "Also:" line. A card a
+    // human has decided gets neither (server sends both empty).
     const hazards = obs.hazard_candidates || [];
-    const _hazKeys = new Set(hazards.map(h => (h.scientific_name || '').trim().toLowerCase()));
+    const deepHazards = obs.hazard_deep || [];
+    const _hazKeys = new Set(hazards.concat(deepHazards).map(h => (h.scientific_name || '').trim().toLowerCase()));
     _cardHazards.set(obs.id, { hazards, proposed: obs.species_primary || obs.species_suggested || '' });
-    const hazardHtml = HazardAck.lineHtml(hazards);
+    const hazardHtml = HazardAck.lineHtml(hazards) + HazardAck.deepLineHtml(deepHazards);
 
     // ── Species block (plant / fungi only) ────────────────────────────────
     let speciesHtml = '';
@@ -2275,15 +2281,10 @@ async function loadCritical() {
   } catch (_) { d = null; }
   if (window.__refreshCriticalBadge) window.__refreshCriticalBadge();
   const items = (d && d.items) || [];
-  const cand  = (d && d.candidate_items) || [];
-  const candHead = document.getElementById('crit-cand-head');
-  const candHelp = document.getElementById('crit-cand-help');
-  const candGrid = document.getElementById('critical-cand-grid');
-  if (!items.length && !cand.length) {
+  if (!items.length) {
     section.style.display = 'none';
     banner.style.display = 'none';
     grid.innerHTML = '';
-    candGrid.innerHTML = '';
     return;
   }
   const n = d.count;
@@ -2291,30 +2292,6 @@ async function loadCritical() {
   banner.style.display = '';
   section.style.display = '';
   grid.innerHTML = items.map(_critCardHtml).join('');
-  candHead.style.display = candHelp.style.display = cand.length ? '' : 'none';
-  candHead.textContent = `☠ Hazard candidate — not decided by a human (${cand.length})`;
-  candGrid.className = 'crit-grid';
-  candGrid.style.cssText = 'display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:10px';
-  candGrid.innerHTML = cand.map(_critCandCardHtml).join('');
-}
-
-function _critCandCardHtml(it) {
-  const deadly = it.level === 'deadly';
-  const img = it.thumbnail
-    ? `<img src="${_esc(it.thumbnail)}" alt="photo" loading="lazy" onclick="_critOpenPhoto(${it.obs_id}, '#${it.obs_id}')">`
-    : '<div class="no-thumb">🌿</div>';
-  return `<div class="crit-card" id="crit-cand-${it.obs_id}">
-    ${img}
-    <div class="crit-body">
-      <span class="crit-badge ${deadly ? 'deadly' : ''}">☠ ${deadly ? 'Deadly' : 'Toxic'} candidate</span>
-      ${HazardAck.lineHtml(it.hazards)}
-      <span>Proposed: ${it.proposed ? `<em>${_esc(it.proposed)}</em>` : 'no name'}</span>
-      <span style="color:#888">#${it.obs_id} · ${_esc(it.review_status)}${it.ai_approved ? ' (AI-approved — on the map)' : ''}</span>
-      <div class="crit-actions">
-        <a href="/review?id=${it.obs_id}"><button>Open card</button></a>
-      </div>
-    </div>
-  </div>`;
 }
 
 function _critCardHtml(it) {

@@ -57,8 +57,11 @@ class ObservationOut(BaseModel):
     # NONE) — the ITIS "no match" banner turns amber when GBIF matches exactly.
     gbif_match_type: Optional[str] = None
     # Hazard species named by any source (app/services/hazard_candidates.py);
-    # filled by list_observations for the Review card.
+    # filled by list_observations for the Review card. hazard_candidates = GATE
+    # tier on an undecided card (red line + second tap); hazard_deep = DEEP tier
+    # (grey "Also listed deep in …" line). Both empty once a human decided.
     hazard_candidates: Optional[list] = None
+    hazard_deep: Optional[list] = None
 
     model_config = {"from_attributes": True}
 
@@ -295,6 +298,13 @@ async def list_observations(
             stmt = stmt.where(
                 Observation.review_status.in_(["approved", "manually_verified"])
             )
+        elif review_status == "hazard_candidates":
+            # Review's "Hazard candidates" filter (Melvin, 22 Oct 2026 evening):
+            # undecided cards with a GATE-tier hazard candidate — the same
+            # predicate as the red line (hazard_candidates.gating_hazards).
+            from app.services.hazard_candidates import undecided_hazard_items
+            _hz_ids = [i["obs_id"] for i in await undecided_hazard_items(db)]
+            stmt = stmt.where(Observation.id.in_(_hz_ids))
         elif review_status == "needs_review":
             # The review queue — shared definition (observation_counts.REVIEW_QUEUE),
             # so the nav badge and the page's count are exactly this list. It keeps the
@@ -349,7 +359,7 @@ async def list_observations(
     order = sort_map.get(sort, sort_map["date_desc"])
     stmt = stmt.order_by(order).limit(limit).offset(offset)
     rows = (await db.execute(stmt)).all()
-    from app.services.hazard_candidates import load_hazard_index, observation_hazards
+    from app.services.hazard_candidates import deep_hazards, gating_hazards, load_hazard_index
     hazard_index = await load_hazard_index(db)
     out = []
     for row in rows:
@@ -359,7 +369,8 @@ async def list_observations(
         d["itis_accepted_name"] = row[2]
         d["itis_tsn"]           = row[3]
         d["gbif_match_type"]    = row[4]
-        d["hazard_candidates"]  = observation_hazards(obs, hazard_index)
+        d["hazard_candidates"]  = gating_hazards(obs, hazard_index)
+        d["hazard_deep"]        = deep_hazards(obs, hazard_index)
         out.append(d)
     return out
 
@@ -449,9 +460,11 @@ async def get_observation(observation_id: int, db: AsyncSession = Depends(get_db
     # Batch 8: a guest sees confirmed observations only (scenes included).
     if not obs or (identity.is_guest and not is_guest_visible_observation(obs)):
         raise HTTPException(status_code=404, detail="Observation not found")
-    from app.services.hazard_candidates import load_hazard_index, observation_hazards
+    from app.services.hazard_candidates import deep_hazards, gating_hazards, load_hazard_index
     d = ObservationOut.model_validate(obs).model_dump()
-    d["hazard_candidates"] = observation_hazards(obs, await load_hazard_index(db))
+    hazard_index = await load_hazard_index(db)
+    d["hazard_candidates"] = gating_hazards(obs, hazard_index)
+    d["hazard_deep"] = deep_hazards(obs, hazard_index)
     return d
 
 

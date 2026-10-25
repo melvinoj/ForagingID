@@ -126,6 +126,20 @@
   .warn strong { display: block; margin-bottom: 2px; }
   .species-card .walk-stop-recipe { margin: 8px 0 0; }
   .walk-stop-recipe .line { margin-top: 3px; font-style: italic; line-height: 1.4; }
+  /* Recipes tab (25 Oct 2026): every public recipe, teaser tiles, no photos.
+     Own filter selects — never .chip (the Plants filter binds every .chip). */
+  .rf-bar { display: flex; flex-wrap: wrap; gap: 8px; margin: 14px 0 0; }
+  .rf-select { min-height: 36px; padding: 0 10px; border-radius: 18px; border: 1px solid rgba(255,255,255,.18);
+    background: transparent; color: var(--leaf-pale); font: 600 .82rem var(--font-ui); }
+  .rf-select option { color: #222; }
+  .rf-group { font-family: var(--font-display); font-size: 1.05rem; color: var(--app-heading); margin: 18px 0 0; }
+  .recipe-tile .body { padding: 12px 14px 14px; }
+  .recipe-tile .dish { font-weight: 700; color: var(--paper); }
+  .recipe-tile .plant { font-size: 0.82rem; color: var(--leaf-pale); margin-top: 2px; }
+  .recipe-tile .plant em { color: var(--moss-light); }
+  .recipe-tile .line { margin-top: 6px; font-style: italic; line-height: 1.4; font-size: 0.85rem; }
+  .recipe-tile .meta { margin-top: 6px; font-size: 0.75rem; color: var(--moss-light); }
+  .recipe-tile .full { display: inline-block; margin-top: 8px; font-weight: 600; }
   .note-box { background: var(--app-shell-deep); border-left: 3px solid var(--amber); border-radius: 0 6px 6px 0;
     padding: 9px 12px; color: var(--leaf-pale); font-weight: 600; margin: 0; }
 
@@ -200,7 +214,16 @@
     <div class="wrap">
       <h2>From the walk to the plate</h2>
       <p class="note-box">A taste of what we cook — full recipes on the day.</p>
-      <div class="grid" id="recipe-grid"></div>
+      <div class="rf-bar" role="group" aria-label="Filter recipes">
+        <select class="rf-select" id="rf-view" aria-label="Show">
+          <option value="now">In season now</option>
+          <option value="season">By season</option>
+          <option value="type">By type</option>
+          <option value="az">A–Z</option>
+          <option value="recent">Recently added</option>
+        </select>
+      </div>
+      <div id="recipe-grid"></div>
     </div>
   </section>
 
@@ -510,17 +533,61 @@ window.DATA = {{DATA}};
     if (e.key === "Escape" && !panel.hidden && !document.getElementById("lightbox").classList.contains("open")) closePanel();
   });
 
-  // ── recipes: teaser in the app's walk-panel recipe strip ──
-  var rg = document.getElementById("recipe-grid");
-  rg.innerHTML = D.recipes.length ? D.recipes.map(function (r) {
-    var s = byId[r.species_id];
-    return '<article class="species-card">' +
-      (s.photo ? '<img class="photo" src="' + esc(s.thumb) + '" data-full="' + esc(s.photo) + '" alt="' + esc(s.en || s.sci) + '" loading="lazy">' : "") +
-      '<div class="body"><div class="common">' + esc(s.en || s.sci) + "</div>" +
-      (s.de ? '<div class="common-de">' + esc(s.de) + "</div>" : "") + badge(s) +
-      '<div class="walk-stop-recipe"><strong>' + esc(r.dish) + '</strong>' + recipeWarn(r) + '<div class="line">' + esc(r.line) + "</div></div>" +
+  // ── recipes: every public recipe (D.recipe_bank, export.build_recipe_bank) ──
+  // Teaser only — dish, plant, season, the one-line summary, ⚠ for caution and
+  // the curator warnings that travel with culinary content (Fix B, recipeWarn);
+  // never ingredients or method. "Full recipe →" only with a website link.
+  // Filters use the visitor's own date for "In season now".
+  var SEASONS = ["spring", "summer", "autumn", "winter", "year-round"];
+  var SEASON_LABEL = { spring: "Spring", summer: "Summer", autumn: "Autumn", winter: "Winter", "year-round": "Year-round" };
+  var TYPE_LABEL = { drink: "Drinks", ferment: "Ferments", condiment: "Condiments", preserve: "Preserves",
+                     main: "Mains", side: "Sides", sweet: "Sweet", other: "Other" };
+  function seasonNow() {
+    var m = new Date().getMonth();
+    return m <= 1 || m === 11 ? "winter" : m <= 4 ? "spring" : m <= 7 ? "summer" : "autumn";
+  }
+  function bankTile(r) {
+    return '<article class="species-card recipe-tile"><div class="body">' +
+      '<div class="dish">' + esc(r.dish) + "</div>" +
+      '<div class="plant">' + esc(r.en || r.sci) + (r.en ? " · <em>" + esc(r.sci) + "</em>" : "") + "</div>" +
+      (r.caution ? '<span class="badge caution">⚠ Caution</span>' : "") +
+      (r.line ? '<div class="line">' + esc(r.line) + "</div>" : "") +
+      '<div class="meta">' + esc(SEASON_LABEL[r.season] || r.season) + " · " + esc(TYPE_LABEL[r.type] || "Other") + "</div>" +
+      recipeWarn(r) +
+      (r.url ? '<a class="full" href="' + esc(r.url) + '" target="_blank" rel="noopener">Full recipe →</a>' : "") +
       "</div></article>";
-  }).join("") : '<p class="subtitle">Recipes to follow.</p>';
+  }
+  function byDish(a, b) { return a.dish.localeCompare(b.dish); }
+  function bankGroups(view, list) {
+    var out = [];
+    function add(label, items) { if (items.length) out.push({ label: label, items: items.slice().sort(byDish) }); }
+    if (view === "now") {
+      var s = seasonNow();
+      add("In season now — " + SEASON_LABEL[s], list.filter(function (r) { return r.season === s; }));
+      add(SEASON_LABEL["year-round"], list.filter(function (r) { return r.season === "year-round"; }));
+    } else if (view === "season") {
+      SEASONS.forEach(function (s) { add(SEASON_LABEL[s], list.filter(function (r) { return r.season === s; })); });
+    } else if (view === "type") {
+      Object.keys(TYPE_LABEL).forEach(function (t) { add(TYPE_LABEL[t], list.filter(function (r) { return r.type === t; })); });
+    } else if (view === "recent") {
+      out.push({ label: "Recently added", items: list.slice().sort(function (a, b) {
+        return (b.approved_at || "").localeCompare(a.approved_at || "") || byDish(a, b); }) });
+    } else {
+      out.push({ label: "A–Z", items: list.slice().sort(byDish) });
+    }
+    return out;
+  }
+  var rg = document.getElementById("recipe-grid");
+  var rfView = document.getElementById("rf-view");
+  function renderBank() {
+    var bank = D.recipe_bank || [];
+    if (!bank.length) { rg.innerHTML = '<p class="subtitle">Recipes to follow.</p>'; return; }
+    rg.innerHTML = bankGroups(rfView.value, bank).map(function (g) {
+      return '<h3 class="rf-group">' + esc(g.label) + "</h3>" + '<div class="grid">' + g.items.map(bankTile).join("") + "</div>";
+    }).join("") || '<p class="subtitle">No recipes in this view.</p>';
+  }
+  rfView.addEventListener("change", renderBank);
+  renderBank();
 
   // ── footer ──
   document.getElementById("disclaimer-h").textContent = D.disclaimer.heading;

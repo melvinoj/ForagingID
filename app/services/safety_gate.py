@@ -53,7 +53,40 @@ async def safety_for_species(db: AsyncSession, sp: Optional[Species],
         return _with_warnings(safety_decision(None, None), species_warnings({}))
     if ci is None:
         ci = await db.scalar(select(CulinaryInfo).where(CulinaryInfo.species_id == sp.id))
-    warnings = species_warnings(await _warning_fields(db, ci))
+    return _decision_for(sp, species_warnings(await _warning_fields(db, ci)))
+
+
+async def safety_for_species_bulk(db: AsyncSession, species: Iterable[Species]) -> Dict[int, dict]:
+    """{species id: decision} for many species in three queries — the same
+    inputs and the same _decision_for as safety_for_species (the Recipes page
+    lists ~220 species)."""
+    sps = {sp.id: sp for sp in species if sp is not None}
+    if not sps:
+        return {}
+    cis = {ci.species_id: ci for ci in (await db.execute(
+        select(CulinaryInfo).where(CulinaryInfo.species_id.in_(list(sps))))).scalars().all()}
+    latest: dict = {}                       # (ci id, column) → (changed_by, new_value), newest first
+    if cis:
+        rows = (await db.execute(
+            select(CulinaryInfoHistory.culinary_info_id, CulinaryInfoHistory.field_name,
+                   CulinaryInfoHistory.changed_by, CulinaryInfoHistory.new_value)
+            .where(CulinaryInfoHistory.culinary_info_id.in_([c.id for c in cis.values()]))
+            .where(CulinaryInfoHistory.field_name.in_(list(WARNING_FIELDS.values())))
+            .order_by(CulinaryInfoHistory.changed_at.desc(), CulinaryInfoHistory.id.desc())
+        )).all()
+        for ci_id, col, by, new in rows:
+            latest.setdefault((ci_id, col), (by, new))
+    out = {}
+    for sid, sp in sps.items():
+        ci = cis.get(sid)
+        fields = {} if ci is None else {
+            col: (getattr(ci, col, None),) + latest.get((ci.id, col), (None, None))
+            for col in WARNING_FIELDS.values()}
+        out[sid] = _decision_for(sp, species_warnings(fields))
+    return out
+
+
+def _decision_for(sp: Species, warnings: dict) -> dict:
     is_caution = (sp.edibility_status or "").strip().lower() == "caution"
     prep, look = warnings["preparation"], warnings["look_alike"]
     caution_warning = prep["text"] if (prep and prep["reviewed"] and is_caution) else None

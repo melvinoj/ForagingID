@@ -2044,6 +2044,11 @@ async def species_profile(
             "is_preferred":      r.is_preferred,
             "is_medicinal_prep": r.is_medicinal_prep,
             "source":            r.source,
+            # Recipes page fields (0059): the card's curator inline edit.
+            "summary":           r.summary,
+            "recipe_type":       r.recipe_type,
+            "hide_from_public":  bool(r.hide_from_public),
+            "website_url":       r.website_url,
         }
         for r in _all_recipes
     ]

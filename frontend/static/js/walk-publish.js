@@ -147,11 +147,8 @@
                 : '<input id="wpub-slug" class="wpub-slug" value="' + esc(p.slug) + '" autocomplete="off"> ' +
                   '<button class="wpub-btn-sm" onclick="WalkPublish.saveSlug()">Save</button>') +
       '</span></div>' +
-      // Front page is chosen at publish time (the tick in the confirm step, on
-      // by default — Melvin, 22 Oct 2026); this line only reports it.
-      '<div class="wpub-row"><span class="wpub-k">Front page</span><span>' +
-        (p.is_default ? 'Yes — this walk is the site\'s front page and the /b card'
-                      : 'No — publishing ticks it on by default') + '</span></div>';
+      '<div class="wpub-row"><span class="wpub-k">Walk collection</span><span>Published walks appear newest first. The latest published walk is shown on melvinjarman.co.uk/b.</span></div>';
+
   }
 
   function renderPlan(p) {
@@ -197,6 +194,32 @@
                         : '<div class="wpub-muted">No species, badge or recipe changes (' + esc(c.species_now) + ' species).</div>';
     }
     if (w.length) h += '<div class="wpub-muted">Recipes withheld (caution, no curator warning): ' + esc(w.join('; ')) + '</div>';
+    h += renderRecipeBank(c.recipe_bank);
+    return h;
+  }
+
+  // Recipes tab (25 Oct 2026): count, new since the page on the site, the full
+  // list — for review before publishing. Edit or hide a recipe on its species card.
+  function renderRecipeBank(b) {
+    if (!b) return '';
+    var h = '<div class="wpub-sub">Recipes tab — ' + esc(b.count) + ' public recipes</div>';
+    h += b.first
+      ? '<div class="wpub-muted">First publish with the Recipes tab — all ' + esc(b.count) + ' are new.</div>'
+      : '<div class="wpub-muted">New since the page on the site: ' + (b.new.length ? esc(b.new.join('; ')) : 'none') +
+        (b.removed && b.removed.length ? '. No longer listed: ' + esc(b.removed.join('; ')) : '') + '</div>';
+    h += '<details><summary>Full list (' + esc(b.count) + ')</summary><ul class="wpub-list">' +
+      (b.list || []).map(function (r) {
+        return '<li>' + esc(r.label) + ' · ' + esc(r.season) + ' · ' + esc(r.type) +
+          (r.caution ? ' · ⚠ caution' : '') + (r.url ? ' · link' : '') + '</li>';
+      }).join('') + '</ul></details>';
+    var np = b.not_public || [];
+    if (np.length) {
+      var why = {};
+      np.forEach(function (x) { why[x.why] = (why[x.why] || 0) + 1; });
+      h += '<details><summary>Not public (' + esc(np.length) + ')</summary><ul class="wpub-list">' +
+        Object.keys(why).sort().map(function (k) { return '<li>' + esc(k) + ': ' + esc(why[k]) + '</li>'; }).join('') +
+        '</ul></details>';
+    }
     return h;
   }
 
@@ -274,9 +297,8 @@
     }
     return '<div class="wpub-confirm">' +
       '<p><strong>This makes the exact route line and every stop location public</strong> at ' + esc(url) +
-        ' — and on the site\'s front page if the box below is ticked.</p>' +
-      '<label class="wpub-check"><input type="checkbox" id="wpub-front" checked> Front page — make this walk the site\'s ' +
-        'front page and the melvinjarman.co.uk/b card (untick to keep the current front page; the card is then rebuilt from it)</label>' +
+        '.</p>' +
+      '<p>Publishing also updates the all-walks collection and the latest-walk preview on melvinjarman.co.uk/b.</p>' +
       '<p>Unpublishing later removes the page from the site, but not from the site\'s git history or from copies other people, browsers or search engines have already saved.</p>' +
       '<label class="wpub-check"><input type="checkbox" id="wpub-tick" onchange="WalkPublish._tick(this)"> I understand — ' + esc(again.toLowerCase()) + ' this walk</label>' +
       '<div class="wpub-actions"><button id="wpub-go" class="wpub-btn wpub-primary" disabled onclick="WalkPublish.publish()">' + esc(again) + ' now</button> ' +
@@ -289,8 +311,8 @@
       return h + '<button class="wpub-btn wpub-danger" onclick="WalkPublish.openUnpublish(true)">Unpublish…</button>';
     }
     return h + '<div class="wpub-confirm wpub-confirm-danger">' +
-      '<p>Removes <strong>' + esc(p.url || '') + '</strong>' + (p.is_default ? ' and the site\'s front page' : '') +
-      ' from the site in one commit. The saved walk stays here.</p>' +
+      '<p>Removes <strong>' + esc(p.url || '') + '</strong>' +
+      ' from the published collection. The preview switches to the next published walk; your saved walk stays here.</p>' +
       '<p>The page stays in the site\'s git history and in copies other people or search engines have already saved.</p>' +
       '<label class="wpub-check"><input type="checkbox" id="wpub-untick" onchange="WalkPublish._untick(this)"> I understand — unpublish this page</label>' +
       '<div class="wpub-actions"><button id="wpub-ungo" class="wpub-btn wpub-danger" disabled onclick="WalkPublish.unpublish()">Unpublish now</button> ' +
@@ -440,8 +462,7 @@
     var p = state.panel.publication;
     var body = { confirm: true };
     if (kind === 'publish') {
-      var fp = document.getElementById('wpub-front');
-      body.front_page = fp ? fp.checked : true;              // on by default
+      body.front_page = true;
     }
     try {
       state.job = await api('POST', '/api/experience/publications/' + p.id + '/' + kind, body);

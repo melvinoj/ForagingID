@@ -352,7 +352,7 @@ def test_every_page_loads_the_helper_and_sw_caches_it():
     sw = _src("frontend/static/sw.js")
     # v11: dry-run.js joined the app shell (22 Oct 2026, enrichment safety).
     # v15: hazard-ack.js joined it (22 Oct 2026, hazard candidates).
-    assert "'/static/js/safety-gate.js'" in sw and "foragingid-v15" in sw
+    assert "'/static/js/safety-gate.js'" in sw and "foragingid-v17" in sw
 
 
 def test_no_page_rederives_the_rule():
@@ -391,6 +391,10 @@ def test_culinary_reads_go_through_the_gate():
                     # species page: inside `if (culinaryBlocked) … else` / SafetyGate.allowed
                     or (rel == "frontend/species.html" and (
                         "ci.taste_notes" in line or "data.recipes" in line or "result.taste_notes" in line))
+                    # Recipes page (25 Oct 2026): server-gated by CULINARY_ALLOWED_SQL, and every
+                    # recipe drawn passes SafetyGate.allowed; _allWalks reads only the walk names
+                    or (rel == "frontend/recipes.html" and (
+                        "SafetyGate.allowed(_data.safety" in line or "_data.recipes.forEach(r => r.walks" in line))
                 )
                 assert ok, f"{rel}:{n} reads culinary content outside the gate: {line.strip()[:120]}"
     lists = _src("frontend/lists.html") + _src("frontend/print.html")

@@ -6,11 +6,17 @@ proposed Pentanema squarrosum at 90.4% with Digitalis purpurea only in the grey
   * One predicate (app/services/hazard_candidates.py): a candidate from any
     source, any rank — including one present ONLY in a raw list — resolving
     (name_key / synonym) to a species that is_hazard_species() is a hazard.
-  * It blocks auto-approve (decide_agreement + scan._identify_scanned end to
-    end), lists the row in Review's Critical section, puts the red ☠ line on the
-    card (rendered from review.html's own _makeCardHtml), and approving as any
-    other species needs hazard_ack naming it (single approve, confirm-species,
-    bulk approve skips it).
+  * It blocks auto-approve at any rank (decide_agreement +
+    scan._identify_scanned end to end).
+  * Tiers (Melvin, 22 Oct 2026 evening): GATE = top 3 of any source or >= 5%
+    in any source — red ☠ line on the card (rendered from review.html's own
+    _makeCardHtml), Review's "Hazard candidates" status filter, and approving
+    as any other species needs hazard_ack naming it (single approve,
+    confirm-species, bulk approve skips it). DEEP = lower: one grey "Also
+    listed deep in …" line, no gate.
+  * A human decision stands: a manually_verified / human-approved photo gets
+    no red line and no gate. Review's Critical block no longer lists hazard
+    candidates.
   * Card fixes: the confidence chip states the band of the % shown; the ITIS
     "no match" banner is amber "may be a newer name" when GBIF matched the name
     exactly, red otherwise.
@@ -35,6 +41,7 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine  # no
 
 import app.main  # noqa: E402,F401  (registers every model on Base.metadata)
 import app.api.bulk_actions as bulk_actions  # noqa: E402
+import app.api.experience as experience  # noqa: E402
 import app.api.observations as observations  # noqa: E402
 import app.api.reidentify as reidentify  # noqa: E402
 import app.api.scan as scan  # noqa: E402
@@ -45,7 +52,8 @@ from app.integrations.plantnet import PlantNetCandidate, PlantNetResult  # noqa:
 from app.models.observation import Observation  # noqa: E402
 from app.models.species import Species, SpeciesSynonym  # noqa: E402
 from app.services.agreement import decide_agreement  # noqa: E402
-from app.services.hazard_candidates import (hazard_hits, inat_hit_entries,  # noqa: E402
+from app.services.hazard_candidates import (deep_hazards, gating_hazards,  # noqa: E402
+                                            hazard_hits, inat_hit_entries,
                                             load_hazard_index, observation_hazards,
                                             plantnet_raw_entries, undecided_hazard_items)
 
@@ -68,6 +76,8 @@ BEECH = (10, "Fagus sylvatica", "none", "edible")
 PENTANEMA = (858, "Pentanema squarrosum", "unknown", "unknown")
 IVY = (20, "Hedera helix", "none", "toxic")              # verdict toxic, severity none
 NETTLE = (30, "Urtica dioica", "none", "edible")
+HEMLOCK = (40, "Conium maculatum", "deadly", "toxic")
+HOGWEED = (41, "Heracleum sphondylium", "none", "edible")
 
 
 def _run(coro):
@@ -85,7 +95,7 @@ async def _db(extra_obs=()):
     eng = create_async_engine(f"sqlite+aiosqlite:///{path}")
     S = async_sessionmaker(eng, expire_on_commit=False)
     async with S() as s:
-        for sid, name, sev, verdict in (FOXGLOVE, BEECH, PENTANEMA, IVY, NETTLE):
+        for sid, name, sev, verdict in (FOXGLOVE, BEECH, PENTANEMA, IVY, NETTLE, HEMLOCK, HOGWEED):
             s.add(Species(id=sid, scientific_name=name, name_key=name.lower(), kingdom="Plantae",
                           toxicity_severity=sev, edibility_status=verdict,
                           preferred_common_name={376: "Foxglove", 20: "Ivy"}.get(sid)))
@@ -209,13 +219,167 @@ def test_harmless_lists_still_auto_approve():
     assert status == "approved" and crit == []
 
 
-def test_deadly_candidate_only_in_raw_list_blocks_auto_approve_and_goes_to_critical():
+def test_deep_deadly_candidate_still_blocks_auto_approve_but_does_not_gate():
+    # Auto-approve stays blocked at ANY rank; rank 12 at 0.05% is DEEP, so the
+    # card is not in the "Hazard candidates" filter (no red line, no gate).
     status, label, crit = _identify([("Fagus sylvatica", 0.95)]
                                     + [(f"Harmless {i}", 0.001) for i in range(10)]
                                     + [("Digitalis purpurea", 0.0005)])
     assert status == "needs_review"
     assert label == "hazard_candidate"
-    assert crit == [50]
+    assert crit == []
+
+
+def test_gate_tier_candidate_blocks_auto_approve_and_is_listed():
+    status, label, crit = _identify([("Fagus sylvatica", 0.95), ("Digitalis purpurea", 0.0005)])
+    assert status == "needs_review" and label == "hazard_candidate" and crit == [50]
+
+
+# ── tiers ─────────────────────────────────────────────────────────────────────
+
+def _idx():
+    async def run():
+        path, eng, S = await _db()
+        async with S() as s:
+            idx = await load_hazard_index(s)
+        await eng.dispose()
+        return idx
+    return _run(run())
+
+
+def test_tier_foxglove_inat_second_gates_hemlock_deep_in_hogweed_does_not():
+    idx = _idx()
+    # #24507: iNat listed foxglove #2 (low score) — gates by rank.
+    fox = hazard_hits(plantnet_raw_entries(_pn_raw([("Pentanema squarrosum", 0.904)]))
+                      + inat_hit_entries([("Pentanema squarrosum", 0.317), ("Digitalis purpurea", 0.012)]), idx)
+    assert [(h["scientific_name"], h["gate"]) for h in fox] == [("Digitalis purpurea", True)]
+    # A hogweed with hemlock at 0.1%, rank 8: DEEP, no gate.
+    hog = hazard_hits(plantnet_raw_entries(_pn_raw(
+        [("Heracleum sphondylium", 0.88)] + [(f"Harmless {i}", 0.01) for i in range(6)]
+        + [("Conium maculatum", 0.001)])), idx)
+    assert [(h["scientific_name"], h["gate"], h["sources"][0]["rank"]) for h in hog] == \
+        [("Conium maculatum", False, 8)]
+    # >= 5% gates at any rank; just under 5% at rank 4 does not.
+    pct = hazard_hits(plantnet_raw_entries(_pn_raw(
+        [("Heracleum sphondylium", 0.5)] + [(f"Harmless {i}", 0.06) for i in range(5)]
+        + [("Conium maculatum", 0.05)])), idx)
+    assert pct[0]["gate"] is True
+    under = hazard_hits(plantnet_raw_entries(_pn_raw(
+        [("Heracleum sphondylium", 0.5)] + [(f"Harmless {i}", 0.06) for i in range(3)]
+        + [("Conium maculatum", 0.049)])), idx)
+    assert under[0]["gate"] is False
+    # Top 3 in ONE source gates even when another source lists it deep.
+    mixed = hazard_hits(plantnet_raw_entries(_pn_raw(
+        [("Heracleum sphondylium", 0.9)] + [(f"Harmless {i}", 0.01) for i in range(9)]
+        + [("Conium maculatum", 0.001)]))
+        + inat_hit_entries([("Heracleum sphondylium", 0.7), ("Conium maculatum", 0.01)]), idx)
+    assert mixed[0]["gate"] is True
+
+
+def test_deep_hazard_needs_no_second_tap():
+    async def run():
+        path, eng, S = await _db(extra_obs=[
+            _obs(70, "Heracleum sphondylium", HOGWEED[0],
+                 pn=[("Heracleum sphondylium", 0.88)] + [(f"Harmless {i}", 0.01) for i in range(6)]
+                 + [("Conium maculatum", 0.001)],
+                 cands=[("Heracleum sphondylium", 0.88)])])
+        async with S() as s:
+            idx = await load_hazard_index(s)
+            o = await s.get(Observation, 70)
+            tiers = ([h["scientific_name"] for h in gating_hazards(o, idx)],
+                     [h["scientific_name"] for h in deep_hazards(o, idx)])
+            await observations.update_review(70, _BG(), status="approved", db=s)
+        async with S() as s:
+            st = (await s.get(Observation, 70)).review_status
+        await eng.dispose()
+        return tiers, st
+    tiers, st = _run(run())
+    assert tiers == ([], ["Conium maculatum"])
+    assert st == "approved"
+
+
+# ── a human decision stands ───────────────────────────────────────────────────
+
+def test_human_decided_photo_gets_no_red_line_and_no_gate():
+    from datetime import datetime
+    fox_pn = [("Pentanema squarrosum", 0.904), ("Digitalis purpurea", 0.2)]
+
+    async def run():
+        path, eng, S = await _db(extra_obs=[
+            _obs(80, "Pentanema squarrosum", PENTANEMA[0], status="manually_verified", pn=fox_pn,
+                 reviewed_at=datetime(2026, 6, 1)),
+            _obs(81, "Pentanema squarrosum", PENTANEMA[0], status="approved", pn=fox_pn,
+                 reviewed_at=datetime(2026, 6, 1)),                   # human-approved
+            _obs(82, "Pentanema squarrosum", PENTANEMA[0], status="approved", pn=fox_pn),  # AI-approved
+            _obs(83, "Pentanema squarrosum", PENTANEMA[0], status="needs_review", pn=fox_pn),
+        ])
+        res = {}
+        async with S() as s:
+            idx = await load_hazard_index(s)
+            for oid in (80, 81, 82, 83):
+                o = await s.get(Observation, oid)
+                res[oid] = (len(gating_hazards(o, idx)), len(deep_hazards(o, idx)))
+            res["filter"] = sorted(i["obs_id"] for i in await undecided_hazard_items(s))
+            # Re-confirm / correct a human-decided photo: no second tap asked.
+            await reidentify.confirm_species(80, _BG(), reidentify.ConfirmSpeciesRequest(
+                scientific_name="Fagus sylvatica"), db=s)
+        async with S() as s:
+            await observations.update_review(81, _BG(), status="manually_verified", db=s)
+        async with S() as s:
+            res["80"] = (await s.get(Observation, 80)).species_primary
+            res["81"] = (await s.get(Observation, 81)).review_status
+            try:
+                await observations.update_review(82, _BG(), status="manually_verified", db=s)
+                res["82"] = "no gate"
+            except HTTPException as e:
+                res["82"] = e.status_code
+        await eng.dispose()
+        return res
+
+    r = _run(run())
+    assert r[80] == (0, 0) and r[81] == (0, 0)          # decided: nothing shown
+    assert r[82] == (1, 0) and r[83] == (1, 0)          # undecided (incl. AI-approved): gated
+    assert r["filter"] == [82, 83]
+    assert r["80"] == "Fagus sylvatica" and r["81"] == "manually_verified"
+    assert r["82"] == 409                               # AI-approved is still undecided
+
+
+# ── Review: status filter, Critical block ────────────────────────────────────
+
+def test_status_filter_lists_only_gated_undecided_cards():
+    async def run():
+        path, eng, S = await _db(extra_obs=[
+            _obs(90, "Pentanema squarrosum", PENTANEMA[0], pn=[("Pentanema squarrosum", 0.9),
+                                                               ("Digitalis purpurea", 0.01)]),
+            _obs(91, "Heracleum sphondylium", HOGWEED[0],
+                 pn=[("Heracleum sphondylium", 0.88)] + [(f"Harmless {i}", 0.01) for i in range(6)]
+                 + [("Conium maculatum", 0.001)]),
+            _obs(92, "Fagus sylvatica", BEECH[0], pn=[("Fagus sylvatica", 0.9)]),
+            _obs(93, "Pentanema squarrosum", PENTANEMA[0], status="manually_verified",
+                 pn=[("Pentanema squarrosum", 0.9), ("Digitalis purpurea", 0.01)]),
+        ])
+        async with S() as s:
+            rows = await observations.list_observations(
+                limit=100, offset=0, geotagged_only=False, no_gps=False, named_only=False,
+                unnamed_only=False, review_status="hazard_candidates", upload_source=None,
+                obs_category=None, prefilter_category=None, review_label=None, q=None,
+                exclude_not_plant=False, sort="added_desc", db=s)
+            crit = await experience.critical_hazards(db=s)
+        await eng.dispose()
+        return rows, crit
+    rows, crit = _run(run())
+    assert [r["id"] for r in rows] == [90]
+    assert [h["scientific_name"] for h in rows[0]["hazard_candidates"]] == ["Digitalis purpurea"]
+    assert "candidate_items" not in crit and crit["count"] == 0
+
+
+def test_review_page_has_no_hazard_candidate_block_and_has_the_filter():
+    page = _src("frontend/review.html")
+    for gone in ("crit-cand-head", "critical-cand-grid", "_critCandCardHtml", "candidate_items"):
+        assert gone not in page, gone
+    assert '<option value="hazard_candidates">☠ Hazard candidates</option>' in page
+    # The walk Critical block stays.
+    assert '<div id="critical-grid"></div>' in page and "function _critCardHtml(" in page
 
 
 # ── second tap ────────────────────────────────────────────────────────────────
@@ -374,7 +538,22 @@ def test_card_shows_hazard_in_red_above_the_name_and_not_in_also():
 
 def test_harmless_card_has_no_hazard_line():
     html = _card(_obs_24507(hazard_candidates=[]))
+    assert "hazard-line" not in html and "hazard-deep-line" not in html
+
+
+def test_deep_hazard_card_shows_one_grey_line_no_red_line():
+    hem = {"species_id": 40, "scientific_name": "Conium maculatum", "common": None, "level": "deadly",
+           "label": "Conium maculatum", "gate": False,
+           "sources": [{"source": "plantnet", "score": 0.001, "rank": 8}]}
+    html = _card(_obs_24507(hazard_candidates=[], hazard_deep=[hem], species_candidates_json=json.dumps([
+        {"scientific_name": "Pentanema squarrosum", "score": 0.9042, "source": "plantnet"},
+        {"scientific_name": "Conium maculatum", "score": 0.001, "source": "plantnet"},
+        {"scientific_name": "Verbascum phoeniceum", "score": 0.0246, "source": "plantnet"}])))
     assert "hazard-line" not in html
+    assert html.count('class="hazard-deep-line"') == 1
+    assert '<div class="hazard-deep-line">Also listed deep in PlantNet: Conium maculatum 0.1%</div>' in html
+    also = re.search(r'<div class="sp-alts">Also: (.*?)</div>', html).group(1)
+    assert "Conium" not in also
 
 
 def test_confidence_chip_matches_the_percent_shown():

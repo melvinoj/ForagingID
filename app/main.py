@@ -402,6 +402,11 @@ async def serve_species():
     return FileResponse("frontend/species.html", headers=_NO_STORE)
 
 
+@app.get("/recipes", include_in_schema=False)
+async def serve_recipes():
+    return FileResponse("frontend/recipes.html", headers=_NO_STORE)
+
+
 @app.get("/sightings", include_in_schema=False)
 async def serve_sightings():
     return FileResponse("frontend/sightings.html", headers=_NO_STORE)

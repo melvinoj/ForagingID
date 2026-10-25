@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <link rel="manifest" href="/static/manifest.json">
+  <meta name="theme-color" content="#2d5a1b">
+  <link rel="apple-touch-icon" href="/static/icons/icon-192.png">
+  <meta name="application-name" content="LandMemory">
+  <meta name="apple-mobile-web-app-title" content="LandMemory">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black">
+  <link rel="icon" type="image/svg+xml" href="/static/icons/dandelion-icon.svg">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LandMemory — Recipes</title>
+  <link rel="stylesheet" href="/static/css/tokens.css">
+  <link rel="stylesheet" href="/static/css/site-header.css">
+  <style>
+    /* Recipes page (Melvin, 25 Oct 2026). Image-free tiles in the species
+       list's own style (species.html .species-card). Data: GET /api/recipes —
+       approved recipes through the species page's culinary gate only. */
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: system-ui, sans-serif; background: #2a3330; color: #d8e4d8; }
+    #recipes-page { max-width: 960px; margin: 0 auto; padding: 20px 16px 40px; }
+    #recipes-page h2 { font-size: 1.3rem; color: #8ab87a; margin-bottom: 4px; }
+    #recipes-page .subtitle { font-size: 0.85rem; color: #7a9a7a; margin-bottom: 14px; }
+    .rc-controls { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; align-items: center; }
+    #recipe-search {
+      flex: 1 1 220px; padding: 8px 12px; font-size: 0.9rem;
+      border: 1px solid #4a5e5a; border-radius: 6px; background: #2f3d3a; color: #d8e4d8; min-height: 38px;
+    }
+    #recipe-search:focus { outline: none; border-color: #7a9e50; box-shadow: 0 0 0 2px #7a9e5020; }
+    .rc-select {
+      padding: 6px 10px; border-radius: 6px; font-size: 0.85rem; min-height: 38px;
+      border: 1px solid #4a5e5a; background: #344440; color: #d8e4d8;
+    }
+    .rc-group-h { font-size: 0.95rem; color: #8ab87a; margin: 18px 0 8px; font-weight: 700; }
+    .rc-group-h .n { color: #7a9a7a; font-weight: 400; font-size: 0.8rem; }
+    .recipe-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 12px; }
+    .recipe-tile {
+      background: #344440; border: 1px solid #4a5e5a; border-radius: 8px;
+      padding: 14px; cursor: pointer; transition: box-shadow 0.15s, border-color 0.15s;
+      color: inherit; display: flex; flex-direction: column; gap: 4px;
+    }
+    .recipe-tile:hover, .recipe-tile:focus { box-shadow: 0 3px 12px rgba(0,0,0,.1); border-color: #7a9e50; outline: none; }
+    .recipe-tile .rt-title { font-size: 0.95rem; font-weight: 700; color: #e0b070; }
+    .recipe-tile .rt-species { font-size: 0.8rem; color: #a8c88a; }
+    .recipe-tile .rt-species em { color: #7a9a6a; }
+    .recipe-tile .rt-summary { font-size: 0.8rem; color: #c8d4c8; line-height: 1.4; }
+    .recipe-tile .rt-meta { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 2px; }
+    .rt-chip { display: inline-block; font-size: 0.7rem; padding: 1px 7px; border-radius: 10px;
+               background: #2f4a3a; color: #8ab87a; }
+    .rt-chip.caution { background: #fef3c7; color: #92400e; font-weight: 700; }
+    .rt-chip.curator { background: #3d3550; color: #c8b8e8; }
+    .recipe-tile details { margin-top: 4px; font-size: 0.78rem; }
+    .recipe-tile details summary { cursor: pointer; color: #e0b070; }
+    .rc-state { color: #7a9a7a; padding: 30px 0; text-align: center; }
+    @media (max-width: 480px) { .recipe-tile { padding: 10px 11px; } }
+  </style>
+</head>
+<body>
+
+<!-- Nav chip + drawer injected by /static/js/site-header.js (Map Redesign P3-nav) -->
+
+<div id="recipes-page">
+  <h2>Recipes</h2>
+  <div class="subtitle" id="rc-subtitle">Approved recipes from the species pages. Tap one to open it.</div>
+  <div class="rc-controls">
+    <input id="recipe-search" type="search" placeholder="Search an ingredient, dish or plant…"
+           aria-label="Search recipes">
+    <select id="rc-view" class="rc-select" aria-label="View">
+      <option value="now">In season now</option>
+      <option value="season">By season</option>
+      <option value="walk">By walk</option>
+      <option value="type">By type</option>
+      <option value="species">By species</option>
+      <option value="part">By plant part</option>
+      <option value="az">A–Z</option>
+      <option value="recent">Recently added</option>
+    </select>
+    <select id="rc-walk" class="rc-select" aria-label="Walk" style="display:none"></select>
+  </div>
+  <div id="rc-results"><div class="rc-state">Loading…</div></div>
+</div>
+
+<script src="/static/js/safety-gate.js"></script>
+<script src="/static/js/species-names.js"></script>
+<script>
+// ── Recipes page ──────────────────────────────────────────────────────────
+// GET /api/recipes (app/api/recipes.py all_recipes): approved, non-medicinal,
+// culinary-allowed recipes only; `safety` is the served decision per species
+// (SafetyGate is the only reader — a recipe whose species fails it is dropped
+// here too, fail closed). Query: ?view=…&walk=<saved walk id> (Find → Make?).
+const SEASONS = ['spring', 'summer', 'autumn', 'winter', 'year-round'];
+const SEASON_LABEL = { spring: '🌱 Spring', summer: '☀️ Summer', autumn: '🍂 Autumn', winter: '❄️ Winter', 'year-round': '🔄 Year-round' };
+const TYPE_LABEL = { drink: 'Drinks', ferment: 'Ferments', condiment: 'Condiments', preserve: 'Preserves',
+                     main: 'Mains', side: 'Sides', sweet: 'Sweet', other: 'Other' };
+const PART_LABEL = { flower: 'Flowers', leaf: 'Leaves', shoot: 'Shoots & stems', berry: 'Fruit & berries',
+                     seed: 'Seeds & nuts', root: 'Roots', bark: 'Bark, sap & needles', whole: 'Mushrooms' };
+
+let _data = { recipes: [], safety: {}, types: [] };
+let _q = '';
+const _params = new URLSearchParams(location.search);
+
+function _esc(s) {
+  return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
+// Today's season (same months as the species page recipe tabs).
+function currentSeason(d) {
+  const m = (d || new Date()).getMonth();
+  return m <= 1 || m === 11 ? 'winter' : m <= 4 ? 'spring' : m <= 7 ? 'summer' : 'autumn';
+}
+
+function recipeHref(r) {
+  return `/species?s=${encodeURIComponent(r.species.scientific_name)}&recipe=${r.id}#recipe-card-${r.id}`;
+}
+
+function tileHtml(r) {
+  const safety = _data.safety[String(r.species.id)];
+  const caution = SafetyGate.decision(safety).level === 'caution';
+  const warn = SafetyGate.culinaryWarnings(safety);
+  const chips = [
+    `<span class="rt-chip">${_esc(SEASON_LABEL[r.season] || r.season)}</span>`,
+    `<span class="rt-chip">${_esc(TYPE_LABEL[r.recipe_type || 'other'])}</span>`,
+    caution ? `<span class="rt-chip caution" title="Caution species — read the warnings">⚠ caution</span>` : '',
+    r.needs_title ? `<span class="rt-chip curator" data-guest-hide title="The title shown is only the recipe's first sentence">needs a title</span>` : '',
+    r.hide_from_public ? `<span class="rt-chip curator" data-guest-hide>hidden from public</span>` : '',
+  ].join('');
+  return `<div class="recipe-tile" role="link" tabindex="0" data-href="${_esc(recipeHref(r))}" data-recipe-id="${r.id}">
+    <div class="rt-title">${_esc(r.title || 'Recipe')}</div>
+    <div class="rt-species">${spNameHtml(r.species.scientific_name, r.species.common)}</div>
+    ${r.summary ? `<div class="rt-summary">${_esc(r.summary)}</div>` : ''}
+    <div class="rt-meta">${chips}</div>
+    ${warn ? `<details><summary>⚠ Warnings</summary>${warn}</details>` : ''}
+  </div>`;
+}
+
+function _visible() {
+  // Fail closed: a recipe whose species decision is missing or blocks culinary
+  // content is never drawn (the server already filtered it).
+  return _data.recipes.filter(r => SafetyGate.allowed(_data.safety[String(r.species.id)]));
+}
+
+const _byTitle = (a, b) => (a.title || '').localeCompare(b.title || '');
+
+function groupsFor(view, list) {
+  const out = [];
+  const add = (key, label, items) => { if (items.length) out.push({ key, label, items: items.slice().sort(_byTitle) }); };
+  if (view === 'now') {
+    const s = currentSeason();
+    add(s, `In season now — ${SEASON_LABEL[s]}`, list.filter(r => r.season === s));
+    add('year-round', SEASON_LABEL['year-round'], list.filter(r => r.season === 'year-round'));
+  } else if (view === 'season') {
+    SEASONS.forEach(s => add(s, SEASON_LABEL[s], list.filter(r => r.season === s)));
+  } else if (view === 'walk') {
+    const walkId = document.getElementById('rc-walk').value;
+    const walks = _allWalks().filter(w => !walkId || String(w.id) === walkId);
+    walks.forEach(w => add(`walk-${w.id}`, w.name, list.filter(r => r.walks.some(x => x.id === w.id))));
+    if (!walkId) add('no-walk', 'Not on a saved walk', list.filter(r => !r.walks.length));
+  } else if (view === 'type') {
+    Object.keys(TYPE_LABEL).forEach(t => add(t, TYPE_LABEL[t], list.filter(r => (r.recipe_type || 'other') === t)));
+  } else if (view === 'species') {
+    const by = new Map();
+    list.forEach(r => {
+      const k = r.species.scientific_name;
+      if (!by.has(k)) by.set(k, { label: spNameText(r.species.scientific_name, r.species.common), items: [] });
+      by.get(k).items.push(r);
+    });
+    [...by.entries()].sort((a, b) => a[1].label.localeCompare(b[1].label))
+      .forEach(([k, g]) => add(k, g.label, g.items));
+  } else if (view === 'part') {
+    Object.keys(PART_LABEL).forEach(p => add(p, PART_LABEL[p], list.filter(r => r.parts.includes(p))));
+    add('none', 'Part not named', list.filter(r => !r.parts.length));
+  } else if (view === 'recent') {
+    out.push({ key: 'recent', label: 'Recently added',
+               items: list.slice().sort((a, b) => (b.approved_at || '').localeCompare(a.approved_at || '')) });
+  } else {
+    out.push({ key: 'az', label: 'A–Z', items: list.slice().sort(_byTitle) });
+  }
+  return out;
+}
+
+function _allWalks() {
+  const m = new Map();
+  _data.recipes.forEach(r => r.walks.forEach(w => m.set(w.id, w)));
+  return [...m.values()].sort((a, b) => a.id - b.id);
+}
+
+function render() {
+  const view = document.getElementById('rc-view').value;
+  const walkSel = document.getElementById('rc-walk');
+  walkSel.style.display = view === 'walk' ? '' : 'none';
+  const el = document.getElementById('rc-results');
+  const list = _visible();
+  if (!list.length) {
+    el.innerHTML = `<div class="rc-state">${_q ? `No recipes found for “${_esc(_q)}”.` : 'No recipes yet.'}</div>`;
+    return;
+  }
+  const groups = groupsFor(view, list);
+  el.innerHTML = groups.length ? groups.map(g => `
+    <div class="rc-group-h">${_esc(g.label)} <span class="n">· ${g.items.length}</span></div>
+    <div class="recipe-grid">${g.items.map(tileHtml).join('')}</div>`).join('')
+    : '<div class="rc-state">Nothing in this view.</div>';
+  document.getElementById('rc-subtitle').textContent =
+    `${list.length} approved recipe${list.length === 1 ? '' : 's'}${_q ? ` matching “${_q}”` : ''}. Tap one to open it on its species page.`;
+}
+
+async function load() {
+  const url = '/api/recipes' + (_q ? `?q=${encodeURIComponent(_q)}` : '');
+  try {
+    const r = await fetch(url);
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    _data = await r.json();
+  } catch (e) {
+    document.getElementById('rc-results').innerHTML = `<div class="rc-state">❌ ${_esc(e.message)}</div>`;
+    return;
+  }
+  const walkSel = document.getElementById('rc-walk');
+  const keep = walkSel.value || _params.get('walk') || '';
+  walkSel.innerHTML = '<option value="">All walks</option>' +
+    _allWalks().map(w => `<option value="${w.id}">${_esc(w.name)}</option>`).join('');
+  if ([...walkSel.options].some(o => o.value === keep)) walkSel.value = keep;
+  render();
+}
+
+// Tile → species page at that recipe card (species.html opens and highlights it).
+document.getElementById('rc-results').addEventListener('click', e => {
+  if (e.target.closest('details')) return;          // the warnings toggle, not a navigation
+  const t = e.target.closest('.recipe-tile');
+  if (t) location.href = t.dataset.href;
+});
+document.getElementById('rc-results').addEventListener('keydown', e => {
+  const t = e.target.closest('.recipe-tile');
+  if (t && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); location.href = t.dataset.href; }
+});
+document.getElementById('rc-view').addEventListener('change', render);
+document.getElementById('rc-walk').addEventListener('change', render);
+let _qTimer = null;
+document.getElementById('recipe-search').addEventListener('input', e => {
+  clearTimeout(_qTimer);
+  _qTimer = setTimeout(() => { _q = e.target.value.trim(); load(); }, 300);
+});
+
+(function init() {
+  const v = _params.get('view') || (_params.get('walk') ? 'walk' : 'now');
+  const sel = document.getElementById('rc-view');
+  if ([...sel.options].some(o => o.value === v)) sel.value = v;
+  load();
+})();
+</script>
+<script src="/static/js/pwa.js"></script>
+<script src="/static/js/offline.js"></script>
+<script src="/static/js/guest-mode.js"></script>
+<script src="/static/js/site-header.js"></script>
+</body>
+</html>

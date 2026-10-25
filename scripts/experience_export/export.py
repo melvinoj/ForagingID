@@ -46,7 +46,9 @@ import app_styles  # noqa: E402
 # app's own rule, imported, not re-implemented (pure Python, no DB access).
 from app.services import walk_membership as wm  # noqa: E402
 from app.services import walk_route  # noqa: E402
-from app.models.species import display_common_name, recipe_display_title  # noqa: E402  — names rule, one definition  — straight (dashed) legs: one reading rule with the app
+# names rule, one definition; recipe title / summary / link rules (Recipes tab)
+from app.models.species import (RECIPE_TYPES, display_common_name, recipe_display_title,  # noqa: E402
+                                recipe_summary_line, recipe_title_source, recipe_website_url_ok)
 
 DB_PATH   = REPO / "data" / "foragingid.db"
 DIST      = REPO / "dist"
@@ -177,6 +179,63 @@ def recipe_teaser(rec: dict, title: str, skip_patterns) -> str:
                 s = s[:190].rsplit(" ", 1)[0].rstrip(",;:—-") + "…"
             return s
     return ""
+
+
+# ── Recipes tab: every public recipe (Melvin, 25 Oct 2026) ───────────────────
+
+def build_recipe_bank(conn: sqlite3.Connection, cfg: dict) -> tuple[list, list]:
+    """(bank, excluded) — every approved recipe in the app that passes the
+    export gates (gates.recipe_allowed: the same rules as this walk's own
+    recipes — toxic, unknown, Apiaceae, not human-verified, withheld caution
+    and medicinal preparations never get here) and is not hidden from public.
+    A teaser only: dish, species names, season, type, the one-line summary
+    (curator's, else the summary rule; never a line matching
+    teaser_skip_patterns — then the export's own teaser rule), the curator
+    warnings that travel with culinary content (Fix B) and the website link.
+    Never the recipe body: no ingredients, no method. A recipe whose title is
+    only a first prose sentence (recipe_title_source 'line') waits for a
+    curator title and is listed as excluded."""
+    skips = [re.compile(x, re.I) for x in cfg.get("teaser_skip_patterns", [])]
+    rows = [dict(r) for r in conn.execute(
+        "SELECT id, species_id, title, body, status, is_preferred, is_medicinal_prep, source, season, "
+        "summary, recipe_type, hide_from_public, website_url, created_at FROM species_recipes "
+        "WHERE status = 'approved' ORDER BY id")]
+    sp_cache: dict = {}
+    bank, excluded = [], []
+    for r in rows:
+        sid = r["species_id"]
+        if sid not in sp_cache:
+            sp_row = conn.execute("SELECT * FROM species WHERE id = ?", (sid,)).fetchone()
+            ci_row = conn.execute("SELECT * FROM culinary_info WHERE species_id = ?", (sid,)).fetchone()
+            sp_cache[sid] = (dict(sp_row) if sp_row else None, dict(ci_row) if ci_row else {})
+        sp, ci = sp_cache[sid]
+        if sp is None:
+            excluded.append((r["id"], None, "no species row"))
+            continue
+        ok, why = gates.recipe_allowed(sp, ci, r, conn, cfg)
+        if not ok:
+            excluded.append((r["id"], sp["scientific_name"], why))
+            continue
+        if r["hide_from_public"]:
+            excluded.append((r["id"], sp["scientific_name"], "hidden from public"))
+            continue
+        if recipe_title_source(r["title"], r["body"]) not in ("own", "heading"):
+            excluded.append((r["id"], sp["scientific_name"], "needs a title"))
+            continue
+        dish = recipe_display_title(r["title"], r["body"])
+        line = (r["summary"] or "").strip() or recipe_summary_line(r["title"], r["body"])
+        if not line or any(x.search(line) for x in skips):
+            line = recipe_teaser(r, dish, cfg.get("teaser_skip_patterns", []))
+        bank.append({
+            "recipe_id": r["id"], "species_id": sid, "dish": dish, "line": line,
+            "season": r["season"], "type": r["recipe_type"] if r["recipe_type"] in RECIPE_TYPES else "other",
+            "approved_at": str(r["created_at"] or "")[:10],
+            "url": r["website_url"] if recipe_website_url_ok(r["website_url"]) else None,
+            "sci": sp["scientific_name"], "en": en_name(sp), "de": first_name(sp.get("common_names_de")),
+            "caution": gates.is_caution(sp), "source": r["source"],
+            "warnings": gates.recipe_warnings(sp, ci, conn),
+        })
+    return bank, excluded
 
 
 # ── photos ───────────────────────────────────────────────────────────────────
@@ -748,6 +807,8 @@ def main(argv=None):
         if picked:
             recipes_out.append(picked)
 
+    recipe_bank, recipe_bank_excluded = build_recipe_bank(conn, cfg)
+
     # Rule 8 (D3-01) per caution species: approved warning shown, recipes kept
     # or withheld. A caution species that is not human-verified never gets here
     # (edibility_badge raised GateError above — that is a block, not a withhold).
@@ -877,6 +938,8 @@ def main(argv=None):
         # Toxicity is shown on each plant (badge/☠), never by list position.
         "species": [pub[s] for s in sorted(pub, key=lambda s: (first_stop.get(s, len(stops) + 1), pub[s]["en"] or pub[s]["sci"]))],
         "recipes": recipes_out,
+        # Recipes tab (25 Oct 2026): every public recipe, teaser only (build_recipe_bank).
+        "recipe_bank": recipe_bank,
         "disclaimer": cfg.get("disclaimer_override") or {"heading": texts["disclaimer_heading"],
                                                          "paras": texts["disclaimer_paras"]},
     }
@@ -914,6 +977,32 @@ def main(argv=None):
     for sid in hide_sp:
         if sid in pub or any(sid in st["species"] for st in stops) or any(r["species_id"] == sid for r in recipes_out):
             die(f"hidden species {sid} still present in the output")
+    # Recipes tab: the same gate cross-checks, re-asked of the final list, and no recipe text.
+    bodies = {r["id"]: r["body"] for r in map(dict, conn.execute(
+        "SELECT id, body FROM species_recipes WHERE id IN (%s)" % ",".join("?" * len(recipe_bank)),
+        [b["recipe_id"] for b in recipe_bank]))} if recipe_bank else {}
+    # Curator warnings are shown in full by design (Fix B) and a recipe body may
+    # repeat them, so the leak check reads every bank field except "warnings".
+    bank_json = json.dumps([{k: v for k, v in b.items() if k != "warnings"} for b in recipe_bank],
+                           ensure_ascii=False)
+    for b in recipe_bank:
+        sp = dict(conn.execute("SELECT * FROM species WHERE id = ?", (b["species_id"],)).fetchone())
+        if gates.is_apiaceae(sp) or gates.is_toxic(sp) or not gates.toxicity_known_safe(sp) \
+                or not gates.human_verified(sp):
+            die(f"Recipes tab: recipe {b['recipe_id']} for non-eligible species {sp['scientific_name']}")
+        if b["recipe_id"] in set(cfg.get("exclude_recipe_ids", [])):
+            die(f"Recipes tab: excluded recipe {b['recipe_id']} present")
+        if set(b) & {"body", "ingredients", "method"}:
+            die(f"Recipes tab: recipe {b['recipe_id']} carries recipe text fields")
+        # No ingredients or method: a sample from the middle of every long body
+        # paragraph (the one-line teaser cannot hold it) must not be in the tab's data.
+        for para in re.split(r"\n\s*\n", bodies.get(b["recipe_id"]) or ""):
+            para = para.strip()
+            if len(para) < 150:
+                continue
+            mid = para[len(para) // 2: len(para) // 2 + 60]
+            if mid not in b["line"] and mid in bank_json:
+                die(f"Recipes tab: recipe {b['recipe_id']} body text found in the page data")
     for st in stops:                                        # a repeat line never drops a safety badge
         for k, rp in st["repeat"].items():
             if pub[int(k)]["badge"]["kind"] in gates.REPEAT_BADGE_KINDS and rp["badge"] != pub[int(k)]["badge"]:
@@ -990,6 +1079,14 @@ def main(argv=None):
                                       "source": r["source"]} for r in recipes_out],
                         "excluded": [{"recipe_id": rid, "species": name, "why": why}
                                      for rid, name, why in recipe_excluded]},
+            # Recipes tab (25 Oct 2026): the full public list, for review before publishing.
+            "recipe_bank": {"count": len(recipe_bank),
+                            "list": [{"recipe_id": b["recipe_id"], "species_id": b["species_id"],
+                                      "dish": b["dish"], "sci": b["sci"], "en": b["en"], "season": b["season"],
+                                      "type": b["type"], "approved_at": b["approved_at"], "caution": b["caution"],
+                                      "url": b["url"]} for b in recipe_bank],
+                            "excluded": [{"recipe_id": rid, "species": name, "why": why}
+                                         for rid, name, why in recipe_bank_excluded]},
             "tree": {"placed": len(species) - len(unplaced), "unplaced": unplaced},
             "images_planned": 2 * (n_main + n_extra),
             "warnings": warnings,
@@ -1036,6 +1133,7 @@ def main(argv=None):
     print(f"Tree: {sum(1 for _ in species) - len(unplaced)} placed, {len(unplaced)} not placed (no lineage): {unplaced}")
     print(f"Tree patches applied ({len(patches)}): " + "; ".join(patches))
     print(f"Recipes: {len(recipes_out)} included, {len(recipe_excluded)} excluded")
+    print(f"Recipes tab: {len(recipe_bank)} public recipes, {len(recipe_bank_excluded)} not public")
     for r in recipes_out:
         print(f"  + {r['recipe_id']:>4} {species[r['species_id']]['scientific_name']:<26} [{r['source']}] {r['dish']}")
         print(f"         \"{r['line']}\"")

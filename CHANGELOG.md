@@ -1,55 +1,45 @@
 ## Current State
 
 ### Build
-- Alembic head 0058. CLAUDE.md still says 0050 (batch 17).
-- 29 test files pass. Service worker foragingid-v15 (hard refresh once).
-- Committed by this End Session: hazard-candidate rule, review card fixes, publish front page + preview, bulk confirm, batch 9/10 data, hazard contact sheets.
+- Alembic head 0059 (species_recipes summary / recipe_type / hide_from_public / website_url). CLAUDE.md still says 0050 (batch 17).
+- 31 test files pass. Service worker foragingid-v17 (hard refresh once).
+- Uncommitted until this End Session: hazard tiers + Review filter, Recipes page + public Recipes tab, recipe backfill, 8262/24525/24471/24469/22184 decisions.
 
-### Done 22 Oct (late evening)
-- #24507 corrected to Digitalis purpurea. Diagnosis: PlantNet itself ranked Pentanema squarrosum 90.4% (foxglove #3 at 0.76%); iNat vision only 31.7%, so auto-approve held. Our processing raised no score; the card hid the hazard in "Also:". Log message now prints both scores.
-- Hazard-candidate rule (is_hazard_species + app/services/hazard_candidates.py): any deadly/toxic species in any source's list (raw lists, stored list, synonyms) blocks auto-approve, lists the photo in Review Critical, shows a red named line above the proposed name, and needs a second named tap to approve (server-enforced on approve, correct, confirm-species, retry-confirm; bulk approve and Data Trust accept skip these).
-- Review card: confidence chip matches the shown %; name/date readable; ITIS banner amber when GBIF matches the name exactly (an exact old synonym also shows amber).
-- Publishing: a publish becomes the front page by default; preview.html (/b card) is rebuilt from the front-page walk (hero = non-toxic species with photo; teasers = that walk's gated recipes); fixed config values removed. Walk 5's first publish (b41435e) went in as non-default, so the site still shows Rümmelsbühl.
-- Publish panel: Select / Select all / Confirm selected for AI-agreed species; hazard rows need their own tap.
-- Batch 9/10 data: B1-02 (17052, 17737 → needs_review; 17737 off walk 4 stop 3 until confirmed); C-01 (131 photos copied, sha256 verified, originals untouched).
-- Recorded walks: "Show to guests" toggle (0058), all hidden by default; recipe titles never a quote/safety line; interrupted publish repaired on start.
-- Hazard archive: HAZARD_ARCHIVE_REPORT_2026-10-22.md (398 confirmed photos with a hazard candidate; 260 after skipping confirmed-hazard species). Contact sheets + CSV indexes in ~/Documents/ForagingID/hazard_review/ (scripts/make_hazard_sheets.py). All 260 reviewed by Melvin + Claude.
+### Done 22–25 Oct
+- 8262 → Chaerophyllum hirsutum (confirm-species, hazard ack C. aureum + C. villarsii); the 22 Oct hazard-review write had left it needs_review with no species change. That write itself: 18 photos in Review with label hazard_review (read back by id); 17579/16763/16782 wrongly sent then reverted the same minute (restored).
+- Hazard tiers (app/services/hazard_candidates.py): GATE = top 3 of any source or ≥5% in any source → red line + named second tap; DEEP → one grey "Also listed deep in …" line, no gate. Auto-approve still blocked at any rank. A human-decided photo (manually_verified / human-approved / rejected) gets no red line and no gate. Review: hazard block removed from Critical (walk items only); Status filter "☠ Hazard candidates". Red line on 29 of 376 queue cards (47 in the filter incl. 18 AI-approved).
+- Decisions: 24525 → Verbascum thapsus; 24471, 24469 → Chaerophyllum hirsutum; 22184 → Rubus pedatifolius (holly + yew acknowledged); new bare card 877 Rubus pedatifolius (verdict NULL, severity unknown). 24512, 24120, 21687, 21688, 21689 stay in Review.
+- Reopened-photos check: beyond the 18 + 17052/17737, 10176 and 22131 were Melvin-directed sends to Review (not restored); 15958, 15970, 21333, 21673, 21799 were Melvin rejections reopened by system:p1_transport_restore on 18 Jul (not restored, Melvin decides).
+- Recipes page (/recipes, in nav): approved, non-medicinal, culinary-allowed recipes only (245; 15 caution); views in season now / season / walk / type / species / plant part / A–Z / recent; search; ⚠ + warnings on tiles; tile opens the species page at that recipe card. Curator inline edit on each recipe card (title, summary, type, website link, Hide from public). Find → Make? opens /recipes (filtered to the open walk).
+- Public walk page Recipes tab = every public recipe (208), teaser only, filters; the plan lists the bank (count, new since the page on the site, full list, not-public reasons). preview.html links to index.html#recipes (still script-free). Not published.
+- Backfill: 25 titles from headings, 252 summaries, 133 types; 22 recipes need a title (RECON_recipes_page_25oct.md). Snapshots db_20261025_113127, db_20261025_114548.
+- Audit pass 2 recon (batches 11–13) reported 22 Oct: fixed B2-06 (data), B3-05, B2-09; mostly fixed C-06 (60 left); open B2-07 (148, 149, 583), B2-08 (12 NULL + 4 creators born NULL), C-05 (walk 4 has no publication row), D3-05, D3-02 (rule-2 GateError still aborts the plan), D3-04 (mirror on every publish), B4-01/B4-02 (defence in depth only), A-04.
 
 ### Next (order)
-1. Hazard review write (prompt written 22 Oct; check History for whether it ran): correct 8262 → Chaerophyllum hirsutum; send to Review with label hazard_review: 24512, 21687, 21688, 21689, 24120, 8341, 9434, 24195, 24196, 24197, 21227, 21246, 21691, 19824, 8291, 24272, 24338, 21776. Keep 9425, 17579, 16763, 16782. Report walks losing stops; check whether Pastinaca sativa (wild parsnip, phototoxic) has a card and hazard status.
-2. Melvin works the hazard_review cards in Review, then republishes walk 5 with Front page ticked.
-3. Audit pass 2: batches 11 + 12 + 13 as "what's left" recon. Then 11b (data, with Melvin), 15b (walk edits, Loop/One-way, Start here, route-line bug; GPS recording kept), 15, 16 (index.html split), 17.
-
-### Settled (Melvin, 22 Oct)
-- "Enrich selected" = scope "Current list". Handout rule: curator prep OR look-alike warning; all cautionary text travels with culinary content.
-- Pimpinella major/saxifraga keep culinary content on handouts; no carrot-family rule.
-- Guests: confirmed photos (scenes included); shared curator encounters only; text-only notes; no walk recording; recorded walks only when shown.
-- GPS walk recording kept for now. A publish makes the walk the front page by default.
-- Any deadly/toxic candidate blocks auto-approve and needs a named second tap.
+1. Walkthroughs A–H automated browser pass (prompt written 25 Oct: Playwright, scratch DB + server on port 8765, local bare repo; results in ~/Documents/ForagingID/walkthrough_run_<date>/). Not started.
+2. Melvin: title the 22 recipes (first recipe 258, walk 5's Laetiporus stop teaser), review types/summaries, then republish walk 5 with Front page ticked.
+3. Melvin works the hazard_review cards in Review.
+4. Audit batches 11 (data decisions), 11b, 12, 13, 15b, 15, 16, 17.
 
 ### Open decisions (Melvin)
-- None.
+- Pastinaca sativa: no card, so the hazard rule can't see it (27 photos list it). Card + verdict?
+- C-06 marker backfill; B2-07 three locks; C-05 walk-4 row vs republish; D3-05 freeze stop labels; D3-04 redirect vs mirror; B4-01 still worth it; A-04 Keychain vs .env.
+- The 5 rejected photos reopened on 18 Jul (15958, 15970, 21333, 21673, 21799).
 
 ### Rules learned
 - A confident single-service score can be wrong; never present one service's % alone when a hazard sits lower in any list.
-- Don't run a full enrichment; use a scope + the 25 cap.
-- Any app/ save reloads uvicorn and kills running jobs, including a publish.
-- Renaming a helper under app/ crashes the reload until all callers are updated; do it in one pass.
+- A human decision stands: the hazard rule never reopens or gates a photo Melvin has decided.
+- A title is never a prose first sentence written as if curated; flag "needs a title" instead.
+- Any app/ save reloads uvicorn and kills running jobs; check /api/processes/active first.
 - The End Session block is always complete and paste-ready.
 
 ### Melvin's review queue
-- hazard_review cards (Next #1). Warning review cards (walk species first). Edit Oxalis grandis 3493. Text tidy-up (352 edible_parts / 689 id_notes with no history). 347 Takeout person_animal rejects (mount DIGIERA). Draft #3252 Amaranthus hybridus. 17052, 17737 back in Review (B1-02).
+- hazard_review cards. 22 untitled recipes. Card 877 Rubus pedatifolius (verdict). Warning review cards. Oxalis grandis 3493. Text tidy-up (352 edible_parts / 689 id_notes). 347 Takeout person_animal rejects (mount DIGIERA). Draft #3252 Amaranthus hybridus. 17052, 17737 in Review.
 
 ### Browser checks: walkthroughs
-Tick-off checklist: "LandMemory Walkthroughs" artifact (A–G, kept in sync with this list).
-Test species: Conium maculatum, Oenanthe crocata, Sambucus nigra, 229 St John's wort, 295 Ramsons, 97 Aspen, Pineapple weed.
-- A. Species page: three views; safety sort; filters kept; capitalised names; test species pages; resources load; culinary, taste, recipes and field recipes show look-alike + prep warnings (uncurated labelled "Source text — not yet reviewed"); a species with none unchanged.
-- B. Map + walks: Conium pin full look-alike; Ramsons labelled; ☠ on 155/688/745; walk stop cards; Edit walk → Save → Re-route; Tidy; Export summary (warnings once); Find Make? cards carry both warnings; walk 5 tidied (7.6 km, dashed 38→12, 32→27); participant "Add a note" saves; Publish box below a divider; plan with AI-agreed thumbnails; Front page ticked by default; Select / Select all / Confirm selected with summary, hazard rows "☠ own tap"; Publish disabled until ticked; job steps tick; after republishing walk 5 the front page and /b show walk 5; acorn recipe has its real title; wifi off stops at step 1; Unpublish confirm (test walk only).
-- C. Handouts: Lists print (field guide, workshop) + PDF in 3 layouts; Conium uncut; 229 withheld; no PFAF Folklore; corners; warnings once; Ramsons and a Macrolepiota print culinary content; participant PDF shows only their own notes.
-- D. Review: Critical section incl. "☠ Hazard candidate" with Open card links; hazard card red named line above the name, not in "Also:"; Approve asks the named second tap; bulk approve leaves hazard cards with a toast; chip matches %; ITIS banner amber on a Pentanema-type card; verdict queue; warning cards Approve/Edit/Remove; Regenerate side by side; Run now dry run + Cancel; AI-draft buttons; reviewer notes.
-- E. Phone: pair; signed in; used link refused; bare URL "Ask Melvin"; revoke; "not signed in" vs offline; List at 390px; proximity alert; airplane-mode outbox; participant note box + dictation; pending/rejected photo 404; confirmed photos only; Record tab no 🎙 or Photo; no 👣 / Record live; Start walk doesn't record; your phone still records walks.
-- F. Settings: devices & sharing; no guest toggle; enrichment buttons ask first; paused-no-network; skip counts; DeepSeek key; Jobs pop-up; caffeinate exits; scope dialog on every bulk button; Continue disabled until scope; cap 25 summary; 🍄 and 💊 buttons; Data Trust accept reports skipped hazard photos.
-- G. Workshops: participant link via ngrok; second phone; used link refused; revoke; mobile data; shared encounter visible, unshared hidden; Participant notes grouped, escaped; no walk recording; recorded walks hidden unless shown; no Publish box, panel API 403.
+A–G as before, plus:
+- D: hazard tiers: red line only for top 3 / ≥5%; grey "Also listed deep in …" line otherwise; Status → "☠ Hazard candidates"; no hazard block at the top; a manually_verified card has no red line.
+- H: Recipes: nav link; every view; search; ⚠ and warnings on caution tiles; curator-only chips; tile opens the right recipe card outlined; ✎ Edit details saves and survives a reload, a bad link is refused, a guest sees no edit; Find → Make? opens Recipes (walk-filtered); publish plan shows "Recipes tab — 208"; after a republish, #recipes and the /b card link work.
 Rule: Code tests whatever it can; new browser checks go into a walkthrough, not numbered.
 
 ## Current State — 22 Oct 2026, evening
@@ -250,6 +240,95 @@ Test species: Conium maculatum, Oenanthe crocata, Sambucus nigra, 229 St John's 
 Rule: Code tests whatever it can (real JS via jsc, real PDFs); new browser checks are added to a walkthrough, not numbered.
 
 ## History
+
+### 2026-10-25 12:47
+**Snapshot** — End of session — Session ended from Settings page
+DB: `snapshots/db_20261025_124705.sqlite`
+
+### 2026-10-25 12:47
+**Session ended** — Session ended from Settings page
+
+### 2026-10-25 11:53
+**Recipes page in the app + Recipes tab (all public recipes) on the public walk page; recipe title/summary/type/hide/website fields (Alembic 0059) with backfill**
+
+**Built:**
+- Alembic 0059_recipe_page_fields: species_recipes.summary, recipe_type, hide_from_public (default 0), website_url — applied live after snapshot db_20261025_113127
+- Shared rules in app/models/species.py: recipe_title_source (own/heading/line), recipe_summary_line (skips safety/hazard/medicinal/cited sentences), propose_recipe_type (dish noun), recipe_plant_parts, recipe_website_url_ok (https melvinjarman.co.uk); recipe_display_title skips section headings and 'Recipe:'/'Title:' labels (JS twin _recipeTitle in step; 0 live display titles changed)
+- Backfill (scripts/recipe_fields_backfill.py, dry run first): 25 titles from headings, 22 'needs a title' left empty, 252 summaries, types 133 (38 corrected after the rule was tightened, snapshot db_20261025_114548); read back by id vs snapshot, 0 mismatches, bodies unchanged
+- GET /api/recipes (CULINARY_ALLOWED_SQL, non-medicinal, approved; safety map via new safety_for_species_bulk, identical to per-species for all 243 species; 0.4 s) + guest allowlist; PATCH recipe: summary/type/hide/website, validated, curator only
+- frontend/recipes.html: views in season now / season / walk / type / species / plant part / A–Z / recent; search; image-free tiles with ⚠ caution and warnings; tile -> /species?s=…&recipe=id#recipe-card-id; nav link
+- species.html: linked recipe opens (all seasons, expanded, outlined); curator inline edit on each recipe card
+- Find -> Make? opens /recipes (?walk=<open walk>); _findRecipes removed (/api/find/recipes kept, no UI caller)
+- Export: build_recipe_bank (export gates, not hidden, titled; teaser only, curator warnings, link); Recipes tab rewritten with filters; leak check (no body text in the tab data); plan lists recipe_bank (count, new since the page on the site, full list, not-public reasons); publish panel shows it; preview card links to index.html#recipes
+- Counts: app 245 recipes (15 caution); public tab 208 (43 not public: 20 needs title, 8 Apiaceae, 7 no edible claim, 4 toxic, 4 caution withheld)
+**Fixed:**
+- Recipe titles taken from '## Ingredients'-type headings (latent; none live)
+**Files:** `migrations/versions/0059_recipe_page_fields.py`, `app/models/species.py`, `app/api/recipes.py`, `app/api/walk.py`, `app/api/culinary.py`, `app/services/safety_gate.py`, `app/services/guest_access.py`, `app/services/experience_publish.py`, `app/main.py`, `frontend/recipes.html`, `frontend/species.html`, `frontend/index.html`, `frontend/static/js/site-header.js`, `frontend/static/js/walk-publish.js`, `frontend/static/sw.js`, `scripts/recipe_fields_backfill.py`, `scripts/experience_export/export.py`, `scripts/experience_export/templates/index.html`, `scripts/experience_export/templates/preview.html`, `tests/test_recipes_page.py`, `tests/test_batch5_safety_gate.py`, `tests/test_batch8_guest_and_culinary_warnings.py`, `RECON_recipes_page_25oct.md`
+**Pending:**
+- Melvin: 22 recipes need a title (list in RECON_recipes_page_25oct.md); recipe 258 (Laetiporus, walk 5 stop teaser) shows 'Always cook well…' as its dish until titled
+- Melvin: review types (113 Other) and summaries on the species cards
+- Browser walkthrough H (Recipes); CLAUDE.md Alembic head now 0059
+- No commit (Melvin)
+
+### 2026-10-25 11:20
+**22184 approved as Rubus pedatifolius (Melvin: yew and holly dismissed)**
+
+**Built:**
+- 22184 -> Rubus pedatifolius via confirm-species, hazard_ack Ilex aquifolium (GATE, iNat #2 2%) + Taxus baccata (DEEP, iNat #7 0.17%) as Melvin dismissed them; manually_verified/identified, label cleared; edits 21758-21763, processing_log 75411; confirmed copy exists. Snapshot db_20261025_111959 (backup API, no commit)
+- New bare species card 877 Rubus pedatifolius created by the confirm path: edibility_status NULL, severity unknown (fails closed; audit B2-08 generator)
+**Pending:**
+- Card 877 Rubus pedatifolius needs enrichment + a verdict (born NULL, B2-08)
+- No commit (Melvin)
+
+### 2026-10-25 11:18
+**Hazard rule simplified: GATE/DEEP tiers in one predicate, human decisions stand, Review hazard block replaced by a Status filter; Melvin's decisions 24525/24471/24469 applied (22184 held)**
+
+**Built:**
+- hazard_candidates.py: GATE tier = top 3 of any source or >= 5% in any source (hit['gate'], entry_gates); gating_hazards()/deep_hazards() return nothing for a photo a human has decided (is_undecided_by_human). Auto-approve still blocked at any rank (scan.py unchanged)
+- Gate callers moved to gating_hazards: check_hazard_ack (approve/correct/confirm-species/retry-confirm), bulk approve, Data Trust accept, publish panel, Review card red line, Review filter
+- Review: Hazard candidate block removed from Critical (/api/experience/critical returns walk items only; badge counts walk items only); Status filter option 'Hazard candidates' (review_status=hazard_candidates); DEEP tier shows one grey line 'Also listed deep in <source>: <name> <score>' (HazardAck.deepLineHtml); ObservationOut.hazard_deep
+- Decisions via confirm-species (edited_by human): 24525 -> Verbascum thapsus (edits 21740-21745; foxglove now DEEP, ack passed for the record), 24471 -> Chaerophyllum hirsutum (21746-21751), 24469 -> Chaerophyllum hirsutum (21752-21757); all manually_verified/identified, confirmed copies exist. Snapshot db_20261022_223012 (backup API, no commit)
+- Red line now on 29 of 376 queue cards (47 in the Hazard candidates filter incl. 18 AI-approved); 58 queue cards carry the grey line
+**Fixed:**
+- Old any-rank rule red-lined and gated cards with a hazard at rank 8+ / <1%; decided photos could still be gated on re-correction
+**Files:** `app/services/hazard_candidates.py`, `app/api/observations.py`, `app/api/experience.py`, `app/api/bulk_actions.py`, `app/api/trust.py`, `frontend/review.html`, `frontend/static/js/hazard-ack.js`, `frontend/static/sw.js`, `tests/test_hazard_candidates.py`, `tests/test_batch5_safety_gate.py`
+**Pending:**
+- 22184 held: yew is DEEP (iNat #7, 0.17%); the gating hazard is holly Ilex aquifolium (iNat #2, 2%) - Melvin to confirm holly dismissed before approving as Rubus pedatifolius
+- Reopened check: beyond the 18 + 17052/17737, 10176 (census 21 Oct) and 22131 (19 Oct non-European misID) were Melvin-directed sends to Review - not restored; 15958, 15970, 21333, 21673, 21799 were Melvin rejections reopened by system:p1_transport_restore 18 Jul - not restored, Melvin decides
+- Pastinaca sativa: still no card - Melvin decides card + verdict
+- Browser walkthrough D additions; no commit (Melvin)
+
+### 2026-10-25 10:49
+**Website review: latest-walk preview and public walk catalogue**
+
+**Built:**
+- Root index now lists all published walks newest first; root preview links to latest published walk.
+- Publish and unpublish regenerate and verify catalogue, root preview, tree alias and walks.json in the same public-site commit.
+- Legacy public root walk preserved at its own URL; public footer privacy link corrected.
+**Fixed:**
+- No-op publishing remains idempotent; missing preview blocks publication and live mismatch is explicitly reported.
+- Public site 400907f pushed and live bytes verified; 64 species / 59 stops shown for latest walk.
+**Files:** `app/services/experience_catalogue.py`, `app/services/experience_publish.py`, `app/api/experience.py`, `frontend/static/js/walk-publish.js`, `scripts/experience_export/config.json`, `tests/test_experience_catalogue.py`, `tests/test_stage_c_publish.py`
+**Pending:**
+- 25 isolated catalogue/publisher tests pass; local app publishing UI has not been browser-tested under the repo rule. Melvin should check the next real publish updates the collection and /b together.
+- Publisher source changes remain in the working tree for the normal End Session commit. Existing unrelated dirty files were preserved.
+
+### 2026-10-22 22:15
+**Hazard review follow-up: 8262 corrected to Chaerophyllum hirsutum; recon of the 20:06 hazard_review write, walk stops, Pastinaca; audit pass 2 recon (batches 11-13)**
+
+**Built:**
+- 8262 corrected Anthriscus sylvestris -> Chaerophyllum hirsutum (species 57, toxic) via confirm-species, hazard_ack 'Chaerophyllum aureum,Chaerophyllum villarsii'; manually_verified/identified; edits 21737-21739, processing_log 75273; snapshot db_20261022_221455 (commit cfc06b53)
+- Recorded: the 22 Oct 20:06 hazard_review write ran (changed_by hazard_review:22oct) but had no History entry: 18 rows -> needs_review + label hazard_review (read back by id); 17579/16763/16782 wrongly sent then reverted 20:06:24 (fully restored); 8262 was left needs_review with no species change - fixed here
+- Walks: no stop emptied, no species lost; photos off stops: walk 4 stop 3 (17737), stop 7 (9434 Tanacetum); walk 5 stop 51 (21227+21246 Pimpinella major), stop 53 (24195)
+- Pastinaca sativa: no species card, so is_hazard_species/hazard index never sees it; named as candidate on 27 photos (16 approved, 1 manually_verified 21778, 8 needs_review, 2 rejected)
+- Audit pass 2 recon: fixed B2-06 (data), B3-05, B2-09; mostly fixed C-06 (60 species without verdict history, was 379); open B2-07 (148,149,583), B2-08 (12 NULL, 4 creators born NULL), C-05 (walk 4 no publication row), D3-05, D3-02 (rule-2 GateError still aborts plan), D3-04 (mirror now every publish), B4-01/B4-02 (defence in depth only), A-04
+**Fixed:**
+- 8262 species correction that the hazard review write missed
+**Pending:**
+- Melvin: Pastinaca sativa card + verdict/severity decision
+- Melvin decisions: C-06 marker backfill, B2-07 3 locks, C-05 walk-4 row vs republish, D3-05 freeze labels, D3-04 redirect, B4-01 still worth it, A-04 Keychain vs .env
+- Code (no decision): B2-08 born-unknown at 4 creators + 12 backfill; D3-02 collect GateErrors
+- Melvin works hazard_review cards, then republishes walk 5 with Front page ticked
 
 ### 2026-10-22 22:14
 **Snapshot** — Manual snapshot

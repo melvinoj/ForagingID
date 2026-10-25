@@ -321,7 +321,7 @@ async def accept_species(
 
     from app.services.observation_service import update_observation_status
     from app.services.hazard_candidates import (
-        hazards_other_than, load_hazard_index, observation_hazards,
+        gating_hazards, hazards_other_than, load_hazard_index,
     )
     hidx = await load_hazard_index(db)
     accepted = 0
@@ -329,7 +329,7 @@ async def accept_species(
     for obs in rows:
         # Hazard candidates (Melvin, 22 Oct 2026): never accepted in bulk —
         # each needs its own second tap on its Review card.
-        if hazards_other_than(observation_hazards(obs, hidx), obs.species_primary,
+        if hazards_other_than(gating_hazards(obs, hidx), obs.species_primary,
                               obs.species_id, hidx):
             hazard_skipped.append(obs.id)
             continue

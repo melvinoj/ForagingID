@@ -490,6 +490,21 @@
       display: block;
     }
     .recipe-expand-btn:hover { text-decoration: underline; }
+    /* Recipes page link target + curator inline edit (25 Oct 2026) */
+    .recipe-bank-card.recipe-linked { outline: 2px solid #e0b070; outline-offset: 2px; box-shadow: 0 0 0 6px #e0b07033; }
+    .recipe-meta-line { font-size: 0.72rem; color: #9ab09a; margin: 2px 0 6px; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+    .recipe-meta-line a { color: #e0b070; }
+    .recipe-edit-btn { background: none; border: 1px solid #4a5e5a; color: #9ab09a; border-radius: 5px;
+                       font-size: 0.72rem; padding: 1px 7px; cursor: pointer; }
+    .recipe-edit-form { display: none; background: #2f3d3a; border: 1px solid #4a5e5a; border-radius: 6px;
+                        padding: 8px 10px; margin: 6px 0; font-size: 0.8rem; }
+    .recipe-edit-form.open { display: grid; gap: 6px; }
+    .recipe-edit-form label { display: grid; gap: 2px; color: #9ab09a; }
+    .recipe-edit-form input[type=text], .recipe-edit-form input[type=url], .recipe-edit-form textarea,
+    .recipe-edit-form select { background: #263230; color: #d8e4d8; border: 1px solid #4a5e5a; border-radius: 4px;
+                               padding: 5px 7px; font: inherit; }
+    .recipe-edit-form .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+    .recipe-edit-form .msg { color: #f0a0a0; }
 
     /* ── Field Recipes (encounter artefacts) ────────────────────────────── */
     #sec-field-recipes { display: none; }
@@ -2363,6 +2378,7 @@ function renderProfile(data, observations) {
       }
 
       _renderRecipeBank(recipes, window._recipeSeason, el);
+      _openLinkedRecipe(recipes);
     }
   }
 
@@ -4755,6 +4771,7 @@ function _renderRecipeBank(recipes, season, container) {
         <span class="recipe-pref-star" title="${r.is_preferred ? 'Preferred recipe' : 'Mark as preferred'}"
               onclick="setPreferredRecipe(${r.id})">${r.is_preferred ? '★' : '☆'}</span>
       </div>
+      ${isMed ? '' : _recipeMetaHtml(r)}
       ${prepWarn}
       <div class="recipe-bank-body" id="recipe-body-${r.id}">${_renderMd(r.body)}</div>
       ${!single ? `<button class="recipe-expand-btn" id="recipe-expand-${r.id}"
@@ -4781,6 +4798,86 @@ function toggleRecipeExpand(recipeId, cardId) {
   const collapsed = card.classList.contains('recipe-bank-collapsed');
   card.classList.toggle('recipe-bank-collapsed', !collapsed);
   if (btn) btn.textContent = collapsed ? '▲ Collapse' : '▼ Show full recipe';
+}
+
+// ── Recipes page link (25 Oct 2026): /species?s=…&recipe=<id> ─────────────
+// Shows every season (the card may not be in the default season tab), opens
+// the card, scrolls to it and outlines it. The warnings sit in the card as
+// always (prepWarn). Once per page load — a reload after an edit keeps place.
+let _linkedRecipeDone = false;
+function _openLinkedRecipe(recipes) {
+  const want = parseInt(params.get('recipe'), 10);
+  if (_linkedRecipeDone || !want || !recipes.some(r => r.id === want)) return;
+  _linkedRecipeDone = true;
+  setRecipeSeason('all');
+  const card = document.getElementById(`recipe-card-${want}`);
+  if (!card) return;
+  if (card.classList.contains('recipe-bank-collapsed')) toggleRecipeExpand(want, card.id);
+  card.classList.add('recipe-linked');
+  requestAnimationFrame(() => card.scrollIntoView({ behavior: 'smooth', block: 'start' }));
+}
+
+// ── Recipe card: curator details + inline edit (Recipes page fields, 0059) ──
+const _RECIPE_TYPES = ['drink', 'ferment', 'condiment', 'preserve', 'main', 'side', 'sweet', 'other'];
+function _recipeMetaHtml(r) {
+  const typeLabel = r.recipe_type ? r.recipe_type.charAt(0).toUpperCase() + r.recipe_type.slice(1) : 'Other';
+  const opts = ['<option value="">Other (no type)</option>'].concat(_RECIPE_TYPES.filter(t => t !== 'other').map(t =>
+    `<option value="${t}"${r.recipe_type === t ? ' selected' : ''}>${t.charAt(0).toUpperCase() + t.slice(1)}</option>`)).join('');
+  return `<div class="recipe-meta-line" data-guest-hide>
+      <span>${_esc(typeLabel)}</span>
+      <span>${r.hide_from_public ? '🔒 hidden from public' : 'public'}</span>
+      ${r.website_url ? `<a href="${_esc(r.website_url)}" target="_blank" rel="noopener">full recipe ↗</a>` : ''}
+      <button class="recipe-edit-btn" onclick="toggleRecipeEdit(${r.id})">✎ Edit details</button>
+    </div>
+    <form class="recipe-edit-form" id="recipe-edit-${r.id}" data-guest-hide onsubmit="saveRecipeEdit(event, ${r.id})">
+      <label>Title<input type="text" name="title" maxlength="200" value="${_esc(r.title || '')}"
+             placeholder="Recipe title"></label>
+      <label>Summary (one line, shown on the Recipes page)<textarea name="summary" rows="2" maxlength="300">${_esc(r.summary || '')}</textarea></label>
+      <div class="row">
+        <label>Type<select name="recipe_type">${opts}</select></label>
+        <label style="flex:1">Full recipe on melvinjarman.co.uk<input type="url" name="website_url"
+               value="${_esc(r.website_url || '')}" placeholder="https://melvinjarman.co.uk/…"></label>
+      </div>
+      <label class="row" style="display:flex"><input type="checkbox" name="hide_from_public"${r.hide_from_public ? ' checked' : ''}>
+        Hide from public (the walk page's Recipes tab)</label>
+      <div class="row"><button type="submit">Save</button>
+        <button type="button" onclick="toggleRecipeEdit(${r.id})">Cancel</button>
+        <span class="msg" id="recipe-edit-msg-${r.id}"></span></div>
+    </form>`;
+}
+
+function toggleRecipeEdit(recipeId) {
+  const f = document.getElementById(`recipe-edit-${recipeId}`);
+  if (f) f.classList.toggle('open');
+}
+
+async function saveRecipeEdit(ev, recipeId) {
+  ev.preventDefault();
+  const f = ev.target;
+  const sp = _currentSpeciesName;
+  const msg = document.getElementById(`recipe-edit-msg-${recipeId}`);
+  const el = name => f.elements[name];      // never f.title — that is the form's own attribute
+  const body = {
+    title: el('title').value,
+    summary: el('summary').value,
+    recipe_type: el('recipe_type').value,
+    website_url: el('website_url').value.trim(),
+    hide_from_public: el('hide_from_public').checked,
+  };
+  if (msg) msg.textContent = 'Saving…';
+  try {
+    const r = await fetch(`/api/species/${encodeURIComponent(sp)}/recipes/${recipeId}`, {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+    });
+    if (!r.ok) {
+      const d = await r.json().catch(() => ({}));
+      throw new Error(d.detail || `HTTP ${r.status}`);
+    }
+    await _invalidateSpeciesCacheEntry(sp);
+    await loadProfile(sp);
+  } catch (e) {
+    if (msg) msg.textContent = '❌ ' + e.message;
+  }
 }
 
 async function setPreferredRecipe(recipeId) {

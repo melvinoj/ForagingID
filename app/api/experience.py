@@ -217,8 +217,8 @@ async def plan_publication(pub_id: int, db: AsyncSession = Depends(get_db)):
     plan["changes"] = xp.plan_changes(plan, before, where)
     ids = [a["obs_id"] for a in plan.get("ai_agreed_obs", [])]
     if ids:
-        from app.services.hazard_candidates import (hazards_other_than, load_hazard_index,
-                                                    observation_hazards)
+        from app.services.hazard_candidates import (gating_hazards, hazards_other_than,
+                                                    load_hazard_index)
         hidx = await load_hazard_index(db)
         rows = {o.id: o for o in (await db.execute(select(Observation)
                                                    .where(Observation.id.in_(ids)))).scalars().all()}
@@ -231,7 +231,7 @@ async def plan_publication(pub_id: int, db: AsyncSession = Depends(get_db)):
             # the species needs the second tap naming it (hazard_ack).
             own = hidx.resolve(o.species_primary) if o else None
             a["hazard_species"] = own.level if own else None
-            a["hazard_candidates"] = (hazards_other_than(observation_hazards(o, hidx), o.species_primary,
+            a["hazard_candidates"] = (hazards_other_than(gating_hazards(o, hidx), o.species_primary,
                                                          o.species_id, hidx) if o else [])
             a["bulk_ok"] = bool(o) and not (a["hazard"] or own or a["hazard_candidates"])
     return plan
@@ -296,7 +296,7 @@ async def walk_panel(walk_id: int, db: AsyncSession = Depends(get_db)):
                           .order_by(ExperiencePublication.id.desc()).limit(1))).scalar_one_or_none()
     pub = _pub_out(p) if p else None
     if pub:
-        pub["url"] = xp.site_url() + ("" if p.is_default else f"w/{p.slug}/")
+        pub["url"] = xp.site_url() + f"w/{p.slug}/"
         pub["last_repair"] = await xp.last_repair(p.id)     # an interrupted run repaired / failed at start
     return {"walk_id": walk_id, "publication": pub, "override_files": xp.override_files(),
             "active_job": xp.active_job(), "site_url": xp.site_url()}
@@ -370,8 +370,9 @@ async def critical_hazards(db: AsyncSession = Depends(get_db)):
     listed here — it is an export blocker only. review_status is never changed,
     so the map pin stays visible.
 
-    candidate_items: observations no human has decided whose candidate lists
-    name a hazard species (app/services/hazard_candidates.py)."""
+    Hazard candidates are not listed here (Melvin, 22 Oct 2026 evening): they
+    show on their own Review card and under Review's "Hazard candidates"
+    status filter (app/services/hazard_candidates.py)."""
     walks = (await db.execute(select(SavedWalk).order_by(SavedWalk.id))).scalars().all()
     placements = []                       # (walk, stop label, obs_id)
     for w in walks:
@@ -402,9 +403,4 @@ async def critical_hazards(db: AsyncSession = Depends(get_db)):
             "review_status": o.review_status,
         })
     items.sort(key=lambda i: (0 if i["severity"] == "deadly" else 1, i["walk_id"], i["obs_id"]))
-    # Hazard candidates (Melvin, 22 Oct 2026 — foxglove #24507): any undecided
-    # observation whose candidates from any source name a hazard species.
-    from app.services.hazard_candidates import undecided_hazard_items
-    candidate_items = await undecided_hazard_items(db)
-    ids = {i["obs_id"] for i in items} | {i["obs_id"] for i in candidate_items}
-    return {"count": len(ids), "items": items, "candidate_items": candidate_items}
+    return {"count": len({i["obs_id"] for i in items}), "items": items}

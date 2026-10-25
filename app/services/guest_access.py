@@ -45,6 +45,7 @@ GUEST_GET_API = [re.compile(p) for p in (
     r"^/api/encounters/\d+$",
     r"^/api/nearby$",
     r"^/api/find/(recipes|medicinal|in-season)$",
+    r"^/api/recipes$",                       # Recipes page (25 Oct 2026) — same gate as species pages
     r"^/api/experience/(critical|publications(/\d+)?)$",
     r"^/api/edibility/(summary|status)/.+$",
     r"^/api/notifications/seasonal-returns$",

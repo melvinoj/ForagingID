@@ -2,6 +2,8 @@
 Recipe bank API — Phase 3.
 
 Endpoints:
+  GET    /api/recipes                             — Recipes page: every approved,
+                                                     culinary-allowed recipe (25 Oct 2026)
   GET    /api/species/{name}/recipes              — list approved recipes
   POST   /api/species/{name}/recipes              — add recipe (human, review queue)
   PATCH  /api/species/{name}/recipes/{id}         — edit (review queue only)
@@ -20,8 +22,12 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.identity import Identity, get_identity
 from app.database import get_db
-from app.models.species import Species, SpeciesRecipe, SpeciesAIDraft, culinary_allowed
+from app.models.species import (CULINARY_ALLOWED_SQL, RECIPE_TYPES, Species, SpeciesRecipe,
+                                SpeciesAIDraft, culinary_allowed,
+                                display_common_name, recipe_display_title, recipe_plant_parts,
+                                recipe_summary_line, recipe_title_source, recipe_website_url_ok)
 from app.models.culinary import CulinaryInfo
 from app.services.ai_placeholder import is_ai_placeholder
 
@@ -49,6 +55,11 @@ class RecipePatch(BaseModel):
     season: Optional[str] = None
     is_medicinal_prep: Optional[bool] = None
     is_preferred: Optional[bool] = None
+    # Recipes page fields (0059). "" clears summary / recipe_type / website_url.
+    summary: Optional[str] = None
+    recipe_type: Optional[str] = None
+    hide_from_public: Optional[bool] = None
+    website_url: Optional[str] = None
 
 
 class RegenerateRequest(BaseModel):
@@ -80,9 +91,74 @@ def _recipe_dict(r: SpeciesRecipe) -> dict:
         "is_medicinal_prep":r.is_medicinal_prep,
         "source":           r.source,
         "status":           r.status,
+        "summary":          r.summary,
+        "recipe_type":      r.recipe_type,
+        "hide_from_public": bool(r.hide_from_public),
+        "website_url":      r.website_url,
         "created_at":       r.created_at.isoformat() if r.created_at else None,
         "updated_at":       r.updated_at.isoformat() if r.updated_at else None,
     }
+
+
+# ---------------------------------------------------------------------------
+# GET /api/recipes — the Recipes page (Melvin, 25 Oct 2026)
+# ---------------------------------------------------------------------------
+
+@router.get("/api/recipes")
+async def all_recipes(
+    q: Optional[str] = Query(None, description="Ingredient or keyword (title + recipe text)"),
+    db: AsyncSession = Depends(get_db),
+    identity: Identity = Depends(get_identity),
+):
+    """Every approved, non-medicinal recipe whose species passes the culinary
+    gate (CULINARY_ALLOWED_SQL = culinary_allowed — the species page's own
+    rule, so a guest sees exactly the recipes the species pages show them).
+    Toxic, deadly, inedible, unknown and never-assessed species never appear.
+    `safety` holds each listed species' served decision once (the page shows
+    its look-alike + preparation warnings with SafetyGate.culinaryWarnings, as
+    every other culinary surface does); each recipe carries the saved walks
+    its species is on. No recipe body (the species page holds it).
+    created_at is the approval date: a recipe row is created when its draft is
+    approved (culinary.approve_ai_draft) or when the curator adds it."""
+    from app.api.walk import saved_walks_by_species
+    from app.services.safety_gate import safety_for_species_bulk
+    stmt = (select(SpeciesRecipe, Species)
+            .join(Species, Species.id == SpeciesRecipe.species_id)
+            .where(SpeciesRecipe.status == "approved")
+            .where(SpeciesRecipe.is_medicinal_prep.is_(False))
+            .where(CULINARY_ALLOWED_SQL))
+    if q and q.strip():
+        pat = f"%{q.strip()}%"
+        stmt = stmt.where(SpeciesRecipe.title.ilike(pat) | SpeciesRecipe.body.ilike(pat)
+                          | SpeciesRecipe.summary.ilike(pat) | Species.scientific_name.ilike(pat)
+                          | Species.common_names.ilike(pat) | Species.preferred_common_name.ilike(pat))
+    rows = (await db.execute(stmt.order_by(SpeciesRecipe.id))).all()
+    walks = await saved_walks_by_species(db)
+    safety = await safety_for_species_bulk(db, [sp for _, sp in rows])
+    out = []
+    for r, sp in rows:
+        d = safety[sp.id]
+        item = {
+            "id": r.id,
+            "title": recipe_display_title(r.title, r.body),
+            "summary": (r.summary or "").strip() or recipe_summary_line(r.title, r.body),
+            "recipe_type": r.recipe_type if r.recipe_type in RECIPE_TYPES else None,
+            "season": r.season,
+            "parts": recipe_plant_parts(r.title, r.body),
+            "approved_at": r.created_at.isoformat() if r.created_at else None,
+            "website_url": r.website_url if recipe_website_url_ok(r.website_url) else None,
+            "species": {"id": sp.id, "scientific_name": sp.scientific_name,
+                        "common": display_common_name(sp.preferred_common_name, sp.common_names) or None,
+                        "level": d["level"], "label": d["label"]},
+            "walks": walks.get(sp.scientific_name, []),
+        }
+        if not identity.is_guest:
+            item["hide_from_public"] = bool(r.hide_from_public)
+            # The shown title is only a first prose sentence: the curator types one.
+            item["needs_title"] = recipe_title_source(r.title, r.body) not in ("own", "heading")
+        out.append(item)
+    return {"count": len(out), "types": list(RECIPE_TYPES), "recipes": out,
+            "safety": {str(sid): d for sid, d in safety.items()}}
 
 
 # ---------------------------------------------------------------------------
@@ -174,7 +250,17 @@ async def edit_recipe(
     recipe_id: int,
     body: RecipePatch,
     db: AsyncSession = Depends(get_db),
+    identity: Identity = Depends(get_identity),
 ):
+    if identity.is_guest:
+        raise HTTPException(403, "Curator only")
+    # Validate before anything changes.
+    if body.recipe_type not in (None, "") and body.recipe_type not in RECIPE_TYPES:
+        raise HTTPException(400, f"recipe_type must be one of {list(RECIPE_TYPES)}")
+    if body.website_url not in (None, "") and not recipe_website_url_ok(body.website_url):
+        raise HTTPException(400, "website_url must be an https link on melvinjarman.co.uk")
+    if body.title is not None and len(body.title.strip()) > 200:
+        raise HTTPException(400, "title is at most 200 characters")
     sp = await _get_species(db, species_name)
     recipe = await db.scalar(
         select(SpeciesRecipe)
@@ -187,11 +273,19 @@ async def edit_recipe(
     if body.body is not None:
         recipe.body = body.body
     if body.title is not None:
-        recipe.title = body.title
+        recipe.title = body.title.strip() or None
     if body.season is not None:
         recipe.season = body.season if body.season in VALID_SEASONS else recipe.season
     if body.is_medicinal_prep is not None:
         recipe.is_medicinal_prep = body.is_medicinal_prep
+    if body.summary is not None:
+        recipe.summary = body.summary.strip() or None
+    if body.recipe_type is not None:
+        recipe.recipe_type = body.recipe_type or None
+    if body.hide_from_public is not None:
+        recipe.hide_from_public = bool(body.hide_from_public)
+    if body.website_url is not None:
+        recipe.website_url = body.website_url.strip() or None
     if body.is_preferred is not None:
         if body.is_preferred:
             # Clear previous preferred

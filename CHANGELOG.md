@@ -1,45 +1,50 @@
 ## Current State
 
-### Build
-- Alembic head 0059 (species_recipes summary / recipe_type / hide_from_public / website_url). CLAUDE.md still says 0050 (batch 17).
-- 31 test files pass. Service worker foragingid-v17 (hard refresh once).
-- Uncommitted until this End Session: hazard tiers + Review filter, Recipes page + public Recipes tab, recipe backfill, 8262/24525/24471/24469/22184 decisions.
+### Session summary (25 Oct, afternoon)
+Walkthroughs A–H automated pass (Playwright, scratch clone + snapshot DB on :8765, local bare repo, local Pages stand-in): 78 PASS / 4 FAIL / 6 NEEDS EYES / 12 MELVIN ONLY, results in ~/Documents/ForagingID/walkthrough_run_20261025/. Bugs found, not fixed: saved-walk load fails on a large zoom (leaflet.heat redraw off-map), Find → Make? loses the open walk (_exitWalkMode), reviewer_notes missing from ObservationOut. New scripts/dev/walkthrough_check.py and requirements-dev.txt (Playwright). No live DB or app code changes.
 
-### Done 22–25 Oct
-- 8262 → Chaerophyllum hirsutum (confirm-species, hazard ack C. aureum + C. villarsii); the 22 Oct hazard-review write had left it needs_review with no species change. That write itself: 18 photos in Review with label hazard_review (read back by id); 17579/16763/16782 wrongly sent then reverted the same minute (restored).
-- Hazard tiers (app/services/hazard_candidates.py): GATE = top 3 of any source or ≥5% in any source → red line + named second tap; DEEP → one grey "Also listed deep in …" line, no gate. Auto-approve still blocked at any rank. A human-decided photo (manually_verified / human-approved / rejected) gets no red line and no gate. Review: hazard block removed from Critical (walk items only); Status filter "☠ Hazard candidates". Red line on 29 of 376 queue cards (47 in the filter incl. 18 AI-approved).
-- Decisions: 24525 → Verbascum thapsus; 24471, 24469 → Chaerophyllum hirsutum; 22184 → Rubus pedatifolius (holly + yew acknowledged); new bare card 877 Rubus pedatifolius (verdict NULL, severity unknown). 24512, 24120, 21687, 21688, 21689 stay in Review.
-- Reopened-photos check: beyond the 18 + 17052/17737, 10176 and 22131 were Melvin-directed sends to Review (not restored); 15958, 15970, 21333, 21673, 21799 were Melvin rejections reopened by system:p1_transport_restore on 18 Jul (not restored, Melvin decides).
-- Recipes page (/recipes, in nav): approved, non-medicinal, culinary-allowed recipes only (245; 15 caution); views in season now / season / walk / type / species / plant part / A–Z / recent; search; ⚠ + warnings on tiles; tile opens the species page at that recipe card. Curator inline edit on each recipe card (title, summary, type, website link, Hide from public). Find → Make? opens /recipes (filtered to the open walk).
-- Public walk page Recipes tab = every public recipe (208), teaser only, filters; the plan lists the bank (count, new since the page on the site, full list, not-public reasons). preview.html links to index.html#recipes (still script-free). Not published.
-- Backfill: 25 titles from headings, 252 summaries, 133 types; 22 recipes need a title (RECON_recipes_page_25oct.md). Snapshots db_20261025_113127, db_20261025_114548.
-- Audit pass 2 recon (batches 11–13) reported 22 Oct: fixed B2-06 (data), B3-05, B2-09; mostly fixed C-06 (60 left); open B2-07 (148, 149, 583), B2-08 (12 NULL + 4 creators born NULL), C-05 (walk 4 has no publication row), D3-05, D3-02 (rule-2 GateError still aborts the plan), D3-04 (mirror on every publish), B4-01/B4-02 (defence in depth only), A-04.
+### Build
+- Alembic head 0059. CLAUDE.md still says 0050 (batch 17).
+- 31 test files pass. Service worker foragingid-v17.
+- New this session (uncommitted until this End Session): scripts/dev/walkthrough_check.py (automated walkthrough pass, re-runnable), requirements-dev.txt (playwright==1.60.0, installed in ~/foragingid-venv; Chromium already cached). No app/ or frontend/ changes. No live DB writes.
+
+### Done 25 Oct (afternoon)
+- Walkthroughs A–H automated pass on a scratch server: APFS clone of the project + snapshot db_20261025_124705 (keys blanked, media paths pointed at the clone), HOME → throwaway folder so publish went to a local bare repo, export site_url → a local static server (GitHub Pages stand-in), port 8765 loopback only. Participant = real /join link with X-Forwarded-For (LAN device). Results: ~/Documents/ForagingID/walkthrough_run_20261025/ (results.csv, one screenshot per item, 3 PDFs). 78 PASS · 4 FAIL · 6 NEEDS EYES · 12 MELVIN ONLY.
+- Passed incl.: species views/sort/warnings; map pop-ups; walk 4 stop cards; Edit walk → Save → Re-route; Tidy; Export summary; published walk 4 page; note tags; participant walk-stop notes; field-guide/workshop print; PDFs (Conium uncut, 229 withheld, no PFAF folklore); participant-only notes in print/PDF; Critical section; hazard tiers (375 queue cards, 28 red — all top 3/≥5%; grey lines all below); hazard filter (46: 28 needs_review + 18 approved); manually verified cards no red line; warning cards; Run now dry run + Cancel; every bulk button scope-first (Continue disabled, walk list, "queued (cap 25)", Cancel starts nothing); used link 410; bare URL 401 "Ask Melvin"; revoke (device + participant); signed-out not offline; offline outbox syncs; participant media 404s, gallery confirmed-only, Record tab roles; SW v17; Share with guests; Participant notes tab (<b> plain); Recipes page views/search/caution tiles/curator chips/tile → card/edit saves/bad link refused/guest no edit; publish plan "Recipes tab — 208"; test walk publish → unpublish; publish with unreachable remote → "No network", nothing pushed.
+
+### Bugs found (not fixed)
+1. Saved walk fails to load ("Failed to load walk: Cannot read properties of null (reading '_animating')"): loadSavedWalk → _fitSavedWalk → large zoom fires zoomend synchronously → _heatZoomEnd → _recalcHeatMax → heatLayer.setOptions → redraw while the heat layer is off the map (_map null). Walk 4 every time; walk 5 at phone width. Smaller zoom: loads but logs the error. renderMarkers' heatLayer.setLatLngs hits the same in Edit walk taps.
+2. Find → 🍳 Make? never walk-filtered: showDiscoverView() calls _exitWalkMode(), which sets _walkSaved = null before _openRecipesPage() reads it (index.html:3557).
+3. Review reviewer notes look lost after reload: PATCH saves, but ObservationOut (app/api/observations.py:24) has no reviewer_notes, so cards come back empty.
 
 ### Next (order)
-1. Walkthroughs A–H automated browser pass (prompt written 25 Oct: Playwright, scratch DB + server on port 8765, local bare repo; results in ~/Documents/ForagingID/walkthrough_run_<date>/). Not started.
-2. Melvin: title the 22 recipes (first recipe 258, walk 5's Laetiporus stop teaser), review types/summaries, then republish walk 5 with Front page ticked.
-3. Melvin works the hazard_review cards in Review.
-4. Audit batches 11 (data decisions), 11b, 12, 13, 15b, 15, 16, 17.
+1. Fix the 3 bugs above (one at a time; each with a test).
+2. Re-run H12 (republish walk 5 → #recipes + /b card link) — the script couldn't click "Walk stats" in the full run; check after bug 1 is fixed.
+3. Melvin: title the 22 recipes (first 258, walk 5's Laetiporus stop teaser), review types/summaries, then republish walk 5. Note: the publish confirm has no Front page tick — it always sends front_page=true.
+4. Melvin works the hazard_review cards in Review.
+5. Audit batches 11 (data decisions), 11b, 12, 13, 15b, 15, 16, 17.
 
 ### Open decisions (Melvin)
 - Pastinaca sativa: no card, so the hazard rule can't see it (27 photos list it). Card + verdict?
 - C-06 marker backfill; B2-07 three locks; C-05 walk-4 row vs republish; D3-05 freeze stop labels; D3-04 redirect vs mirror; B4-01 still worth it; A-04 Keychain vs .env.
 - The 5 rejected photos reopened on 18 Jul (15958, 15970, 21333, 21673, 21799).
+- Walk 5 members now 105 (22 Oct note said 108) — expected after later decisions?
 
 ### Rules learned
 - A confident single-service score can be wrong; never present one service's % alone when a hazard sits lower in any list.
 - A human decision stands: the hazard rule never reopens or gates a photo Melvin has decided.
 - A title is never a prose first sentence written as if curated; flag "needs a title" instead.
 - Any app/ save reloads uvicorn and kills running jobs; check /api/processes/active first.
-- The End Session block is always complete and paste-ready.
+- The End Session block is always ONE complete, paste-ready block (summary included).
+- Automated browser runs only against a scratch clone (never :8000); the script refuses :8000 and the real ~/foraging-experience. A second server on this Mac picks up Melvin's running ngrok tunnel via ngrok's local API — links it mints point at the live server.
 
 ### Melvin's review queue
 - hazard_review cards. 22 untitled recipes. Card 877 Rubus pedatifolius (verdict). Warning review cards. Oxalis grandis 3493. Text tidy-up (352 edible_parts / 689 id_notes). 347 Takeout person_animal rejects (mount DIGIERA). Draft #3252 Amaranthus hybridus. 17052, 17737 in Review.
+- Walkthrough NEEDS EYES: B10 walk 5 dashed legs/order, C03 PDF corners (×3), E07 List view at 390px, F02 device list on a paired curator phone.
+- Walkthrough MELVIN ONLY: pair a phone (Add device), installed app signed in, "Start sharing first" refusal with sharing stopped, keyboard dictation, ⚡ Enrich, Regenerate side by side, paused "no network" run, run summary skip counts, DeepSeek key shown, Jobs pop-up, caffeinate exits, participant phone on mobile data / second phone via ngrok.
 
 ### Browser checks: walkthroughs
-A–G as before, plus:
-- D: hazard tiers: red line only for top 3 / ≥5%; grey "Also listed deep in …" line otherwise; Status → "☠ Hazard candidates"; no hazard block at the top; a manually_verified card has no red line.
-- H: Recipes: nav link; every view; search; ⚠ and warnings on caution tiles; curator-only chips; tile opens the right recipe card outlined; ✎ Edit details saves and survives a reload, a bad link is refused, a guest sees no edit; Find → Make? opens Recipes (walk-filtered); publish plan shows "Recipes tab — 208"; after a republish, #recipes and the /b card link work.
+Automated: ~/foragingid-venv/bin/python scripts/dev/walkthrough_check.py --site <scratch HOME>/foraging-experience --remote <scratch>/remote.git --out ~/Documents/ForagingID/walkthrough_run_<date> (scratch server on 8765 required; see the script header). Remaining live checks are the NEEDS EYES / MELVIN ONLY lists above.
 Rule: Code tests whatever it can; new browser checks go into a walkthrough, not numbered.
 
 ## Current State — 22 Oct 2026, evening
@@ -240,6 +245,13 @@ Test species: Conium maculatum, Oenanthe crocata, Sambucus nigra, 229 St John's 
 Rule: Code tests whatever it can (real JS via jsc, real PDFs); new browser checks are added to a walkthrough, not numbered.
 
 ## History
+
+### 2026-10-25 16:52
+**Snapshot** — End of session — Session ended from Settings page
+DB: `snapshots/db_20261025_165228.sqlite`
+
+### 2026-10-25 16:52
+**Session ended** — Session ended from Settings page
 
 ### 2026-10-25 12:47
 **Snapshot** — End of session — Session ended from Settings page

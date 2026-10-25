@@ -24,6 +24,11 @@
     /* ── Species list view ───────────────────────────────────────────────── */
     #list-view { max-width: 960px; margin: 0 auto; padding: 20px 16px; }
     #list-view h2 { font-size: 1.3rem; color: #8ab87a; margin-bottom: 4px; }
+    /* The fixed nav chip (site-header.css: left 12px, 44px wide) sits over the
+       heading whenever the 960px column reaches the left edge — indent past it. */
+    @media (max-width: 1080px) {
+      #list-view > h2, #list-view > .subtitle { padding-left: 50px; }
+    }
     #list-view .subtitle { font-size: 0.85rem; color: #7a9a7a; margin-bottom: 16px; }
 
     #species-search {
@@ -117,7 +122,9 @@
     .sp-row a { color: inherit; text-decoration: none; }
     .sp-table .common { font-weight: 700; color: #a8c88a; }
     .sp-table .common-de { font-size: 0.75rem; color: #7a6530; font-style: italic; }
-    .sp-table .sci-name { font-style: italic; color: #8aa86a; }
+    /* Latin names wrap at spaces only (the td's overflow-wrap:anywhere split
+       "pseudoplatan|us"); the phone column widths below fit the longest epithet. */
+    .sp-table .sci-name { font-style: italic; color: #8aa86a; overflow-wrap: normal; }
     .sp-table .col-thumb { width: 52px; position: relative; }
     .sp-table .col-family { width: 18%; color: #888; }
     .sp-table .col-sightings { width: 58px; text-align: right; }
@@ -139,6 +146,9 @@
       .sp-thumb-sm { width: 38px; height: 38px; }
       .sp-table .col-sightings { width: 44px; }
       .sp-table .col-safety { width: 92px; }
+      /* Room for a 16-letter word (Tripleurospermum, Ampulloclitocybe) unbroken. */
+      .sp-table .col-latin { width: 112px; }
+      .sp-table .sci-name { font-size: 0.76rem; }
       .sp-table td, .sp-sort-btn { padding: 4px 4px; }
     }
 

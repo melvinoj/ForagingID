@@ -62,6 +62,10 @@ class ObservationOut(BaseModel):
     # (grey "Also listed deep in …" line). Both empty once a human decided.
     hazard_candidates: Optional[list] = None
     hazard_deep: Optional[list] = None
+    # Curator's notes (scene description on landscape rows) — the Review card's
+    # notes box reads it back after a reload. Curator-only: get_observation
+    # blanks it for guests.
+    reviewer_notes: Optional[str] = None
 
     model_config = {"from_attributes": True}
 
@@ -462,6 +466,8 @@ async def get_observation(observation_id: int, db: AsyncSession = Depends(get_db
         raise HTTPException(status_code=404, detail="Observation not found")
     from app.services.hazard_candidates import deep_hazards, gating_hazards, load_hazard_index
     d = ObservationOut.model_validate(obs).model_dump()
+    if identity.is_guest:
+        d["reviewer_notes"] = None
     hazard_index = await load_hazard_index(db)
     d["hazard_candidates"] = gating_hazards(obs, hazard_index)
     d["hazard_deep"] = deep_hazards(obs, hazard_index)

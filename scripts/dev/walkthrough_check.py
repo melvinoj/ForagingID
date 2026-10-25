@@ -1918,6 +1918,25 @@ def _remote_file(R, rel):
 
 def _publish_panel(R, pg, walk_id):
     how = _open_saved_walk(R, pg, walk_id)
+    # A failed publish left by an earlier item (H14 fails one on purpose) keeps
+    # its Background jobs card open over the walk tabs — dismiss it (the button
+    # only clears the dead row; it stops nothing).
+    for _ in range(5):
+        btn = pg.locator("button[onclick^='window.__jswDismiss']:visible")
+        if not btn.count():
+            break
+        btn.first.click(); pg.wait_for_timeout(1500)
+    # The stats tab shows once the loaded walk's panel is drawn. On 25 Oct H12's
+    # click timed out here (a knock-on of the '_animating' load error): wait for
+    # it and say what is on screen instead of a bare 30 s click timeout.
+    try:
+        pg.wait_for_selector("#walk-tab-btn-stats", state="visible", timeout=15000)
+    except Exception:
+        state = pg.evaluate("""() => { const t = document.getElementById('walk-tabs');
+            return {tabs: t ? getComputedStyle(t).display : 'missing',
+                    sheet: (document.getElementById('walk-bottom-sheet') || {}).className || ''}; }""")
+        raise Check(f"walk {walk_id}: 'Walk stats' tab not visible after the load ({how}; #walk-tabs {state['tabs']}, "
+                    f"sheet '{state['sheet']}')")
     pg.click("#walk-tab-btn-stats"); pg.wait_for_timeout(1500)
     pg.wait_for_selector("#walk-publish .wpub-box", timeout=30000)
     return how

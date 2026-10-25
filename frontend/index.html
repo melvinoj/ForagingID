@@ -566,11 +566,13 @@
       border-bottom: 1px solid #e8eee0; flex-shrink: 0;
       flex-wrap: wrap;
     }
+    /* Labels wrap at spaces (no nowrap): at 1280px the three-per-row loaded-walk
+       buttons clipped "Tidy route order" / "Export summary". */
     .walk-map-btn {
       flex: 1; min-width: 100px;
       padding: 7px 10px; border: 1.5px solid; border-radius: 7px;
       font-size: 0.78rem; font-weight: 600; cursor: pointer;
-      text-align: center; white-space: nowrap;
+      text-align: center; white-space: normal;
       touch-action: manipulation; text-decoration: none;
     }
     .walk-map-btn.apple  { border-color: #555; color: #333; background: white; }
@@ -769,7 +771,7 @@
       flex: 1; min-width: 90px;
       padding: 7px 10px; border: 1.5px solid #2d5016; border-radius: 7px;
       font-size: 0.78rem; font-weight: 600; cursor: pointer;
-      text-align: center; white-space: nowrap; touch-action: manipulation;
+      text-align: center; white-space: normal; touch-action: manipulation;
       background: #f0f4e8; color: #2d5016; font-family: inherit;
     }
     .walk-save-btn:hover { background: #2d5016; color: white; }
@@ -3186,6 +3188,27 @@ let heatLayer = L.heatLayer([], {
   minOpacity: 0.6,
   gradient:   _HEAT_GRADIENT,
 });
+// leaflet.heat 0.2.0's redraw() reads this._map._animating, and _map is null
+// once the layer is off the map (a loaded saved walk hides it) — setOptions /
+// setLatLngs then throw "Cannot read properties of null (reading '_animating')".
+// Every heat update goes through these: off the map they only store the new
+// data/options, which onAdd's _reset → _redraw draws when the layer returns.
+function _heatOnMap() { return !!heatLayer._map; }
+function _heatSetOptions(opts) {
+  if (_heatOnMap()) { heatLayer.setOptions(opts); return; }
+  L.setOptions(heatLayer, opts);
+  if (heatLayer._heat) heatLayer._updateOptions();
+}
+function _heatSetLatLngs(pts) {
+  if (_heatOnMap()) heatLayer.setLatLngs(pts);
+  else heatLayer._latlngs = pts;
+}
+// Remove the heat layer and drop a redraw frame it already queued — that frame's
+// _redraw reads this._map.getSize() and would throw after removal.
+function _heatRemove() {
+  if (heatLayer._frame) { L.Util.cancelAnimFrame(heatLayer._frame); heatLayer._frame = null; }
+  map.removeLayer(heatLayer);
+}
 let currentLayer = 'heatmap';
 let _pinsExplicit = false; // true only when user explicitly selects the Pins layer button
 
@@ -3220,8 +3243,8 @@ function _applyLayer() {
   if (!showPins    &&  map.hasLayer(pinsGroup))    map.removeLayer(pinsGroup);
   if (showClusters && !map.hasLayer(clusterGroup)) map.addLayer(clusterGroup);
   if (!showClusters &&  map.hasLayer(clusterGroup)) map.removeLayer(clusterGroup);
-  if (showHeat     && !map.hasLayer(heatLayer))    map.addLayer(heatLayer);
-  if (!showHeat    &&  map.hasLayer(heatLayer))    map.removeLayer(heatLayer);
+  if (showHeat     && !map.hasLayer(heatLayer))    { map.addLayer(heatLayer); _recalcHeatMax(); }
+  if (!showHeat    &&  map.hasLayer(heatLayer))    _heatRemove();
 
   // Heatmap controls disclosure only makes sense when the heatmap is the active
   // view — toggle the whole #cs-heatmap section (retargeted from the sliders).
@@ -3245,13 +3268,7 @@ function updateHeatmapOptions() {
   document.getElementById('hc-blur-val').textContent       = blur;
   document.getElementById('hc-brightness-val').textContent = brightness + '%';
 
-  if (heatLayer.setOptions) {
-    heatLayer.setOptions({ radius, blur });
-  } else {
-    heatLayer.options.radius = radius;
-    heatLayer.options.blur   = blur;
-    heatLayer.redraw();
-  }
+  _heatSetOptions({ radius, blur });
   // Brightness controls canvas opacity so the whole heatmap fades uniformly
   if (heatLayer._canvas) heatLayer._canvas.style.opacity = brightness / 100;
   _recalcHeatMax();
@@ -3260,10 +3277,11 @@ function updateHeatmapOptions() {
 // Self-calibrate heatmap max: find the highest point-density within the current
 // radius in the visible viewport, so the hottest cluster hits the red end of scale.
 function _recalcHeatMax() {
-  // No-op when the heat layer isn't on the map (e.g. Pins/Clusters view) — its
-  // canvas doesn't exist yet, and setOptions()/redraw() would throw on a
-  // zoomend fired by an unrelated fitBounds/flyTo (e.g. _discoverShowSpecies).
-  if (!heatLayer._canvas) return;
+  // No-op when the heat layer isn't on the map (Pins/Clusters view, a loaded
+  // saved walk): a zoomend fired by an unrelated fitBounds/flyTo (_fitSavedWalk,
+  // _discoverShowSpecies) must not redraw it. Checks _map, not _canvas — the
+  // canvas survives removal. _applyLayer recalibrates when the layer returns.
+  if (!_heatOnMap()) return;
   if (!_heatPoints.length) return;
   const radius = parseInt(document.getElementById('hc-radius').value) || 30;
   const zoom   = map.getZoom();
@@ -3290,12 +3308,7 @@ function _recalcHeatMax() {
     if (count > maxCount) maxCount = count;
   }
 
-  if (heatLayer.setOptions) {
-    heatLayer.setOptions({ max: maxCount });
-  } else {
-    heatLayer.options.max = maxCount;
-    heatLayer.redraw();
-  }
+  _heatSetOptions({ max: maxCount });
 }
 
 map.addLayer(heatLayer);
@@ -3549,12 +3562,20 @@ function _nearMeFallbackHint() {
 // and Find modes (season/recipes/medicinal) all share one results list.
 
 let _discoverNearMeOn = false;
+// Saved walk that was open when Find opened — _exitWalkMode clears _walkSaved,
+// so 🍳 Make? (_openRecipesPage) reads the walk from here. null = none.
+let _discoverWalkId = null;
 
 function showDiscoverView() {
   _closeTabPanels();
   document.getElementById('filter-view').style.display = 'none';
   document.getElementById('detail-view').style.display = 'none';
-  if (_walkActive) { _exitWalkMode(); }
+  if (_walkActive) {
+    _discoverWalkId = (_walkSaved && _walkSaved.id) || null;
+    _exitWalkMode();
+  } else if (!document.getElementById('discover-view').classList.contains('active')) {
+    _discoverWalkId = null;
+  }
   document.getElementById('discover-view').classList.add('active');
   openSidebar();
   // Discover draws on pins so surrounding sightings stay visible behind the sheet.
@@ -3570,6 +3591,7 @@ function _exitDiscoverView() {
   const view = document.getElementById('discover-view');
   const wasActive = view.classList.contains('active');
   view.classList.remove('active');
+  _discoverWalkId = null;
   _nearMePos = null;
   _nearMeResults = [];
   // Restore the Filters tab if Discover was on screen.
@@ -4595,7 +4617,7 @@ function renderMarkers() {
   }
 
   _heatPoints = heatPoints;
-  heatLayer.setLatLngs(heatPoints);
+  _heatSetLatLngs(heatPoints);
   _recalcHeatMax();
   // Sync canvas opacity with brightness slider on every render.
   // updateHeatmapOptions() only fires on slider input, so without this the canvas
@@ -9696,10 +9718,12 @@ async function _findInSeason() {
 // Replaces the old in-panel ingredient search (_findRecipes, /api/find/recipes):
 // the Recipes page has the same search plus season / walk / type views, and its
 // tiles carry the same look-alike + preparation warnings. With a saved walk
-// open, it opens on that walk's recipes.
+// open, it opens on that walk's recipes — the walk open before Find
+// (_discoverWalkId), since opening Find leaves walk mode.
 
 function _openRecipesPage() {
-  const walkId = (typeof _walkSaved !== 'undefined' && _walkSaved && _walkSaved.id) ? _walkSaved.id : null;
+  const walkId = (typeof _walkSaved !== 'undefined' && _walkSaved && _walkSaved.id) ? _walkSaved.id
+               : (_discoverWalkId || null);
   location.href = walkId ? `/recipes?walk=${encodeURIComponent(walkId)}` : '/recipes';
 }
 

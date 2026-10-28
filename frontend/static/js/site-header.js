@@ -166,6 +166,7 @@
         document.querySelectorAll('.curator-nav').forEach(function (el) { el.style.display = ''; });
         _initEncountersBadge();
         _initCriticalBadge();
+        _initReviewBadge();   // curator-only endpoint: guests make no request (was a 403)
         _loadJobWidget();
       }
     }).catch(function () {});
@@ -235,5 +236,4 @@
 
   _buildHeader();
   _initIdentity();
-  _initReviewBadge();
 })();

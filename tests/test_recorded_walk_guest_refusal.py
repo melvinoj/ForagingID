@@ -102,7 +102,8 @@ def test_record_tab_hides_voice_and_photo_for_participants():
 
 def test_walk_recording_controls_hidden_and_guarded_for_participants():
     idx = _src("frontend/index.html")
-    assert '<button id="wrec-float-btn" data-guest-hide' in idx
+    # (batch 15b: the button is also hidden for everyone — class rec-ui-off)
+    assert '<button id="wrec-float-btn" class="rec-ui-off" data-guest-hide' in idx
     assert '<div id="walk-rec-hud" data-guest-hide>' in idx
     assert '<div id="walk-save-modal" data-guest-hide>' in idx
     assert idx.count('data-guest-hide onclick="_wbsStartRecording()"') == 2

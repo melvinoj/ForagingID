@@ -286,6 +286,16 @@ def is_detour(routed_m: float, straight_m: float) -> bool:
     return routed_m > DETOUR_FACTOR * straight_m + DETOUR_SLACK_M
 
 
+def start_from_middle(stops: list, k: int) -> list:
+    """"Start here" on an OPEN line (batch 15b, Melvin 28 Oct 2026): stop k
+    becomes stop 1, the walk runs k…N, then back k−1…1 — every stop kept. The
+    stored legs k…N and 1…k−1 (walked backwards) are kept by plan_reroute; only
+    N → k−1 is new. A closed loop is rotated instead (start_at), no ORS."""
+    if not 0 < k < len(stops):
+        raise RouteError(f"start index {k} out of range 1..{len(stops) - 1}")
+    return stops[k:] + stops[:k][::-1]
+
+
 def insert_cheapest(saved: list, new: list, closed: bool) -> list:
     """Stops in walking order "as if they were there all along": saved stops
     keep their order (stop 1 first); each new stop is inserted between the two
@@ -408,6 +418,23 @@ def assemble_reroute(route: dict, new_stops: list, plan: dict, routed: dict) -> 
 
 def _pt(s) -> list:
     return [s["lng"], s["lat"]]
+
+
+# ── Loop / One-way label (batch 15b, Melvin 28 Oct 2026) ──────────────────────
+LOOP_LABEL_MAX_M = 600.0
+
+
+def loop_label(waypoints: list) -> Optional[str]:
+    """'Loop' when the last stop is within LOOP_LABEL_MAX_M of stop 1, else
+    'One-way'; None with fewer than two stops. A LABEL only — the shown line
+    still follows foragingid.circular and the stored line (shown_line), so no
+    walk's line, distance or published page changes. JS twin: _walkLoopLabel
+    in frontend/index.html."""
+    pts = [w for w in waypoints or [] if isinstance(w, dict) and w.get("lat") is not None
+           and w.get("lng") is not None]
+    if len(pts) < 2:
+        return None
+    return "Loop" if _hav(_pt(pts[0]), _pt(pts[-1])) <= LOOP_LABEL_MAX_M else "One-way"
 
 
 def order_length_m(stops: list, order: list, circular: bool) -> float:

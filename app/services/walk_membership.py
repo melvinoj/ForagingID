@@ -495,12 +495,16 @@ def renumbered_snapshot(result: dict) -> tuple[list, list]:
     numbered 1..N in display order. Returns (waypoints, obs_ids) for
     waypoints_json / obs_ids_json. Saved stops keep their stored waypoint
     fields (only obs_ids/labels refreshed); labels become the current confirmed
-    species names, so stale save-time labels are replaced too.
+    species names, so stale save-time labels are replaced too. A saved stop
+    with no confirmed species left is dropped (batch 15b, Melvin 28 Oct 2026 —
+    as Re-route already does); note stops are kept.
     """
     waypoints, all_ids = [], []
     for st in result["stops"]:
         if st["is_note"]:
             waypoints.append(dict(st["_wp"]))
+            continue
+        if not st["species"]:
             continue
         wp = dict(st.get("_wp") or {"type": "obs", "lat": st["lat"], "lng": st["lng"]})
         wp["type"] = "obs"

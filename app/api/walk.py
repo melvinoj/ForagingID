@@ -363,8 +363,9 @@ async def exclude_obs(
     photos (Select pins → Remove from walk, or a stop card's ✕). A hand-added
     photo is un-accepted first and excluded only if it is still on the walk —
     so Remove after Add restores the row exactly. Saved stops are never
-    deleted: a stop whose photos are all removed stays on the line with no
-    species until the walk is re-routed."""
+    deleted here: a stop whose photos are all removed is hidden in the app and
+    dropped by the next Re-route or Renumber (batch 15b; Save changes opens the
+    Re-route preview for it)."""
     _require_curator(identity)
     walk = await _load_walk(db, walk_id)
     want = list(dict.fromkeys(int(x) for x in body.obs_ids))
@@ -440,6 +441,9 @@ async def set_walk_loop(
 
 class RerouteBody(BaseModel):
     confirm: bool = False              # False = dry run: what would change, no ORS call, no write
+    # "Start here" on an open line (batch 15b): this saved stop becomes stop 1 —
+    # k…N, then back k−1…1 (walk_route.start_from_middle). None = keep the order.
+    start_label: Optional[str] = None
 
 
 async def _reroute_snapshot(walk_id: int) -> str:
@@ -505,6 +509,16 @@ async def reroute_walk(
         k0 = next((k for k, st in enumerate(base) if st["origin"] == "saved" and st["label"] == "1"), 0)
         base = base[k0:] + base[:k0]
     kept = walk_route.insert_cheapest(base, far, closed)
+    if body.start_label is not None:
+        if closed:
+            raise HTTPException(409, "this walk's line is a closed loop — Start here rotates it without re-routing")
+        k = next((i for i, st in enumerate(kept)
+                  if st["origin"] == "saved" and st["label"] == body.start_label), None)
+        if k is None:
+            raise HTTPException(409, f"stop {body.start_label} is not a saved stop on this walk — Renumber first")
+        if k == 0:
+            raise HTTPException(409, f"stop {body.start_label} is already stop 1")
+        kept = walk_route.start_from_middle(kept, k)
     new_stops = [{"lat": st["lat"], "lng": st["lng"], "label": st["label"],
                   "old_index": int(st["label"]) - 1 if st["origin"] == "saved" else None} for st in kept]
     if len(new_stops) < 2:
@@ -515,6 +529,7 @@ async def reroute_walk(
         "dry_run": not body.confirm,
         "stops_before": len(mem["stops"]), "stops_after": len(new_stops),
         "added_stops": added, "dropped_stops": dropped,
+        "start_label": body.start_label,
         "legs_kept": sum(l["kind"] == "keep" for l in plan["legs"]),
         "legs_to_route": [f"{a}→{b}" for a, b in to_route],
         "ors_requests": len(plan["runs"]),

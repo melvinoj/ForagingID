@@ -1,51 +1,48 @@
 ## Current State
 
 ### Build
-- Alembic head 0059 (recipe title/summary/type/hide_from_public/website_url). CLAUDE.md still says 0050 (batch 17).
-- 32 test files pass. Service worker v17 or later (hard refresh once).
-- Committed by this End Session: hazard tiers, recipes page + public Recipes tab, walkthrough fixes, walkthrough script (scripts/dev/walkthrough_check.py, requirements-dev.txt with Playwright).
+- Alembic head 0059. CLAUDE.md still says 0050 (batch 17).
+- 35 test files pass (new: tests/test_batch11b_merge.py, 7 tests). Service worker v17 or later.
+- Uncommitted until this End Session: batch 11b (app/services/species_merge.py, app/api/culinary.py merge endpoint + rename lineage fix, scripts/batch11b_data.py, tests/test_batch11b_merge.py, CLAUDE.md merge rule, DECISIONS_11b_2026-10-27.md), plus the earlier uncommitted batch 11/12 files already in the tree.
 
-### Done 25 Oct
-- Hazard tiers: red line + named second tap only for a deadly/toxic candidate in the top 3 of any source or ≥5%; deeper ones get one grey "Also listed deep in…" line. Auto-approve still blocked at any rank. Review's separate hazard block removed; "☠ Hazard candidates" in the Status filter. Human-confirmed, approved or rejected photos never gated again. 29 of 376 review cards carry the red line (was 76).
-- Melvin's decisions written: 24525 Verbascum thapsus; 24469, 24471 Chaerophyllum hirsutum; 22184 Rubus pedatifolius (holly + yew dismissed; created bare card 877, no verdict yet).
-- Reopened-photos check: only the 18 hazard-review photos + 17052/17737 are back in Review by design; 10176 and 22131 by Melvin's own earlier decisions. Golden chervil: 18 photos, all approved (14 by Melvin; 21420, 21422, 21470, 21478 auto-approved only).
-- Recipes page (/recipes, nav): views in season now (default), season, walk, type, species, plant part, A–Z, recently added + search; image-free tiles with ⚠ and warnings fold; tile opens the species page at that recipe; curator inline edit (title, summary, type, website link, Hide from public). Find → Make? opens it (filtered to the open walk). 245 approved recipes, loads in 0.4 s.
-- Public Recipes tab in the walk page (index.html, #recipes): teasers only (title, species, season, summary, ⚠; "Full recipe →" when a website link is set); build fails if recipe text leaks. preview.html (/b card) stays script-free with an "All recipes →" link. Publish plan lists the public recipes (208 now; 20 untitled, 8 Apiaceae, 7 unverified, 4 toxic, 4 caution without curator warning excluded).
-- Recipe data (0059): 25 titles backfilled, 22 need a title from Melvin (flagged; hidden from public), 252 summaries (skip safety/hazard/medicinal wording), 133 typed, 119 Other.
-- Automated walkthroughs: Playwright on a scratch clone + snapshot DB (:8765) with a local Pages stand-in (:8766); ~80 of 100 checks pass by machine. Bugs found and fixed: saved walks failing to load (leaflet.heat redraw off-map; all heat updates now via guarded helpers), Find → Make? losing the open walk, reviewer_notes missing from ObservationOut (blanked for guests). Small UI: walk panel buttons wrap; Latin names break at spaces; Species heading clears the menu icon. Walk 5 yellow/purple lines are base-map sled runs and a ski piste.
+### Done 27–28 Oct (batch 11b, Melvin's decisions in DECISIONS_11b_2026-10-27.md)
+- Dry run 27 Oct: DECISIONS_11b_2026-10-27.md + group D contact sheet ~/Documents/ForagingID/11b_review/.
+- Merge routine app/services/species_merge.merge_species_cards — the ONE way to merge: re-keys every species-keyed table (observations id/name/suggestion, candidates, drafts, recipes, edibility history/conditions, lookalikes both cols, synonyms + discard name, session/list/dismissals deduped, encounters, sources, enrichment_sources, species_resources by name, map note tags, walk waypoints, walk override files, experience_publications ids); text: human-edited side wins, else accepted name, loser in a history row; verdict: toxic wins, human-verified beats unverified, more conservative among equals; deletes the discard card. POST /api/species/merge calls it.
+- A: 7 merges 704→457, 758→757, 412→708, 608→589, 103→531, 600→749, 200→82 (704 first, read back clean). Synonym rows 9–14. 103's human edible_parts kept on 531. Walk 5 published snapshot ids re-keyed.
+- B: 8410 → Lepista nuda; 21950/22074 → Erigeron canadensis; 187's 5 photos → Hypericum perforatum (manually_verified).
+- C: 151 cards set to GBIF family / own-name genus / empty kingdom filled (343 history rows). 0 cards left with non-family family, empty genus or kingdom. 332 Physarum stays Fungi. Rename now re-derives family/genus via GBIF (culinary._reset_lineage_for_new_name).
+- D: 12 corrections (18398 scene; 8229 Bryonia dioica; 19809 Carpinus betulus; 24068/24069 Larix decidua; 8408 Populus tremula; 8263 Parthenocissus quinquefolia; 17033/17046 Usnea; 21713 Oxalis stricta; 18828 Dryopteris affinis; 24062 Salix). New cards 878 Parthenocissus (toxic/toxic, human), 879 Bryonia dioica, 880 Usnea, 881 Salix. 28 photos to Review, label 11b_review, reviewer note names the suggestion (24 with species_suggested set; 21252 Arctium note only; 9477/20893/8370 none).
+- E: 22 G3-held drafts rejected (reason recorded); 3160 released.
+- F: 43 English names (GBIF vernacular).
+- G: 87 cards deleted with species-keyed rows (253 drafts, 8 recipes, 155 verdict-history, 3 conditions, 918 enrichment caches, 87 culinary_info + 238 history, 1 lookalike); 48 rejected photos species_id NULL; 6 stale suggestions cleared. 148/583/740/808/826 kept, orphan-marked. Toxic 136/477/581/686/843 and 22 European reference cards kept. 657 cards now.
+- H: 882 Pastinaca sativa caution/none (human) + Melvin's preparation warning verbatim (not in the hazard index); 877 Rubus pedatifolius edible/none (human).
+- Snapshots db_20261028_030037 … db_20261028_031236 (backup API, no git commit).
 
 ### Next (order)
-1. Melvin: quick looks + republish walk 5 (checklist artifact: title recipe 258, decide the hazard_review cards incl. walk 5 stops 24195, 21227, 21246, glance through the 208 public recipes, publish with Front page ticked).
-2. Audit pass 2: batches 11 + 12 + 13 as "what's left" recon (prompt written 25 Oct).
-3. Then 11b (data, with Melvin), 15b (walk edits, Loop/One-way, Start here, route-line bug; GPS recording kept), 15, 16 (index.html split), 17.
+1. Code: route culinary._auto_merge_into (rename onto an existing name) through merge_species_cards — it still soft-deletes via edibility_status '_merged_into:'. Melvin said yes 28 Oct. Add a test.
+2. Melvin: Review → 28 photos under 11b_review; republish walk 5 (67 → 66 species: 457 Trametes, 589 Cota once).
+3. Verdicts + scoped enrichment for bare cards 879 Bryonia dioica, 880 Usnea, 881 Salix.
+4. Then 15b, 15, 16, 17 per REPORT.md section 9.
 
 ### Settled (Melvin)
-- "Enrich selected" = scope "Current list". Handout rule: curator prep OR look-alike warning; all cautionary text travels with culinary content.
-- Pimpinella major/saxifraga keep culinary content on handouts; no carrot-family rule. Public page keeps Apiaceae as ID cards only.
-- Guests: confirmed photos (scenes included); shared curator encounters only; text-only notes; no walk recording; recorded walks only when shown.
-- GPS walk recording kept for now. A publish makes the walk the front page by default.
-- Hazard gate: top 3 or ≥5%; human decisions are never reopened by it.
-- Every approved recipe is public unless hidden; public shows teasers only.
+- Merges only via merge_species_cards; kept name = GBIF accepted; human-edited text wins.
+- Pastinaca caution/none with Melvin's warning; Parthenocissus toxic; 877 edible.
+- Keep 148, 583, 740, 808, 826 orphan-marked (off the Species list), not deleted.
+- Toxic/deadly and native European reference cards are never junk-deleted.
 
 ### Open decisions (Melvin)
-- Pastinaca sativa (wild parsnip): add a card with caution (phototoxic) so the hazard rule can see it?
-- Card 877 Rubus pedatifolius: verdict needed (fails safe meanwhile).
+- None.
 
 ### Rules learned
-- Safety features are proportionate: show the dry-run count (with examples) before building anything that adds review work or new UI states, and fit it into the existing queue.
-- A confident single-service score can be wrong; never present one service's % alone when a hazard sits high in another list.
-- Automated walkthroughs run on a scratch clone only; the live ngrok tunnel is visible to the scratch server.
-- Don't run a full enrichment; use a scope + the 25 cap.
-- Any app/ save reloads uvicorn and kills running jobs, including a publish.
-- The End Session block is always complete and paste-ready.
+- Delete species_recipes before species_ai_drafts (ai_draft_id FK).
+- A bulk delete list: never put a comment mid-tuple (it silently drops entries) — test bulk deletes on a snapshot copy first.
+- GBIF match on a bare genus can be ambiguous (Salix): retry with a kingdom hint.
+- Any app/ save reloads uvicorn and kills running jobs.
 
 ### Melvin's review queue
-- hazard_review cards (18) + 17052, 17737. 22 recipes needing a title (RECON_recipes_page_25oct.md). Five rejected photos restored by the system in July (15958, 15970, 21333, 21673, 21799). Warning review cards (walk species first). Edit Oxalis grandis 3493. Text tidy-up (352 edible_parts / 689 id_notes with no history). 347 Takeout person_animal rejects (mount DIGIERA). Draft #3252 Amaranthus hybridus.
+- 11b_review (28). hazard_review cards (18) + 17052, 17737. 22 recipes needing a title. Five rejected photos restored in July (15958, 15970, 21333, 21673, 21799). Warning review cards. Edit Oxalis grandis 3493 (card deleted in 11b — drop). Text tidy-up (352 edible_parts / 689 id_notes). 347 Takeout person_animal rejects (mount DIGIERA). Draft #3252 Amaranthus hybridus.
 
-### Browser checks
-- Automated: scripts/dev/walkthrough_check.py on the scratch setup (results in ~/Documents/ForagingID/walkthrough_run_*). Re-run after UI-touching batches.
-- Melvin only (checklist artifact "LandMemory Walkthroughs"): quick looks (walk panel buttons at laptop width; Species list on the phone); phone pairing, installed app, device list on the paired phone, Add device refused with sharing stopped, keyboard dictation, participant on mobile data; a real scoped enrichment run (Jobs pop-up, skip counts, cap 25, paused-no-network, ⚡ Enrich, Regenerate side by side, caffeinate exits); walk 5 republish.
-Rule: Code tests whatever it can (unit tests + the walkthrough script); only what needs a real phone, network or keys goes to Melvin.
+Session summary: Audit batch 11b — dry run (DECISIONS_11b_2026-10-27.md, group D contact sheet) then build from Melvin's decisions: one shared merge routine (7 merges), relinks, GBIF genus/family sweep (151 cards) + rename lineage fix, non-European corrections (12) and 28 photos to Review, 22 drafts rejected, 43 English names, 87 junk cards deleted, Pastinaca card + 877 verdict. Snapshot before every step, every row read back; 35 test files pass.
 
 ## Current State — 22 Oct 2026, evening
 
@@ -245,6 +242,74 @@ Test species: Conium maculatum, Oenanthe crocata, Sambucus nigra, 229 St John's 
 Rule: Code tests whatever it can (real JS via jsc, real PDFs); new browser checks are added to a walkthrough, not numbered.
 
 ## History
+
+### 2026-10-28 03:22
+**Snapshot** — End of session — Session ended from Settings page
+DB: `snapshots/db_20261028_032253.sqlite`
+
+### 2026-10-28 03:22
+**Session ended** — Session ended from Settings page
+
+### 2026-10-28 03:17
+**Audit batch 11b BUILD — data and taxonomy (Melvin's decisions 27–28 Oct; DECISIONS_11b_2026-10-27.md). Snapshot before every write step (11 snapshots db_20261028_0300xx–031236, backup API, no git commit); every changed row read back by id.**
+
+**Built:**
+- app/services/species_merge.py merge_species_cards — the ONE merge routine: re-keys observations (id/name/suggestion), candidates, drafts, recipes, edibility history/conditions, lookalikes (both cols), synonyms (+ discard name), session/list/dismissal rows (deduped), encounters, sources, enrichment_sources, species_resources (by name), map note tags, walk waypoints, walk override files, experience_publications ids; TEXT RULE (human side wins, else accepted name; loser in a history row); VERDICT RULE (toxic wins, human-verified beats unverified, conservative among equals); deletes the discard card. POST /api/species/merge now calls it (no more _merged_into soft-delete)
+- A: 7 merges — 704→457, 758→757, 412→708, 608→589, 103→531, 600→749, 200→82; 704 first alone and read back clean; synonym rows 9–14 added (412's existing row 8 kept); 103's human edible_parts kept on 531; walk 5 published snapshot ids re-keyed (704→457, 608→589)
+- B: 8410 → Lepista nuda, 21950/22074 → Erigeron canadensis (spelling only); 187's 5 photos → Hypericum perforatum (manually_verified)
+- C: 151 cards set to GBIF family / own-name genus / empty kingdom filled (343 history rows, changed_by=human); 332 stays Fungi; 0 cards left with a non-family family, empty genus or empty kingdom
+- D: 12 corrections via update_observation_status (18398 scene; 8229 Bryonia dioica; 19809 Carpinus betulus; 24068/24069 Larix decidua; 8408 Populus tremula; 8263 Parthenocissus quinquefolia; 17033/17046 Usnea; 21713 Oxalis stricta; 18828 Dryopteris affinis; 24062 Salix); no hazard second tap needed; new cards 878 Parthenocissus (toxic/toxic, human), 879 Bryonia dioica, 880 Usnea, 881 Salix
+- D: 28 photos to Review, label 11b_review, reviewer note naming the suggestion; 24 with a promotable species_suggested, 21252 Arctium note only, 9477/20893/8370 no suggestion
+- E: 22 G3-held drafts rejected (reason recorded); 3160 Chenopodium pratericola released
+- F: 43 English names (the other cards in the list were merged or deleted)
+- G: 87 cards deleted with their species-keyed rows (253 drafts, 8 recipes, 155 verdict-history, 3 conditions, 918 enrichment caches, 87 culinary_info + 238 history, 1 lookalike); 48 rejected photos → species_id NULL; 6 stale suggestions on confirmed photos cleared; 148/583/740/808/826 kept, orphan-marked; toxic (136, 477, 581, 686, 843) and 22 European reference cards kept
+- H: 882 Pastinaca sativa (new_species_card, Apiaceae) caution/none human + Melvin's preparation warning verbatim; 877 Rubus pedatifolius edible/none human
+- tests/test_batch11b_merge.py (7 tests); full suite 35 files pass
+**Fixed:**
+- Rename no longer keeps the old family/genus: culinary._reset_lineage_for_new_name re-resolves lineage through the GBIF write-gate (family left empty if GBIF fails, genus from the name), history rows changed_by=system:rename
+- CLAUDE.md merge rule now points at species_merge.merge_species_cards
+**Files:** `app/services/species_merge.py`, `app/api/culinary.py`, `scripts/batch11b_data.py`, `tests/test_batch11b_merge.py`, `CLAUDE.md`
+**Pending:**
+- Melvin: 28 photos in Review under 11b_review
+- Walk 5 republish: list then shows 457 Trametes versicolor and 589 Cota tinctoria once (67 → 66 species)
+- New bare cards 879 Bryonia dioica, 880 Usnea, 881 Salix have no verdict/enrichment (confirm path's background AI drafts not run) — scoped enrichment + verdicts
+- _auto_merge_into (rename onto an existing name) still soft-deletes via edibility_status '_merged_into:' — route it through merge_species_cards
+
+### 2026-10-25 19:57
+**Audit batch 12 + A-04 + batch 11 leftovers: plan collects all blockers, walk 4 publication row, stop renumbering in the plan, orphan root photos removal, secrets in .env, Group B retired, bracken text fill-only**
+
+**Built:**
+- Plan shows stop renumbering vs the live page (stop_changes)
+- Publish commit removes unreferenced site-root photos/; plan lists it under Removed from site
+- Secrets read from environment/.env only; Settings writes .env
+**Fixed:**
+- D3-02: GateErrors collected as blockers (badge blocked); build still writes nothing
+- C-05: experience_publications #2 for walk 4 (rummelsbuhl-foray, ed3b4d9, 2026-10-21 17:00:10 UTC, not default)
+- A-04: deepseek key moved to .env; deepseek_api_key and gdrive_access_token blanked in app_settings (snapshot db_20261025_195040)
+- Startup Group B human stamp retired (0 rows today)
+- Bracken constant fills only empty fields; differing text -> review card
+**Files:** `scripts/experience_export/export.py`, `app/services/experience_publish.py`, `app/api/experience.py`, `frontend/static/js/walk-publish.js`, `app/config.py`, `app/services/settings_service.py`, `app/services/api_dashboard.py`, `app/api/settings.py`, `app/database.py`, `app/services/enrichment.py`, `scripts/batch12_data.py`, `scripts/dev/walkthrough_check.py`, `tests/test_batch12_publish_secrets.py`, `tests/test_batch4_a02_d1_01.py`
+**Pending:**
+- Melvin: rotate the DeepSeek key (new key in Settings, revoke old)
+- Saved walks have no edit guard while published (by design; plan shows changes)
+- Old snapshots still hold the old DeepSeek key and Drive token (not edited, per decision)
+
+### 2026-10-25 18:58
+**Audit batch 11 verdict trail: new-card helper, no startup auto lock, bracken via shared writer; data B2-08/B2-07/C-06**
+
+**Built:**
+- new_species_card() in app/models/species.py used by all 5 creation paths
+- _write_verdict(changed_by=...) shared by the bracken safety constant
+- scripts/batch11_verdict_trail.py (dry run / snapshot / write / read-back)
+**Fixed:**
+- B2-08: no card is born with a NULL verdict; 13 NULL -> unknown (history 2259-2271, system:never_assessed)
+- B2-07: init_db no longer writes verified_by=auto; 583 -> human (2272); 148/149 unlocked (2273-2276)
+- C-06: 60 origin_unknown verdict rows (2277-2336)
+- Bracken: verdict row + verified_by=safety_constant, never re-stamps a human lock
+**Files:** `app/models/species.py`, `app/api/edibility.py`, `app/services/enrichment.py`, `app/services/species_link.py`, `app/api/culinary.py`, `app/api/scan.py`, `app/database.py`, `scripts/batch11_verdict_trail.py`, `tests/test_batch11_verdict_trail.py`
+**Pending:**
+- Startup Group B still stamps human on unfingerprinted verified rows with no provenance (flagged)
+- Bracken branch still overwrites edible_parts/preparation_warnings without history (flagged)
 
 ### 2026-10-25 18:30
 **Snapshot** — End of session — Session ended from Settings page

@@ -743,12 +743,19 @@ def main(argv=None):
             extras.append(o)
         photo_plan[sid] = {"main": chosen, "extras": extras}
 
-    # Per-species public record (everything through gates). GateError (e.g. an
-    # unverified 'edible' that would get an edible label) stops the build here.
+    # Per-species public record (everything through gates). A GateError (e.g. an
+    # unverified 'edible' that would get an edible label) is a BLOCKER (audit
+    # D3-02): every one is collected so the plan lists them all in one pass; the
+    # species gets a "blocked" badge in the plan, and the build writes nothing
+    # while any blocker stands (the write step below).
     pub = {}
     for sid, sp in species.items():
         ci = ci_by_sp[sid]
-        badge = gates.edibility_badge(sp, ci, conn, cfg)
+        try:
+            badge = gates.edibility_badge(sp, ci, conn, cfg)
+        except gates.GateError as e:
+            blockers.append(str(e))
+            badge = {"kind": "blocked", "text": "Blocked — not human-verified"}
         pp = photo_plan.get(sid)
         pub[sid] = {
             "id": sid,
@@ -811,7 +818,7 @@ def main(argv=None):
 
     # Rule 8 (D3-01) per caution species: approved warning shown, recipes kept
     # or withheld. A caution species that is not human-verified never gets here
-    # (edibility_badge raised GateError above — that is a block, not a withhold).
+    # (edibility_badge raised GateError above — that is a blocker, not a withhold).
     caution_report = []
     for sid, sp in species.items():
         if not gates.is_caution(sp):
@@ -1060,6 +1067,7 @@ def main(argv=None):
                          "route_vertices": len(line or []), "straight_ranges": straight_ranges},
             "observations": {"member": len(obs_order), "pass": len(passing), "fail": len(failing)},
             "stops": [{"label": st["n"], "species_ids": st["species"], "toxic": st["toxic"],
+                       "lat": st["lat"], "lng": st["lng"],
                        "repeats": {k: {"first": v["first"], "badge": v["badge"]["kind"] if v["badge"] else None}
                                    for k, v in st["repeat"].items()}} for st in stops],
             "emptied_stops": emptied_stops,

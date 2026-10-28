@@ -46,6 +46,7 @@ import uuid
 from datetime import datetime
 from pathlib import Path
 from typing import Callable, Optional
+from urllib.parse import urljoin, urlparse
 
 from app import database
 from app.services.experience_catalogue import rebuild_catalogue, preserve_root_walk, ROOT_FILES
@@ -412,14 +413,114 @@ def recipe_bank_changes(plan: dict, before: Optional[dict]) -> dict:
             "not_public": (plan.get("recipe_bank") or {}).get("excluded", [])}
 
 
+def _label_key(label) -> tuple:
+    """Stop labels in walk order: "7" < "7a" < "7b" < "8"."""
+    m = re.match(r"(\d+)(.*)", str(label))
+    return (int(m.group(1)), m.group(2)) if m else (10 ** 9, str(label))
+
+
+def _stop_point(st: dict) -> Optional[tuple]:
+    lat, lng = st.get("lat"), st.get("lng")
+    return None if lat is None or lng is None else (round(float(lat), 6), round(float(lng), 6))
+
+
+def stop_changes(plan: dict, before: Optional[dict]) -> Optional[dict]:
+    """Stop renumbering against the page now on the site (audit D3-05, Melvin
+    25 Oct 2026: labels are not frozen — Melvin sees the renumbering before he
+    confirms a republish). A stop is the same stop when it sits at the same
+    point; per species: its stop numbers on the live page → in this plan, only
+    where they differ; stops added and removed. None for a first publish or a
+    live page without stop points."""
+    if before is None:
+        return None
+    was = ((before.get("walk") or {}).get("stops")) or []
+    now = plan.get("stops") or []
+    if not was or any(_stop_point(st) is None for st in was + now):
+        return None
+    names = {p["id"]: p.get("en") or p.get("sci") or p.get("scientific_name")
+             for p in before.get("species", [])}
+    names.update({p["id"]: p.get("en") or p.get("scientific_name") for p in plan.get("public_species", [])})
+    was_at = {_stop_point(st): st for st in was}
+    now_at = {_stop_point(st): st for st in now}
+    moved = sorted(({"from": str(was_at[k]["n"]), "to": str(now_at[k]["label"])}
+                    for k in set(was_at) & set(now_at) if str(was_at[k]["n"]) != str(now_at[k]["label"])),
+                   key=lambda m: _label_key(m["from"]))
+
+    def by_species(stops, label_key, ids_key):
+        out = {}
+        for st in stops:
+            for sid in st.get(ids_key) or []:
+                out.setdefault(sid, []).append(str(st[label_key]))
+        return {sid: sorted(v, key=_label_key) for sid, v in out.items()}
+    was_sp, now_sp = by_species(was, "n", "species"), by_species(now, "label", "species_ids")
+    renumbered = sorted(({"species": names.get(sid) or str(sid), "from": was_sp[sid], "to": now_sp[sid]}
+                         for sid in set(was_sp) & set(now_sp) if was_sp[sid] != now_sp[sid]),
+                        key=lambda c: _label_key(c["from"][0]))
+    stop_list = lambda stops, keys, label, ids: sorted(
+        ({"stop": str(stops[k][label]), "species": [names.get(i) or str(i) for i in stops[k].get(ids) or []]}
+         for k in keys), key=lambda x: _label_key(x["stop"]))
+    return {"stops_before": len(was), "stops_now": len(now), "renumbered_stops": moved,
+            "species_renumbered": renumbered,
+            "stops_added": stop_list(now_at, set(now_at) - set(was_at), "label", "species_ids"),
+            "stops_removed": stop_list(was_at, set(was_at) - set(now_at), "n", "species")}
+
+
 def plan_changes(plan: dict, before: Optional[dict], where: str) -> dict:
     """Added / removed species, badge changes, recipes in/out vs the page on the
-    site; plus the recipes this plan withholds (caution without a warning) and
-    the Recipes tab list (recipe_bank_changes)."""
+    site; plus the recipes this plan withholds (caution without a warning), the
+    Recipes tab list (recipe_bank_changes) and the stop renumbering (stop_changes)."""
     out = _plan_changes(plan, before, where)
     if plan.get("ok"):
         out["recipe_bank"] = recipe_bank_changes(plan, before)
+        out["stops"] = stop_changes(plan, before)
     return out
+
+
+# ── the site-root photos/ folder (audit D3-04 leftover) ──────────────────────
+# Before the walk collection (22 Oct) the default walk lived at the site root
+# with its photos in /photos/. Its page now lives at w/<slug>/ with its own
+# copy, so /photos/ is 30 MB nothing uses. The next publish commit removes it —
+# only while no file on the site refers to it.
+
+_PHOTOS_REF = re.compile(r"([\w./:%~-]*)photos/")
+_TEXT_SUFFIXES = (".html", ".htm", ".json", ".js", ".css", ".md", ".txt", ".xml", ".webmanifest")
+
+
+def root_photos_refs(root: Path, public_url: Optional[str] = None) -> list[str]:
+    """Files under root that refer to root/photos/ (relative, ../ or the public
+    URL; a bare "photos/" in a root-level file counts). Empty = unreferenced."""
+    public_url = public_url or site_url()
+    refs = []
+    for f in sorted(root.rglob("*")):
+        rel = f.relative_to(root)
+        if ".git" in rel.parts or rel.parts[0] == "photos" or not f.is_file() \
+                or f.suffix.lower() not in _TEXT_SUFFIXES:
+            continue
+        base = "https://site.invalid/" + "".join(f"{p}/" for p in rel.parts[:-1])
+        text = f.read_text(encoding="utf-8", errors="replace").replace(public_url, "https://site.invalid/")
+        for m in _PHOTOS_REF.finditer(text):
+            if urlparse(urljoin(base, m.group(1) + "photos/x")).path.startswith("/photos/"):
+                refs.append(rel.as_posix())
+                break
+    return refs
+
+
+def orphan_root_photos(root: Path) -> Optional[dict]:
+    """{files, bytes} when root/photos exists and nothing refers to it, else None."""
+    d = root / "photos"
+    if not d.is_dir() or root_photos_refs(root):
+        return None
+    files = [f for f in d.rglob("*") if f.is_file()]
+    return {"files": len(files), "bytes": sum(f.stat().st_size for f in files)}
+
+
+def remove_orphan_root_photos(root: Path) -> list[str]:
+    """Delete root/photos when unreferenced (in the publish worktree). Returns the
+    removed path for the commit's change list."""
+    if orphan_root_photos(root) is None:
+        return []
+    shutil.rmtree(root / "photos")
+    return ["photos"]
 
 
 def _plan_changes(plan: dict, before: Optional[dict], where: str) -> dict:
@@ -690,8 +791,9 @@ async def run_publish(job: dict, clone: Optional[Path] = None) -> None:
                 preserve_root_walk(wt)
                 _replace_page(dirs, [wt / r for r in rels])
                 catalogue_expected.update(rebuild_catalogue(wt, published_slug=pub.slug))
-                return rels + list(ROOT_FILES)
-            allowed = ["w", *ROOT_FILES]
+                # D3-04 leftover: the old root walk's photos/, once nothing uses it.
+                return rels + list(ROOT_FILES) + remove_orphan_root_photos(wt)
+            allowed = ["w", *ROOT_FILES, "photos"]
             msg = (f"Publish walk {walk.id} '{walk.name}' → {', '.join(r or '/' for r in rels)}\n\n"
                    f"{len(plan['public_species'])} species, {len(plan['stops'])} stops. "
                    f"From ForagingID experience publication #{pub.id}.")

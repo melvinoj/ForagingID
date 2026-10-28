@@ -6,6 +6,12 @@ live app on :8000. The scratch server is a clone of the project tree with a
 snapshot DB, HOME pointed at a throwaway folder (so publish goes to a local
 bare repo), ID/AI keys disabled, bound to 127.0.0.1:8765.
 
+Secrets (audit A-04, 25 Oct 2026): keys live in the project's gitignored .env,
+so a clone of the project tree copies it. The scratch setup must delete the
+clone's .env and start uvicorn with FORAGINGID_ENV_FILE= (empty: no .env at
+all) and every key exported as a disabled value (DEEPSEEK_API_KEY included).
+Never point the scratch server at the real .env.
+
 Sessions:
   * curator desktop (1280px) and curator phone (390px) — localhost = curator.
   * participant (390px) — joined through a real one-time /join/<token> link.

@@ -1113,6 +1113,24 @@ ALLOWED_SEVERITIES = {
 }
 
 
+UNASSESSED_VERDICT = "unknown"
+
+
+def new_species_card(scientific_name: str, **fields) -> "Species":
+    """The ONE way to make a new species card (audit B2-08, batch 11). A new
+    card is never assessed: verdict 'unknown' and severity 'unknown', so it
+    fails closed everywhere until a curator decides. Before this, four creation
+    paths left edibility_status NULL (e.g. 877 Rubus pedatifolius, 25 Oct).
+    scientific_name is stored as given — callers collapse autonyms first.
+    The caller adds the row to its session."""
+    from app.services.taxonomy import normalize_taxon_key
+    for k in ("edibility_status", "toxicity_severity"):
+        if k in fields:
+            raise ValueError(f"new_species_card: {k} is always unassessed on a new card")
+    return Species(scientific_name=scientific_name, name_key=normalize_taxon_key(scientific_name),
+                   edibility_status=UNASSESSED_VERDICT, toxicity_severity=UNASSESSED_SEVERITY, **fields)
+
+
 class SeverityRuleError(ValueError):
     """The verdict/severity combination is refused — nothing may be written."""
 

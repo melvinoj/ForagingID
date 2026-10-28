@@ -33,7 +33,7 @@ from app.services.enrichment_scope import resolve as resolve_scope
 from app.models.culinary import CulinaryInfo
 from app.models.notes import MapNote
 from app.models.observation import Observation, is_guest_visible_observation
-from app.models.species import CulinaryInfoHistory, EnrichmentSource, Species, SpeciesAIDraft, SpeciesCandidate, SpeciesRecipe, SpeciesEdibilityCondition, SpeciesLookalike, culinary_allowed, safety_decision, CURATOR_DRAFT_FIELDS, AI_NO_CONTENT_VERDICTS, is_curator_authored
+from app.models.species import CulinaryInfoHistory, EnrichmentSource, Species, SpeciesAIDraft, SpeciesCandidate, SpeciesRecipe, SpeciesEdibilityCondition, SpeciesLookalike, culinary_allowed, safety_decision, CURATOR_DRAFT_FIELDS, AI_NO_CONTENT_VERDICTS, is_curator_authored, new_species_card
 from app.models.encounter import Encounter
 from app.models.foray_session import SessionSpecies
 from app.models.notification import NotificationDismissal
@@ -943,7 +943,7 @@ async def rename_species_by_name(
             }
 
         # Species not in enrichment DB — create it under the new name directly
-        sp = Species(scientific_name=new_name, name_key=normalize_taxon_key(new_name))
+        sp = new_species_card(new_name)
         if body.new_common_name:
             sp.common_names = json.dumps([body.new_common_name])
         db.add(sp)
@@ -973,6 +973,9 @@ async def rename_species_by_name(
     if old_name != new_name:
         sp.scientific_name = new_name
         sp.name_key = normalize_taxon_key(new_name)
+        # The lineage belonged to the old name (11b: 160 Boletus edulis kept the
+        # Calluna family/genus it had) — re-derive it for the new one.
+        await _reset_lineage_for_new_name(db, sp, old_name)
 
     if body.new_common_name:
         # Prepend user-supplied common name; keep existing names
@@ -1175,6 +1178,34 @@ async def set_foraging_notes(
     }
 
 
+_LINEAGE_FIELDS = ("family", "genus", "phylum", "class_", "order_", "gbif_usage_key",
+                   "gbif_match_type", "gbif_match_confidence")
+
+
+async def _reset_lineage_for_new_name(db: AsyncSession, sp: Species, old_name: str) -> None:
+    """Rename only: clear the lineage that described the old name and re-resolve
+    it for sp.scientific_name through the GBIF write-gate (best effort — a
+    network failure leaves family empty, never stale). genus falls back to the
+    first word of the new name. family/genus changes get a history row."""
+    from app.models.species import SpeciesEdibilityHistory
+    before = {f: getattr(sp, f) for f in ("family", "genus")}
+    for f in _LINEAGE_FIELDS:
+        setattr(sp, f, None)
+    try:
+        from app.integrations.gbif import enrich_species_taxonomy
+        await enrich_species_taxonomy(sp)
+    except Exception as exc:  # noqa: BLE001 — lineage is descriptive metadata only
+        log.warning("rename %r → %r: GBIF lineage refresh failed: %s", old_name, sp.scientific_name, exc)
+    first = (sp.scientific_name or "").split()[0] if sp.scientific_name else ""
+    if not sp.genus and first[:1].isupper():
+        sp.genus = first
+    for f, old in before.items():
+        if getattr(sp, f) != old:
+            db.add(SpeciesEdibilityHistory(species_id=sp.id, field=f, old_value=old, new_value=getattr(sp, f),
+                                           changed_by="system:rename",
+                                           note=f"rename {old_name} → {sp.scientific_name}"))
+
+
 async def _update_map_note_tags(db: AsyncSession, old_name: str, new_name: str) -> int:
     """Replace old_name with new_name inside MapNote.species_tags JSON arrays."""
     result = await db.execute(
@@ -1344,251 +1375,28 @@ async def merge_species(
     identity: Identity = Depends(get_identity),
 ):
     """
-    Merge two species records. All child rows from `discard` are reparented to
-    `keep`. The `discard` species row is soft-deleted (edibility_status marked
-    _merged_into:keep — never physically deleted).
-
-    Tables covered (14 top-level + culinary_info_history inline):
-      observations, enrichment_sources, species_ai_drafts, species_recipes,
-      culinary_info (+ culinary_info_history reparented before discard CI deleted),
-      encounters, notification_dismissals, personal_list_species,
-      session_species (reparented FIRST — CASCADE FK), sources,
-      species_candidates, species_edibility_conditions, species_lookalikes,
-      species_resources (string-keyed by species_name, not species_id).
-
-    Unique-constraint conflicts → keeper row wins, discard row deleted.
-    Verdict fields (edibility_status, ev_by, edibility_confidence) are NEVER
-    copied from discard to keeper.
+    Merge two species records — app/services/species_merge.merge_species_cards,
+    the ONE merge routine (audit 11b): every species-keyed table is re-keyed to
+    `keep` (species_resources by name), curator text follows the TEXT RULE,
+    the verdict the VERDICT RULE, and the `discard` card is then deleted.
+    Never goes through the rename cascade.
     """
     if identity.is_guest:
         raise HTTPException(403, "Curator only")
-    from sqlalchemy import update as sqla_update, text as sqla_text
-
     keep_sp = await db.scalar(select(Species).where(Species.scientific_name == body.keep))
     if not keep_sp:
         raise HTTPException(status_code=404, detail=f"Species '{body.keep}' not found")
-
     discard_sp = await db.scalar(select(Species).where(Species.scientific_name == body.discard))
     if not discard_sp:
         raise HTTPException(status_code=404, detail=f"Species '{body.discard}' not found")
-
     if keep_sp.id == discard_sp.id:
         raise HTTPException(status_code=400, detail="Cannot merge a species with itself")
-
-    kid = keep_sp.id
-    did = discard_sp.id
-
-    # ── 0. session_species — CASCADE FK: reparent BEFORE anything touches ────
-    # the discard row, or these rows vanish silently on DELETE.
-    # Dedupe: if same session already has keeper, drop the discard row instead.
-    await db.execute(sqla_text("""
-        DELETE FROM session_species
-        WHERE species_id = :did
-          AND EXISTS (
-              SELECT 1 FROM session_species ss2
-              WHERE ss2.species_id = :kid
-                AND ss2.session_id = session_species.session_id
-          )
-    """), {"did": did, "kid": kid})
-    await db.execute(
-        sqla_update(SessionSpecies)
-        .where(SessionSpecies.species_id == did)
-        .values(species_id=kid)
-    )
-
-    # ── 1. observations ───────────────────────────────────────────────────────
-    # Primary match on species_primary string (display cache); secondary sweep
-    # catches any obs linked by FK only (species_primary may differ).
-    await db.execute(
-        sqla_update(Observation)
-        .where(Observation.species_primary == body.discard)
-        .values(species_primary=body.keep, species_id=kid)
-    )
-    await db.execute(
-        sqla_update(Observation)
-        .where(Observation.species_id == did)
-        .values(species_id=kid)
-    )
-
-    # ── 2. enrichment_sources ─────────────────────────────────────────────────
-    await db.execute(
-        sqla_update(EnrichmentSource)
-        .where(EnrichmentSource.species_id == did)
-        .values(species_id=kid)
-    )
-
-    # ── 3. species_ai_drafts ──────────────────────────────────────────────────
-    await db.execute(
-        sqla_update(SpeciesAIDraft)
-        .where(SpeciesAIDraft.species_id == did)
-        .values(species_id=kid)
-    )
-
-    # ── 4. species_recipes ────────────────────────────────────────────────────
-    await db.execute(
-        sqla_update(SpeciesRecipe)
-        .where(SpeciesRecipe.species_id == did)
-        .values(species_id=kid)
-    )
-
-    # ── 5. culinary_info — field-level merge, verdict fields excluded ─────────
-    _CULINARY_COPYABLE = [
-        "edible_parts", "preparation_methods", "cooking_techniques",
-        "preservation_methods", "seasonal_peak", "harvest_stage",
-        "culinary_traditions", "look_alike_warnings", "preparation_warnings",
-        "flavour_profile", "pairing_ideas", "recipe_ideas",
-        "workshop_value_score", "traditional_uses", "cultural_notes",
-        "medicinal_folklore", "taste_notes", "medicinal_notes", "recipe",
-    ]
-    source_ci = await db.scalar(select(CulinaryInfo).where(CulinaryInfo.species_id == did))
-    target_ci = await db.scalar(select(CulinaryInfo).where(CulinaryInfo.species_id == kid))
-    if source_ci:
-        if target_ci is None:
-            source_ci.species_id = kid
-            target_ci = source_ci
-        else:
-            for _f in _CULINARY_COPYABLE:
-                if getattr(target_ci, _f) is None:
-                    src_val = getattr(source_ci, _f, None)
-                    if src_val is not None:
-                        setattr(target_ci, _f, src_val)
-            src_conf = source_ci.data_confidence or 0.0
-            tgt_conf = target_ci.data_confidence or 0.0
-            if src_conf > tgt_conf:
-                target_ci.data_confidence = src_conf
-            # Reparent culinary_info_history before deleting the discard CI row
-            # (culinary_info_history has no ON DELETE CASCADE — FK violation otherwise)
-            await db.execute(
-                sqla_update(CulinaryInfoHistory)
-                .where(CulinaryInfoHistory.culinary_info_id == source_ci.id)
-                .values(culinary_info_id=target_ci.id)
-            )
-            await db.delete(source_ci)
-
-    # ── 6. encounters ─────────────────────────────────────────────────────────
-    await db.execute(
-        sqla_update(Encounter)
-        .where(Encounter.species_id == did)
-        .values(species_id=kid)
-    )
-
-    # ── 7. notification_dismissals — unique (user_id, species_id, season_key) ─
-    await db.execute(sqla_text("""
-        DELETE FROM notification_dismissals
-        WHERE species_id = :did
-          AND EXISTS (
-              SELECT 1 FROM notification_dismissals nd2
-              WHERE nd2.species_id = :kid
-                AND nd2.user_id = notification_dismissals.user_id
-                AND nd2.season_key = notification_dismissals.season_key
-          )
-    """), {"did": did, "kid": kid})
-    await db.execute(
-        sqla_update(NotificationDismissal)
-        .where(NotificationDismissal.species_id == did)
-        .values(species_id=kid)
-    )
-
-    # ── 8. personal_list_species — unique (list_id, species_id) ──────────────
-    await db.execute(sqla_text("""
-        DELETE FROM personal_list_species
-        WHERE species_id = :did
-          AND EXISTS (
-              SELECT 1 FROM personal_list_species pls2
-              WHERE pls2.species_id = :kid
-                AND pls2.list_id = personal_list_species.list_id
-          )
-    """), {"did": did, "kid": kid})
-    await db.execute(
-        sqla_update(PersonalListSpecies)
-        .where(PersonalListSpecies.species_id == did)
-        .values(species_id=kid)
-    )
-
-    # ── 9. sources ────────────────────────────────────────────────────────────
-    await db.execute(
-        sqla_update(Source)
-        .where(Source.species_id == did)
-        .values(species_id=kid)
-    )
-
-    # ── 10. species_candidates ────────────────────────────────────────────────
-    await db.execute(
-        sqla_update(SpeciesCandidate)
-        .where(SpeciesCandidate.species_id == did)
-        .values(species_id=kid)
-    )
-
-    # ── 11. species_edibility_conditions ─────────────────────────────────────
-    await db.execute(
-        sqla_update(SpeciesEdibilityCondition)
-        .where(SpeciesEdibilityCondition.species_id == did)
-        .values(species_id=kid)
-    )
-
-    # ── 12. species_lookalikes (both FK columns) ──────────────────────────────
-    await db.execute(
-        sqla_update(SpeciesLookalike)
-        .where(SpeciesLookalike.species_id == did)
-        .values(species_id=kid)
-    )
-    await db.execute(
-        sqla_update(SpeciesLookalike)
-        .where(SpeciesLookalike.lookalike_species_id == did)
-        .values(lookalike_species_id=kid)
-    )
-    # Remove self-references (species_id == lookalike_species_id) created by merge
-    await db.execute(sqla_text(
-        "DELETE FROM species_lookalikes WHERE species_id = lookalike_species_id"
-    ))
-    # Dedupe identical (species_id, lookalike_name) pairs — keep lowest id
-    await db.execute(sqla_text("""
-        DELETE FROM species_lookalikes
-        WHERE id NOT IN (
-            SELECT MIN(id) FROM species_lookalikes
-            GROUP BY species_id, lookalike_name
-        )
-    """))
-
-    # ── 13. species_resources — string-keyed by species_name (no species_id FK) ─
-    # Dedupe first: drop discard rows whose URL already exists on keeper's name.
-    await db.execute(sqla_text("""
-        DELETE FROM species_resources
-        WHERE species_name = :dn
-          AND url IS NOT NULL
-          AND url IN (SELECT url FROM species_resources WHERE species_name = :kn)
-    """), {"dn": body.discard, "kn": body.keep})
-    # Reparent any remaining discard rows to keeper's name.
-    await db.execute(sqla_text(
-        "UPDATE species_resources SET species_name = :kn WHERE species_name = :dn"
-    ), {"dn": body.discard, "kn": body.keep})
-
-    # ── 14. map note tags ─────────────────────────────────────────────────────
-    await _update_map_note_tags(db, body.discard, body.keep)
-
-    # ── audit log ─────────────────────────────────────────────────────────────
-    ci_keep = await db.scalar(select(CulinaryInfo).where(CulinaryInfo.species_id == kid))
-    if ci_keep:
-        db.add(CulinaryInfoHistory(
-            culinary_info_id=ci_keep.id,
-            field_name="_merge_event",
-            old_value=None,
-            new_value=f"Merged '{body.discard}' (id={did}) into '{body.keep}' (id={kid})",
-            changed_by="human_merge",
-        ))
-
-    # ── soft-delete discard — never physically delete ─────────────────────────
-    discard_sp.edibility_status = f"_merged_into:{body.keep}"
-
-    await db.commit()
-
-    return {
-        "ok": True,
-        "merged_into": body.keep,
-        "discarded": body.discard,
-        "discard_id": did,
-        "keep_id": kid,
-    }
+    from app.services.species_merge import merge_species_cards
+    async with db_write_lock():
+        rep = await merge_species_cards(db, discard_sp.id, keep_sp.id, changed_by="human_merge")
+        await db.commit()
+    return {"ok": True, "merged_into": body.keep, "discarded": body.discard,
+            "discard_id": rep["discard"], "keep_id": rep["keep"], "report": rep}
 
 
 # ---------------------------------------------------------------------------

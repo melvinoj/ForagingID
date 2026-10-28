@@ -14,6 +14,11 @@ that every `get_setting()` call is a pure dict lookup — zero DB overhead.
 `save_setting()` writes to the DB and refreshes the cache immediately so
 changes take effect without a restart.
 
+Secrets (audit A-04, Melvin 25 Oct 2026): an entry with "secret": True is read
+from the environment / the gitignored .env only (the config object), never from
+app_settings — not even a stale row. Saving one writes .env (write_env_secret),
+never the DB. GET /api/settings reports only whether it is set (A-02).
+
 Registry structure per entry:
   key          str   — the setting key
   default      any   — value derived from .env / config / hardcoded constant
@@ -145,7 +150,9 @@ def _build_registry() -> List[Dict]:
             # Audit A-02 (21 Oct 2026): a secret is never returned by GET
             # /api/settings — only whether it is set. Entry is write-only via
             # POST /api/settings/api-key. See is_secret_setting().
+            # Audit A-04 (25 Oct 2026): lives in .env as DEEPSEEK_API_KEY.
             "secret": True,
+            "env": "DEEPSEEK_API_KEY",
         },
         {
             "key": "deepseek_model",
@@ -373,6 +380,52 @@ def is_secret_setting(entry: Dict) -> bool:
     return bool(entry.get("secret"))
 
 
+def _secret_entry(key: str) -> Optional[Dict]:
+    entry = next((e for e in _get_registry() if e["key"] == key), None)
+    return entry if entry is not None and is_secret_setting(entry) else None
+
+
+def _env_secret(entry: Dict) -> str:
+    """A secret's value: the environment / .env (config object). Never the DB."""
+    from app.config import settings as cfg
+    return str(getattr(cfg, entry["key"], "") or "")
+
+
+def write_env_secret(key: str, value: str) -> None:
+    """Save a secret to the .env this process uses and apply it live (A-04).
+    Refused when the process has no .env (a test run, or FORAGINGID_ENV_FILE='')."""
+    from app.config import ENV_FILE, settings as cfg
+    entry = _secret_entry(key)
+    if entry is None:
+        raise KeyError(f"{key!r} is not a secret setting")
+    if ENV_FILE is None:
+        raise ValueError("this process has no .env file — the secret was not saved")
+    value = (value or "").strip()
+    if any(c in value for c in "\r\n"):
+        raise ValueError("a key cannot contain a line break")
+    upsert_env_line(ENV_FILE, entry["env"], value)
+    object.__setattr__(cfg, key, value)
+
+
+def upsert_env_line(path, env_key: str, value: str) -> None:
+    """Insert or replace one KEY=value line in a .env file (created 0600 if absent)."""
+    import os
+    from pathlib import Path
+    path = Path(path)
+    lines = path.read_text(encoding="utf-8").splitlines() if path.exists() else []
+    prefix = f"{env_key}="
+    for i, line in enumerate(lines):
+        if line.strip().startswith(prefix):
+            lines[i] = f"{env_key}={value}"
+            break
+    else:
+        lines.append(f"{env_key}={value}")
+    existed = path.exists()
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    if not existed:
+        os.chmod(path, 0o600)
+
+
 def get_default(key: str) -> Any:
     for entry in _get_registry():
         if entry["key"] == key:
@@ -404,6 +457,9 @@ def get_setting(key: str) -> Any:
     Returns the DB override if set, otherwise the registry default.
     Always returns a typed Python value.
     """
+    secret = _secret_entry(key)
+    if secret is not None:
+        return _env_secret(secret)          # A-04: never the cache, never the DB
     if key in _cache:
         return _cache[key]
     # Fall back to registry default (also caches it)
@@ -431,6 +487,8 @@ async def load_settings_from_db(session: AsyncSession) -> None:
         # Find the type for this key
         for entry in _get_registry():
             if entry["key"] == row.key:
+                if is_secret_setting(entry):
+                    break                   # A-04: a secret is never read from the DB
                 try:
                     _cache[row.key] = _cast(row.value, entry["type"])
                 except (ValueError, TypeError):
@@ -451,6 +509,10 @@ async def save_setting(key: str, value: Any, session: AsyncSession) -> None:
     entry = next((e for e in _get_registry() if e["key"] == key), None)
     if entry is None:
         raise KeyError(f"Unknown setting key: {key!r}")
+    if is_secret_setting(entry):
+        write_env_secret(key, str(value))   # A-04: .env, never app_settings
+        log.info("settings: saved secret %r to .env", key)
+        return
 
     # Validate choices
     if "choices" in entry and value not in entry["choices"]:
@@ -486,6 +548,9 @@ async def reset_setting(key: str, session: AsyncSession) -> Any:
     entry = next((e for e in _get_registry() if e["key"] == key), None)
     if entry is None:
         raise KeyError(f"Unknown setting key: {key!r}")
+    if is_secret_setting(entry):
+        write_env_secret(key, "")           # A-04: clears the .env line; the DB is not touched
+        return entry["default"]
 
     existing = await session.get(AppSetting, key)
     if existing:

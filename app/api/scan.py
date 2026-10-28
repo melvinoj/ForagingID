@@ -2084,7 +2084,7 @@ async def _upsert_species_card(
     - Never overwrites enriched data.
     - Taxonomy (family/genus/common_names) is back-filled from PlantNet candidates.
     """
-    from app.models.species import Species
+    from app.models.species import Species, new_species_card
     import json as _j
 
     scientific_name = top_candidate["scientific_name"]
@@ -2120,13 +2120,11 @@ async def _upsert_species_card(
                 break
 
         _sci = collapse_autonym(scientific_name)
-        new_species = Species(
-            scientific_name=_sci,
-            name_key=normalize_taxon_key(_sci),
+        new_species = new_species_card(
+            _sci,
             family=family,
             genus=genus,
             common_names=_j.dumps(common_names) if common_names else None,
-            edibility_status="unknown",
         )
         session.add(new_species)
         await session.flush()

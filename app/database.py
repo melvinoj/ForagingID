@@ -164,11 +164,14 @@ async def init_db():
         _t_ev0 = _time.perf_counter()
         # Phase 12 Prompt 3 — edibility_verified_by provenance backfill.
         # Runs idempotently on every server start (guard: edibility_verified_by IS NULL).
-        # Classifies the 212 legacy edibility_verified=True species into four buckets:
+        # Classifies the 212 legacy edibility_verified=True species into buckets:
         #   safety_constant  — Pteridium aquilinum (bracken hardcode)
-        #   human            — Group B: no enrichment fingerprint → human provenance
-        #   auto             — fingerprinted + PFAF rating >=4 (conf>=0.8)
-        #   unlocked_for_review — all remaining fingerprinted species
+        #   unlocked_for_review — every other locked row with no provenance
+        # The old 'auto' bucket (fingerprinted + PFAF conf >=0.8) and 'human'
+        # Group B (no enrichment fingerprint) are gone (audit B2-07, batch 11 +
+        # leftover, Melvin 25 Oct 2026): a machine never writes a lock flag that
+        # reads as confirmed — only Melvin's own actions write 'human'. Such rows
+        # now fall to D and are unlocked for review (0 rows matched either on 25 Oct).
         #
         # SAFETY: unlocking here is only correct because Prompt 1 made
         # PFAF/Wikidata verdict-writes structural no-ops — edibility_status
@@ -181,33 +184,6 @@ async def init_db():
                SET edibility_verified_by = 'safety_constant'
              WHERE scientific_name = 'Pteridium aquilinum'
                AND edibility_verified_by IS NULL
-        """))
-
-        # B: Group B — no enrichment fingerprint → human provenance
-        await conn.execute(sqlalchemy.text("""
-            UPDATE species
-               SET edibility_verified_by = 'human'
-             WHERE edibility_verified = 1
-               AND scientific_name != 'Pteridium aquilinum'
-               AND edibility_verified_by IS NULL
-               AND id NOT IN (
-                   SELECT species_id FROM culinary_info
-                    WHERE ai_approved_fields_json IS NOT NULL
-               )
-        """))
-
-        # C: auto — fingerprinted + PFAF rating >=4 (extraction_confidence >=0.8)
-        await conn.execute(sqlalchemy.text("""
-            UPDATE species
-               SET edibility_verified_by = 'auto'
-             WHERE edibility_verified = 1
-               AND edibility_verified_by IS NULL
-               AND id IN (
-                   SELECT species_id FROM enrichment_sources
-                    WHERE source_name = 'pfaf'
-                    GROUP BY species_id
-                   HAVING MAX(extraction_confidence) >= 0.8
-               )
         """))
 
         # D: unlock remaining fingerprinted (all edibility_verified=1 still NULL after A–C)

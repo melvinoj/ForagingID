@@ -4,6 +4,8 @@ Tests for batch 4 (audit REPORT section 9, 21 Oct 2026):
 A-02  GET /api/settings returned the DeepSeek key to any reader, guests included.
       Now: no secret value in any settings response (only is_set), and every
       /api/settings route refuses a guest identity (host or token).
+      A-04 (25 Oct 2026): the key comes from the environment / .env only — a
+      DeepSeek row left in app_settings is ignored; Settings writes .env.
 D1-01 POST /api/lists/pdf rendered request text as live HTML (autoescape off)
       and WeasyPrint fetched any local file. Now: autoescape on (|safe only for
       _season_str / _mdlite), and a url_fetcher limited to data: URIs and files
@@ -57,15 +59,17 @@ CFG_SECRETS = {
     "thunderforest_api_key": "A02-THUNDERFOREST-SENTINEL-6666",
     "openai_api_key":        "sk-A02-OPENAI-SENTINEL-7777",
     "anthropic_api_key":     "sk-ant-A02-ANTHROPIC-SENTINEL-8888",
+    "deepseek_api_key":      DEEPSEEK,           # A-04: from the environment, like the rest
 }
-ALL_SECRETS = [DEEPSEEK, GDRIVE, *CFG_SECRETS.values()]
+ALL_SECRETS = [GDRIVE, *CFG_SECRETS.values()]
 
 
 # ── A-02 ──────────────────────────────────────────────────────────────────────
 
 def _client():
     """The real settings router (with its curator dependency and the real
-    get_identity) on a throw-away DB holding a DeepSeek key and a Drive token."""
+    get_identity) on a throw-away DB holding a DeepSeek key and a Drive token —
+    stale rows the app must never read (A-04)."""
     path = os.path.join(tempfile.mkdtemp(prefix="a02test_"), "t.db")
     Base.metadata.create_all(create_engine(f"sqlite:///{path}"))
     eng = create_async_engine(f"sqlite+aiosqlite:///{path}")
@@ -129,7 +133,7 @@ def test_settings_list_returns_no_secret_value_only_is_set():
         assert ds["is_set"] is True and ds["secret"] is True
         assert ds["current_value"] is None and ds["default_value"] is None and ds["db_raw"] is None
         assert "default" not in ds
-        assert ds["overridden"] is True
+        assert ds["overridden"] is False          # A-04: a secret is never a DB override
         # Non-secret settings are untouched.
         assert rows["min_identification_confidence"]["current_value"] == 0.3
         assert rows["min_identification_confidence"]["db_raw"] == "0.3"
@@ -143,24 +147,39 @@ def test_settings_list_returns_no_secret_value_only_is_set():
 
 
 def test_unset_secret_reports_is_set_false():
+    """No key in the environment → not set, though the DB still holds a row (A-04)."""
     c = _client()
-    ss._cache["deepseek_api_key"] = ""
-    r = c.get("/api/settings", headers={"host": "localhost"})
-    ds = next(e for e in r.json()["settings"] if e["key"] == "deepseek_api_key")
-    assert ds["is_set"] is False and ds["current_value"] is None
+    old = cfg.deepseek_api_key
+    object.__setattr__(cfg, "deepseek_api_key", "")
+    try:
+        r = c.get("/api/settings", headers={"host": "localhost"})
+        ds = next(e for e in r.json()["settings"] if e["key"] == "deepseek_api_key")
+        assert ds["is_set"] is False and ds["current_value"] is None
+    finally:
+        object.__setattr__(cfg, "deepseek_api_key", old)
 
 
 def test_put_and_delete_never_echo_the_secret():
+    import app.config as config_mod
     c = _client()
-    r = c.put("/api/settings/deepseek_api_key", json={"value": DEEPSEEK + "-NEW"},
-              headers={"host": "localhost"})
-    assert r.status_code == 200 and r.json()["value"] is None
-    assert DEEPSEEK not in r.text
-    assert ss.get_setting("deepseek_api_key") == DEEPSEEK + "-NEW"        # still saved
-    r = c.get("/api/settings", headers={"host": "localhost"})
-    assert DEEPSEEK not in r.text
-    r = c.delete("/api/settings/deepseek_api_key", headers={"host": "localhost"})
-    assert r.status_code == 200 and r.json()["value"] is None
+    tmp_env = Path(tempfile.mkdtemp(prefix="a02env_")) / ".env"      # never the real .env
+    old_env, old_key = config_mod.ENV_FILE, cfg.deepseek_api_key
+    config_mod.ENV_FILE = tmp_env
+    try:
+        r = c.put("/api/settings/deepseek_api_key", json={"value": DEEPSEEK + "-NEW"},
+                  headers={"host": "localhost"})
+        assert r.status_code == 200 and r.json()["value"] is None
+        assert DEEPSEEK not in r.text
+        assert ss.get_setting("deepseek_api_key") == DEEPSEEK + "-NEW"        # saved — to .env
+        assert tmp_env.read_text() == f"DEEPSEEK_API_KEY={DEEPSEEK}-NEW\n"
+        r = c.get("/api/settings", headers={"host": "localhost"})
+        assert DEEPSEEK not in r.text
+        r = c.delete("/api/settings/deepseek_api_key", headers={"host": "localhost"})
+        assert r.status_code == 200 and r.json()["value"] is None
+        assert tmp_env.read_text() == "DEEPSEEK_API_KEY=\n"
+    finally:
+        config_mod.ENV_FILE = old_env
+        object.__setattr__(cfg, "deepseek_api_key", old_key)
     # A normal setting still echoes its value.
     r = c.put("/api/settings/min_identification_confidence", json={"value": 0.4},
               headers={"host": "localhost"})
@@ -204,7 +223,8 @@ def test_url_and_bearer_tokens_grant_nothing():
 
 def test_curator_sees_set_not_set_and_lan_or_ngrok_without_a_device_do_not():
     c = _client()
-    r = c.get("/api/settings", headers={"host": "localhost"})
+    with _CfgSecrets():
+        r = c.get("/api/settings", headers={"host": "localhost"})
     assert r.status_code == 200
     ds = next(e for e in r.json()["settings"] if e["key"] == "deepseek_api_key")
     assert ds["is_set"] is True

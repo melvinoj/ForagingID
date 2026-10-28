@@ -127,7 +127,7 @@ async def list_settings(db: AsyncSession = Depends(get_db)):
                 "is_set": bool(str(current or "").strip()),
                 "current_value": None,
                 "default_value": None,
-                "overridden": key in db_rows,
+                "overridden": False,          # A-04: secrets come from .env, never a DB override
                 "db_raw": None,
             })
             continue

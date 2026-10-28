@@ -121,42 +121,45 @@ def _apply_verdict_severity(db: AsyncSession, sp: Species, status: str,
 
 
 def _write_verdict(db: AsyncSession, sp: Species, status: str, verified: Optional[bool],
-                   requested_severity: Optional[str], note: Optional[str]) -> None:
-    """The curator's verdict write — the ONE implementation behind
-    PATCH /api/edibility/status and the verdict-draft approve (batch 3b), so
-    neither is a bypass. Order matters: both safety gates raise HTTPException(400)
+                   requested_severity: Optional[str], note: Optional[str],
+                   changed_by: str = "human") -> None:
+    """The verdict write — the ONE implementation behind PATCH
+    /api/edibility/status, the verdict-draft approve (batch 3b) and the bracken
+    safety constant (batch 11, changed_by='safety_constant'), so none is a
+    bypass. changed_by stamps the history rows and verified_by; anything but
+    'human' is refused a relax by RULE 2. Order matters: both safety gates raise HTTPException(400)
     BEFORE anything is mutated, so a refused write changes nothing.
 
       1. RULE 1 coupling + RULE 2 human-only relax (_enforce_edibility_write_rules)
       2. severity with the verdict (severity_for_verdict) + its history row
       3. edibility_status (+ verified / verified_by when verified is not None)
-         + a species_edibility_history row, changed_by 'human'
+         + a species_edibility_history row, stamped changed_by
     verified None = status-only write: edibility_verified/_by left untouched."""
     old_status = sp.edibility_status
-    _enforce_edibility_write_rules(old_status, status, verified, "human")
-    _apply_verdict_severity(db, sp, status, requested_severity, "human", note)
+    _enforce_edibility_write_rules(old_status, status, verified, changed_by)
+    _apply_verdict_severity(db, sp, status, requested_severity, changed_by, note)
     sp.edibility_status = status
     if verified is not None:
         old_verified, old_by = sp.edibility_verified, sp.edibility_verified_by
         sp.edibility_verified = bool(verified) and status != "unknown"
-        sp.edibility_verified_by = "human" if sp.edibility_verified else None
+        sp.edibility_verified_by = changed_by if sp.edibility_verified else None
         # A history row for every change (Melvin, 21 Oct 2026) — same shape as
         # experience.verify_species. Before this, the lock flag changed silently.
         _old_v = None if old_verified is None else str(int(bool(old_verified)))
         _new_v = str(int(bool(sp.edibility_verified)))
         if _old_v != _new_v:
             db.add(SpeciesEdibilityHistory(species_id=sp.id, field="edibility_verified",
-                                           old_value=_old_v, new_value=_new_v, changed_by="human", note=note))
+                                           old_value=_old_v, new_value=_new_v, changed_by=changed_by, note=note))
         if old_by != sp.edibility_verified_by:
             db.add(SpeciesEdibilityHistory(species_id=sp.id, field="edibility_verified_by",
                                            old_value=old_by, new_value=sp.edibility_verified_by,
-                                           changed_by="human", note=note))
+                                           changed_by=changed_by, note=note))
     db.add(SpeciesEdibilityHistory(
         species_id=sp.id,
         field="edibility_status",
         old_value=old_status,
         new_value=status,
-        changed_by="human",
+        changed_by=changed_by,
         note=note,
     ))
 

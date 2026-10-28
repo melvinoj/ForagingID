@@ -1,6 +1,30 @@
+import os
+import sys
 from pathlib import Path
+from typing import Optional
 from pydantic_settings import BaseSettings
 from pydantic import Field, field_validator
+
+
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+
+
+def env_file_path() -> Optional[Path]:
+    """The .env this process reads secrets from and Settings writes keys to
+    (audit A-04: secrets live here, never in the DB). FORAGINGID_ENV_FILE
+    overrides it (empty = no .env at all). A test run — a script under tests/
+    or pytest — never reads the real one: it gets no .env unless it sets the
+    variable to a file of its own."""
+    override = os.environ.get("FORAGINGID_ENV_FILE")
+    if override is not None:
+        return Path(override) if override else None
+    main = Path(sys.argv[0]).resolve() if sys.argv and sys.argv[0] else None
+    if "pytest" in sys.modules or (main is not None and main.parent.name == "tests"):
+        return None
+    return PROJECT_ROOT / ".env"
+
+
+ENV_FILE = env_file_path()
 
 
 class Settings(BaseSettings):
@@ -14,10 +38,18 @@ class Settings(BaseSettings):
     inaturalist_api_token: str = ""
 
     # Retired 21 Oct 2026 (Melvin D1): Anthropic is not used — every AI call
-    # site uses DeepSeek (key in Settings, app_settings.deepseek_api_key).
+    # site uses DeepSeek (key in Settings → .env, deepseek_api_key below).
     # Nothing reads this; it stays only so an existing ANTHROPIC_API_KEY line
     # in .env doesn't fail startup (extra .env keys are rejected).
     anthropic_api_key: str = ""
+
+    # DeepSeek — the one AI backend (Melvin D1, 21 Oct 2026). Secret: read from
+    # .env / the environment only (audit A-04, 25 Oct 2026); Settings writes it
+    # to .env, never to app_settings.
+    deepseek_api_key: str = ""
+    # Google Drive OAuth token (CHANGELOG sync). Nothing calls the Drive sync
+    # today; kept here so a token never goes back into the DB.
+    gdrive_access_token: str = ""
 
     # OpenAI key — used ONLY for server-side Whisper transcription of encounter
     # audio (POST /v1/audio/transcriptions). Leave empty to disable the
@@ -61,7 +93,8 @@ class Settings(BaseSettings):
     port: int = 8000
     debug: bool = False
 
-    model_config = {"env_file": ".env", "env_file_encoding": "utf-8", "env_ignore_empty": True}
+    model_config = {"env_file": str(ENV_FILE) if ENV_FILE else None, "env_file_encoding": "utf-8",
+                    "env_ignore_empty": True}
 
     @property
     def phone_foraging_dir(self) -> Path:

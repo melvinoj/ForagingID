@@ -194,8 +194,34 @@
                         : '<div class="wpub-muted">No species, badge or recipe changes (' + esc(c.species_now) + ' species).</div>';
     }
     if (w.length) h += '<div class="wpub-muted">Recipes withheld (caution, no curator warning): ' + esc(w.join('; ')) + '</div>';
+    h += renderStopChanges(c.stops);
+    if (c.removed_from_site && c.removed_from_site.length) {
+      h += '<div class="wpub-sub">Removed from site</div><ul class="wpub-list">' +
+        c.removed_from_site.map(function (x) { return '<li>' + esc(x) + '</li>'; }).join('') + '</ul>';
+    }
     h += renderRecipeBank(c.recipe_bank);
     return h;
+  }
+
+  // Stop renumbering vs the page on the site (audit D3-05, 25 Oct 2026): labels
+  // are not frozen, so a republish can renumber — shown here before confirming.
+  function renderStopChanges(s) {
+    if (!s) return '';
+    var lines = [];
+    (s.species_renumbered || []).forEach(function (r) {
+      lines.push(r.species + ': stop ' + r.from.join(', ') + ' → ' + r.to.join(', '));
+    });
+    (s.stops_added || []).forEach(function (x) {
+      lines.push('New stop ' + x.stop + (x.species.length ? ': ' + x.species.join(', ') : ''));
+    });
+    (s.stops_removed || []).forEach(function (x) {
+      lines.push('Stop ' + x.stop + ' removed' + (x.species.length ? ' (was: ' + x.species.join(', ') + ')' : ''));
+    });
+    var h = '<div class="wpub-sub">Stop numbers — ' + esc(s.stops_before) + ' on the site → ' + esc(s.stops_now) + ' now</div>';
+    if (!lines.length) return h + '<div class="wpub-muted">No stop is renumbered, added or removed.</div>';
+    return h + '<details' + (lines.length <= 8 ? ' open' : '') + '><summary>' + esc(lines.length) +
+      ' change' + (lines.length === 1 ? '' : 's') + '</summary><ul class="wpub-list">' +
+      lines.map(function (l) { return '<li>' + esc(l) + '</li>'; }).join('') + '</ul></details>';
   }
 
   // Recipes tab (25 Oct 2026): count, new since the page on the site, the full

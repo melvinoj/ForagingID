@@ -37,7 +37,7 @@ from app.integrations.deepseek_draft import generate_deepseek_drafts
 from app.models.culinary import CulinaryInfo
 from app.models.observation import Observation
 from app.models.species import (CulinaryInfoHistory, EnrichmentSource, Species, SpeciesAIDraft,
-                                CURATOR_DRAFT_FIELDS, AI_NO_CONTENT_VERDICTS)
+                                CURATOR_DRAFT_FIELDS, AI_NO_CONTENT_VERDICTS, new_species_card)
 from app.services.ai_placeholder import is_ai_placeholder
 from app.services.pfaf_fallback import apply_pfaf_fallback, stored_pfaf_medicinal_text
 
@@ -116,24 +116,30 @@ async def enrich_species(
         log.info("[dry-run] Would enrich: %s", species.scientific_name)
         return "enriched"
 
-    # Fix 24a: Bracken Safety Flagging
+    # Fix 24a: Bracken Safety Flagging. The verdict goes through the shared
+    # verdict writer (batch 11): severity with the verdict, a verdict history
+    # row and verified_by='safety_constant'. A toxic verdict already locked by
+    # a human (Melvin confirmed bracken) or by the constant is left alone — the
+    # constant never re-stamps a human lock, and an unchanged row writes nothing.
     if species.scientific_name == "Pteridium aquilinum":
-        from app.models.species import SpeciesEdibilityHistory, severity_for_verdict
-        _sev = severity_for_verdict("toxic", species.toxicity_severity)   # B2-02: severity with the verdict
-        if _sev != species.toxicity_severity:
-            session.add(SpeciesEdibilityHistory(
-                species_id=species.id, field="toxicity_severity",
-                old_value=species.toxicity_severity, new_value=_sev,
-                changed_by="safety_constant", note="bracken safety constant",
-            ))
-            species.toxicity_severity = _sev
-        species.edibility_status = "toxic"
-        species.edibility_verified = True
+        if not (species.edibility_status == "toxic" and species.edibility_verified
+                and species.edibility_verified_by in ("human", "safety_constant")):
+            from app.api.edibility import _write_verdict
+            _write_verdict(session, species, "toxic", True, None, "bracken safety constant",
+                           changed_by="safety_constant")
         if not existing_ci:
             existing_ci = CulinaryInfo(species_id=species.id)
             session.add(existing_ci)
-        existing_ci.edible_parts = "None - TOXIC"
-        existing_ci.preparation_warnings = "Not safe for human consumption. Contains ptaquiloside (a carcinogen) and thiaminase. Do not eat."
+        # The constant's text follows the enrichment rule (batch 11 leftover,
+        # Melvin 25 Oct 2026): it fills a field only when empty; text already
+        # there — curator-authored or not — is never overwritten, and a
+        # different constant text becomes a warning review card instead.
+        review: list = []
+        for field, text in BRACKEN_CONSTANT_TEXT.items():
+            if field not in protected_fields:
+                _fill_or_review(existing_ci, field, text, "safety_constant", review)
+        await session.flush()
+        await _queue_source_review_drafts(session, species, existing_ci, review)
         await session.flush()
         return "enriched"
 
@@ -758,7 +764,7 @@ async def _get_or_create_species(session: AsyncSession, scientific_name: str) ->
         if sp:
             return sp
     _sci = collapse_autonym(scientific_name)
-    sp = Species(scientific_name=_sci, name_key=normalize_taxon_key(_sci))
+    sp = new_species_card(_sci)
     session.add(sp)
     await session.flush()
     return sp
@@ -937,6 +943,13 @@ def _apply_pfaf_to_species_edibility(species: Species, r: PFAFResult) -> None:
     orchestrator) for auditability and to make the gating explicit.
     """
     return
+
+
+# Bracken safety constant text (Fix 24a) — filled only when the field is empty.
+BRACKEN_CONSTANT_TEXT = {
+    "edible_parts": "None - TOXIC",
+    "preparation_warnings": "Not safe for human consumption. Contains ptaquiloside (a carcinogen) and thiaminase. Do not eat.",
+}
 
 
 # Fields enrichment may only FILL WHEN EMPTY (Melvin, 22 Oct 2026). Different
@@ -1786,7 +1799,7 @@ async def trigger_ai_drafts_for_species(scientific_name: str) -> None:
                         sp = await session.get(Species, canonical_id)
                 if sp is None:
                     _sci = collapse_autonym(scientific_name)
-                    sp = Species(scientific_name=_sci, name_key=normalize_taxon_key(_sci))
+                    sp = new_species_card(_sci)
                     session.add(sp)
                     await session.flush()
 

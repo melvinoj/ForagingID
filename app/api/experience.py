@@ -215,6 +215,11 @@ async def plan_publication(pub_id: int, db: AsyncSession = Depends(get_db)):
                        "recipe_count": len(plan.get("recipes", {}).get("included", []))}
     before, where = await xp.site_page(p.slug, bool(p.is_default))
     plan["changes"] = xp.plan_changes(plan, before, where)
+    # D3-04 leftover: the site-root photos/ the next publish commit removes.
+    orphan = xp.orphan_root_photos(xp.CLONE) if xp.CLONE.is_dir() else None
+    plan["changes"]["removed_from_site"] = (
+        [f"photos/ at the site root — {orphan['files']} files, {orphan['bytes'] / 1e6:.0f} MB, no page uses it"]
+        if orphan else [])
     ids = [a["obs_id"] for a in plan.get("ai_agreed_obs", [])]
     if ids:
         from app.services.hazard_candidates import (gating_hazards, hazards_other_than,

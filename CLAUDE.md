@@ -315,7 +315,7 @@ Human lock:
 
 Species lookup:
 - Use name_key (via normalize_taxon_key()) for all species lookups, not scientific_name.
-- species_resources is string-keyed by species_name, not species_id — merges orphan these; do not attempt merges.
+- species_resources is string-keyed by species_name, not species_id. Merge species ONLY through app/services/species_merge.merge_species_cards (POST /api/species/merge calls it): it re-keys every species-keyed table including species_resources by name, keeps human-edited text and the more conservative verdict, adds a synonym row and deletes the merged-away card. Never merge through the rename cascade or by hand-written SQL. Snapshot first; read back every moved row.
 
 Uploads:
 - uploads/ is the primary image store. Never bulk-delete from it. Never move it without a corresponding DB path update for all affected observations.

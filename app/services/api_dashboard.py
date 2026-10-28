@@ -32,14 +32,13 @@ from app.config import settings
 
 log = logging.getLogger("foragingid.api_dashboard")
 
-_ENV_PATH = Path(__file__).resolve().parent.parent.parent / ".env"
 _PROBE_TIMEOUT = 6.0
 INAT_EXPIRY_WARN_SECONDS = 4 * 3600   # warn when < 4h remain (cause #1)
 
 
 # ── Registry ────────────────────────────────────────────────────────────────
-# env_key:  the .env variable name (None for key-less or DB-stored services)
-# db_key:   for services whose secret lives in the DB settings table (Drive)
+# env_key:  the .env variable name (None for key-less services). Every secret
+#           lives in .env (audit A-04, 25 Oct 2026) — none in the DB.
 # how_to:   ordered step strings; may contain URLs and commands to paste
 API_REGISTRY = [
     {
@@ -71,8 +70,7 @@ API_REGISTRY = [
     {
         "id": "deepseek",
         "name": "DeepSeek (AI)",
-        "env_key": None,
-        "db_key": "deepseek_api_key",
+        "env_key": "DEEPSEEK_API_KEY",
         "needs_key": True,
         "token_url": "https://platform.deepseek.com/api_keys",
         "how_to": [
@@ -341,9 +339,6 @@ _PROBES = {
 def _has_key(api: dict) -> bool:
     if api.get("env_key"):
         return bool(getattr(settings, api["env_key"].lower(), "") or "")
-    if api.get("db_key"):
-        from app.services.settings_service import get_setting
-        return bool((get_setting(api["db_key"]) or "").strip())
     return False
 
 
@@ -398,27 +393,22 @@ async def test_all() -> list[dict]:
 
 # ── Key management ────────────────────────────────────────────────────────────
 def _upsert_env(env_key: str, value: str) -> None:
-    """Insert or replace a KEY=value line in .env (creates the file if absent)."""
-    lines: list[str] = []
-    if _ENV_PATH.exists():
-        lines = _ENV_PATH.read_text(encoding="utf-8").splitlines()
-    prefix = f"{env_key}="
-    replaced = False
-    for i, line in enumerate(lines):
-        if line.strip().startswith(prefix):
-            lines[i] = f"{env_key}={value}"
-            replaced = True
-            break
-    if not replaced:
-        lines.append(f"{env_key}={value}")
-    _ENV_PATH.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    """Insert or replace a KEY=value line in this process's .env (config.ENV_FILE).
+    Refused when the process has none (a test run) — never the real one by accident."""
+    from app.config import ENV_FILE
+    from app.services.settings_service import upsert_env_line
+    if ENV_FILE is None:
+        raise ValueError("this process has no .env file — the key was not saved")
+    if any(c in value for c in "\r\n"):
+        raise ValueError("a key cannot contain a line break")
+    upsert_env_line(ENV_FILE, env_key, value)
 
 
 async def set_api_key(api_id: str, key: str, db) -> dict:
     """
     Save an API key/token to the correct destination and apply it live.
-    .env-backed APIs update the .env file + the in-memory settings object.
-    DeepSeek (DB-backed) routes through the existing settings table.
+    Every key goes to the .env file + the in-memory settings object (A-04:
+    DeepSeek too — no secret is written to the DB).
     """
     api = _REGISTRY_BY_ID.get(api_id)
     if not api:
@@ -428,12 +418,6 @@ async def set_api_key(api_id: str, key: str, db) -> dict:
     key = (key or "").strip()
     if not key:
         raise ValueError("Empty key")
-
-    if api.get("db_key"):
-        # DB-stored secret (e.g. DeepSeek) — reuse the settings service.
-        from app.services.settings_service import save_setting
-        await save_setting(api["db_key"], key, db)
-        return {"id": api_id, "saved": True, "destination": "db"}
 
     env_key = api["env_key"]
     _upsert_env(env_key, key)

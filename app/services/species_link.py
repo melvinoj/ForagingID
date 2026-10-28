@@ -21,7 +21,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.observation import Observation
-from app.models.species import Species
+from app.models.species import Species, new_species_card
 from app.services.taxonomy import normalize_taxon_key
 
 
@@ -222,7 +222,7 @@ async def ensure_species_row(session: AsyncSession, obs: Observation) -> Optiona
     if sid is None:
         from app.services.taxonomy import collapse_autonym
         sci = collapse_autonym(name)
-        sp = Species(scientific_name=sci, name_key=normalize_taxon_key(sci))
+        sp = new_species_card(sci)
         session.add(sp)
         await session.flush()
         sid = sp.id

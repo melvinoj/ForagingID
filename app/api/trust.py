@@ -436,6 +436,9 @@ async def bulk_reassign(
 
     if payload.source_species == payload.target_species:
         return {"ok": False, "error": "Source and target species are the same"}
+    # No genus cards, ever (Melvin, 28 Oct 2026) — refused before the dry run and any write.
+    from app.services.taxonomy import require_species_rank
+    require_species_rank(payload.target_species)
 
     # Count affected observations
     obs_rows = (await db.execute(

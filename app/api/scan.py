@@ -1854,6 +1854,38 @@ async def _identify_scanned_inner(
                 await _p2_tick(obs_id, files_processed=1, files_review=1)
                 return
 
+            # ── Species rank (Melvin, 28 Oct 2026) ────────────────────────
+            # No genus cards, ever; every photo is identified to species. A top
+            # name above species rank (iNat can return a genus) assigns no
+            # species, creates no card and is never auto-approved, even when
+            # both APIs agree — it goes to Review for a species-level ID.
+            from app.services.taxonomy import is_species_rank_name
+            if not is_species_rank_name(top["scientific_name"]):
+                _genus_note = f"{top['scientific_name']} — identify to species"
+                if not terminal:
+                    await set_observation_species(session, obs, None)
+                    obs.species_suggested     = None
+                    obs.review_status         = "needs_review"
+                    obs.review_label          = "genus_reid"
+                    obs.identification_status = "below_threshold"
+                    if _genus_note not in (obs.reviewer_notes or ""):
+                        obs.reviewer_notes = (obs.reviewer_notes + "\n" + _genus_note) if obs.reviewer_notes else _genus_note
+                    msg = (f"[not-species] Top candidate {top['scientific_name']!r} is above species "
+                           f"rank — no species, no card, sent to review (genus_reid)")
+                else:
+                    msg = (f"[not-species] Top candidate {top['scientific_name']!r} is above species "
+                           f"rank — row left unchanged (review_status={obs.review_status!r} is a "
+                           f"finalized human decision)")
+                log.warning("[ID not-species] obs#%s: %s", obs_id, msg)
+                session.add(ProcessingLog(
+                    observation_id=obs_id, stage="identify", status="success",
+                    message=msg + _promo_note,
+                ))
+                await session.commit()
+                _scan_status[obs_id] = "done"
+                await _p2_tick(obs_id, files_processed=1, files_review=1)
+                return
+
             # A curator's species assignment is the single most expensive piece
             # of human work this app stores. Overwriting it with an API's top
             # guess on a re-identify was unguarded and unchecked against

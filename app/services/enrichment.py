@@ -1798,6 +1798,12 @@ async def trigger_ai_drafts_for_species(scientific_name: str) -> None:
                     if canonical_id is not None:
                         sp = await session.get(Species, canonical_id)
                 if sp is None:
+                    from app.services.taxonomy import is_species_rank_name
+                    if not is_species_rank_name(scientific_name):
+                        # No genus cards, ever (Melvin, 28 Oct 2026).
+                        log.warning("[trigger_drafts] %r is above species rank — no card, no drafts",
+                                    scientific_name)
+                        return
                     _sci = collapse_autonym(scientific_name)
                     sp = new_species_card(_sci)
                     session.add(sp)

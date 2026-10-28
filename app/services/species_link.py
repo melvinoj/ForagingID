@@ -162,7 +162,15 @@ async def resolve_species_id(
 
 async def promotable_suggestion(session: AsyncSession, obs: Observation) -> Optional[str]:
     """The scientific name an APPROVE may promote from species_suggested, or None
-    when the suggestion is not a recognised scientific name.
+    when the suggestion is not a recognised scientific name or is above species
+    rank (no genus cards, Melvin 28 Oct 2026 — taxonomy.is_species_rank_name)."""
+    from app.services.taxonomy import is_species_rank_name
+    name = await _recognised_suggestion(session, obs)
+    return name if is_species_rank_name(name) else None
+
+
+async def _recognised_suggestion(session: AsyncSession, obs: Observation) -> Optional[str]:
+    """species_suggested as a recognised scientific name, or None.
 
     species_suggested holds either the pipeline's below-threshold top candidate
     or whatever the reviewer typed before pressing Look up (PATCH /suggest) —
@@ -416,13 +424,18 @@ async def set_observation_species(
 ) -> None:
     """Set species_primary (display cache) and keep species_id (FK) in sync.
 
-    Pass scientific_name=None to clear both fields.
+    Pass scientific_name=None to clear both fields. A name above species rank
+    raises NonSpeciesNameError before anything changes (no genus cards, Melvin
+    28 Oct 2026) — every human and automated species write goes through here.
 
     Orphan-GC: when the observation moves OFF a name, mark that name's card
     orphaned under the orphan rule (no live observation, not a reference card);
     and un-mark the card it moves ONTO when this observation is live. Additive
     marking only — never deletes.
     """
+    if scientific_name:
+        from app.services.taxonomy import require_species_rank
+        require_species_rank(scientific_name)
     old_name = obs.species_primary
     old_id = obs.species_id
 

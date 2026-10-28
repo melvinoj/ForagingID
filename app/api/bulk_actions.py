@@ -117,6 +117,18 @@ async def _bulk_review_task(obs_ids: List[int], status: str, pid: Optional[int])
                         await bp_progress(pid, i + 1, total, f"obs {obs_id}: unrecognised name")
                         continue
 
+                # No genus cards, ever (Melvin, 28 Oct 2026): a photo whose name is
+                # above species rank is left for the reviewer to identify to species.
+                if status in confirmed_statuses and promote_to is None and obs.species_primary:
+                    from app.services.taxonomy import is_species_rank_name
+                    if not is_species_rank_name(obs.species_primary):
+                        log.warning("[bulk_review] obs %d not approved: %r is not a species name",
+                                    obs_id, obs.species_primary)
+                        errors += 1
+                        await bp_progress(pid, i + 1, total,
+                                          f"obs {obs_id}: {obs.species_primary} — identify to species")
+                        continue
+
                 # Hazard candidates (Melvin, 22 Oct 2026): approving a photo whose
                 # candidates name a hazard species as ANOTHER species needs its
                 # own second tap on the card — never a bulk approve. GATE tier,

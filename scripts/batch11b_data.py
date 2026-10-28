@@ -88,7 +88,7 @@ async def step_merge(args):
         return
     snapshot()
     async with AsyncSessionLocal() as s:
-        rep = await merge_species_cards(s, did, kid, changed_by="merge", note=NOTE)
+        rep = await merge_species_cards(s, did, kid, changed_by="merge", note=args.note or NOTE)
         await s.commit()
     print("report:", json.dumps({k: v for k, v in rep.items() if k != "moved"}, default=str))
     print("moved ids:", json.dumps({k: v for k, v in rep["moved"].items() if v}))
@@ -657,6 +657,7 @@ def main():
     ap.add_argument("step", choices=sorted(STEPS))
     ap.add_argument("ids", nargs="*", type=int)
     ap.add_argument("--apply", action="store_true")
+    ap.add_argument("--note", help="merge: note for the history rows (default: the 11b note)")
     args = ap.parse_args()
     asyncio.run(STEPS[args.step](args))
 

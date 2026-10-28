@@ -1122,8 +1122,10 @@ def new_species_card(scientific_name: str, **fields) -> "Species":
     fails closed everywhere until a curator decides. Before this, four creation
     paths left edibility_status NULL (e.g. 877 Rubus pedatifolius, 25 Oct).
     scientific_name is stored as given — callers collapse autonyms first.
-    The caller adds the row to its session."""
-    from app.services.taxonomy import normalize_taxon_key
+    The caller adds the row to its session. A name above species rank raises
+    NonSpeciesNameError — no genus cards, ever (Melvin, 28 Oct 2026)."""
+    from app.services.taxonomy import normalize_taxon_key, require_species_rank
+    require_species_rank(scientific_name)
     for k in ("edibility_status", "toxicity_severity"):
         if k in fields:
             raise ValueError(f"new_species_card: {k} is always unassessed on a new card")

@@ -899,6 +899,11 @@ async def rename_species_by_name(
 
     if old_name == new_name and not body.new_common_name:
         raise HTTPException(400, "New name is identical to current name — nothing to change")
+    if old_name != new_name:
+        # No genus cards, ever (Melvin, 28 Oct 2026): refused before any write,
+        # in place, onto a new card or onto an existing one (auto-merge).
+        from app.services.taxonomy import require_species_rank
+        require_species_rank(new_name)
 
     # Check for collision with an existing species row.
     # When the target name already exists, auto-merge silently rather than
@@ -1236,99 +1241,37 @@ async def _auto_merge_into(
     the user as an error.
 
     Steps:
-      1. Move all observations from source → target.
-      2. Reassign enrichment sources from source → target.
-      3. Copy any culinary_info fields that are None on target but set on source.
-      4. Mark the source species row as merged (never deleted).
-      5. Optionally prepend new_common_name to target's common_names list.
-      6. Trigger re-enrichment on the target (fill_empty_only).
+      1. Source card exists → app/services/species_merge.merge_species_cards,
+         the ONE merge routine (re-keys every species-keyed table, text and
+         verdict rules, deletes the source card). No card (the name is only on
+         observations) → move those observations and map note tags.
+      2. Optionally prepend new_common_name to target's common_names list.
+      3. Trigger re-enrichment on the target (fill_empty_only).
     """
     from sqlalchemy import update as sqla_update
     from app.services.enrichment import enrich_species as _enrich_sp
+    from app.services.species_merge import merge_species_cards
 
     source_sp = await db.scalar(
         select(Species).where(Species.scientific_name == source_name)
     )
 
-    # 1 — Move observations (repoint both the display cache and the FK)
-    await db.execute(
-        sqla_update(Observation)
-        .where(Observation.species_primary == source_name)
-        .values(species_primary=target_sp.scientific_name, species_id=target_sp.id)
-    )
-
     if source_sp:
-        # 2 — Reassign enrichment sources
+        async with db_write_lock():
+            await merge_species_cards(db, source_sp.id, target_sp.id,
+                                      changed_by="human_merge", note="rename onto an existing name")
+            await db.commit()
+        await db.refresh(target_sp)
+    else:
+        # 1 — Move observations (repoint both the display cache and the FK)
         await db.execute(
-            sqla_update(EnrichmentSource)
-            .where(EnrichmentSource.species_id == source_sp.id)
-            .values(species_id=target_sp.id)
+            sqla_update(Observation)
+            .where(Observation.species_primary == source_name)
+            .values(species_primary=target_sp.scientific_name, species_id=target_sp.id)
         )
+        await _update_map_note_tags(db, source_name, target_sp.scientific_name)
 
-        # 2b — Migrate pending AI drafts (queue entries) to target species
-        await db.execute(
-            sqla_update(SpeciesAIDraft)
-            .where(SpeciesAIDraft.species_id == source_sp.id)
-            .values(species_id=target_sp.id)
-        )
-
-        # 2c — Migrate recipes to target species
-        await db.execute(
-            sqla_update(SpeciesRecipe)
-            .where(SpeciesRecipe.species_id == source_sp.id)
-            .values(species_id=target_sp.id)
-        )
-
-        # 3 — Copy missing culinary fields source → target
-        source_ci = await db.scalar(
-            select(CulinaryInfo).where(CulinaryInfo.species_id == source_sp.id)
-        )
-        target_ci = await db.scalar(
-            select(CulinaryInfo).where(CulinaryInfo.species_id == target_sp.id)
-        )
-        if source_ci:
-            if target_ci is None:
-                # Target has no culinary row — just reassign the source row
-                source_ci.species_id = target_sp.id
-                target_ci = source_ci
-            else:
-                # Copy field-by-field: only fill None slots on target
-                _CULINARY_COPYABLE = [
-                    "edible_parts", "preparation_methods", "cooking_techniques",
-                    "preservation_methods", "seasonal_peak", "harvest_stage",
-                    "culinary_traditions", "look_alike_warnings", "preparation_warnings",
-                    "flavour_profile", "pairing_ideas", "recipe_ideas",
-                    "workshop_value_score", "traditional_uses", "cultural_notes",
-                    "medicinal_folklore",
-                ]
-                for field in _CULINARY_COPYABLE:
-                    if getattr(target_ci, field) is None:
-                        src_val = getattr(source_ci, field, None)
-                        if src_val is not None:
-                            setattr(target_ci, field, src_val)
-                # Keep the higher confidence score
-                src_conf = source_ci.data_confidence or 0.0
-                tgt_conf = target_ci.data_confidence or 0.0
-                if src_conf > tgt_conf:
-                    target_ci.data_confidence = src_conf
-
-            # Write audit row
-            if target_ci and target_ci.id:
-                db.add(CulinaryInfoHistory(
-                    culinary_info_id=target_ci.id,
-                    field_name="_merge_event",
-                    old_value=None,
-                    new_value=(
-                        f"Auto-merged from '{source_name}' (id={source_sp.id}) "
-                        f"into '{target_sp.scientific_name}' via rename"
-                    ),
-                    changed_by="auto_merge",
-                ))
-
-        # 4 — Mark source as merged (never delete)
-        source_sp.edibility_status = f"_merged_into:{target_sp.scientific_name}"
-
-    # 5 — Optionally prepend common name
+    # 2 — Optionally prepend common name
     if new_common_name:
         existing = []
         if target_sp.common_names:
@@ -1339,13 +1282,10 @@ async def _auto_merge_into(
         merged_names = [new_common_name] + [n for n in existing if n != new_common_name]
         target_sp.common_names = json.dumps(merged_names)
 
-    # 5b — Update MapNote species_tags that reference the old name
-    await _update_map_note_tags(db, source_name, target_sp.scientific_name)
-
     await db.commit()
     await db.refresh(target_sp)
 
-    # 6 — Re-enrich the target species
+    # 3 — Re-enrich the target species
     enrichment_status = await _enrich_sp(
         session=db,
         species=target_sp,
@@ -1391,6 +1331,8 @@ async def merge_species(
         raise HTTPException(status_code=404, detail=f"Species '{body.discard}' not found")
     if keep_sp.id == discard_sp.id:
         raise HTTPException(status_code=400, detail="Cannot merge a species with itself")
+    from app.services.taxonomy import require_species_rank
+    require_species_rank(keep_sp.scientific_name)   # the kept card is a species (Melvin, 28 Oct 2026)
     from app.services.species_merge import merge_species_cards
     async with db_write_lock():
         rep = await merge_species_cards(db, discard_sp.id, keep_sp.id, changed_by="human_merge")

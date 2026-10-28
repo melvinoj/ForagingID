@@ -871,6 +871,8 @@ async def retry_confirm(
     new_species = body.scientific_name.strip()
     if not new_species:
         raise HTTPException(status_code=400, detail="scientific_name is required")
+    from app.services.taxonomy import require_species_rank
+    require_species_rank(new_species)      # no genus cards, ever (Melvin, 28 Oct 2026)
 
     # Second tap naming any other hazard candidate (Melvin, 22 Oct 2026).
     from app.services.hazard_candidates import check_hazard_ack

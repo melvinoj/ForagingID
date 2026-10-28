@@ -94,3 +94,60 @@ def collapse_autonym(name: str) -> str:
     ):
         return f"{tokens[0]} {tokens[1]}"
     return name
+
+
+# ---------------------------------------------------------------------------
+# Species rank (Melvin, 28 Oct 2026): no genus cards, ever — every photo is
+# identified to species (a best guess is fine). is_species_rank_name() is the
+# ONLY definition of "this name is a species (or below)". Every path that makes
+# a card or sets a photo's species refuses anything else — extend it here,
+# never copy it into a call site.
+# ---------------------------------------------------------------------------
+# Tokens that mark a name above species rank (or not a clean species name):
+# genus-level placeholders, infrageneric ranks, aggregates, uncertainty qualifiers.
+_ABOVE_SPECIES_TOKENS = frozenset({
+    "sp", "spp", "subg", "subgen", "sect", "subsect", "ser", "subser",
+    "agg", "aggr", "grp", "group", "complex", "cf", "aff", "gen", "indet",
+})
+_HYBRID_TOKENS = frozenset({"×", "x"})
+
+
+class NonSpeciesNameError(ValueError):
+    """A card or a photo's species was given a name above species rank.
+    app/main.py turns it into HTTP 400 (code 'not_species_rank')."""
+
+    def __init__(self, name):
+        self.name = name
+        super().__init__(f"{name!r} is not a species name — identify to species "
+                         f"(a best guess is fine). Genus or higher names are refused.")
+
+
+def is_species_rank_name(name) -> bool:
+    """True when `name` names a species or an infraspecific taxon:
+    'Genus epithet …' with a capitalised genus and a lowercase epithet, hybrid
+    markers allowed ('Picea × lutzii', '× Cupressocyparis leylandii').
+    False for a bare genus or anything above ('Salix', 'Usnea', 'Asteraceae'),
+    'Genus sp.' / 'spp.', infrageneric ranks ('Taraxacum sect. Taraxacum',
+    'Rubus subg. Rubus'), aggregates and cf./aff. qualifiers. Shape only — no
+    lookup, so it works offline and every caller gets the same answer."""
+    if not name or not isinstance(name, str):
+        return False
+    tokens = [t for t in _WS.sub(" ", name.strip()).split(" ") if t]
+    if any(t.lower().rstrip(".") in _ABOVE_SPECIES_TOKENS for t in tokens):
+        return False
+    tokens = [t.lstrip("×") for t in tokens if t.lower() not in _HYBRID_TOKENS]
+    tokens = [t for t in tokens if t]
+    if len(tokens) < 2:
+        return False
+    genus, epithet = tokens[0], tokens[1]
+    if not (genus[:1].isupper() and genus.replace("-", "").isalpha()):
+        return False
+    return epithet[:1].islower() and epithet.replace("-", "").isalpha()
+
+
+def require_species_rank(name) -> str:
+    """Return `name` unchanged when it is a species-rank name; otherwise raise
+    NonSpeciesNameError. For write paths that must refuse before writing."""
+    if not is_species_rank_name(name):
+        raise NonSpeciesNameError(name)
+    return name

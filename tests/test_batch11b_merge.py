@@ -267,6 +267,57 @@ def test_rename_rederives_family_and_genus():
     asyncio.run(run())
 
 
+def test_rename_onto_existing_name_merges_through_merge_species_cards():
+    """Rename onto an existing name = a real merge: source card deleted, its rows
+    re-keyed, verdict rule applied, synonym row added — no '_merged_into:' marker."""
+    async def run():
+        path, eng, S = _db()
+        async with S() as s:
+            keep = _card("Mycelis muralis", "edible", "none", False)
+            disc = _card("Lactuca muralis", "caution", "mild", True)
+            s.add_all([keep, disc])
+            await s.flush()
+            k, d = keep.id, disc.id
+            s.add(CulinaryInfo(species_id=d, taste_notes="bitter (human)"))
+            s.add(Observation(file_path="/tmp/m.jpg", file_hash="m", review_status="approved",
+                              identification_status="identified", species_primary="Lactuca muralis", species_id=d))
+            await s.commit()
+        from app.api import culinary
+        from app.services import enrichment, species_merge
+        real_enrich, real_merge = enrichment.enrich_species, species_merge.merge_species_cards
+        calls = []
+
+        async def no_enrich(**kw):
+            return "enriched"
+
+        async def spy_merge(session, discard_id, keep_id, **kw):
+            calls.append((discard_id, keep_id))
+            return await real_merge(session, discard_id, keep_id, **{**kw, "overrides_dir": None})
+        enrichment.enrich_species, species_merge.merge_species_cards = no_enrich, spy_merge
+        try:
+            async with S() as s:
+                out = await culinary.rename_species_by_name(
+                    "Lactuca muralis", culinary.RenameRequest(new_name="Mycelis muralis", new_common_name="Wall lettuce"),
+                    db=s, identity=CURATOR)
+        finally:
+            enrichment.enrich_species, species_merge.merge_species_cards = real_enrich, real_merge
+        assert out["auto_merged"] and calls == [(d, k)], (out, calls)
+        async with S() as s:
+            assert (await s.get(Species, d)) is None
+            assert (await s.scalar(text("SELECT count(*) FROM species WHERE edibility_status LIKE '%merged_into%'"))) == 0
+            sp = await s.get(Species, k)
+            assert (sp.edibility_status, sp.edibility_verified) == ("caution", True), sp.edibility_status
+            assert json.loads(sp.common_names)[0] == "Wall lettuce"
+            o = await s.scalar(select(Observation))
+            assert (o.species_id, o.species_primary) == (k, "Mycelis muralis")
+            ci = await s.scalar(select(CulinaryInfo).where(CulinaryInfo.species_id == k))
+            assert ci.taste_notes == "bitter (human)"
+            syn = (await s.execute(text("SELECT count(*) FROM species_synonyms WHERE canonical_species_id = :k"), {"k": k})).scalar()
+            assert syn >= 1
+        await eng.dispose()
+    asyncio.run(run())
+
+
 def test_orphan_marked_kept_cards_are_not_in_the_species_list():
     async def run():
         path, eng, S = _db()

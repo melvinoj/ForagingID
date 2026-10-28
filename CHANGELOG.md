@@ -1,31 +1,35 @@
 ## Current State
 
+28 Oct 2026, morning
+
+### Session summary
+Rename onto an existing name now merges through merge_species_cards (no more '_merged_into:' soft-delete; 0 cards carried it). Bryony / genus cleanup: 8229 to Review (bryony_check); 879 Bryonia dioica toxic/toxic verified with Melvin's look-alike + preparation warnings verbatim; genus cards 880 Usnea, 881 Salix, 354 Crocus, 530 Taraxacum sect. Taraxacum deleted (step G route), their 6 photos to Review (genus_reid); 136 Bryonia syriaca orphan-marked. Species-rank guard built: no genus cards, ever. 845 Taraxacum campylodes merged into 286 Taraxacum officinale. Snapshot before every write, every row read back by id; 36 test files pass.
+
 ### Build
 - Alembic head 0059. CLAUDE.md still says 0050 (batch 17).
-- 35 test files pass (new: tests/test_batch11b_merge.py, 7 tests). Service worker v17 or later.
-- Uncommitted until this End Session: batch 11b (app/services/species_merge.py, app/api/culinary.py merge endpoint + rename lineage fix, scripts/batch11b_data.py, tests/test_batch11b_merge.py, CLAUDE.md merge rule, DECISIONS_11b_2026-10-27.md), plus the earlier uncommitted batch 11/12 files already in the tree.
+- 36 test files pass (new: tests/test_species_rank_guard.py, 9 tests; test_batch11b_merge.py now 8). Service worker v17 or later.
+- Committed by this End Session: culinary._auto_merge_into → merge_species_cards; species-rank guard (app/services/taxonomy.py, models/species.py, services/species_link.py, services/observation_service.py, services/enrichment.py, api/bulk_actions.py, api/trust.py, api/reidentify.py, api/culinary.py, api/scan.py, main.py); scripts/bryony_genus_28oct.py; scripts/batch11b_data.py merge --note; CHANGELOG Browser checks.
 
-### Done 27–28 Oct (batch 11b, Melvin's decisions in DECISIONS_11b_2026-10-27.md)
-- Dry run 27 Oct: DECISIONS_11b_2026-10-27.md + group D contact sheet ~/Documents/ForagingID/11b_review/.
-- Merge routine app/services/species_merge.merge_species_cards — the ONE way to merge: re-keys every species-keyed table (observations id/name/suggestion, candidates, drafts, recipes, edibility history/conditions, lookalikes both cols, synonyms + discard name, session/list/dismissals deduped, encounters, sources, enrichment_sources, species_resources by name, map note tags, walk waypoints, walk override files, experience_publications ids); text: human-edited side wins, else accepted name, loser in a history row; verdict: toxic wins, human-verified beats unverified, more conservative among equals; deletes the discard card. POST /api/species/merge calls it.
-- A: 7 merges 704→457, 758→757, 412→708, 608→589, 103→531, 600→749, 200→82 (704 first, read back clean). Synonym rows 9–14. 103's human edible_parts kept on 531. Walk 5 published snapshot ids re-keyed.
-- B: 8410 → Lepista nuda; 21950/22074 → Erigeron canadensis; 187's 5 photos → Hypericum perforatum (manually_verified).
-- C: 151 cards set to GBIF family / own-name genus / empty kingdom filled (343 history rows). 0 cards left with non-family family, empty genus or kingdom. 332 Physarum stays Fungi. Rename now re-derives family/genus via GBIF (culinary._reset_lineage_for_new_name).
-- D: 12 corrections (18398 scene; 8229 Bryonia dioica; 19809 Carpinus betulus; 24068/24069 Larix decidua; 8408 Populus tremula; 8263 Parthenocissus quinquefolia; 17033/17046 Usnea; 21713 Oxalis stricta; 18828 Dryopteris affinis; 24062 Salix). New cards 878 Parthenocissus (toxic/toxic, human), 879 Bryonia dioica, 880 Usnea, 881 Salix. 28 photos to Review, label 11b_review, reviewer note names the suggestion (24 with species_suggested set; 21252 Arctium note only; 9477/20893/8370 none).
-- E: 22 G3-held drafts rejected (reason recorded); 3160 released.
-- F: 43 English names (GBIF vernacular).
-- G: 87 cards deleted with species-keyed rows (253 drafts, 8 recipes, 155 verdict-history, 3 conditions, 918 enrichment caches, 87 culinary_info + 238 history, 1 lookalike); 48 rejected photos species_id NULL; 6 stale suggestions cleared. 148/583/740/808/826 kept, orphan-marked. Toxic 136/477/581/686/843 and 22 European reference cards kept. 657 cards now.
-- H: 882 Pastinaca sativa caution/none (human) + Melvin's preparation warning verbatim (not in the hazard index); 877 Rubus pedatifolius edible/none (human).
-- Snapshots db_20261028_030037 … db_20261028_031236 (backup API, no git commit).
+### Done 28 Oct (this session)
+- Rename onto an existing name: culinary._auto_merge_into calls merge_species_cards (source card deleted, every species-keyed table re-keyed, text/verdict rules, synonym row). Name only on photos → photos + map note tags moved. Recon: the only '_merged_into:' writer was culinary.py:1329; reader scripts/verdict_sweep_drafts.py:67 (kept, harmless); 0 cards carried it.
+- 8229 Bryonia dioica → needs_review, label bryony_check, note "Melvin re-check: white bryony (B. dioica) vs B. alba — not black bryony"; stays on 879 (needs_review still backs the card; 879 is off the Species list/map until approved again).
+- 879 Bryonia dioica: toxic / toxic, verified human (history 2785–2788, "Melvin 28 Oct"); culinary_info 835 created with Melvin's look_alike_warnings and preparation_warnings verbatim (history 3781/3782, human, old NULL). Not deadly, not red-skull. Handout: culinary withheld (level toxic).
+- Genus cards deleted (step G route), photos → needs_review, label genus_reid, note "<name> — identify to species", species cleared: 880 Usnea (17033, 17046), 881 Salix (24062), 354 Crocus (8198), 530 Taraxacum sect. Taraxacum (15957, 24430). Rejected 19704 stays rejected, suggestion cleared. 354 Crocus (toxic) is out of the hazard index.
+- 136 Bryonia syriaca orphan-marked (verdict unchanged, not deleted).
+- Species-rank guard: taxonomy.is_species_rank_name / require_species_rank / NonSpeciesNameError (one definition; refuses bare genus and above, sp./spp., sect./subg., agg., cf./aff.). new_species_card and set_observation_species refuse; main.py → HTTP 400 code not_species_rank. Refused before any write: confirm/correct (update_observation_status), retry-confirm, rename (in place, new card, onto existing), merge keep card, trust bulk-reassign. Bulk approve skips; promotable_suggestion returns None. Scan: non-species top → needs_review genus_reid, identification_status below_threshold, no species, no card, never auto-approved. trigger_ai_drafts makes no card. Census after: 0 non-species cards, 0 live photos with a non-species name.
+- 845 Taraxacum campylodes merged into 286 Taraxacum officinale (GBIF backbone accepts both; The Plant List treats officinale as a synonym of campylodes; ITIS/VASCAN put campylodes under the arctic T. lapponicum). Moved: photo 24429, 16083's suggestion, 2 drafts, 8 history rows, 5 enrichment sources; synonym row 15; id_notes conflict kept 286's text (845's in history 3783). 652 cards.
+- Snapshots db_20261028_035116, _035121, _035128, _035138, _035145, _040253, _041350 (backup API, no git commit).
 
 ### Next (order)
-1. Code: route culinary._auto_merge_into (rename onto an existing name) through merge_species_cards — it still soft-deletes via edibility_status '_merged_into:'. Melvin said yes 28 Oct. Add a test.
-2. Melvin: Review → 28 photos under 11b_review; republish walk 5 (67 → 66 species: 457 Trametes, 589 Cota once).
-3. Verdicts + scoped enrichment for bare cards 879 Bryonia dioica, 880 Usnea, 881 Salix.
+1. Melvin: Review → 11b_review (28), genus_reid (6), bryony_check (8229); republish walk 5 (67 → 66 species: 457 Trametes, 589 Cota once).
+2. Live check of the guard: rename a card to "Salix" → refused with "'Salix' is not a species name — identify to species", card unchanged.
+3. Scoped enrichment for 879 Bryonia dioica (verdict and warnings are set; other fields bare).
 4. Then 15b, 15, 16, 17 per REPORT.md section 9.
 
 ### Settled (Melvin)
-- Merges only via merge_species_cards; kept name = GBIF accepted; human-edited text wins.
+- Merges only via merge_species_cards; kept name = GBIF accepted (or the established card when GBIF accepts both, e.g. 286 Taraxacum officinale); human-edited text wins.
+- No genus cards, ever; every photo is identified to species (a best guess is fine). Genus photos go to Review as genus_reid.
+- 879 Bryonia dioica toxic/toxic, not deadly. 136 kept orphan-marked.
 - Pastinaca caution/none with Melvin's warning; Parthenocissus toxic; 877 edible.
 - Keep 148, 583, 740, 808, 826 orphan-marked (off the Species list), not deleted.
 - Toxic/deadly and native European reference cards are never junk-deleted.
@@ -38,11 +42,16 @@
 - A bulk delete list: never put a comment mid-tuple (it silently drops entries) — test bulk deletes on a snapshot copy first.
 - GBIF match on a bare genus can be ambiguous (Salix): retry with a kingdom hint.
 - Any app/ save reloads uvicorn and kills running jobs.
+- A needs_review photo still backs its card (only rejected doesn't), but the Species list and map show approved/manually_verified only.
+- GBIF backbone can accept two names for one plant (Taraxacum officinale / campylodes): check the source checklists before deciding a merge.
+
+### Browser checks
+- Automated: scripts/dev/walkthrough_check.py on the scratch setup (results in ~/Documents/ForagingID/walkthrough_run_*). Re-run after UI-touching batches.
+- Melvin only (checklist artifact "LandMemory Walkthroughs"): quick looks (walk panel buttons at laptop width; Species list on the phone); phone pairing, installed app, device list on the paired phone, Add device refused with sharing stopped, keyboard dictation, participant on mobile data; rotate the DeepSeek key; a real scoped enrichment run (Jobs pop-up, skip counts, cap 25, paused-no-network, ⚡ Enrich, Regenerate side by side, caffeinate exits); walk 5 republish.
+Rule: Code tests whatever it can (unit tests + the walkthrough script); only what needs a real phone, network or keys goes to Melvin.
 
 ### Melvin's review queue
-- 11b_review (28). hazard_review cards (18) + 17052, 17737. 22 recipes needing a title. Five rejected photos restored in July (15958, 15970, 21333, 21673, 21799). Warning review cards. Edit Oxalis grandis 3493 (card deleted in 11b — drop). Text tidy-up (352 edible_parts / 689 id_notes). 347 Takeout person_animal rejects (mount DIGIERA). Draft #3252 Amaranthus hybridus.
-
-Session summary: Audit batch 11b — dry run (DECISIONS_11b_2026-10-27.md, group D contact sheet) then build from Melvin's decisions: one shared merge routine (7 merges), relinks, GBIF genus/family sweep (151 cards) + rename lineage fix, non-European corrections (12) and 28 photos to Review, 22 drafts rejected, 43 English names, 87 junk cards deleted, Pastinaca card + 877 verdict. Snapshot before every step, every row read back; 35 test files pass.
+- 11b_review (28). genus_reid (6: Usnea ×2, Salix, Crocus, Taraxacum ×2). bryony_check (8229). Photo 24429 on 286 Taraxacum officinale (13%, suggestion Hyoseris radiata). 286 taste_notes reads "test draft". hazard_review cards (18) + 17052, 17737. 22 recipes needing a title. Five rejected photos restored in July (15958, 15970, 21333, 21673, 21799). Warning review cards. Text tidy-up (352 edible_parts / 689 id_notes). 347 Takeout person_animal rejects (mount DIGIERA). Draft #3252 Amaranthus hybridus.
 
 ## Current State — 22 Oct 2026, evening
 
@@ -242,6 +251,81 @@ Test species: Conium maculatum, Oenanthe crocata, Sambucus nigra, 229 St John's 
 Rule: Code tests whatever it can (real JS via jsc, real PDFs); new browser checks are added to a walkthrough, not numbered.
 
 ## History
+
+### 2026-10-28 04:20
+**Snapshot** — End of session — Session ended from Settings page
+DB: `snapshots/db_20261028_042023.sqlite`
+
+### 2026-10-28 04:20
+**Session ended** — Session ended from Settings page
+
+### 2026-10-28 04:13
+**Merged 845 Taraxacum campylodes into 286 Taraxacum officinale via merge_species_cards (Melvin 28 Oct)**
+
+**Built:**
+- batch11b_data.py merge --note option
+**Fixed:**
+- 845 merged into 286: obs 24429, suggestion on 16083, 2 drafts, 8 history rows, 5 enrichment sources moved; synonym row 15; id_notes conflict kept 286 text, 845 text in history 3783; card 845 deleted
+**Files:** `scripts/batch11b_data.py`
+**Pending:**
+- Melvin: check photo 24429 (13%, suggestion Hyoseris radiata)
+- 286 taste_notes reads "test draft"
+
+### 2026-10-28 04:03
+**354 Crocus and 530 Taraxacum sect. Taraxacum treated like Usnea (Melvin 28 Oct)**
+
+**Built:**
+- bryony_genus_28oct.py genus step takes --cards; rejected photos stay rejected
+**Fixed:**
+- Photos 8198, 15957, 24430 to Review (genus_reid, <name> — identify to species), species cleared
+- 19704 (rejected) suggestion cleared
+- Cards 354 and 530 deleted by the step G route (7 drafts, 13 history, 47 enrichment sources, 2 culinary_info); 653 cards; 0 non-species cards or live photos left
+**Files:** `scripts/bryony_genus_28oct.py`
+**Pending:**
+- Melvin: Review genus_reid (6 photos) + bryony_check (8229)
+
+### 2026-10-28 04:00
+**Species-rank guard: no genus cards, ever (Melvin 28 Oct)**
+
+**Built:**
+- taxonomy.is_species_rank_name / require_species_rank / NonSpeciesNameError (one definition)
+- new_species_card + set_observation_species refuse non-species names; main.py maps to HTTP 400 code not_species_rank
+- Refused before any write: confirm/correct (update_observation_status), retry-confirm, rename (in place, new card, onto existing), merge keep, trust bulk-reassign
+- Bulk approve skips; promotable_suggestion returns None for non-species
+- Scan: non-species top name -> needs_review genus_reid, no species, no card, never auto-approved
+- trigger_ai_drafts makes no card for a non-species name
+**Files:** `app/services/taxonomy.py`, `app/models/species.py`, `app/services/species_link.py`, `app/services/observation_service.py`, `app/api/bulk_actions.py`, `app/api/trust.py`, `app/api/reidentify.py`, `app/api/culinary.py`, `app/api/scan.py`, `app/services/enrichment.py`, `app/main.py`, `tests/test_species_rank_guard.py`
+**Pending:**
+- Melvin: decide 354 Crocus and 530 Taraxacum sect. Taraxacum (both now refused on re-approve/rename-onto)
+- Melvin: live check — rename a card to a genus shows the refusal message
+
+### 2026-10-28 03:52
+**Bryony / Usnea / Salix (Melvin 28 Oct): 8229 to Review (bryony_check); 879 Bryonia dioica toxic/toxic verified + Melvin look-alike and preparation warnings verbatim; Usnea/Salix photos to Review (genus_reid), cards 880/881 deleted (step G route); 136 Bryonia syriaca orphan-marked; genus-card census + no-genus-card guard proposal (not built)**
+
+**Built:**
+- scripts/bryony_genus_28oct.py (dry run default, snapshot + read-back per step)
+**Fixed:**
+- 879 verdict toxic/toxic verified human
+- 879 look_alike_warnings + preparation_warnings human verbatim
+- 880 Usnea / 881 Salix deleted, photos 17033/17046/24062 to Review
+- 136 orphan-marked
+**Files:** `scripts/bryony_genus_28oct.py`
+**Pending:**
+- No-genus-card guard: build after Melvin approves the proposal
+- Decide 354 Crocus and 530 Taraxacum sect. Taraxacum (non-species cards with photos)
+- Melvin: Review bryony_check (8229), genus_reid (3)
+
+### 2026-10-28 03:27
+**Rename onto an existing name now merges through merge_species_cards (no more _merged_into: soft-delete); CHANGELOG Browser checks restored**
+
+**Built:**
+- culinary._auto_merge_into delegates to species_merge.merge_species_cards (source card deleted, all species-keyed rows re-keyed, text/verdict rules, synonym row)
+**Fixed:**
+- Rename-onto-existing no longer writes edibility_status _merged_into: marker
+- Current State: Browser checks block restored; Oxalis grandis 3493 dropped from review queue
+**Files:** `app/api/culinary.py`, `tests/test_batch11b_merge.py`, `CHANGELOG.md`
+**Pending:**
+- Commit at End Session
 
 ### 2026-10-28 03:22
 **Snapshot** — End of session — Session ended from Settings page

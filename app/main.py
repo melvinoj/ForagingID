@@ -211,6 +211,16 @@ async def _global_exception_handler(request: Request, exc: Exception) -> JSONRes
         content={"detail": "Internal server error", "error": type(exc).__name__},
     )
 
+
+from app.services.taxonomy import NonSpeciesNameError  # noqa: E402
+
+
+@app.exception_handler(NonSpeciesNameError)
+async def _non_species_name_handler(request: Request, exc: NonSpeciesNameError) -> JSONResponse:
+    """No genus cards, ever (Melvin, 28 Oct 2026): a name above species rank on
+    any card or species write is a 400 the UI shows, not a 500."""
+    return JSONResponse(status_code=400, content={"detail": str(exc), "code": "not_species_rank"})
+
 # API routers
 app.include_router(observations.router)
 app.include_router(map.router)

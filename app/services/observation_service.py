@@ -85,6 +85,14 @@ async def update_observation_status(
     hazard candidate raises 409 hazard_ack_required without it (Melvin, 22 Oct
     2026; app/services/hazard_candidates.py). Checked before any write.
     """
+    # No genus cards, ever (Melvin, 28 Oct 2026): a confirm or a species set by
+    # hand names a species — refused before any write (taxonomy.is_species_rank_name).
+    from app.services.taxonomy import require_species_rank
+    if update_species and species_name:
+        require_species_rank(species_name)
+    elif review_status in ("approved", "manually_verified") and obs.species_primary:
+        require_species_rank(obs.species_primary)
+
     if review_status in ("approved", "manually_verified"):
         from app.services.hazard_candidates import check_hazard_ack
         if update_species:

@@ -17,6 +17,8 @@ Step 4 — recipe season (#19): curator-set (not ai_generated) always wins; else
   season word in the title beats the keyword guess (recipe 74 → spring); every
   served season reads recipe_season; the draft-approve guess checks the title
   first. No DB write.
+Step 5 — lighter design, recipes page only: page-scoped CSS; serif from local
+  fonts only on titles; the safety CSS (badges, warning boxes, ☠) untouched.
 
 The JS is EXECUTED in macOS JavaScriptCore (`jsc`) with small DOM stubs. No
 browser — the live checks stay Melvin's.
@@ -419,6 +421,72 @@ def test_api_serves_derived_season_without_writing():
     assert [r["season"] for r in lst["recipes"] if r["id"] == 101] == ["spring"]
     assert stored == "autumn"
     assert _sq.connect(url).execute("SELECT season FROM species_recipes WHERE id = 101").fetchone()[0] == "autumn"
+
+
+# ── Step 5: lighter design — the safety CSS is untouched ───────────────────────
+
+def _rc_css():
+    page = _src("frontend/recipes.html")
+    return page[page.index("<style>"):page.index("</style>")]
+
+
+def _rules(css):
+    css = re.sub(r"/\*.*?\*/", "", css, flags=re.S)
+    return [(sel.strip(), body.strip()) for sel, body in re.findall(r"([^{}]+)\{([^{}]*)\}", css)]
+
+
+SAFETY_CLASS = re.compile(r"(?<!col-)safety|culinary-warn|warn-badge|toxic-badge|sw-unreviewed|skull|☠|obs-badge|inedible-badge")
+
+
+def test_badge_css_is_the_species_pages_and_nothing_else_touches_safety():
+    rules = _rules(_rc_css())
+    safety_rules = [(sel, body) for sel, body in rules if SAFETY_CLASS.search(sel)]
+    norm = lambda b: re.sub(r"\s+", " ", b)
+    assert [(sel, norm(b)) for sel, b in safety_rules] == [
+        ("#rc-results .obs-badge, #rc-results .inedible-badge",
+         "display: inline-block; font-size: 0.72rem; padding: 2px 7px; border-radius: 10px; font-weight: 600;"),
+        ("#rc-results .inedible-badge", "background: #fef3c7; color: #854d0e; font-weight: 400;"),
+    ]
+    sp = _src("frontend/species.html")
+    assert ".sp-table .obs-badge, .sp-table .inedible-badge {\n      display: inline-block; font-size: 0.72rem; " \
+           "padding: 2px 7px; border-radius: 10px; font-weight: 600;\n    }" in sp
+    assert ".sp-table .inedible-badge { background: #fef3c7; color: #854d0e; font-weight: 400; }" in sp
+    # no page rule reaches into a warning box or a badge by element or attribute
+    for sel, _ in rules:
+        assert "[style" not in sel and "details div" not in sel and "details *" not in sel, sel
+    # the badge markup itself is unchanged (inline styles, from LmViewSwitch.badge / SafetyGate.badge)
+    vs = _src("frontend/static/js/view-switch.js")
+    assert '<span class="obs-badge" style="background:#2a2010;color:#d4a840;border:1px solid #4a3a10">⚠ caution</span>' in vs
+    sg = _src("frontend/static/js/safety-gate.js")
+    assert "'padding:1px 6px;border-radius:4px;font-weight:700;background:' + (red ? '#dc2626' : '#fef3c7')" in sg
+    assert "'font-size:0.78rem;color:#7a2000;background:#fff7ed;border-left:3px solid #ea580c;'" in sg
+
+
+def test_serif_on_titles_only_and_no_font_fetch():
+    rules = _rules(_rc_css())
+    serif = [sel for sel, body in rules if "--rc-serif)" in body and "font-family" in body]
+    assert sorted(serif) == sorted(["#recipes-page h2", ".rc-group-h", ".recipe-tile .rt-title", ".rc-table .rl-title"]), serif
+    body = [b for sel, b in rules if sel == "body"][0]
+    assert "system-ui" in body and "serif;" not in body.replace("sans-serif", "")
+    page = _src("frontend/recipes.html")
+    assert "@import" not in page and "@font-face" not in page and "fonts.g" not in page
+    assert "Iowan Old Style" in page and "Georgia" in page
+    assert "--rc-" in page and not re.search(r"^\s*--(ink|paper|moss|leaf|ground)\s*:", _rc_css(), re.M)  # no token redefined
+
+
+def test_batch_commits_leave_shared_css_and_safety_gate_alone():
+    out = subprocess.run(["git", "log", "--format=%s", "a67236e..HEAD", "--",
+                          "frontend/static/css/tokens.css", "frontend/static/css/site-header.css",
+                          "frontend/static/js/safety-gate.js"],
+                         cwd=ROOT, capture_output=True, text=True).stdout
+    assert not [l for l in out.splitlines() if l.startswith("Recipes batch")], out
+    diff = subprocess.run(["git", "diff", "--stat", "HEAD", "--", "frontend/static/css/tokens.css",
+                           "frontend/static/css/site-header.css", "frontend/static/js/safety-gate.js"],
+                          cwd=ROOT, capture_output=True, text=True).stdout
+    assert diff.strip() == "", diff
+    # page-scoped: no other page links a recipes stylesheet, and the page adds none
+    assert re.findall(r'<link rel="stylesheet" href="([^"]+)"', _src("frontend/recipes.html")) == \
+        ["/static/css/tokens.css", "/static/css/site-header.css"]
 
 
 if __name__ == "__main__":

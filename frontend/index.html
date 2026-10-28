@@ -3346,7 +3346,6 @@ function _heatZoomEnd() {
 
 map.on('zoom',    _heatZoomFeedback);
 map.on('zoomend', _heatZoomEnd);
-map.on('zoomend', _rescaleNotePins);   // keep note pin size proportional to zoom
 
 let allFeatures = [];   // bbox-bounded pins for the current viewport
 let _heatAll    = [];   // whole-archive heat points [lat,lng,sp,hc,ws,month]
@@ -9400,6 +9399,7 @@ function _rescaleNotePins() {
   const icon = makeNoteIcon(_noteIconSize());
   noteGroup.eachLayer(function(mk) { mk.setIcon(icon); });
 }
+map.on('zoomend', _rescaleNotePins);   // keep note pin size proportional to zoom
 
 async function loadNotes() {
   try {

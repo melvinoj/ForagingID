@@ -70,7 +70,7 @@ def test_species_page_renders_server_chips_only():
     assert "🔗 PFAF" not in body and "sources_json" not in body and "primary_source_url" not in body
     assert "_renderSources(ci, data.source_chips || [])" in h
     py = _read("app/api/culinary.py")
-    assert '"source_chips": chips' in py
+    assert '"source_chips": _chips' in py and py.count('"source_chips"') == 1
 
 
 # ── 2. Bare domains ──────────────────────────────────────────────────────────
@@ -180,6 +180,62 @@ def test_bp_empty_and_normal_rows_unchanged():
     o = _bp_run(_ok("Promise.resolve([{process_id:1, process_type:'p1_syncthing', progress_total:4,"
                     " progress_current:2, heartbeat_age_s:5, status:'running', is_stalled:false}])"))
     assert "2 of 4" in o["html"] and "running" in o["html"] and o["errs"] == [], o
+
+
+# ── 5. Guest scene pin wording ───────────────────────────────────────────────
+def test_scene_no_description_line_is_curator_only():
+    js = _read("frontend/static/js/index/detail-card.js")
+    line = [l for l in js.split("\n") if "No description added yet" in l]
+    assert len(line) == 1 and "data-guest-hide" in line[0], line
+    assert "edit in review queue" in line[0]                             # curator wording unchanged
+    assert "body.guest-mode [data-guest-hide]" in _read("frontend/static/js/guest-mode.js")
+
+
+# ── 6. No stats request for guests ───────────────────────────────────────────
+def test_review_badge_only_in_owner_branch():
+    js = _read("frontend/static/js/site-header.js")
+    ident = js[js.index("function _initIdentity()"):js.index("function _initEncountersBadge()")]
+    guest_branch = ident[ident.index("if (d.is_guest) {"):ident.index("} else {")]
+    owner_branch = ident[ident.index("} else {"):]
+    assert "_initReviewBadge()" not in guest_branch and "_initReviewBadge();" in owner_branch
+    assert js.count("_initReviewBadge();") == 1                          # no unconditional boot call
+    assert js.count("/api/observations/stats") == 1
+
+
+# ── 7. Medicinal-prep search serves recipe_season ────────────────────────────
+def test_medicinal_search_serves_recipe_season():
+    import asyncio
+    from datetime import datetime
+    from sqlalchemy import create_engine
+    from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+    import app.main  # noqa: F401
+    from app.api.find import find_medicinal
+    from app.database import Base
+    from app.models.species import Species, SpeciesRecipe, recipe_season
+    from app.services.taxonomy import normalize_taxon_key
+
+    async def go():
+        path = os.path.join(tempfile.mkdtemp(prefix="sf28_"), "t.db")
+        Base.metadata.create_all(create_engine(f"sqlite:///{path}"))
+        eng = create_async_engine(f"sqlite+aiosqlite:///{path}")
+        S = async_sessionmaker(eng, expire_on_commit=False)
+        async with S() as s:
+            s.add(Species(id=1, scientific_name="Sambucus nigra", name_key=normalize_taxon_key("Sambucus nigra"),
+                          edibility_status="caution", toxicity_severity="none", kingdom="Plantae"))
+            # stored autumn, ai_generated, title says Spring → served spring (title word wins)
+            s.add(SpeciesRecipe(id=10, species_id=1, title="Spring Elderflower Tea", body="A tea for colds.",
+                                season="autumn", source="ai_generated", status="approved",
+                                is_medicinal_prep=True, created_at=datetime(2026, 10, 1)))
+            await s.commit()
+        async with S() as s:
+            d = await find_medicinal(q="tea", db=s)
+        await eng.dispose()
+        return d
+
+    d = asyncio.run(go())
+    prep = d["results"][0]["preparations"][0]
+    assert prep["season"] == recipe_season("autumn", "ai_generated", "Spring Elderflower Tea", "A tea for colds.")
+    assert prep["season"] == "spring", prep
 
 
 if __name__ == "__main__":

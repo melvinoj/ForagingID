@@ -380,13 +380,13 @@ def test_recipe_74_spring_and_curator_season_wins():
 def test_every_served_season_reads_the_rule():
     assert src_count("app/api/recipes.py", "recipe_season(r.season, r.source, r.title, r.body)") == 2
     assert src_count("app/api/culinary.py", "recipe_season(r.season, r.source, r.title, r.body)") == 2
-    assert src_count("app/api/find.py", "recipe_season(r.season, r.source, r.title, r.body)") == 1
+    assert src_count("app/api/find.py", "recipe_season(r.season, r.source, r.title, r.body)") == 2   # + medicinal-prep search (small fixes 28 Oct #7)
     assert 'recipe_season(r["season"], r["source"], r["title"], r["body"])' in _src("scripts/experience_export/export.py")
     cul = _src("app/api/culinary.py")
     appr = cul[cul.index("_VALID_SEASONS = {"):cul.index("existing_rb = await db.scalar(")]
     assert appr.index("recipe_title_season(recipe_title)") < appr.index("_SEASON_RE.items()")   # title before keywords
     assert "season=new_season," in cul and "season=recipe_season," not in cul
-    assert "'foragingid-species-5'" in _src("frontend/static/sw.js")                      # cached profiles evicted
+    assert "'foragingid-species-6'" in _src("frontend/static/sw.js")                      # cached profiles evicted
 
 
 def src_count(rel, needle):

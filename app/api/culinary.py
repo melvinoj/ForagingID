@@ -33,7 +33,7 @@ from app.services.enrichment_scope import resolve as resolve_scope
 from app.models.culinary import CulinaryInfo
 from app.models.notes import MapNote
 from app.models.observation import Observation, is_guest_visible_observation
-from app.models.species import CulinaryInfoHistory, EnrichmentSource, Species, SpeciesAIDraft, SpeciesCandidate, SpeciesRecipe, SpeciesEdibilityCondition, SpeciesLookalike, culinary_allowed, recipe_list_title, safety_decision, CURATOR_DRAFT_FIELDS, AI_NO_CONTENT_VERDICTS, is_curator_authored, new_species_card
+from app.models.species import CulinaryInfoHistory, EnrichmentSource, Species, SpeciesAIDraft, SpeciesCandidate, SpeciesRecipe, SpeciesEdibilityCondition, SpeciesLookalike, culinary_allowed, recipe_list_title, recipe_season, recipe_title_season, safety_decision, CURATOR_DRAFT_FIELDS, AI_NO_CONTENT_VERDICTS, is_curator_authored, new_species_card
 from app.models.encounter import Encounter
 from app.models.foray_session import SessionSpecies
 from app.models.notification import NotificationDismissal
@@ -1468,7 +1468,7 @@ async def get_culinary_profile(
 
     recipes_out = [
         {"id": r.id, "title": r.title, "body": r.body,
-         "season": r.season, "is_preferred": r.is_preferred,
+         "season": recipe_season(r.season, r.source, r.title, r.body), "is_preferred": r.is_preferred,
          "is_medicinal_prep": r.is_medicinal_prep,
          # walk Export summary ranks curator > own menu > ai_generated (_summaryRecipe)
          "source": r.source}
@@ -1833,7 +1833,7 @@ async def species_profile(
             # The card's title (recipe_list_title): own or heading; "" = untitled.
             "display_title":     recipe_list_title(r.title, r.body),
             "body":              r.body,
-            "season":            r.season,
+            "season":            recipe_season(r.season, r.source, r.title, r.body),
             "is_preferred":      r.is_preferred,
             "is_medicinal_prep": r.is_medicinal_prep,
             "source":            r.source,
@@ -2469,13 +2469,6 @@ async def approve_ai_draft(
             "winter": _re.compile(r"\b(winter|december|january|february|stored root)\b", _re.IGNORECASE),
         }
         _VALID_SEASONS = {"spring", "summer", "autumn", "winter", "year-round"}
-        # Use provided season or infer from text
-        recipe_season = body.season if (body.season and body.season in _VALID_SEASONS) else "year-round"
-        if recipe_season == "year-round":
-            counts = {s: len(p.findall(approved_text)) for s, p in _SEASON_RE.items()}
-            best = max(counts, key=counts.get)
-            if counts[best] > 0:
-                recipe_season = best
         # Extract title from first # heading
         recipe_title = None
         for line in approved_text.splitlines():
@@ -2483,6 +2476,16 @@ async def approve_ai_draft(
             if stripped.startswith("#"):
                 recipe_title = stripped.lstrip("#").strip()[:200]
                 break
+        # Use provided season; else a season word in the title (recipe_title_season,
+        # 28 Oct 2026); else infer from the text's keywords
+        new_season = body.season if (body.season and body.season in _VALID_SEASONS) else "year-round"
+        if new_season == "year-round":
+            new_season = recipe_title_season(recipe_title) or "year-round"
+        if new_season == "year-round":
+            counts = {s: len(p.findall(approved_text)) for s, p in _SEASON_RE.items()}
+            best = max(counts, key=counts.get)
+            if counts[best] > 0:
+                new_season = best
         # Check if recipe bank entry already exists from this draft
         existing_rb = await db.scalar(
             select(SpeciesRecipe).where(SpeciesRecipe.ai_draft_id == draft.id)
@@ -2492,7 +2495,7 @@ async def approve_ai_draft(
                 species_id=sp.id,
                 title=recipe_title,
                 body=approved_text,
-                season=recipe_season,
+                season=new_season,
                 source="ai_generated",
                 status="approved",
                 ai_draft_id=draft.id,

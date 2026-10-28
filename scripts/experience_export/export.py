@@ -48,7 +48,7 @@ from app.services import walk_membership as wm  # noqa: E402
 from app.services import walk_route  # noqa: E402
 # names rule, one definition; recipe title / summary / link rules (Recipes tab)
 from app.models.species import (RECIPE_TYPES, display_common_name, recipe_display_title,  # noqa: E402
-                                recipe_summary_line, recipe_title_source, recipe_website_url_ok)
+                                recipe_season, recipe_summary_line, recipe_title_source, recipe_website_url_ok)
 
 DB_PATH   = REPO / "data" / "foragingid.db"
 DIST      = REPO / "dist"
@@ -228,7 +228,8 @@ def build_recipe_bank(conn: sqlite3.Connection, cfg: dict) -> tuple[list, list]:
             line = recipe_teaser(r, dish, cfg.get("teaser_skip_patterns", []))
         bank.append({
             "recipe_id": r["id"], "species_id": sid, "dish": dish, "line": line,
-            "season": r["season"], "type": r["recipe_type"] if r["recipe_type"] in RECIPE_TYPES else "other",
+            "season": recipe_season(r["season"], r["source"], r["title"], r["body"]),
+            "type": r["recipe_type"] if r["recipe_type"] in RECIPE_TYPES else "other",
             "approved_at": str(r["created_at"] or "")[:10],
             "url": r["website_url"] if recipe_website_url_ok(r["website_url"]) else None,
             "sci": sp["scientific_name"], "en": en_name(sp), "de": first_name(sp.get("common_names_de")),

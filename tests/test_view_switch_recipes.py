@@ -13,6 +13,10 @@ Step 2 — recipes in three views: every card / row carries the species badge
 Step 3 — a safety sentence is never a title (recipe 258 "Always cook well…"):
   is_safety_note_line + its JS twin widened; a list / card shows only an own or
   heading title (recipe_list_title), else "Untitled recipe" + species. No DB write.
+Step 4 — recipe season (#19): curator-set (not ai_generated) always wins; else a
+  season word in the title beats the keyword guess (recipe 74 → spring); every
+  served season reads recipe_season; the draft-approve guess checks the title
+  first. No DB write.
 
 The JS is EXECUTED in macOS JavaScriptCore (`jsc`) with small DOM stubs. No
 browser — the live checks stay Melvin's.
@@ -346,6 +350,75 @@ print(JSON.stringify({ t: _rcTitle(_data.recipes[0]), tile: tileHtml(_data.recip
     assert "r.body.split('\\n')[0]" not in sp                     # no first-line title fallback left
     assert '"display_title":     recipe_list_title(r.title, r.body),' in _src("app/api/culinary.py")
     assert '"title": recipe_list_title(r.title, r.body),' in _src("app/api/recipes.py")
+
+
+# ── Step 4: season ────────────────────────────────────────────────────────────
+
+def test_recipe_74_spring_and_curator_season_wins():
+    from app.models.species import recipe_season, recipe_title_season
+    t74 = "Spring Beech Leaf Salad with Toasted Beechnut, Aged Sheep's Cheese & Wild Herb Dressing"
+    assert recipe_season("autumn", "ai_generated", t74, "beechnut autumn harvest") == "spring"
+    assert recipe_season("autumn", "curator", t74, "x") == "autumn"                 # curator-set wins
+    assert recipe_season("summer", "Friture Sauvage menu, Hofgut LEO, 5 July 2026", "Spring Soup", "x") == "summer"
+    assert recipe_season("autumn", "ai_generated", "Beech Nut Butter", "x") == "autumn"   # no title word: stored
+    assert recipe_season("autumn", "ai_generated", None, "# Spring Beech Salad\n\nx") == "spring"   # heading title
+    assert recipe_season("autumn", "ai_generated", None, "Spring is here and so is beech.") == "autumn"  # prose ≠ title
+    assert recipe_season(None, "ai_generated", "Wood Sorrel Soup", "x") == "year-round"
+    # season words that are not the dish's season
+    for t in ("Ox-Eye Daisy Shoots with Charred Spring Onions", "Wood Blewit with Winter Savory",
+              "Wild Pear, Blette, and Honey — A Slow Cure for Winter", "Springy Thistle Broth",
+              "Winter and Summer Salad", "Spring Garlic Butter", "Summer Squash Fritters"):
+        assert recipe_title_season(t) is None, t
+    for t, want in (("A Winter Salad of Ivy-Leaved Toadflax", "winter"), ("Summer Bolete, Spelt", "summer"),
+                    ("Sorrel — A Spring Braise", "spring"), ("autumn hedgerow jelly", "autumn"),
+                    ("Spring Onion and Spring Nettle Tart", "spring")):
+        assert recipe_title_season(t) == want, t
+
+
+def test_every_served_season_reads_the_rule():
+    assert src_count("app/api/recipes.py", "recipe_season(r.season, r.source, r.title, r.body)") == 2
+    assert src_count("app/api/culinary.py", "recipe_season(r.season, r.source, r.title, r.body)") == 2
+    assert src_count("app/api/find.py", "recipe_season(r.season, r.source, r.title, r.body)") == 1
+    assert 'recipe_season(r["season"], r["source"], r["title"], r["body"])' in _src("scripts/experience_export/export.py")
+    cul = _src("app/api/culinary.py")
+    appr = cul[cul.index("_VALID_SEASONS = {"):cul.index("existing_rb = await db.scalar(")]
+    assert appr.index("recipe_title_season(recipe_title)") < appr.index("_SEASON_RE.items()")   # title before keywords
+    assert "season=new_season," in cul and "season=recipe_season," not in cul
+    assert "'foragingid-species-5'" in _src("frontend/static/sw.js")                      # cached profiles evicted
+
+
+def src_count(rel, needle):
+    return _src(rel).count(needle)
+
+
+def test_api_serves_derived_season_without_writing():
+    import asyncio
+    import sqlite3 as _sq
+    sys.path.insert(0, os.path.join(ROOT, "tests"))
+    import test_recipes_page as trp
+    import app.api.recipes as recipes_api
+    from app.models.species import SpeciesRecipe
+
+    async def run():
+        eng, S = await trp._api_db()
+        async with S() as s:
+            r = await s.get(SpeciesRecipe, 101)
+            r.title, r.season = "Spring Nettle Salad", "autumn"
+            r2 = await s.get(SpeciesRecipe, 102)
+            r2.title, r2.season, r2.source = "Spring Ramsons Pesto", "autumn", "curator"
+            await s.commit()
+            api = await recipes_api.all_recipes(q=None, db=s, identity=trp.CURATOR)
+            lst = await recipes_api.list_recipes("Urtica dioica", db=s)
+            stored = (await s.get(SpeciesRecipe, 101)).season
+        url = str(eng.url).replace("sqlite+aiosqlite:///", "")
+        await eng.dispose()
+        return api, lst, stored, url
+    api, lst, stored, url = asyncio.run(run())
+    by = {r["id"]: r for r in api["recipes"]}
+    assert by[101]["season"] == "spring" and by[102]["season"] == "autumn"
+    assert [r["season"] for r in lst["recipes"] if r["id"] == 101] == ["spring"]
+    assert stored == "autumn"
+    assert _sq.connect(url).execute("SELECT season FROM species_recipes WHERE id = 101").fetchone()[0] == "autumn"
 
 
 if __name__ == "__main__":

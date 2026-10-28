@@ -27,6 +27,7 @@ from app.database import get_db
 from app.models.species import (CULINARY_ALLOWED_SQL, RECIPE_TYPES, Species, SpeciesRecipe,
                                 SpeciesAIDraft, culinary_allowed,
                                 display_common_name, recipe_display_title, recipe_list_title, recipe_plant_parts,
+                                recipe_season,
                                 recipe_summary_line, recipe_title_source, recipe_website_url_ok)
 from app.models.culinary import CulinaryInfo
 from app.services.ai_placeholder import is_ai_placeholder
@@ -86,7 +87,7 @@ def _recipe_dict(r: SpeciesRecipe) -> dict:
         "id":               r.id,
         "title":            r.title,
         "body":             r.body,
-        "season":           r.season,
+        "season":           recipe_season(r.season, r.source, r.title, r.body),
         "is_preferred":     r.is_preferred,
         "is_medicinal_prep":r.is_medicinal_prep,
         "source":           r.source,
@@ -153,7 +154,7 @@ async def all_recipes(
             "title": recipe_list_title(r.title, r.body),
             "summary": (r.summary or "").strip() or recipe_summary_line(r.title, r.body),
             "recipe_type": r.recipe_type if r.recipe_type in RECIPE_TYPES else None,
-            "season": r.season,
+            "season": recipe_season(r.season, r.source, r.title, r.body),
             "parts": recipe_plant_parts(r.title, r.body),
             "approved_at": r.created_at.isoformat() if r.created_at else None,
             "website_url": r.website_url if recipe_website_url_ok(r.website_url) else None,

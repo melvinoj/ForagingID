@@ -842,6 +842,37 @@ def recipe_list_title(title: Optional[str], body: Optional[str]) -> str:
     return ""
 
 
+# ---------------------------------------------------------------------------
+# Recipe season — the ONLY rule (Melvin, 28 Oct 2026; CLOSEOUT #19, recipe 74
+# "Spring Beech Leaf Salad" stored as autumn). A curator-set season always
+# wins; otherwise an explicit season word in the recipe's title beats the
+# ingredient keyword guess made when its draft was approved
+# (culinary.approve_ai_draft). "Curator-set" = the recipe is not
+# ai_generated (curator-added or a menu import): no edit trail records who
+# chose an ai_generated recipe's season. Season words that name an
+# ingredient ("spring onions", "winter savory") or a storage purpose ("for
+# winter") are not the dish's season; two different seasons → no title season.
+# Read-time only — nothing is written.
+# ---------------------------------------------------------------------------
+_TITLE_SEASON_NOT = (r"spring\s+(onions?|garlic|greens)|(winter|summer)\s+savou?ry|winter\s+purslane|"
+                     r"(winter|summer)\s+squash|winter\s*cress|(for|through)\s+(the\s+)?winter")
+
+
+def recipe_title_season(title: Optional[str]) -> Optional[str]:
+    import re as _re
+    t = _re.sub(_TITLE_SEASON_NOT, " ", title or "", flags=_re.I)
+    found = {s for s in ("spring", "summer", "autumn", "winter") if _re.search(rf"\b{s}\b", t, _re.I)}
+    return found.pop() if len(found) == 1 else None
+
+
+def recipe_season(season: Optional[str], source: Optional[str], title: Optional[str],
+                  body: Optional[str]) -> str:
+    stored = season or "year-round"
+    if source != "ai_generated":
+        return stored                                     # curator-set: always wins
+    return recipe_title_season(recipe_list_title(title, body)) or stored
+
+
 def recipe_title_source(title: Optional[str], body: Optional[str]) -> Optional[str]:
     """Where recipe_display_title() got its text: 'own' (the stored title),
     'heading' (the body's first usable heading), 'line' (a first prose sentence

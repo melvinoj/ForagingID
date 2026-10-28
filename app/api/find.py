@@ -17,7 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.models.observation import Observation
-from app.models.species import Species, SpeciesRecipe, CULINARY_ALLOWED_SQL, display_common_name
+from app.models.species import Species, SpeciesRecipe, CULINARY_ALLOWED_SQL, display_common_name, recipe_season
 from app.services.phenology import species_in_season
 
 router = APIRouter(prefix="/api/find", tags=["find"])
@@ -167,6 +167,7 @@ async def find_recipes(
             SpeciesRecipe.title,
             SpeciesRecipe.body,
             SpeciesRecipe.season,
+            SpeciesRecipe.source,
             SpeciesRecipe.is_preferred,
             SpeciesRecipe.species_id,
             Species.scientific_name,
@@ -204,7 +205,7 @@ async def find_recipes(
             "id": r.id,
             "title": r.title,
             "body": r.body,
-            "season": r.season,
+            "season": recipe_season(r.season, r.source, r.title, r.body),
             "is_preferred": r.is_preferred,
             "snippet": _snippet(r.body, q, 120),
         })

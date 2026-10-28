@@ -367,7 +367,7 @@ def test_pages_render_warnings_through_the_helper_uncut():
     js = _src("frontend/static/js/safety-gate.js")
     assert ".slice(" not in js and "substring(" not in js                              # the helper never cuts
     assert "'Source text — not yet reviewed'" in js and f"'{CAUTION_UNREVIEWED_LABEL}'" in js
-    assert "'foragingid-species-4'" in _src("frontend/static/sw.js")                   # stale payloads evicted (-4: 28 Oct flagged source links)
+    assert "'foragingid-species-5'" in _src("frontend/static/sw.js")                   # stale payloads evicted (-4: 28 Oct flagged source links)
 
 
 if __name__ == "__main__":

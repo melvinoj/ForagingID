@@ -189,11 +189,17 @@ function _rcThumb(r, cls) {
     (f ? `<img src="/thumbnails/${_esc(f)}" loading="lazy" alt="" onerror="this.remove()">` : '') + '</div>';
 }
 
+// The shown title: the served one (own or heading — recipe_list_title), else
+// "Untitled recipe" with its species. Never a first sentence, never a warning.
+function _rcTitle(r) {
+  return r.title || `Untitled recipe · ${r.species.common || r.species.scientific_name}`;
+}
+
 function _rcChips(r) {
   return [
     `<span class="rt-chip">${_esc(SEASON_LABEL[r.season] || r.season)}</span>`,
     `<span class="rt-chip">${_esc(TYPE_LABEL[r.recipe_type || 'other'])}</span>`,
-    r.needs_title ? `<span class="rt-chip curator" data-guest-hide title="The title shown is only the recipe's first sentence">needs a title</span>` : '',
+    r.needs_title ? `<span class="rt-chip curator" data-guest-hide title="This recipe has no title yet — type one on its species page">needs a title</span>` : '',
     r.hide_from_public ? `<span class="rt-chip curator" data-guest-hide>hidden from public</span>` : '',
   ].join('');
 }
@@ -204,7 +210,7 @@ function tileHtml(r) {
   const warn = SafetyGate.culinaryWarnings(safety);
   return `<div class="recipe-tile" role="link" tabindex="0" data-href="${_esc(recipeHref(r))}" data-recipe-id="${r.id}" data-name="${r.id}">
     ${_rcView === 'large' ? _rcThumb(r, 'rc-thumb-lg') : ''}
-    <div class="rt-title">${_esc(r.title || 'Recipe')}</div>
+    <div class="rt-title${r.title ? '' : ' rt-untitled'}">${_esc(_rcTitle(r))}</div>
     <div class="rt-species">${spNameHtml(r.species.scientific_name, r.species.common)}</div>
     ${r.summary ? `<div class="rt-summary">${_esc(r.summary)}</div>` : ''}
     <div class="rt-meta">${_rcChips(r)}${_rcBadge(r)}</div>
@@ -215,7 +221,7 @@ function tileHtml(r) {
 // List view: title, species (display common name), season, badge; sortable,
 // safety first by default (deadly, toxic, unknown, caution, edible, not edible).
 const _RC_SORTS = {
-  title:   r => (r.title || '').toLowerCase(),
+  title:   r => _rcTitle(r).toLowerCase(),
   species: r => (r.species.common || r.species.scientific_name).toLowerCase(),
   season:  r => SEASONS.indexOf(r.season),
   safety:  r => LmViewSwitch.safetyRank(_data.safety[String(r.species.id)]),
@@ -240,7 +246,7 @@ function rowHtml(r) {
   const sp = r.species.common ? _esc(r.species.common) : `<em>${_esc(r.species.scientific_name)}</em>`;
   return `<tr class="rc-row" role="link" tabindex="0" data-href="${_esc(recipeHref(r))}" data-recipe-id="${r.id}" data-name="${r.id}">
     <td class="col-thumb">${_rcThumb(r, 'rc-thumb-sm')}</td>
-    <td class="col-title"><div class="rl-title">${_esc(r.title || 'Recipe')}</div>
+    <td class="col-title"><div class="rl-title${r.title ? '' : ' rt-untitled'}">${_esc(_rcTitle(r))}</div>
       ${warn ? `<details><summary>⚠ Warnings</summary>${warn}</details>` : ''}</td>
     <td class="col-species" title="${_esc(r.species.scientific_name)}">${sp}</td>
     <td class="col-season">${_esc(SEASON_LABEL[r.season] || r.season)}</td>
@@ -277,7 +283,7 @@ function _visible() {
   return _data.recipes.filter(r => SafetyGate.allowed(_data.safety[String(r.species.id)]));
 }
 
-const _byTitle = (a, b) => (a.title || '').localeCompare(b.title || '');
+const _byTitle = (a, b) => _rcTitle(a).localeCompare(_rcTitle(b));
 
 function groupsFor(view, list) {
   const out = [];

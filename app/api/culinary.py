@@ -33,7 +33,7 @@ from app.services.enrichment_scope import resolve as resolve_scope
 from app.models.culinary import CulinaryInfo
 from app.models.notes import MapNote
 from app.models.observation import Observation, is_guest_visible_observation
-from app.models.species import CulinaryInfoHistory, EnrichmentSource, Species, SpeciesAIDraft, SpeciesCandidate, SpeciesRecipe, SpeciesEdibilityCondition, SpeciesLookalike, culinary_allowed, safety_decision, CURATOR_DRAFT_FIELDS, AI_NO_CONTENT_VERDICTS, is_curator_authored, new_species_card
+from app.models.species import CulinaryInfoHistory, EnrichmentSource, Species, SpeciesAIDraft, SpeciesCandidate, SpeciesRecipe, SpeciesEdibilityCondition, SpeciesLookalike, culinary_allowed, recipe_list_title, safety_decision, CURATOR_DRAFT_FIELDS, AI_NO_CONTENT_VERDICTS, is_curator_authored, new_species_card
 from app.models.encounter import Encounter
 from app.models.foray_session import SessionSpecies
 from app.models.notification import NotificationDismissal
@@ -1830,6 +1830,8 @@ async def species_profile(
         {
             "id":                r.id,
             "title":             r.title,
+            # The card's title (recipe_list_title): own or heading; "" = untitled.
+            "display_title":     recipe_list_title(r.title, r.body),
             "body":              r.body,
             "season":            r.season,
             "is_preferred":      r.is_preferred,

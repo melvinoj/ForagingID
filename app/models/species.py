@@ -777,10 +777,16 @@ def _md_plain(line: str) -> str:
     return t.rstrip(":").strip()
 
 
+# A line opening with a warning is a safety note, never a title or a summary:
+# "Safety note", "SAFETY WARNING — READ FIRST", "Caution:", "Warning –", and
+# (28 Oct 2026, recipe 258) "Always cook well…", "Never…", "Do not…", "Don't…",
+# "Avoid…". JS twin: _isSafetyNoteLine in frontend/static/js/index/walk-panel.js.
+_SAFETY_NOTE_OPENERS = r"(safety|caution|warning|always\s+cook|never|do\s+not|don['’]t|avoid)\b"
+
+
 def is_safety_note_line(plain: str) -> bool:
     import re as _re
-    # "Safety note", "Safety notice:", "SAFETY WARNING — READ FIRST", "Caution:", "Warning –" …
-    return bool(_re.match(r"(safety|caution|warning)\b", plain.strip(), _re.I))
+    return bool(_re.match(_SAFETY_NOTE_OPENERS, plain.strip(), _re.I))
 
 
 # A section heading inside a recipe ("## Ingredients", "### Method") is never its title.
@@ -823,6 +829,16 @@ def recipe_display_title(title: Optional[str], body: Optional[str]) -> str:
         if len(t) > _RECIPE_TITLE_CAP:
             t = t[:_RECIPE_TITLE_CAP - 1].rsplit(" ", 1)[0].rstrip(",;:—-") + "…"
         return t
+    return ""
+
+
+def recipe_list_title(title: Optional[str], body: Optional[str]) -> str:
+    """The title a recipe list or card shows (Melvin, 28 Oct 2026): the
+    recipe's own title or its heading title. A first prose sentence is not a
+    title — "" means untitled: the page shows "Untitled recipe" with the
+    species, and the recipe stays in the needs_title queue. Never fabricated."""
+    if recipe_title_source(title, body) in ("own", "heading"):
+        return recipe_display_title(title, body)
     return ""
 
 

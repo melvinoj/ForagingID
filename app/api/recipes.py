@@ -26,7 +26,7 @@ from app.api.identity import Identity, get_identity
 from app.database import get_db
 from app.models.species import (CULINARY_ALLOWED_SQL, RECIPE_TYPES, Species, SpeciesRecipe,
                                 SpeciesAIDraft, culinary_allowed,
-                                display_common_name, recipe_display_title, recipe_plant_parts,
+                                display_common_name, recipe_display_title, recipe_list_title, recipe_plant_parts,
                                 recipe_summary_line, recipe_title_source, recipe_website_url_ok)
 from app.models.culinary import CulinaryInfo
 from app.services.ai_placeholder import is_ai_placeholder
@@ -149,7 +149,8 @@ async def all_recipes(
         d = safety[sp.id]
         item = {
             "id": r.id,
-            "title": recipe_display_title(r.title, r.body),
+            # Own or heading title only; "" = untitled (the page shows "Untitled recipe").
+            "title": recipe_list_title(r.title, r.body),
             "summary": (r.summary or "").strip() or recipe_summary_line(r.title, r.body),
             "recipe_type": r.recipe_type if r.recipe_type in RECIPE_TYPES else None,
             "season": r.season,

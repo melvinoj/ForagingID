@@ -4701,7 +4701,9 @@ function _renderRecipeBank(recipes, season, container) {
   container.innerHTML = filtered.map((r, idx) => {
     const seasonIcon = _SEASON_ICON[r.season] || '🔄';
     const seasonLabel = r.season.charAt(0).toUpperCase() + r.season.slice(1);
-    const titleText = r.title || r.body.split('\n')[0].replace(/^#+/, '').trim() || _esc(r.is_medicinal_prep ? 'Preparation' : 'Recipe');
+    // Served title rule (recipe_list_title): own or heading title — never a first
+    // sentence or a safety note; untitled says so (28 Oct 2026).
+    const titleText = r.display_title || (r.is_medicinal_prep ? 'Untitled preparation' : 'Untitled recipe');
     const isMed = r.is_medicinal_prep;
     const cardId = `recipe-card-${r.id}`;
 

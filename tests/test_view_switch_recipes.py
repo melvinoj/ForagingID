@@ -10,6 +10,9 @@ Step 2 — recipes in three views: every card / row carries the species badge
   (LmViewSwitch.badge, the species list's own); List = title, species, season,
   badge, safety first; thumbnails = the species list's best confirmed photo
   (one rule, best_confirmed_thumbnails), lazy, over a drawn placeholder.
+Step 3 — a safety sentence is never a title (recipe 258 "Always cook well…"):
+  is_safety_note_line + its JS twin widened; a list / card shows only an own or
+  heading title (recipe_list_title), else "Untitled recipe" + species. No DB write.
 
 The JS is EXECUTED in macOS JavaScriptCore (`jsc`) with small DOM stubs. No
 browser — the live checks stay Melvin's.
@@ -294,6 +297,55 @@ def test_api_serves_thumbnail_and_badge_inputs():
     assert by[102]["edibility_status"] == "caution" and by[102]["condition_count"] == 0
     nettle = [x for x in sp_list if x["scientific_name"] == "Urtica dioica"][0]
     assert nettle["thumbnail"] == "best.jpg"                   # the species list: the same one rule
+
+
+# ── Step 3: titles ────────────────────────────────────────────────────────────
+
+BODY_258 = ("Always cook well; some people react, so try a little first.\n\n"
+            "Chicken of the woods is a young fungus for a young appetite — firm and bright.\n\n"
+            "## Ingredients\n- 300 g chicken of the woods\n")
+NOTE_LINES = ["Always cook well; some people react.", "Never eat it raw.", "Do not confuse with X.",
+              "Don't eat the old brackets.", "Don’t eat the old brackets.", "Avoid during pregnancy.",
+              "Caution: bitter.", "Warning – look-alikes.", "SAFETY NOTE", "  never raw", "DO NOT pick near roads."]
+NOT_NOTES = ["Always a favourite in spring.", "Nevertheless a fine soup.", "Doughnuts with elderflower",
+             "Avocado and ramsons toast", "Spring Beech Leaf Salad", "Neverland Nettle Broth", ""]
+
+
+def test_safety_openers_python_and_js_agree():
+    from app.models.species import is_safety_note_line
+    for t in NOTE_LINES:
+        assert is_safety_note_line(t), t
+    for t in NOT_NOTES:
+        assert not is_safety_note_line(t), t
+    wp = _src("frontend/static/js/index/walk-panel.js")
+    fn = wp[wp.index("function _isSafetyNoteLine(plain)"):].split("\n")[0]
+    got = _jsc(fn + "\nprint(JSON.stringify(%s.map(_isSafetyNoteLine)));" % json.dumps(NOTE_LINES + NOT_NOTES))
+    assert got == [True] * len(NOTE_LINES) + [False] * len(NOT_NOTES)
+
+
+def test_recipe_258_never_gets_its_warning_as_title():
+    from app.models.species import recipe_display_title, recipe_list_title, recipe_title_source
+    shown = recipe_display_title(None, BODY_258)
+    assert not shown.startswith("Always") and shown.startswith("Chicken of the woods")
+    assert recipe_title_source(None, BODY_258) == "line"          # still in the needs_title queue
+    assert recipe_list_title(None, BODY_258) == ""                # untitled — no prose sentence as a title
+    assert recipe_list_title(None, "# Nettle Soup\n\nText.") == "Nettle Soup"
+    assert recipe_list_title("  Own Title ", "Never raw.") == "Own Title"
+    assert recipe_list_title(None, "Never eat raw.\n\nDo not pick near roads.") == ""
+
+
+def test_untitled_label_on_recipes_page_and_species_card():
+    res = _rc_run("""
+_data.recipes[0].title = ''; _rcView = 'grid';
+print(JSON.stringify({ t: _rcTitle(_data.recipes[0]), tile: tileHtml(_data.recipes[0]),
+                       row: rowHtml(_data.recipes[0]) }));""")
+    assert res["t"] == "Untitled recipe · Nettle"
+    assert "Untitled recipe · Nettle" in res["tile"] and "Untitled recipe · Nettle" in res["row"]
+    sp = _src("frontend/species.html")
+    assert "const titleText = r.display_title || (r.is_medicinal_prep ? 'Untitled preparation' : 'Untitled recipe');" in sp
+    assert "r.body.split('\\n')[0]" not in sp                     # no first-line title fallback left
+    assert '"display_title":     recipe_list_title(r.title, r.body),' in _src("app/api/culinary.py")
+    assert '"title": recipe_list_title(r.title, r.body),' in _src("app/api/recipes.py")
 
 
 if __name__ == "__main__":

@@ -24,7 +24,8 @@ function _recipeMdPlain(line) {
   return line.trim().replace(/^[#>\s]+/, '').replace(/[*_`]+/g, '').trim()
     .replace(/^(recipe\s*title|recipe|title)\s*:\s*/i, '').replace(/:+$/, '').trim();
 }
-function _isSafetyNoteLine(plain) { return /^(safety|caution|warning)\b/i.test(plain.trim()); }
+// Twin of _SAFETY_NOTE_OPENERS (app/models/species.py): "Always cook well…", "Never…", "Do not…" are notes too.
+function _isSafetyNoteLine(plain) { return /^(safety|caution|warning|always\s+cook|never|do\s+not|don['’]t|avoid)\b/i.test(plain.trim()); }
 // A section heading ("## Ingredients", "Method:") is never a title (_RECIPE_SECTION_HEADINGS).
 const _RECIPE_SECTION_HEADINGS = new Set(['ingredients', 'ingredient', 'method', 'methods', 'instructions',
   'directions', 'steps', 'notes', 'note', 'serves', 'to serve', 'serving', 'preparation', 'equipment', 'tips',

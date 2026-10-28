@@ -49,6 +49,17 @@
       font-size: 1.1rem; padding: 0 4px; line-height: 1; flex-shrink: 0;
     }
     .sp-compact-rm:hover { color: #c0392b; }
+    /* Each row + its dropdown (fill status + PDF-include toggles, toggleExpand) */
+    .sp-compact-item { border-bottom: 1px solid #2f3d3a; }
+    .sp-compact-item:last-child { border-bottom: none; }
+    .sp-compact-item > .sp-compact-row { border-bottom: none; }
+    .sp-compact-item.expanded .lc-detail { display: block; }
+    .sp-compact-exp {
+      background: none; border: none; color: #6a8a6a; cursor: pointer;
+      font-size: 0.8rem; padding: 0 4px; line-height: 1; flex-shrink: 0; transition: transform 0.15s;
+    }
+    .sp-compact-exp:hover { color: #a8d890; }
+    .sp-compact-item.expanded .sp-compact-exp { transform: rotate(180deg); }
     .sp-add-row {
       display: flex; gap: 6px; padding: 8px 14px; background: #2f3d3a;
     }
@@ -1155,11 +1166,17 @@ function render() {
     compact.innerHTML = list.species.map(name => {
       const base   = _baseByName[name] || {};
       const common = spPickCommon(base.preferred_common_name, base.common_names);
-      return `<div class="sp-compact-row">
+      const safe   = name.replace(/[^a-zA-Z0-9]/g, '_');
+      return `<div class="sp-compact-item" id="card-${safe}">
+      <div class="sp-compact-row">
         <span class="sp-compact-sci">${_esc(name)}</span>
         ${common ? `<span class="sp-compact-common">${_esc(common)}</span>` : ''}
+        <button class="sp-compact-exp" title="PDF sections" aria-label="PDF sections"
+                onclick="toggleExpand(${lmJsArg(name)})">▾</button>
         <button class="sp-compact-rm" title="Remove"
                 onclick="removeFromList('${_esc(String(name).replace(/'/g, "\\'"))}')">×</button>
+      </div>
+      <div class="lc-detail" id="detail-${safe}"></div>
       </div>`;
     }).join('');
   }

@@ -19,9 +19,7 @@ Final audit pass built (prompt B): batch 17 tidy, batch 15 (one Markdown dialect
 4. Batch 16 (index.html split) — separate prompt, plan in docs/audit/2026-10-20/RECON_final_pass_28oct.md.
 
 ### Open decisions (Melvin)
-- Lists enrichment dropdown: toggleExpand has no caller (only opener of the PDF-include toggles) — wire it back or remove the dropdown? (held, not deleted)
-- POST mark-verified is a 410 stub that writes nothing — keep (default) or delete?
-- New walks are always built as loops now the toggle is gone; should the 600 m rule also drive new-walk builds?
+- None.
 
 ### Backlog
 - Walk route line distorts, then disappears after zooming in and dragging, until the walk is reloaded (REPORT.md batch 15b item 4). Moved out of 15b by Melvin, 28 Oct. Melvin reproduces first; no fix from code reading alone.
@@ -29,6 +27,8 @@ Final audit pass built (prompt B): batch 17 tidy, batch 15 (one Markdown dialect
 ### Settled (Melvin)
 - All recon defaults accepted 28 Oct, with: Loop threshold 600 m label only; PDF disclaimer name only; UA LandMemory/0.2 (+https://melvinjarman.co.uk); recording UI hidden only.
 - Merges only via merge_species_cards; no genus cards, ever; 879 Bryonia dioica toxic/toxic; 136 orphan-marked.
+- 28 Oct: POST mark-verified stays the 410 stub (writes nothing). New walks stay built as loops (the 600 m rule is the label only). Lists dropdown wired back (▾ on each selected-species row → toggleExpand), not removed.
+- 28 Oct: device list — ✕ on every entry (live paired device = revoke + remove; revoked device / unused link = delete the entry), app confirm dialog. Auto-prune only revoked devices and links unused after 7 days, on every list load; never a paired device for being offline.
 
 ### Rules learned
 - Any app/ save reloads uvicorn — check /api/processes/active right before each save.
@@ -37,6 +37,8 @@ Final audit pass built (prompt B): batch 17 tidy, batch 15 (one Markdown dialect
 - Static files are served from disk: a sw.js bump is live as soon as it is written.
 
 ### Browser checks
+- Device list (28 Oct): Settings → Curator devices shows only "Melvino's" (rows 2–4, all revoked, pruned live). ✕ opens the in-app dialog (no browser popup), Cancel / click outside / Esc close it; on the live device it says "Revoke and remove". Don't confirm on your only signed-in phone unless you mean it — ✕ there cuts that phone off at once.
+- Lists dropdown (28 Oct): ▾ on a selected-species row opens fill status + Include in PDF toggles (Warnings "Always printed", Conditions "Not printed"); unticking a section removes it from the preview; ▾ rotates when open.
 - scripts/dev/walkthrough_check.py drives a browser, so Melvin runs it after UI batches; Code does not.
 - Batch 17, 15, 15b and the sw.js bump: full checklists in CHANGELOG Browser checks (pre-filter note, Lists rows, device list, Large/List thumbnails, reload banner, PDF/print recipes 125/206, apostrophe names on every converted button, preferred names, Loop label, Start here, stop 58 hidden, Edit walk stop tap + lasso, no recording UI, upload button).
 
@@ -44,6 +46,21 @@ Final audit pass built (prompt B): batch 17 tidy, batch 15 (one Markdown dialect
 - 11b_review (28). genus_reid (6). bryony_check (8229). hazard_review cards (18) + 17052, 17737. 22 recipes needing a title. Five rejected photos restored in July (15958, 15970, 21333, 21673, 21799). Warning review cards. Text tidy-up (352 edible_parts / 689 id_notes). 347 Takeout person_animal rejects (mount DIGIERA). Draft #3252 Amaranthus hybridus. data/ old DBs (293 MB) + thumbnails_quarantine/ → copy to DIGIERA, delete in Finder.
 
 ## History
+
+### 2026-10-28 13:08
+**Pre-split fixes (phase 1): device list ✕ + auto-prune, Lists dropdown wired back, settled items recorded**
+
+**Built:**
+- Settings device list: red ✕ on every entry with in-app confirm dialog; DELETE /api/sharing/devices/{id} (live paired = revoke + remove, revoked/unused link = delete entry)
+- Auto-prune of dead curator entries on every list load: revoked devices + pairing links unused after 7 days; paired-but-offline devices never pruned
+- Lists: ▾ on each selected-species row opens the toggleExpand dropdown (fill status + Include in PDF)
+**Fixed:**
+- Live prune ran: guest_tokens 2, 3, 4 (all revoked) deleted; 5 (paired, last used 22 Oct) kept — snapshot db_20261028_100138
+- CHANGELOG: mark-verified 410 stub kept, new walks stay loops, Lists dropdown wired — moved to Settled
+**Files:** `app/api/sharing.py`, `frontend/settings.html`, `frontend/lists.html`, `tests/test_device_list_remove_prune.py`, `tests/test_lists_toggle_expand.py`, `CHANGELOG.md`
+**Pending:**
+- Melvin: live check device list ✕ dialog + Lists ▾ dropdown
+- Lists removeFromList still uses the old escape-then-apostrophe pattern (apostrophe names) — not touched
 
 ### 2026-10-28 10:01
 **Snapshot** — Manual snapshot

@@ -9,6 +9,7 @@ GET  /api/me                   — { is_guest, is_local, ngrok_active } for curr
 GET  /api/sharing/devices      — curator devices (curator)
 POST /api/sharing/devices      — add a curator device → one-time /join link + QR (localhost only)
 POST /api/sharing/devices/{id}/revoke — revoke a curator device (curator)
+DELETE /api/sharing/devices/{id} — remove a device entry; a live device is revoked by it (curator)
 GET  /join/{token}             — one-time link: sets the device cookie, redirects to a clean URL
 POST /api/sharing/export-walk  — returns self-contained walk summary HTML
 
@@ -23,14 +24,14 @@ import ipaddress
 import logging
 import secrets
 import socket
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 from typing import Optional, List
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from pydantic import BaseModel
-from sqlalchemy import select, update
+from sqlalchemy import delete, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.identity import Identity, get_identity
@@ -322,9 +323,32 @@ def _require_curator(identity: Identity) -> None:
         raise HTTPException(403, "Curator only")
 
 
+# A pairing link nobody opened within this many days is a dead entry.
+UNUSED_LINK_PRUNE_DAYS = 7
+
+
+async def prune_dead_devices(db: AsyncSession, now: Optional[datetime] = None) -> List[int]:
+    """Delete dead curator-device entries: revoked devices, and pairing links
+    still unused UNUSED_LINK_PRUNE_DAYS after they were made. A paired device is
+    never pruned for being offline — last_used_at plays no part. Returns the ids."""
+    now = now or datetime.utcnow()
+    cutoff = now - timedelta(days=UNUSED_LINK_PRUNE_DAYS)
+    dead = or_(GuestToken.is_active.is_(False),
+               (GuestToken.claimed_at.is_(None)) & (GuestToken.created_at < cutoff))
+    ids = list((await db.scalars(
+        select(GuestToken.id).where(GuestToken.participant_id.is_(None), dead)
+    )).all())
+    if ids:
+        await db.execute(delete(GuestToken).where(GuestToken.id.in_(ids)))
+        await db.commit()
+        log.info("Pruned dead curator device entries: %s", ids)
+    return ids
+
+
 @router.get("/api/sharing/devices")
 async def list_devices(identity: Identity = Depends(get_identity), db: AsyncSession = Depends(get_db)):
     _require_curator(identity)
+    await prune_dead_devices(db)
     rows = (await db.scalars(
         select(GuestToken).where(GuestToken.participant_id.is_(None)).order_by(GuestToken.id)
     )).all()
@@ -366,6 +390,22 @@ async def revoke_device(device_id: int, identity: Identity = Depends(get_identit
     tok.is_active = False
     await db.commit()
     return _device_out(tok)
+
+
+@router.delete("/api/sharing/devices/{device_id}")
+async def delete_device(device_id: int, identity: Identity = Depends(get_identity),
+                        db: AsyncSession = Depends(get_db)):
+    """Settings ✕: removes the entry. Deleting a live paired device's row is its
+    revocation — its cookie matches no session_hash on the next request. A
+    revoked device or an unused pairing link is simply a leftover entry."""
+    _require_curator(identity)
+    tok = await db.get(GuestToken, device_id)
+    if tok is None or not is_curator_token(tok):
+        raise HTTPException(404, "Device not found")
+    was = "revoked" if tok.is_active and tok.claimed_at else "deleted"
+    await db.delete(tok)
+    await db.commit()
+    return {"id": device_id, "removed": was}
 
 
 # ---------------------------------------------------------------------------

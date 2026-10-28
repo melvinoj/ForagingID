@@ -185,6 +185,28 @@
       background: none; border: none; color: #c4b5fd; cursor: pointer;
     }
     .snap-toggle:hover { text-decoration: underline; }
+    /* Device ✕ confirm — same look as the map's #confirm-dialog (index.html) */
+    #device-confirm {
+      display: none; position: fixed; inset: 0; z-index: 10000;
+      background: rgba(0,0,0,.5); align-items: center; justify-content: center;
+    }
+    #device-confirm.show { display: flex; }
+    #device-confirm .confirm-box {
+      background: white; border-radius: 12px; padding: 24px 20px;
+      max-width: 320px; width: calc(100% - 40px);
+      box-shadow: 0 8px 32px rgba(0,0,0,.3); text-align: center;
+    }
+    #device-confirm h3 { font-size: 1rem; margin: 0 0 8px; color: #222; }
+    #device-confirm p  { font-size: 0.85rem; color: #666; margin: 0 0 20px; line-height: 1.5; }
+    #device-confirm .confirm-btns { display: flex; gap: 10px; justify-content: center; }
+    #device-confirm .c-btn-cancel {
+      padding: 9px 22px; border-radius: 6px; border: 1px solid #ccc;
+      background: white; cursor: pointer; font-size: 0.85rem; color: #333;
+    }
+    #device-confirm .c-btn-danger {
+      padding: 9px 22px; border-radius: 6px; border: 1px solid #dc2626;
+      background: #dc2626; color: white; cursor: pointer; font-size: 0.85rem; font-weight: 600;
+    }
     .cl-modal-overlay {
       position: fixed; inset: 0; background: rgba(0,0,0,0.45);
       display: flex; align-items: center; justify-content: center;
@@ -828,6 +850,17 @@
 
 <div id="toast"></div>
 
+<div id="device-confirm" onclick="if(event.target===this)hideDeviceConfirm()">
+  <div class="confirm-box">
+    <h3 id="device-confirm-title"></h3>
+    <p id="device-confirm-text"></p>
+    <div class="confirm-btns">
+      <button class="c-btn-cancel" onclick="hideDeviceConfirm()">Cancel</button>
+      <button class="c-btn-danger" id="device-confirm-ok" onclick="confirmRemoveDevice()"></button>
+    </div>
+  </div>
+</div>
+
 <div id="changelog-modal" class="cl-modal-overlay" style="display:none" onclick="closeChangelogModal(event)">
   <div class="cl-modal" onclick="event.stopPropagation()">
     <div class="cl-modal-head">
@@ -1276,7 +1309,7 @@ function closeChangelogModal(event) {
 }
 
 document.addEventListener('keydown', function(e) {
-  if (e.key === 'Escape') closeChangelogModal();
+  if (e.key === 'Escape') { closeChangelogModal(); hideDeviceConfirm(); }
 });
 
 
@@ -1647,6 +1680,7 @@ async function loadDevices() {
     const r = await fetch('/api/sharing/devices');
     if (!r.ok) throw new Error('HTTP ' + r.status);
     const rows = await r.json();
+    _deviceRows = rows;
     _syncDevicePoll(rows.some(function (d) { return d.is_active && !d.claimed_at; }));
     if (!rows.length) { list.textContent = 'No curator devices yet.'; return; }
     list.innerHTML = rows.map(function (d) {
@@ -1656,8 +1690,9 @@ async function loadDevices() {
         '<span>' + _esc(state) + '</span>' +
         '<span>· created ' + _esc(_fmtWhen(d.created_at)) + '</span>' +
         '<span>· last used ' + _esc(_fmtWhen(d.last_used_at)) + '</span>' +
-        (d.is_active ? '<button onclick="revokeDevice(' + Number(d.id) + ')" style="margin-left:auto;padding:3px 10px;' +
-          'background:#fff;border:1px solid #fca5a5;color:#c0392b;border-radius:6px;font-size:0.75rem;cursor:pointer">Revoke</button>' : '') +
+        '<button onclick="askRemoveDevice(' + Number(d.id) + ')" title="Remove" aria-label="Remove ' + _esc(d.name || ('Device ' + d.id)) + '"' +
+          ' style="margin-left:auto;padding:2px 9px;background:#fff;border:1px solid #fca5a5;color:#dc2626;' +
+          'border-radius:6px;font-size:0.85rem;font-weight:700;line-height:1.3;cursor:pointer">✕</button>' +
         '</div>';
     }).join('');
   } catch (e) {
@@ -1707,16 +1742,41 @@ async function addDevice() {
   }
 }
 
-async function revokeDevice(id) {
-  if (!confirm('Revoke this device? It loses access on its next request.')) return;
+// ✕ on every entry. A live paired device: revoke + remove (deleting its row is
+// the revocation). A revoked device or an unused pairing link: delete the
+// leftover entry. Dead entries are also pruned server-side on every list load.
+let _deviceRows = [], _removeDeviceId = null;
+function askRemoveDevice(id) {
+  const d = _deviceRows.find(function (x) { return x.id === id; });
+  if (!d) { loadDevices(); return; }
+  const name = d.name || ('Device ' + d.id);
+  const live = d.is_active && d.claimed_at;
+  _removeDeviceId = id;
+  document.getElementById('device-confirm-title').textContent =
+    live ? 'Revoke and remove "' + name + '"?' : 'Remove "' + name + '"?';
+  document.getElementById('device-confirm-text').textContent = live
+    ? 'This device loses access on its next request and leaves the list. To use it again, add it with a new link.'
+    : (d.is_active ? 'The unused pairing link stops working and leaves the list.' : 'This revoked device leaves the list.');
+  document.getElementById('device-confirm-ok').textContent = live ? 'Revoke' : 'Remove';
+  document.getElementById('device-confirm').classList.add('show');
+}
+function hideDeviceConfirm() {
+  _removeDeviceId = null;
+  document.getElementById('device-confirm').classList.remove('show');
+}
+async function confirmRemoveDevice() {
+  const id = _removeDeviceId;
+  hideDeviceConfirm();
+  if (id == null) return;
   try {
-    const r = await fetch('/api/sharing/devices/' + id + '/revoke', { method: 'POST' });
-    if (!r.ok) throw new Error('HTTP ' + r.status);
-    _showToast('Device revoked');
-    loadDevices();
+    const r = await fetch('/api/sharing/devices/' + id, { method: 'DELETE' });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(d.detail || ('HTTP ' + r.status));
+    _showToast(d.removed === 'revoked' ? 'Device revoked and removed' : 'Entry removed');
   } catch (e) {
     _showToast('✗ ' + e.message, true);
   }
+  loadDevices();
 }
 
 function copyLanUrl() {

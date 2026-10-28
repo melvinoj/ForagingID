@@ -2242,11 +2242,28 @@ async function _loadBpCancellable() {
 async function loadBgProcesses() {
   const body = document.getElementById('bg-processes-body');
   if (!body) return;
+  // Three failures, three messages (CLOSEOUT_28oct section 4 #18): only a failed
+  // fetch is "Could not reach server"; a bad response body or a rendering bug
+  // says so and logs the real error to the console instead of being masked.
+  const cancellable = await _loadBpCancellable();   // swallows its own errors
+  let r;
   try {
-    const cancellable = await _loadBpCancellable();
-    const r = await fetch('/api/processes/active');
-    if (!r.ok) { body.innerHTML = '<span style="color:#c00">Error loading processes</span>'; return; }
-    const rows = await r.json();
+    r = await fetch('/api/processes/active');
+  } catch (_) {
+    body.innerHTML = '<span style="color:#c00">Could not reach server.</span>';
+    return;
+  }
+  if (!r.ok) { body.innerHTML = '<span style="color:#c00">Error loading processes</span>'; return; }
+  let rows;
+  try {
+    rows = await r.json();
+    if (!Array.isArray(rows)) throw new TypeError('expected a list, got ' + typeof rows);
+  } catch (e) {
+    console.error('Background processes: unreadable response from /api/processes/active', e);
+    body.innerHTML = '<span style="color:#c00">Server sent an unreadable process list (details in the browser console).</span>';
+    return;
+  }
+  try {
     if (!rows.length) {
       body.innerHTML = '<span style="color:#888">No processes running.</span>';
       return;
@@ -2298,8 +2315,9 @@ async function loadBgProcesses() {
         + dismissBtn
         + '</div>';
     }).join('');
-  } catch (_) {
-    body.innerHTML = '<span style="color:#c00">Could not reach server.</span>';
+  } catch (e) {
+    console.error('Background processes: could not display the process list', e);
+    body.innerHTML = '<span style="color:#c00">Could not display processes (details in the browser console).</span>';
   }
 }
 

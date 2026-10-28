@@ -10,9 +10,12 @@ Small fixes batch, 28 Oct 2026 (Melvin; Claude.ai defaults).
 Plain script, no live server. Run from project root:
     python tests/test_small_fixes_28oct.py
 """
+import json
 import os
 import re
+import subprocess
 import sys
+import tempfile
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
@@ -99,6 +102,71 @@ def test_p1_chips_show_duplicates_and_prefilter_rejects():
     # syncthing counts both into files_processed — the reason both chips exist
     py = _read("app/api/syncthing.py")
     assert "files_processed=1, files_duplicate=1" in py and "files_processed=1, files_rejected=1" in py
+
+
+# ── 4. Background Processes: network vs render error ─────────────────────────
+JSC = "/System/Library/Frameworks/JavaScriptCore.framework/Versions/Current/Helpers/jsc"
+
+
+def _jsc(script):
+    with tempfile.NamedTemporaryFile("w", suffix=".js", delete=False, encoding="utf-8") as f:
+        f.write(script)
+        path = f.name
+    try:
+        out = subprocess.run([JSC, path], capture_output=True, text=True, timeout=60)
+    finally:
+        os.unlink(path)
+    assert out.returncode == 0, out.stderr or out.stdout
+    return json.loads(out.stdout.strip().split("\n")[-1])
+
+
+def _bp_run(fetch_js):
+    """Runs settings.html's real loadBgProcesses with a stub fetch; returns the
+    body HTML and what reached console.error."""
+    h = _read("frontend/settings.html")
+    src = h[h.index("const _BP_TYPE_LABEL = {"):h.index("// Dismiss removes a dead row")]
+    script = (
+        "var body = {innerHTML: ''}; var errs = [];\n"
+        "var document = {getElementById: function(){ return body; }};\n"
+        "var console = {error: function(){ errs.push([].slice.call(arguments).map(String).join(' ')); }};\n"
+        "var fetch = " + fetch_js + ";\n" + src +
+        "\nvar out = null; loadBgProcesses().then(function(){ out = {html: body.innerHTML, errs: errs}; });\n"
+        "drainMicrotasks(); print(JSON.stringify(out));")
+    return _jsc(script)
+
+
+def _ok(active_json):
+    return ("function(u){ if (u.indexOf('cancellable') >= 0) return Promise.resolve({ok:true, json:function(){"
+            "return Promise.resolve({cancellable_types:[]});}});"
+            " return Promise.resolve({ok:true, json:function(){ return " + active_json + "; }}); }")
+
+
+def test_bp_network_failure_says_could_not_reach_server():
+    o = _bp_run("function(){ return Promise.reject(new TypeError('Failed to fetch')); }")
+    assert "Could not reach server." in o["html"] and o["errs"] == [], o
+
+
+def test_bp_render_error_is_its_own_message_and_logged():
+    # a row whose getter throws while rendering = a render bug, not the network
+    o = _bp_run(_ok("Promise.resolve([{get process_type(){ throw new Error('boom-render'); }}])"))
+    assert "Could not reach server" not in o["html"], o
+    assert "Could not display processes" in o["html"]
+    assert any("boom-render" in e for e in o["errs"]), o
+
+
+def test_bp_unreadable_body_is_its_own_message_and_logged():
+    o = _bp_run(_ok("Promise.reject(new SyntaxError('bad json'))"))
+    assert "unreadable process list" in o["html"] and "Could not reach server" not in o["html"]
+    assert any("bad json" in e for e in o["errs"]), o
+    o = _bp_run(_ok("Promise.resolve({detail: 'x'})"))
+    assert "unreadable process list" in o["html"], o
+
+
+def test_bp_empty_and_normal_rows_unchanged():
+    assert "No processes running." in _bp_run(_ok("Promise.resolve([])"))["html"]
+    o = _bp_run(_ok("Promise.resolve([{process_id:1, process_type:'p1_syncthing', progress_total:4,"
+                    " progress_current:2, heartbeat_age_s:5, status:'running', is_stalled:false}])"))
+    assert "2 of 4" in o["html"] and "running" in o["html"] and o["errs"] == [], o
 
 
 if __name__ == "__main__":

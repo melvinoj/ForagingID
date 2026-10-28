@@ -1,67 +1,77 @@
 ## Current State
 
-28 Oct 2026, morning
+28 Oct 2026, late morning
 
 ### Session summary
-Rename onto an existing name now merges through merge_species_cards (no more '_merged_into:' soft-delete; 0 cards carried it). Bryony / genus cleanup: 8229 to Review (bryony_check); 879 Bryonia dioica toxic/toxic verified with Melvin's look-alike + preparation warnings verbatim; genus cards 880 Usnea, 881 Salix, 354 Crocus, 530 Taraxacum sect. Taraxacum deleted (step G route), their 6 photos to Review (genus_reid); 136 Bryonia syriaca orphan-marked. Species-rank guard built: no genus cards, ever. 845 Taraxacum campylodes merged into 286 Taraxacum officinale. Snapshot before every write, every row read back by id; 36 test files pass.
+Final audit pass built (prompt B): batch 17 tidy, batch 15 (one Markdown dialect, one escaper + lmJsArg, one names rule), batch 15b (walk changes), one service-worker bump (v18). Step 0: obs 24429 → needs_review dandelion_check (Melvin then approved it); card 286 taste_notes "test draft" cleared (history 3785). 41 test files pass. Commits 5830833, 94afbbe, 0f47e98, 536b7e7 (not pushed until this End Session). Snapshots db_20261028_042247, _082151, _082939, _085440, _090626.
 
 ### Build
-- Alembic head 0059. CLAUDE.md still says 0050 (batch 17).
-- 36 test files pass (new: tests/test_species_rank_guard.py, 9 tests; test_batch11b_merge.py now 8). Service worker v17 or later.
-- Committed by this End Session: culinary._auto_merge_into → merge_species_cards; species-rank guard (app/services/taxonomy.py, models/species.py, services/species_link.py, services/observation_service.py, services/enrichment.py, api/bulk_actions.py, api/trust.py, api/reidentify.py, api/culinary.py, api/scan.py, main.py); scripts/bryony_genus_28oct.py; scripts/batch11b_data.py merge --note; CHANGELOG Browser checks.
-
-### Done 28 Oct (this session)
-- Rename onto an existing name: culinary._auto_merge_into calls merge_species_cards (source card deleted, every species-keyed table re-keyed, text/verdict rules, synonym row). Name only on photos → photos + map note tags moved. Recon: the only '_merged_into:' writer was culinary.py:1329; reader scripts/verdict_sweep_drafts.py:67 (kept, harmless); 0 cards carried it.
-- 8229 Bryonia dioica → needs_review, label bryony_check, note "Melvin re-check: white bryony (B. dioica) vs B. alba — not black bryony"; stays on 879 (needs_review still backs the card; 879 is off the Species list/map until approved again).
-- 879 Bryonia dioica: toxic / toxic, verified human (history 2785–2788, "Melvin 28 Oct"); culinary_info 835 created with Melvin's look_alike_warnings and preparation_warnings verbatim (history 3781/3782, human, old NULL). Not deadly, not red-skull. Handout: culinary withheld (level toxic).
-- Genus cards deleted (step G route), photos → needs_review, label genus_reid, note "<name> — identify to species", species cleared: 880 Usnea (17033, 17046), 881 Salix (24062), 354 Crocus (8198), 530 Taraxacum sect. Taraxacum (15957, 24430). Rejected 19704 stays rejected, suggestion cleared. 354 Crocus (toxic) is out of the hazard index.
-- 136 Bryonia syriaca orphan-marked (verdict unchanged, not deleted).
-- Species-rank guard: taxonomy.is_species_rank_name / require_species_rank / NonSpeciesNameError (one definition; refuses bare genus and above, sp./spp., sect./subg., agg., cf./aff.). new_species_card and set_observation_species refuse; main.py → HTTP 400 code not_species_rank. Refused before any write: confirm/correct (update_observation_status), retry-confirm, rename (in place, new card, onto existing), merge keep card, trust bulk-reassign. Bulk approve skips; promotable_suggestion returns None. Scan: non-species top → needs_review genus_reid, identification_status below_threshold, no species, no card, never auto-approved. trigger_ai_drafts makes no card. Census after: 0 non-species cards, 0 live photos with a non-species name.
-- 845 Taraxacum campylodes merged into 286 Taraxacum officinale (GBIF backbone accepts both; The Plant List treats officinale as a synonym of campylodes; ITIS/VASCAN put campylodes under the arctic T. lapponicum). Moved: photo 24429, 16083's suggestion, 2 drafts, 8 history rows, 5 enrichment sources; synonym row 15; id_notes conflict kept 286's text (845's in history 3783). 652 cards.
-- Snapshots db_20261028_035116, _035121, _035128, _035138, _035145, _040253, _041350 (backup API, no git commit).
+- Alembic head 0059 (CLAUDE.md now says 0059). Service worker foragingid-v18, species cache foragingid-species-3, APP_SHELL + esc.js / md.js / species-names.js.
+- Tests: 41 files, all pass (plain scripts, no pytest; JS via jsc). New: test_batch17_tidy, test_changelog_service, test_batch15_markdown, test_batch15_esc_names, test_batch15b_walk.
+- Batch 17: CLAUDE.md / architecture.md fixes; docs/current_phase.md + its end-session writer removed; dead code removed after repo-wide re-grep (6 Python, 25 JS functions, git-banner.js, scratch page + route, geopy/piexif/aiofiles); migrate_*.py → scripts/archive; scan.html prefilter threshold fix; Lists fixed rows; device list self-refresh; APP_VERSION 0.2.0 + HTTP_USER_AGENT "LandMemory/0.2 (+https://melvinjarman.co.uk)"; log filter for 8 polling paths, [TIMING] behind LOG_TIMING, launcher keeps 10 logs; rename group 1 (PDF title/filename/disclaimer name, /docs, shared photo, start.sh, About prompt); /api/species/ thumbnail; reload banner (prompt only); End Session no longer stacks Current State blocks (4 stale blocks archived first); 4 dead app_settings rows deleted.
+- Batch 15: app/services/markdown.py + static/js/md.js, byte-identical on every live recipe; PDF no longer drops recipe text (53, 125, 198, 206, 234); curator warnings render verbatim (tested in app, print/Lists, PDF ×3 layouts); static/js/esc.js loads first on every escaping page, all escape-then-apostrophe handler args → lmJsArg; display_common_name on server picks (PDF honours preferred name) + spPickCommon JS twin; profile ai_drafts_blocked.
+- Batch 15b: Loop / One-way read-only label at 600 m (walks 1, 3, 4, 5 all Loop; lines unchanged; PATCH …/loop and stored flag kept; new walks still built as loops); Start here on every saved stop (closed line rotates, open line via Re-route preview k…N then k−1…1); empty saved stops hidden (panel, map, Export summary), Save opens Re-route, Renumber drops them; GPS recording start controls hidden (code, IndexedDB, upload, endpoints kept; upload buttons guest-hidden); Edit walk: tap a stop marks it for removal, ⬚ Lasso toggles pins.
 
 ### Next (order)
-1. Melvin: Review → 11b_review (28), genus_reid (6), bryony_check (8229); republish walk 5 (67 → 66 species: 457 Trametes, 589 Cota once).
-2. Live check of the guard: rename a card to "Salix" → refused with "'Salix' is not a species name — identify to species", card unchanged.
-3. Scoped enrichment for 879 Bryonia dioica (verdict and warnings are set; other fields bare).
-4. Then 15b, 15, 16, 17 per REPORT.md section 9.
-
-### Settled (Melvin)
-- Merges only via merge_species_cards; kept name = GBIF accepted (or the established card when GBIF accepts both, e.g. 286 Taraxacum officinale); human-edited text wins.
-- No genus cards, ever; every photo is identified to species (a best guess is fine). Genus photos go to Review as genus_reid.
-- 879 Bryonia dioica toxic/toxic, not deadly. 136 kept orphan-marked.
-- Pastinaca caution/none with Melvin's warning; Parthenocissus toxic; 877 edible.
-- Keep 148, 583, 740, 808, 826 orphan-marked (off the Species list), not deleted.
-- Toxic/deadly and native European reference cards are never junk-deleted.
+1. Melvin, phone: open the app, tap "↑ Upload pending walks (N)" if shown; then one reload per device.
+2. Walk 5 republish (Melvin approved 24429 on 28 Oct): fresh session — confirm 24429 approved, re-run plan (expect 65), publish with Front page ticked. Checked: no live page uses the site-root photos/ (safe to remove). Note: front page is currently the all-walks collection (commit 400907f) — Front page ticked replaces it with walk 5.
+3. Live walkthrough checks for batches 17 / 15 / 15b (Browser checks below).
+4. Batch 16 (index.html split) — separate prompt, plan in docs/audit/2026-10-20/RECON_final_pass_28oct.md.
 
 ### Open decisions (Melvin)
-- None.
+- Lists enrichment dropdown: toggleExpand has no caller (only opener of the PDF-include toggles) — wire it back or remove the dropdown? (held, not deleted)
+- POST mark-verified is a 410 stub that writes nothing — keep (default) or delete?
+- New walks are always built as loops now the toggle is gone; should the 600 m rule also drive new-walk builds?
 
 ### Backlog
 - Walk route line distorts, then disappears after zooming in and dragging, until the walk is reloaded (REPORT.md batch 15b item 4). Moved out of 15b by Melvin, 28 Oct. Melvin reproduces first; no fix from code reading alone.
 
+### Settled (Melvin)
+- All recon defaults accepted 28 Oct, with: Loop threshold 600 m label only; PDF disclaimer name only; UA LandMemory/0.2 (+https://melvinjarman.co.uk); recording UI hidden only.
+- Merges only via merge_species_cards; no genus cards, ever; 879 Bryonia dioica toxic/toxic; 136 orphan-marked.
+
 ### Rules learned
-- Delete species_recipes before species_ai_drafts (ai_draft_id FK).
-- A bulk delete list: never put a comment mid-tuple (it silently drops entries) — test bulk deletes on a snapshot copy first.
-- GBIF match on a bare genus can be ambiguous (Salix): retry with a kingdom hint.
-- Any app/ save reloads uvicorn and kills running jobs.
-- A needs_review photo still backs its card (only rejected doesn't), but the Species list and map show approved/manually_verified only.
-- GBIF backbone can accept two names for one plant (Taraxacum officinale / campylodes): check the source checklists before deciding a merge.
+- Any app/ save reloads uvicorn — check /api/processes/active right before each save.
+- Escaping is 5-char now: inline-handler string args must use lmJsArg, never escape-then-replace(/'/).
+- Python str.splitlines() splits on U+2028 — use split("\n") when reading jsc JSON output.
+- Static files are served from disk: a sw.js bump is live as soon as it is written.
 
 ### Browser checks
-- scripts/dev/walkthrough_check.py drives a browser, so Melvin runs it after UI-touching batches (results in ~/Documents/ForagingID/walkthrough_run_*); Code does not (CLAUDE.md no-browser rule, decision 31, 28 Oct).
-- Melvin only (checklist artifact "LandMemory Walkthroughs"): quick looks (walk panel buttons at laptop width; Species list on the phone); phone pairing, installed app, device list on the paired phone, Add device refused with sharing stopped, keyboard dictation, participant on mobile data; rotate the DeepSeek key; a real scoped enrichment run (Jobs pop-up, skip counts, cap 25, paused-no-network, ⚡ Enrich, Regenerate side by side, caffeinate exits); walk 5 republish.
-- Batch 17 (28 Oct, implemented, unverified live): Scan page pre-filter note now reads "🔍 Pre-filter green threshold: N% (default/custom)" (was blank); Lists → expand a species (if the dropdown is reachable at all — toggleExpand has no caller) shows "Always printed" / "Not printed" instead of checkboxes for Lookalike warnings / Edibility conditions; Settings → Add device, pair the phone, the laptop row turns "signed in" within ~5 s without a reload, and a revoke on another device shows when the tab is focused again; Species page Large / List views show photos straight away (one /api/species/ request, no /api/map/geojson in the Network tab outside select mode); after the final sw.js bump, an open tab shows "New version available — Reload" and only reloads when tapped (also on Encounters and Workshops), and the first-ever install shows no bar; PDF download is named landmemory-list.pdf, its title and disclaimer say LandMemory; /docs title LandMemory; server log no longer fills with /api/processes/active, /api/queue/list, /health lines (errors still show) and no [TIMING] lines unless LOG_TIMING=1; logs/ keeps 10 server logs after the next launcher start.
-- Batch 15 (28 Oct, implemented, unverified live): Lists → PDF in all 3 layouts for recipe 125 (sp 486) shows the whole "For the pickled seed keys" ingredient list, 206 (sp 228) shows "Serves 4", and list/italic recipe lines render as lists/italics (also Lists preview + browser print); species page recipe bank headings and lists look right; walk stop card / Export summary recipe snippet unchanged in look; Encounters → a species card's recipe renders formatted (headings/lists), warnings above it unchanged; curator warnings everywhere read exactly as stored (e.g. Conium look-alike text with * or _ in it shows those characters); a name with an apostrophe (e.g. "St John's wort") — ✎ rename, ⚡ Enrich, note tag add/remove on the map, Review AI-draft buttons (collapse / approve / regenerate / reject), Review enrichment buttons (approve / re-ID / clear / repopulate / lightbox), Settings → Data sources Delete, Species select-mode photo pick, Workshops History / Tokens / Link walk buttons all still work; the PDF / print / Lists / Find / personal card / seasonal returns show the preferred common name (e.g. Allium ursinum "Wild garlic" if that is the preferred name); Encounters species picker reads "Common (Latin)"; species page pending-draft section still shows for an edible species and stays hidden for a toxic one.
-- Batch 15b (28 Oct, implemented, unverified live): walk panel shows a read-only "🔄 Loop" / "➡ One-way" label instead of the Circular / Point-to-point button — walks 1, 3, 4, 5 all read "Loop" (walk 3: last stop 576 m from stop 1), and the line/distance of every walk are unchanged; a new walk built from the map reads Loop or One-way by its stops and is still built as a loop (old default); no 👣 button on the phone, no "Record live" in the bottom-sheet quickbar or empty state; "↑ Upload pending walks (N)" still appears on the phone when IndexedDB holds a walk and uploads it (do this BEFORE the sw.js bump goes live); a participant phone shows no upload button; walk 5 no longer shows stop 58 (Phyllospadix, obs 10176 in Review) on the panel, the map or Export summary, and stop numbers around it are unchanged; Edit walk → tap a numbered stop: it gets a red ring, its pins turn red "−", Save changes (N) counts them, tap again unmarks; Edit walk → ⬚ Lasso → drag a box: pins inside toggle +/− and the Foraging List is unchanged; Save changes that empties a stop opens the Re-route preview listing "Dropped (no species left)"; Start here shows on every saved stop (not 1, not 7a): on walks 3/4/5 (closed lines) it rotates with no dialog as before; on an open (one-way) line it opens the Re-route preview "Start … at stop k? It walks on to the last stop, then back the other way to stop 1" with one leg to route; Renumber stops drops an empty stop; leaving walk mode while Edit walk is on leaves no route on the map.
-- Final pass sw.js bump (28 Oct): foragingid-v18, species cache foragingid-species-3, APP_SHELL + esc.js / md.js / species-names.js. FIRST, on the phone: open the app and tap "↑ Upload pending walks (N)" if it shows (the bump never touches IndexedDB, and the button stays, but upload before anything else). Then: one reload per device; the next deploy shows the "New version available — Reload" bar; map page works offline after one online load (esc.js cached).
-- Walk 5 republish (held): approve 24429 in Review (dandelion_check), then re-run the plan (expect 65) and publish with Front page ticked. Checked 28 Oct: no live published page references the site-root photos/ folder (root index.html links only w/<slug>/photos/…; each walk page uses its own photos/), so the publish may remove it. Note: the site root is currently the all-walks collection page (commit 400907f) — confirm Front page should replace it with walk 5.
-Rule: Code tests whatever it can (unit tests); only what needs a browser, a real phone, network or keys goes to Melvin.
+- scripts/dev/walkthrough_check.py drives a browser, so Melvin runs it after UI batches; Code does not.
+- Batch 17, 15, 15b and the sw.js bump: full checklists in CHANGELOG Browser checks (pre-filter note, Lists rows, device list, Large/List thumbnails, reload banner, PDF/print recipes 125/206, apostrophe names on every converted button, preferred names, Loop label, Start here, stop 58 hidden, Edit walk stop tap + lasso, no recording UI, upload button).
 
 ### Melvin's review queue
-- 11b_review (28). genus_reid (6: Usnea ×2, Salix, Crocus, Taraxacum ×2). bryony_check (8229). dandelion_check (24429 on 286 Taraxacum officinale, 13%, suggestion Hyoseris radiata — approve it before the walk 5 republish). hazard_review cards (18) + 17052, 17737. 22 recipes needing a title. Five rejected photos restored in July (15958, 15970, 21333, 21673, 21799). Warning review cards. Text tidy-up (352 edible_parts / 689 id_notes). 347 Takeout person_animal rejects (mount DIGIERA). Draft #3252 Amaranthus hybridus.
+- 11b_review (28). genus_reid (6). bryony_check (8229). hazard_review cards (18) + 17052, 17737. 22 recipes needing a title. Five rejected photos restored in July (15958, 15970, 21333, 21673, 21799). Warning review cards. Text tidy-up (352 edible_parts / 689 id_notes). 347 Takeout person_animal rejects (mount DIGIERA). Draft #3252 Amaranthus hybridus. data/ old DBs (293 MB) + thumbnails_quarantine/ → copy to DIGIERA, delete in Finder.
 
 ## History
+
+### 2026-10-28 09:36
+**Snapshot** — End of session — Session ended from Settings page
+DB: `snapshots/db_20261028_093618.sqlite`
+
+### 2026-10-28 09:36
+**Session ended** — Session ended from Settings page
+
+### 2026-10-28 09:10
+**Final pass build (prompt B): batches 17, 15, 15b + one sw.js bump**
+
+**Built:**
+- Batch 17 tidy (5830833)
+- Batch 15 markdown/esc/names (94afbbe)
+- Batch 15b walk (0f47e98)
+- sw v18 (536b7e7)
+**Fixed:**
+- PDF recipe content loss (5 recipes)
+- scan.html prefilter threshold
+- End Session stacked Current State blocks
+- 4 dead app_settings rows deleted (snapshot db_20261028_082151)
+**Files:** `see commits 5830833 94afbbe 0f47e98 536b7e7`
+**Pending:**
+- Walk 5 republish: approve 24429 first
+- Upload pending phone walks
+- Live walkthrough checks for 17/15/15b in CHANGELOG Browser checks
+- toggleExpand (Lists dropdown opener) held
+- mark-verified 410 stub held
 
 ### 2026-10-28 08:07
 **Final audit pass combined recon (15b, 15, 16, 17) + step 0 small items**

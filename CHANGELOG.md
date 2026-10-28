@@ -45,6 +45,10 @@ Final audit pass built (prompt B): batch 17 tidy, batch 15 (one Markdown dialect
 
 ## History
 
+### 2026-10-28 10:01
+**Snapshot** — Manual snapshot
+DB: `snapshots/db_20261028_100138.sqlite`
+
 ### 2026-10-28 09:59
 **Snapshot** — before re-route of saved walk 4
 DB: `snapshots/db_20261028_095904.sqlite`

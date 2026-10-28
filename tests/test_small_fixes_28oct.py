@@ -86,6 +86,21 @@ def test_data_sources_serves_normalised_url_from_shared_helper():
     assert '"url": _normalise_url(ds.url)' in py
 
 
+# ── 3. Import summary adds up ────────────────────────────────────────────────
+def test_p1_chips_show_duplicates_and_prefilter_rejects():
+    h = _read("frontend/scan.html")
+    stats = h[h.index('id="s-session-stats"'):h.index('id="s1-breakdown"')]
+    for chip in ("s-sess-total", "s-sess-approved", "s-sess-review", "s-sess-failed",
+                 "s-sess-rejected", "s-sess-duplicate"):
+        assert stats.count(f'id="{chip}"') == 1, chip
+    assert "sv(`${prefix}-sess-duplicate`, s.files_duplicate ?? null" in h
+    # session 120 (28 Oct): processed 288 = 15 + 178 + 0 + 0 rejected + 95 duplicates
+    assert 288 == 15 + 178 + 0 + 0 + 95
+    # syncthing counts both into files_processed — the reason both chips exist
+    py = _read("app/api/syncthing.py")
+    assert "files_processed=1, files_duplicate=1" in py and "files_processed=1, files_rejected=1" in py
+
+
 if __name__ == "__main__":
     fails = 0
     for name, fn in list(globals().items()):

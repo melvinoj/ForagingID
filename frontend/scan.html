@@ -952,6 +952,16 @@
           <div class="ss-val" id="s-sess-failed">—</div>
           <div class="ss-label">Failed</div>
         </div>
+        <!-- Processed also counts duplicates and pre-filter rejects (syncthing.py
+             session_inc); shown so the chips add up. Set from the DB session only. -->
+        <div class="ss-chip">
+          <div class="ss-val" id="s-sess-rejected">—</div>
+          <div class="ss-label">Pre-filter</div>
+        </div>
+        <div class="ss-chip">
+          <div class="ss-val" id="s-sess-duplicate">—</div>
+          <div class="ss-label">Duplicates</div>
+        </div>
       </div>
 
       <!-- All-time pipeline file breakdown -->
@@ -2015,8 +2025,9 @@ function _renderSessionChips(prefix, session, inflight) {
   sv(`${prefix}-sess-approved`,  s.files_approved  ?? null, (s.files_approved  || 0) > 0 ? 'ok'   : '');
   sv(`${prefix}-sess-review`,    s.files_review    ?? null, (s.files_review    || 0) > 0 ? 'warn' : '');
   sv(`${prefix}-sess-failed`,    s.files_failed    ?? null, (s.files_failed    || 0) > 0 ? 'err'  : '');
-  // P2-only fields — silently skipped when rendering P1
-  sv(`${prefix}-sess-rejected`,  s.files_rejected         ?? null, (s.files_rejected         || 0) > 0 ? 'warn' : '');
+  // Duplicates + pre-filter rejects are part of Processed (P1 chips)
+  sv(`${prefix}-sess-duplicate`, s.files_duplicate ?? null, '');
+  sv(`${prefix}-sess-rejected`,  s.files_rejected        ?? null, (s.files_rejected         || 0) > 0 ? 'warn' : '');
   sv(`${prefix}-sess-skipped`,   s.files_skipped          ?? null, (s.files_skipped          || 0) > 0 ? 'warn' : '');
   sv(`${prefix}-sess-new`,       s.files_new              ?? null, (s.files_new              || 0) > 0 ? 'ok'   : '');
   sv(`${prefix}-sess-retryable`, s.files_retryable        ?? null, (s.files_retryable        || 0) > 0 ? 'warn' : '');

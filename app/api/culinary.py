@@ -1477,12 +1477,9 @@ async def get_culinary_profile(
 
     # Source links (28 Oct 2026): one species-name check; flagged links are
     # marked for the curator and never reach a guest (app/services/source_links.py).
-    from app.services.source_links import apply_link_check, source_chips
+    from app.services.source_links import apply_link_check
     culinary_dict = _culinary_to_dict(ci, sp.scientific_name) if ci else None
     await apply_link_check(db, sp, culinary_dict, identity.is_guest)
-    # Source chips: one per known source, labelled by host (CLOSEOUT_28oct section 4 #11).
-    chips = source_chips(ci.primary_source_url if ci else None,
-                         (culinary_dict or {}).get("sources_json", []) + sources)
     return {
         "species": {
             "id": sp.id,
@@ -1502,7 +1499,6 @@ async def get_culinary_profile(
         "culinary": culinary_dict,
         "ai_generated_fields": ai_fields,
         "enrichment_sources": sources,
-        "source_chips": chips,
         "recipes": recipes_out,
     }
 
@@ -1863,6 +1859,12 @@ async def species_profile(
             db, culinary_out, ci.id if ci else None
         )
         ai_fields_out = [f for f in ai_fields if (culinary_out or {}).get(f) is not None]
+    # Species page source chips: one per known source, labelled by the URL's host
+    # (CLOSEOUT_28oct section 4 #11). From culinary_out after the guest mask, so
+    # a guest gets chips only for links it already received.
+    from app.services.source_links import source_chips
+    _chips = source_chips((culinary_out or {}).get("primary_source_url"),
+                          (culinary_out or {}).get("sources_json"))
 
     return {
         "species": {
@@ -1895,6 +1897,7 @@ async def species_profile(
         # static/js/safety-gate.js; the PDF re-asks the server (B2-09).
         "safety": await safety_for_species(db, sp, ci),
         "culinary": culinary_out,
+        "source_chips": _chips,
         "ai_generated_fields": ai_fields_out,
         # field_source_tags: {field_name: "PFAF"|"EMA"|"Source: reference data"}.
         # Only ever populated for guest requests — curators get full provenance

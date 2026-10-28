@@ -47,7 +47,7 @@ SQLite continues through Phases 10–12. Postgres migration is Phase 13 via Alem
 
 ### API routing
 - **Plants** → PlantNet + iNaturalist
-- **Fungi** → iNaturalist + Mushroom Observer only (never PlantNet)
+- **Fungi** → iNaturalist only (never PlantNet)
 
 ### Auto-approve rule (edibility-safety critical)
 - Auto-approve triggers **only** when BOTH APIs independently return the same species at or above the confidence threshold

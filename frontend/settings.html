@@ -1283,29 +1283,6 @@ document.addEventListener('keydown', function(e) {
   if (e.key === 'Escape') closeChangelogModal();
 });
 
-async function saveSnapshot() {
-  const btn    = document.getElementById('btn-save-snap');
-  const status = document.getElementById('snap-status');
-  if (btn) { btn.disabled = true; btn.textContent = '⏳ Saving…'; }
-  if (status) status.textContent = '';
-  try {
-    const r = await fetch('/api/dev/snapshot', { method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ description: 'Manual save from Settings' }),
-    });
-    const d = await r.json();
-    if (!r.ok) throw new Error(d.detail || 'HTTP ' + r.status);
-    const msg = '✓ Snapshot saved' + (d.commit_hash ? ' — git ' + d.commit_hash : '');
-    if (status) { status.textContent = msg; status.style.color = '#16a34a'; }
-    _showToast(msg);
-    await loadSnapshots();
-  } catch (e) {
-    _showToast('✗ Snapshot failed: ' + e.message, true);
-    if (status) { status.textContent = '✗ ' + e.message; status.style.color = '#c0392b'; }
-  } finally {
-    if (btn) { btn.disabled = false; btn.textContent = '💾 Save snapshot'; }
-  }
-}
 
 async function restoreSnapshot(snap) {
   // Build confirmation message
@@ -1674,6 +1651,7 @@ async function loadDevices() {
     const r = await fetch('/api/sharing/devices');
     if (!r.ok) throw new Error('HTTP ' + r.status);
     const rows = await r.json();
+    _syncDevicePoll(rows.some(function (d) { return d.is_active && !d.claimed_at; }));
     if (!rows.length) { list.textContent = 'No curator devices yet.'; return; }
     list.innerHTML = rows.map(function (d) {
       const state = !d.is_active ? 'revoked' : (d.claimed_at ? 'signed in' : 'link not used yet');
@@ -1690,6 +1668,27 @@ async function loadDevices() {
     list.textContent = 'Could not load devices (' + e.message + ')';
   }
 }
+
+// The list refreshes itself while a pairing link is still unused (the phone
+// claims it elsewhere), and whenever the page becomes visible again — a revoke
+// or claim on another device shows up without a manual reload (17-B5).
+// Polls only while the page is visible; gives up after 10 minutes.
+let _devicePollTimer = null, _devicePollStarted = 0;
+function _syncDevicePoll(wanted) {
+  if (wanted && !_devicePollTimer) {
+    _devicePollStarted = Date.now();
+    _devicePollTimer = setInterval(function () {
+      if (Date.now() - _devicePollStarted > 10 * 60 * 1000) { _syncDevicePoll(false); return; }
+      if (document.visibilityState === 'visible') loadDevices();
+    }, 5000);
+  } else if (!wanted && _devicePollTimer) {
+    clearInterval(_devicePollTimer);
+    _devicePollTimer = null;
+  }
+}
+document.addEventListener('visibilitychange', function () {
+  if (document.visibilityState === 'visible') loadDevices();
+});
 
 async function addDevice() {
   const name = (prompt('Name this device (e.g. "Melvin\'s phone"):') || '').trim();

@@ -641,137 +641,6 @@ function _seasonalReturnsHtml(items) {
 }
 
 // ── Print window generator ──────────────────────────────────────────────────
-// Opens a fresh self-contained window with borders hardcoded as static HTML.
-// Bypasses Chrome's print-cache problem entirely — no JS, no data attributes,
-// no CSS switching in the new window. window.onload fires print immediately.
-function openPrintWindow() {
-  const style   = document.body.getAttribute('data-border-style') || 'botanical';
-  const content = document.getElementById('content');
-  if (!content) return;
-
-  const base       = window.location.origin;
-  const contentHTML = content.innerHTML;
-  const contentCls  = content.className;
-  const padL        = content.style.paddingLeft  || '14mm';
-  const padR        = content.style.paddingRight || '14mm';
-
-  // Side strip helper — tiles N <img> tags in a clipping fixed container.
-  // Uses real <img> tags so they always print regardless of Background Graphics setting.
-  function sideStrip(src, side, mirror) {
-    const tiles = Array(5).fill(`<img src="${src}" style="width:160px;height:auto;display:block;">`).join('');
-    const flip  = mirror ? 'transform:scaleX(-1);' : '';
-    return `<div style="position:fixed;top:0;${side}:0;width:160px;overflow:hidden;height:100%;z-index:50;${flip}">${tiles}</div>`;
-  }
-
-  // Build border HTML — all <img> tags, hardcoded for the active style only.
-  let borderHTML = '';
-  if (style === 'botanical') {
-    const ci = (src,pos,tr) => `<img src="${base}/${src}" style="position:fixed;${pos};width:180px;height:180px;object-fit:contain;z-index:50;${tr}">`;
-    borderHTML =
-      ci('static/print/botanical%20corner%20flowing%20light.png', 'top:0;left:0',   '') +
-      ci('static/print/botanical%20corner%20flowing%20light.png', 'top:0;right:0',  'transform:scaleX(-1);') +
-      ci('static/print/botanical%20corner%20flowing%20bold.png',  'bottom:0;left:0','transform:rotate(0deg);') +
-      ci('static/print/botanical%20corner%20flowing%20bold.png',  'bottom:0;right:0','transform:rotate(270deg);');
-  } else if (style === 'herbalist') {
-    const src = `${base}/static/print/botanical-side-border-serrated.%20leaves.png`;
-    borderHTML = sideStrip(src, 'left', false) + sideStrip(src, 'right', true);
-  } else if (style === 'goethean') {
-    borderHTML =
-      sideStrip(`${base}/static/print/watercolour-oakleaf-right.png`, 'left',  false) +
-      sideStrip(`${base}/static/print/watercolour-oakleaf-left.png`,  'right', false);
-  }
-
-  const html = `<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <base href="${base}/">
-  <title>LandMemory — Print</title>
-  <style>
-    *{box-sizing:border-box;margin:0;padding:0;}
-    body{font-family:Georgia,'Times New Roman',serif;background:#fff;color:#111;}
-    #content{width:100%;padding:20mm ${padR} 20mm ${padL};}
-    #content.mode-field{column-count:2;column-gap:12mm;column-rule:none;}
-    #content.mode-workshop{column-count:1;}
-    .fg-entry{break-inside:avoid;-webkit-column-break-inside:avoid;padding:4mm 0;border-bottom:1px solid #ddd;overflow:hidden;}
-    .fg-sci{font-weight:700;font-size:0.92rem;color:#1c1c1c;}
-    .fg-common{font-size:0.8rem;color:#555;}
-    .fg-row{margin-top:3px;display:flex;gap:6px;flex-wrap:wrap;align-items:center;}
-    .fg-pill{display:inline-block;font-size:0.7rem;padding:1px 6px;border-radius:10px;font-weight:600;}
-    .pill-safe{background:#e6f4d7;color:#2d5016;}
-    .pill-cond{background:#fef3c7;color:#7a4f00;}
-    .pill-toxic{background:#dc2626;color:#fff;font-weight:600;}
-    .pill-unk{background:#f0f0f0;color:#555;}
-    .fg-season{font-size:0.7rem;color:#444;}
-    .fg-season strong{color:#2d5016;}
-    .fg-season .off{color:#bbb;}
-    .fg-id-primary{margin-top:3px;font-size:0.75rem;color:#333;line-height:1.4;}
-    .fg-lookalike{margin-top:3px;font-size:0.72rem;color:#7a2000;line-height:1.3;}
-    .fg-note{margin-top:2px;font-size:0.72rem;color:#555;font-style:italic;}
-    .fg-recipe span.rt{font-size:0.72rem;color:#2d5016;font-style:italic;}
-    .fg-photo{float:right;width:18mm;height:18mm;object-fit:cover;margin:0 0 3px 4px;border-radius:2px;}
-    .fg-cover{column-span:all;-webkit-column-span:all;padding:8mm 0 6mm;border-bottom:2px solid #2d5016;margin-bottom:4mm;}
-    .fg-cover-title{font-size:1.5rem;font-weight:700;}
-    .fg-cover-meta{font-size:0.85rem;color:#555;margin-top:4px;}
-    .fg-cover-intro{font-size:0.82rem;color:#333;margin-top:6px;line-height:1.5;}
-    .print-map-snap{column-span:all;-webkit-column-span:all;margin:0 0 6mm;break-inside:avoid;}
-    .print-map-snap img{width:100%;display:block;border:1px solid #c8d8a0;border-radius:4px;}
-    .print-map-snap-grid{display:grid;grid-template-columns:repeat(3,1fr);border:1px solid #c8d8a0;border-radius:4px;overflow:hidden;line-height:0;}
-    .print-map-snap-grid img{width:100%;display:block;}
-    .print-map-snap-caption{font-size:0.72rem;color:#888;text-align:center;margin-top:3px;}
-    .ws-page{padding:10mm 0;min-height:230mm;break-after:page;page-break-after:always;border-bottom:1px solid #ddd;}
-    .ws-page:last-child{break-after:auto;page-break-after:auto;border:none;}
-    .ws-head{display:flex;justify-content:space-between;align-items:flex-start;gap:8mm;margin-bottom:5mm;}
-    .ws-sci{font-size:1.4rem;font-weight:700;}
-    .ws-common{font-size:0.95rem;color:#555;margin-top:2px;}
-    .ws-photo{width:46mm;height:46mm;object-fit:cover;border-radius:3px;flex-shrink:0;}
-    .ws-banner-photo{width:100%;max-height:220px;object-fit:cover;display:block;border-radius:3px;margin-bottom:5mm;}
-    .ws-section-h{font-size:0.78rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#2d5016;margin:5mm 0 2mm;border-bottom:0.4pt solid #2d5016;}
-    .ws-safety{background:#fffbf0;border:0.5pt solid #e6c87a;padding:3mm;border-radius:2px;margin-bottom:4mm;}
-    .ws-safety-h{font-size:0.75rem;font-weight:700;color:#7a4f00;margin-bottom:2mm;}
-    .ws-edib{margin-bottom:2mm;}
-    .ws-safety p,.ws-recipe p,.ws-forage p{font-size:0.78rem;line-height:1.5;margin-bottom:3px;}
-    .ws-fl{font-weight:700;}
-    .ws-rule{border-bottom:0.4pt solid #ccc;margin:4mm 0;}
-    .ws-mynotes{margin-top:6mm;}
-    .ws-credit{font-size:0.7rem;color:#aaa;margin-top:4mm;text-align:right;}
-    .sr-section{column-span:all;-webkit-column-span:all;padding:8mm 0 5mm;border-bottom:1.5px solid #2d5016;margin-bottom:6mm;}
-    .sr-title{font-size:0.82rem;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:#2d5016;border-bottom:1px solid #2d5016;padding-bottom:4px;margin-bottom:8px;}
-    .sr-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:5px 12px;}
-    #content.mode-workshop .sr-grid{grid-template-columns:1fr;}
-    .sr-entry{border-bottom:1px solid #eee;padding:4px 0;}
-    .sr-common{font-weight:700;font-size:0.9rem;color:#1c1c1c;}
-    .sr-sci{font-style:italic;font-size:0.76rem;color:#555;}
-    .sr-row{margin-top:2px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;}
-    .sr-badge{font-size:0.65rem;padding:1px 6px;border-radius:8px;font-weight:600;}
-    .sr-badge-now{background:#e6f4d7;color:#2d5016;}
-    .sr-badge-soon{background:#fef3c7;color:#7a4f00;}
-    .sr-meta{font-size:0.72rem;color:#555;}
-    .sr-reason{font-size:0.72rem;color:#666;font-style:italic;margin-top:2px;}
-    @media print{
-      @page{size:A4;margin:8mm;}
-      #content.mode-field{column-count:2;column-gap:12mm;column-rule:none;}
-      .ws-page{border:none;}
-    }
-  </style>
-</head>
-<body>
-${borderHTML}
-<div id="content" class="${contentCls}">${contentHTML}</div>
-<script>
-  window.onload = function() {
-    window.print();
-    window.onafterprint = function() { window.close(); };
-  };
-<\/script>
-</body>
-</html>`;
-
-  const win = window.open('', '_blank', 'width=900,height=700');
-  win.document.open();
-  win.document.write(html);
-  win.document.close();
-}
 
 // ── Main ────────────────────────────────────────────────────────────────────
 (async function main() {
@@ -869,7 +738,7 @@ async function downloadPdf() {
     const url  = URL.createObjectURL(blob);
     const a    = document.createElement('a');
     a.href     = url;
-    a.download = 'foragingid-list.pdf';
+    a.download = 'landmemory-list.pdf';
     a.click();
     URL.revokeObjectURL(url);
   } catch (e) {

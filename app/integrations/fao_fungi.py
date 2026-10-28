@@ -20,6 +20,8 @@ from typing import Optional
 
 import httpx
 
+from app.config import HTTP_USER_AGENT
+
 log = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
@@ -149,7 +151,7 @@ async def _fetch_html(url: str, scientific_name: str) -> Optional[str]:
         async with httpx.AsyncClient(
             timeout=REQUEST_TIMEOUT_S,
             follow_redirects=True,
-            headers={"User-Agent": "ForagingID-research/1.0 (educational/non-commercial)"},
+            headers={"User-Agent": HTTP_USER_AGENT},
         ) as client:
             r = await client.get(url)
             if r.status_code == 404:

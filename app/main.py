@@ -12,7 +12,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response
 from starlette.types import Scope, Receive, Send
 
-from app.config import settings
+from app.config import APP_VERSION, log_timing, settings
 from app.database import AsyncSessionLocal, init_db
 from app.services.settings_service import load_settings_from_db
 from app.services.access import ASK_PAGE, COOKIE_NAME, SIGNED_OUT_TEXT, cookie_kwargs, needs_last_used_update, resolve_access
@@ -63,7 +63,7 @@ from app.models import experience as _experience_models  # noqa: F401 — ensure
 log = logging.getLogger(__name__)
 
 _T_MAIN_IMPORTS_DONE = _time.perf_counter()
-print(f"[TIMING] main.py: module-level imports complete: {_T_MAIN_IMPORTS_DONE - _T_MAIN_IMPORT_START:.1f}s", flush=True)
+log_timing(f"[TIMING] main.py: module-level imports complete: {_T_MAIN_IMPORTS_DONE - _T_MAIN_IMPORT_START:.1f}s")
 
 
 class NoCacheStaticFiles(StaticFiles):
@@ -129,24 +129,24 @@ def _warn_if_inat_token_expiring() -> None:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     _ls0 = _time.perf_counter()
-    print(f"[TIMING] lifespan: start", flush=True)
+    log_timing(f"[TIMING] lifespan: start")
 
     settings.ensure_dirs()
     _ls1 = _time.perf_counter()
-    print(f"[TIMING] lifespan: ensure_dirs: {_ls1 - _ls0:.1f}s", flush=True)
+    log_timing(f"[TIMING] lifespan: ensure_dirs: {_ls1 - _ls0:.1f}s")
 
     await init_db()
     _ls2 = _time.perf_counter()
-    print(f"[TIMING] lifespan: init_db (wall): {_ls2 - _ls1:.1f}s", flush=True)
+    log_timing(f"[TIMING] lifespan: init_db (wall): {_ls2 - _ls1:.1f}s")
 
     async with AsyncSessionLocal() as session:
         await load_settings_from_db(session)
     _ls3 = _time.perf_counter()
-    print(f"[TIMING] lifespan: load_settings_from_db: {_ls3 - _ls2:.1f}s", flush=True)
+    log_timing(f"[TIMING] lifespan: load_settings_from_db: {_ls3 - _ls2:.1f}s")
 
     _warn_if_inat_token_expiring()
     _ls4 = _time.perf_counter()
-    print(f"[TIMING] lifespan: _warn_if_inat_token_expiring: {_ls4 - _ls3:.1f}s", flush=True)
+    log_timing(f"[TIMING] lifespan: _warn_if_inat_token_expiring: {_ls4 - _ls3:.1f}s")
 
     from app.api.queue_api import recover_stale_jobs
     await recover_stale_jobs()
@@ -160,18 +160,18 @@ async def lifespan(app: FastAPI):
     from app.services.experience_publish import repair_interrupted
     repair_task = asyncio.create_task(repair_interrupted())
     _ls5 = _time.perf_counter()
-    print(f"[TIMING] lifespan: recover_stale_jobs: {_ls5 - _ls4:.1f}s", flush=True)
+    log_timing(f"[TIMING] lifespan: recover_stale_jobs: {_ls5 - _ls4:.1f}s")
 
     task = asyncio.create_task(syncthing._auto_scan_loop())
     _ls6 = _time.perf_counter()
-    print(f"[TIMING] lifespan: create_task(syncthing): {_ls6 - _ls5:.1f}s", flush=True)
+    log_timing(f"[TIMING] lifespan: create_task(syncthing): {_ls6 - _ls5:.1f}s")
 
     # Orphan sweep — recovers rows committed at stage='ingested' that never
     # reached identify. Takes the same pipeline mutex as P1/the archive scan, so
     # it can never compete with a live scan for the single SQLite writer.
     from app.services.orphan_sweep import orphan_sweep_loop
     sweep_task = asyncio.create_task(orphan_sweep_loop())
-    print(f"[TIMING] lifespan: TOTAL startup: {_ls6 - _ls0:.1f}s", flush=True)
+    log_timing(f"[TIMING] lifespan: TOTAL startup: {_ls6 - _ls0:.1f}s")
 
     yield
     task.cancel()
@@ -188,10 +188,32 @@ async def lifespan(app: FastAPI):
         logging.getLogger(__name__).exception("lifespan: stopping ngrok failed")
 
 
+# E-12: the dashboard polls these every few seconds — ~97% of the server log.
+# Successful (2xx/304) access lines for them are dropped; errors still log.
+_QUIET_POLL_PATHS = frozenset({
+    "/api/processes/active", "/api/queue/list", "/health", "/api/scan/sessions/all",
+    "/api/ingest/pipeline-stats", "/api/scan/p2-stats", "/api/syncthing/status",
+    "/api/scan/lifetime-breakdown",
+})
+
+
+class _QuietPollFilter(logging.Filter):
+    def filter(self, record: logging.LogRecord) -> bool:
+        args = record.args
+        if not isinstance(args, tuple) or len(args) < 5:
+            return True
+        path, status = str(args[2]).split("?", 1)[0], args[4]
+        quiet = isinstance(status, int) and (200 <= status < 300 or status == 304)
+        return not (quiet and path in _QUIET_POLL_PATHS)
+
+
+logging.getLogger("uvicorn.access").addFilter(_QuietPollFilter())
+
+
 app = FastAPI(
-    title="ForagingID",
+    title="LandMemory",
     description="Local-first plant foraging intelligence system",
-    version="0.1.0",
+    version=APP_VERSION,
     lifespan=lifespan,
 )
 
@@ -457,14 +479,6 @@ async def serve_about():
     return FileResponse("frontend/about.html", headers=_NO_STORE)
 
 
-@app.get("/scratch-filename-test", include_in_schema=False)
-async def serve_scratch_filename_test():
-    p = Path("frontend/scratch-filename-test.html")
-    if not p.exists():
-        raise HTTPException(404)
-    return FileResponse(str(p), headers=_NO_STORE)
-
-
 @app.get("/encounters", include_in_schema=False)
 async def serve_encounters():
     return FileResponse("frontend/encounters.html", headers=_NO_STORE)
@@ -506,4 +520,4 @@ async def serve_service_worker():
 
 @app.get("/health")
 async def health():
-    return {"status": "ok", "version": "0.2.0"}
+    return {"status": "ok", "version": APP_VERSION}

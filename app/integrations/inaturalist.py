@@ -436,25 +436,3 @@ async def taxa_autocomplete(query: str, limit: int = 5) -> List[INatTaxon]:
     return taxa
 
 
-async def get_regional_obs_count(
-    taxon_name: str, lat: float, lng: float, radius_km: int = 150
-) -> int:
-    """Return iNaturalist observation count near a location. Returns 0 on any error."""
-    try:
-        async with httpx.AsyncClient(timeout=TIMEOUT_S) as client:
-            resp = await client.get(
-                "https://api.inaturalist.org/v1/observations",
-                params={
-                    "taxon_name": taxon_name,
-                    "lat": lat,
-                    "lng": lng,
-                    "radius": radius_km,
-                    "per_page": 0,
-                },
-            )
-        if resp.status_code != 200:
-            return 0
-        data = resp.json()
-    except Exception:
-        return 0
-    return int(data.get("total_results", 0))

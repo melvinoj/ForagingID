@@ -560,7 +560,9 @@ def test_every_frontend_button_asks_the_dry_run_first():
     """Each fetch that starts enrichment / drafts goes through lmDryRunConfirm, or sits
     in a handler whose first statement is lmDryRunCheck. Auto-enrich after a species-ID
     correction (Review) is not a button and is listed explicitly."""
-    AUTO = {"review.html": 4}          # _enrichAfterCorrection-style calls (approve flow)
+    # _enrichAfterCorrection-style calls (approve flow); 3 since the dead
+    # saveCorrection (and its call) was deleted in batch 17 (E-07, 28 Oct 2026).
+    AUTO = {"review.html": 3}
     for page in ("review.html", "scan.html", "settings.html", "species.html", "index.html"):
         src = open(os.path.join(ROOT, "frontend", page), encoding="utf-8").read()
         assert '<script src="/static/js/dry-run.js"></script>' in src, page

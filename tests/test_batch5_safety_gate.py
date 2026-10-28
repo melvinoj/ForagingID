@@ -342,8 +342,7 @@ def _src(rel):
 PAGES = ("frontend/index.html", "frontend/species.html", "frontend/lists.html", "frontend/print.html")
 # Curator editing / review tools and the user's own encounter notes are not
 # display surfaces for the gate.
-EXEMPT = {"frontend/review.html", "frontend/scan.html", "frontend/static/js/encounters-main.js",
-          "frontend/scratch-filename-test.html"}
+EXEMPT = {"frontend/review.html", "frontend/scan.html", "frontend/static/js/encounters-main.js"}
 
 
 def test_every_page_loads_the_helper_and_sw_caches_it():

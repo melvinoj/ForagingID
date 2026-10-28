@@ -625,44 +625,6 @@ def _update_claude_md_phase(current_phase: str, next_steps: str) -> None:
     path.write_text(text)
 
 
-def _update_current_phase_doc(
-    current_phase: str,
-    next_steps: str,
-    current_state_text: str,
-    ts_human: str,
-) -> None:
-    """
-    Rewrite the variable header section of docs/current_phase.md.
-    Everything from '## Critical Discipline Notes' onwards is static and
-    preserved unchanged.
-    """
-    path = PROJECT_ROOT / "docs" / "current_phase.md"
-    if not path.exists():
-        return
-    existing = path.read_text()
-
-    # Find the static section boundary — preserve from here down
-    static_marker = "## Critical Discipline Notes"
-    idx = existing.find(static_marker)
-    preserved = existing[idx:] if idx != -1 else ""
-
-    variable_section = (
-        f"# ForagingID — Current Phase\n"
-        f"*Last updated: {ts_human}*\n\n"
-        f"## Status\n\n"
-        f"{current_phase}\n\n"
-        f"---\n\n"
-        f"## What's Running Now\n\n"
-        f"{current_state_text.strip()}\n\n"
-        f"---\n\n"
-        f"## Next Up\n\n"
-        f"{next_steps}\n\n"
-        f"---\n\n"
-    )
-
-    path.write_text(variable_section + preserved)
-
-
 # ---------------------------------------------------------------------------
 # End session
 # ---------------------------------------------------------------------------
@@ -670,8 +632,8 @@ def _update_current_phase_doc(
 class EndSessionRequest(BaseModel):
     current_state:   str
     session_summary: Optional[str] = None
-    current_phase:   Optional[str] = None   # short label for CLAUDE.md + current_phase.md
-    next_steps:      Optional[str] = None   # what's next for CLAUDE.md + current_phase.md
+    current_phase:   Optional[str] = None   # short label for CLAUDE.md
+    next_steps:      Optional[str] = None   # what's next for CLAUDE.md
 
 
 @router.post("/end-session")
@@ -679,8 +641,8 @@ async def end_session(body: EndSessionRequest):
     """
     Clean end-of-session action:
     1. Rewrite ## Current State in CHANGELOG.md
-    2. Update docs/current_phase.md variable section (if current_phase/next_steps supplied)
-    3. Update ## Current Phase and ## Next Steps in CLAUDE.md (if supplied)
+    2. Update ## Current Phase and ## Next Steps in CLAUDE.md (if supplied)
+       (docs/current_phase.md was retired 28 Oct 2026 — CHANGELOG is the source of truth)
     4. Append session-end entry to ## History in CHANGELOG.md
     5. Create a full snapshot (DB copy + local git commit)
     6. Push to origin/main — best-effort, non-fatal on failure
@@ -695,12 +657,11 @@ async def end_session(body: EndSessionRequest):
     # 1. Rewrite Current State in CHANGELOG.md
     rewrite_current_state(body.current_state)
 
-    # 2 + 3. Update docs files when phase/next-steps data is provided
+    # 2. Update CLAUDE.md when phase/next-steps data is provided
     if body.current_phase or body.next_steps:
         cp = body.current_phase or "—"
         ns = body.next_steps    or "—"
         try:
-            _update_current_phase_doc(cp, ns, body.current_state, ts_human)
             _update_claude_md_phase(cp, ns)
             docs_updated = True
         except Exception as exc:

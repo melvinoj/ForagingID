@@ -24,6 +24,8 @@ fi
 
 PORT=8000
 mkdir -p logs
+# Keep the 9 newest server logs; this start adds the 10th (E-12, 28 Oct 2026).
+ls -t logs/server_*.log 2>/dev/null | tail -n +10 | while IFS= read -r old; do rm -f -- "$old"; done
 LOG="logs/server_$(date +%Y%m%d_%H%M%S).log"
 
 # Never kill -9 a running server (it may be mid-write). If the port is taken,

@@ -1218,6 +1218,8 @@ const SECTION_DEFS = [
   ['conditions', 'Edibility conditions'],
   ['phenology',  'Phenology / season'],
 ];
+// Rows whose PDF inclusion is not a choice (17-B1, 28 Oct 2026).
+const FIXED_SECTION_TEXT = { lookalikes: 'Always printed', conditions: 'Not printed' };
 
 // SECTION_FIELDS / SECTION_HINTS / _getFieldValue removed in 11a.2 — they only
 // fed the inline enrichment editor, which is gone. Editing now happens solely
@@ -1324,15 +1326,21 @@ function toggleExpandFill(name) {
     const filled  = _isFilled(prof, key);
     const checked = prefs[key] ? ' checked' : '';
     const rowId = `er_${safe}_${key}`;
-    return `<div class="enrich-row" id="${rowId}">
-      <span class="enrich-cat">${label}</span>
-      <span class="enrich-status ${filled ? 'filled' : 'empty'}">${filled ? '✓' : '–'}</span>
-      <label class="enrich-include">
+    // Warnings print always, uncut (batch 6, B2-03) and conditions never print,
+    // so neither row offers a toggle — a checkbox there would do nothing.
+    const fixed = FIXED_SECTION_TEXT[key];
+    const include = fixed
+      ? `<span class="enrich-include">${fixed}</span>`
+      : `<label class="enrich-include">
         <input type="checkbox"${checked}
                data-name="${_esc(name)}" data-key="${key}"
                onchange="toggleSection(this.dataset.name, this.dataset.key, this.checked)">
         Include in PDF
-      </label>
+      </label>`;
+    return `<div class="enrich-row" id="${rowId}">
+      <span class="enrich-cat">${label}</span>
+      <span class="enrich-status ${filled ? 'filled' : 'empty'}">${filled ? '✓' : '–'}</span>
+      ${include}
     </div>`;
   }).join('');
   const enrichTable = `<div class="enrich-table">${enrichRows}</div>`;
@@ -1629,25 +1637,6 @@ function setPrintStyle(s) {
 */
 
 // ── Toolbar ─────────────────────────────────────────────────────────────────
-function toggleMode(mode) {
-  const o = ForagingList.load();
-  if (!Array.isArray(o.modes)) o.modes = o.mode ? [o.mode] : ['field'];
-  const idx = o.modes.indexOf(mode);
-  if (idx >= 0) {
-    // Enforce minimum one mode — silently refuse to deactivate the last active mode
-    if (o.modes.length > 1) o.modes.splice(idx, 1);
-  } else {
-    o.modes.push(mode);
-  }
-  ForagingList.save(o);
-  syncToolbar();
-  refreshPreview();
-}
-function togglePhotos(on) {
-  ForagingList.setPref('showPhotos', !!on);
-  applyPhotoVisibility();
-  refreshPreview();
-}
 function applyPhotoVisibility() {
   const show = _loadContentToggles().photos;
   document.querySelectorAll('.lc-thumb').forEach(el => { el.style.display = show ? '' : 'none'; });

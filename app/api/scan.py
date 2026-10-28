@@ -1353,7 +1353,7 @@ async def _identify_scanned_inner(
             # Reload upload_source to know if we must force_review.
             # "file_upload" and legacy "phone" are both treated as manual uploads
             # that require human review regardless of confidence.
-            # "syncthing" CAN auto-approve on dual-agree ≥ auto_approve_threshold (force_review=False).
+            # "syncthing" CAN auto-approve on dual-agree ≥ upload_auto_approve_threshold (force_review=False).
             #
             # NAME, deliberately: this is NOT "phone origin". It was called
             # is_phone, which read as a provenance test and was twice mistaken

@@ -85,8 +85,8 @@ POST /api/dev/log
 - `app/services/` — Business logic services
 - `app/integrations/` — External API clients (PlantNet, iNaturalist, Claude, etc.)
 - `frontend/` — HTML pages + `static/js/`
-- `photos/pipeline2/` — P2 (Syncthing/Takeout) copies — project-local, HD-independent
-- `uploads/` — **primary image store**, not staging. ~88% of observations reference it directly via `file_path` (12,239 of 13,855). Browser uploads land here and stay here. See "Data Model — critical rules" below: never bulk-delete, never move without updating every affected `file_path`.
+- `photos/pipeline2/` — copy-on-ingest copies of P1 (Syncthing) and archive-rescan sources — project-local, HD-independent (browser uploads stay in `uploads/`)
+- `uploads/` — **primary image store**, not staging. ~86% of observations reference it directly via `file_path` (13,945 of 16,230, 28 Oct 2026). Browser uploads land here and stay here. See "Data Model — critical rules" below: never bulk-delete, never move without updating every affected `file_path`.
 - `snapshots/` (in `/Users/melvinjarman/ForagingID/snapshots/`, project-local) — DB snapshots
 - `/Volumes/DIGIERA/Pictures/` — photo archive (year folders 2013–2026, consolidated June 2026); HD-dependent, used as P2 rescan source
 
@@ -94,7 +94,7 @@ POST /api/dev/log
 - FastAPI + SQLAlchemy async + aiosqlite
 - No framework on frontend — vanilla ES2020+, no bundler
 - PlantNet + iNaturalist APIs for plant/fungi ID
-- Anthropic Claude (`claude-sonnet-4-6` default) for enrichment AI drafts
+- DeepSeek for enrichment AI drafts (the only backend since D1, 21 Oct 2026; `claude_draft.py` survives as a prompt/context helper)
 - OpenAI Whisper for encounter audio transcription (optional)
 
 ---
@@ -104,7 +104,7 @@ POST /api/dev/log
 There are two import pipelines, sharing identification logic but differing in approval rules.
 
 ### Pipeline 1 — Syncthing (P1)
-Watches `~/Local(unsynced)/PhoneForaging` via `syncthing._auto_scan_loop()` (started at lifespan). The live path comes from the `photo_library_path` setting in the DB, not a hardcoded constant — `_watch_dir()` reads that override first and only falls back to `config.py`'s `phone_foraging_dir`, which is stale and points at a non-existent path. Source files are **read-only**; each is copied to `photos/pipeline2/` before a DB record is created (Option B copy-on-ingest, migration 0021).
+Watches `~/Local(unsynced)/PhoneForaging` via `syncthing._auto_scan_loop()` (started at lifespan). The live path comes from the `photo_library_path` setting in the DB, not a hardcoded constant — `_watch_dir()` reads that override first and only falls back to `config.py`'s `phone_foraging_dir` (which resolves to the same folder). Source files are **read-only**; each is copied to `photos/pipeline2/` before a DB record is created (Option B copy-on-ingest).
 
 **Routing:** dual-API agreement ≥ `upload_auto_approve_threshold` → `approved`; everything else → `needs_review`. **P1 never auto-rejects on confidence** — only `not_plant` pre-filter rejections are valid rejections.
 
@@ -152,7 +152,7 @@ The three code paths that set `manually_verified` also upgrade `identification_s
 
 The invariant is `approved ⇒ identified`. It is **not** `identified ⇒ has species`. Reading it the second way is what made these rows look like corruption.
 
-This state is produced deliberately by `observations.py` (category change → landscape) and, since 19 July 2026, by both approve paths. As of that date the map and species-card counts agree exactly (2158/2158, zero drifted rows) *because* scene rows are consistently `identified`.
+This state is produced deliberately by `observations.py` (category change → landscape) and, since 19 July 2026, by both approve paths. As of that date the map and species-card counts agreed exactly (2158/2158 on 19 Jul, zero drifted rows) *because* scene rows are consistently `identified`.
 
 A non-landscape row with no species is a different thing entirely: for a plant or fungi row, "approved but unidentified" is a real unresolved state and must stay visible as such.
 
@@ -174,7 +174,7 @@ Three predicates in `app/models/observation.py` are the **only** definitions of 
 
 Schema changes use two mechanisms:
 
-1. **Alembic** for structural changes: `migrations/versions/NNNN_*.py`. Run with `alembic upgrade head`. Current head: `0050_add_triage_keep`.
+1. **Alembic** for structural changes: `migrations/versions/NNNN_*.py`. Run with `alembic upgrade head`. Current head: `0059_recipe_page_fields`.
 
 2. **Idempotent SQL in `app/database.py` `init_db()`** for data backfills and one-time rescue operations that run on every server start (harmless if rows already updated). Use `INSERT OR IGNORE` / `UPDATE ... WHERE condition` patterns. New columns still go via Alembic — `init_db()` is for data, not schema.
 
@@ -250,12 +250,12 @@ correctly).
 ## Current Phase
 
 <!-- auto-updated by end-session — do not edit manually -->
-—
+See CHANGELOG.md `## Current State` (source of truth).
 
 ## Next Steps
 
 <!-- auto-updated by end-session — do not edit manually -->
-Awaiting prompt (do not start until explicitly prompted):  Takeout batch: rescan → process delta (operational, not a code task) Roadmap update to v20 Fix 5 total/geotagged count — confirm correct thresholds with Melvin Google Drive token refresh
+See CHANGELOG.md `## Current State` → Next.
 
 ## Code discipline — mandatory
 

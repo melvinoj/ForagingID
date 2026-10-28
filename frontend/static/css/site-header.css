@@ -1,8 +1,7 @@
 /* ── Shared site nav: chip → drawer (Map Redesign P3-nav) ──────────────────
    Extracted from the map-page nav drawer (Map Redesign P1). Injected on every
    app-shell page by site-header.js. Not loaded on print_pdf.html (PDF-only),
-   landing.html (guest marketing page), print.html (bespoke toolbar), or
-   scratch-filename-test.html. */
+   landing.html (guest marketing page) or print.html (bespoke toolbar). */
 
 #site-nav-chip {
   position: fixed; top: calc(12px + var(--nav-chip-offset, 0px)); left: 12px; z-index: 1000;

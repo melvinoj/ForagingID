@@ -80,13 +80,6 @@ Transcript:
 %s
 \"\"\""""
 
-_RECIPE_CUES = frozenset([
-    "cordial", "infusion", "i'm making", "we're making", "i am making",
-    "putting in", "put in", "recipe", "cook", "prepare", "syrup", "jam",
-    "wine", "tea", "vinegar", "i'm going to", "going to put",
-    "we are picking", "picking for",
-])
-
 _SAFETY_WORDS = frozenset(["toxic", "poisonous", "do not eat", "harmful", "dangerous", "deadly"])
 
 
@@ -106,12 +99,6 @@ def _match_species(value: str, species_index: List[dict]) -> Optional[dict]:
             if nn and (nn == nv or nv in nn or nn in nv):
                 return {"id": sp.get("id"), "scientific_name": sp.get("scientific_name")}
     return None
-
-
-def _has_recipe_cue(transcript: str) -> bool:
-    """Quick pre-check — does the transcript contain any recipe-type language?"""
-    tl = transcript.lower()
-    return any(cue in tl for cue in _RECIPE_CUES)
 
 
 async def extract_suggestions(

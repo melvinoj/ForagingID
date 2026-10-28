@@ -78,7 +78,7 @@ def test_pdf_disclaimer_no_longer_promises_provenance_markers():
         "Edibility and medicinal information in this booklet is for educational reference only. "
         "Always verify identification with multiple authoritative sources before consuming any wild "
         "plant or fungi. Never rely on any single source, including this booklet, as your sole basis "
-        "for a consumption decision. Identification and content may be AI-assisted. ForagingID is an "
+        "for a consumption decision. Identification and content may be AI-assisted. LandMemory is an "
         "educational tool, not a safety-certified identification system.")
     for rel in ("frontend/print.html", "frontend/lists.html", "app/api/lists_pdf.py", "app/api/sharing.py"):
         assert "indicated where shown" not in open(os.path.join(ROOT, rel), encoding="utf-8").read(), rel

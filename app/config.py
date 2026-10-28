@@ -8,6 +8,20 @@ from pydantic import Field, field_validator
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
+# One app version (FastAPI title page + /health) and one User-Agent for every
+# outbound request (batch 17: A-10, Phase F group 6). Keep the UA in the
+# "name/version (+contact)" form — Wikidata returns 403 without a contact.
+APP_VERSION = "0.2.0"
+HTTP_USER_AGENT = "LandMemory/0.2 (+https://melvinjarman.co.uk)"
+
+# Startup [TIMING] lines print only with LOG_TIMING=1 in the environment (E-12).
+LOG_TIMING = os.environ.get("LOG_TIMING", "").strip() not in ("", "0")
+
+
+def log_timing(msg: str) -> None:
+    if LOG_TIMING:
+        print(msg, flush=True)
+
 
 def env_file_path() -> Optional[Path]:
     """The .env this process reads secrets from and Settings writes keys to
@@ -127,7 +141,7 @@ class Settings(BaseSettings):
     def confirmed_plants_dir(self) -> Path:
         """
         Absolute path to the confirmed_plants folder — always inside the ForagingID
-        project directory so confirmed photos are git-tracked alongside the DB.
+        project directory (not git-tracked: photos are gitignored).
         Resolves to: <project_root>/photos/confirmed_plants/
         """
         return Path(__file__).resolve().parent.parent / "photos" / "confirmed_plants"
@@ -136,7 +150,7 @@ class Settings(BaseSettings):
     def phone_uploads_dir(self) -> Path:
         """
         Permanent storage for phone browser uploads.
-        Always inside the ForagingID project directory — git-tracked, never in /tmp.
+        Always inside the ForagingID project directory (not git-tracked), never in /tmp.
         Resolves to: <project_root>/uploads/
 
         Path integrity rule: observations with file_path inside this directory

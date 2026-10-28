@@ -1571,15 +1571,16 @@ function finishSpSelectMode() {
 
 async function loadSpeciesList() {
   _syncSpViewButtons();
-  // Large / List show thumbnails: fetch them alongside (re-render when they arrive).
-  if (_spView !== 'grid' && !_selectMode) {
-    _loadSpThumbs().then(() => { if (_spView !== 'grid' && allSpecies.length) renderList(_spLastItems); });
-  }
   try {
     const r = await fetch('/api/species/');
     if (!r.ok) throw new Error(`HTTP ${r.status}`);
     allSpecies = await r.json();
     applyFilters();
+    // Large / List thumbnails come with the list; only an old cached list
+    // without them still needs the map data (re-render when it arrives).
+    if (_spView !== 'grid' && !_selectMode && !_spListHasThumbs()) {
+      _loadSpThumbs().then(() => { if (_spView !== 'grid' && allSpecies.length) renderList(_spLastItems); });
+    }
   } catch (e) {
     document.getElementById('species-grid').innerHTML =
       `<div class="empty-state">Could not load species list: ${_esc(e.message)}</div>`;
@@ -1713,8 +1714,25 @@ function _loadSpThumbs() {
   return _spThumbsPromise;
 }
 
+// /api/species/ carries each species' best confirmed thumbnail (17-B3), so the
+// Large / List views no longer need the whole map payload. A list without the
+// field (an old cached response) still falls back to the map data.
+let _spListThumbSrc = null, _spListThumbMap = {};
+function _spListThumb(name) {
+  if (_spListThumbSrc !== allSpecies) {
+    _spListThumbSrc = allSpecies;
+    _spListThumbMap = {};
+    allSpecies.forEach(s => { if (s.thumbnail) _spListThumbMap[s.scientific_name] = s.thumbnail; });
+  }
+  return _spListThumbMap[name] || null;
+}
+function _spListHasThumbs() {
+  return allSpecies.length > 0 && 'thumbnail' in allSpecies[0];
+}
+
 function _spThumbFile(name) {
-  return (_selectMode && ForagingList.getPhoto(name)) || ((_spThumbs[name] || [])[0] || {}).file || null;
+  return (_selectMode && ForagingList.getPhoto(name)) || _spListThumb(name)
+    || ((_spThumbs[name] || [])[0] || {}).file || null;
 }
 
 function _spThumbImg(name, cls) {
@@ -1733,7 +1751,7 @@ function setSpeciesView(view) {
   if (!allSpecies.length) return;            // list not loaded yet — loadSpeciesList renders it
   renderList(_spLastItems);
   _spScrollToName(anchor);
-  if (view !== 'grid' && !_selectMode) {
+  if (view !== 'grid' && !_selectMode && !_spListHasThumbs()) {
     _loadSpThumbs().then(() => {
       if (_spView !== view) return;
       const a2 = _spFirstVisibleName();
@@ -1932,8 +1950,6 @@ function _spListHtml(items) {
   </table>`;
 }
 
-// Legacy alias (old oninput handler)
-function filterList() { applyFilters(); }
 
 function toggleDeNames() {
   const isOn = !document.body.classList.contains('hide-de');

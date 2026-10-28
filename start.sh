@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# start.sh — start ForagingID and print local network URL
+# start.sh — start LandMemory and print local network URL
 #
 # Usage:
 #   ./start.sh            (default port 8000, reload off for production)
@@ -39,7 +39,7 @@ except Exception:
 " 2>/dev/null)
 
 echo ""
-echo "  🌿  ForagingID"
+echo "  🌿  LandMemory"
 echo "  ──────────────────────────────────────────"
 echo "  Local:    http://localhost:${PORT}"
 if [ "$LAN_IP" != "unknown" ]; then

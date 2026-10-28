@@ -1084,7 +1084,7 @@ async def _run_identification(obs_id: int) -> None:
     """
     Identify a Syncthing observation. Imports and calls scan.py's worker,
     which already handles upload_source=PHONE_ORIGIN_SOURCE correctly:
-      - dual-agree ≥80% → auto-approved
+      - dual-agree ≥ upload_auto_approve_threshold → auto-approved
       - otherwise → needs_review "Syncthing — needs review"
     """
     from app.api.scan import _identify_scanned

@@ -958,12 +958,6 @@
     if (el) { el.textContent = text; el.className = 'save-msg ' + type; }
   }
 
-  function _setDefaultDate() {
-    var now = new Date(), pad = function (n) { return String(n).padStart(2, '0'); };
-    var el = document.getElementById('enc-date');
-    if (el) el.value = now.getFullYear() + '-' + pad(now.getMonth() + 1) + '-' + pad(now.getDate()) +
-      'T' + pad(now.getHours()) + ':' + pad(now.getMinutes());
-  }
 
   // -- Encounter card rendering (full -- transcript/suggestions) -
   var _SUGG_META = {

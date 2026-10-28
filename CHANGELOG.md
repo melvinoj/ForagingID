@@ -37,6 +37,9 @@ Rename onto an existing name now merges through merge_species_cards (no more '_m
 ### Open decisions (Melvin)
 - None.
 
+### Backlog
+- Walk route line distorts, then disappears after zooming in and dragging, until the walk is reloaded (REPORT.md batch 15b item 4). Moved out of 15b by Melvin, 28 Oct. Melvin reproduces first; no fix from code reading alone.
+
 ### Rules learned
 - Delete species_recipes before species_ai_drafts (ai_draft_id FK).
 - A bulk delete list: never put a comment mid-tuple (it silently drops entries) — test bulk deletes on a snapshot copy first.
@@ -46,211 +49,29 @@ Rename onto an existing name now merges through merge_species_cards (no more '_m
 - GBIF backbone can accept two names for one plant (Taraxacum officinale / campylodes): check the source checklists before deciding a merge.
 
 ### Browser checks
-- Automated: scripts/dev/walkthrough_check.py on the scratch setup (results in ~/Documents/ForagingID/walkthrough_run_*). Re-run after UI-touching batches.
+- scripts/dev/walkthrough_check.py drives a browser, so Melvin runs it after UI-touching batches (results in ~/Documents/ForagingID/walkthrough_run_*); Code does not (CLAUDE.md no-browser rule, decision 31, 28 Oct).
 - Melvin only (checklist artifact "LandMemory Walkthroughs"): quick looks (walk panel buttons at laptop width; Species list on the phone); phone pairing, installed app, device list on the paired phone, Add device refused with sharing stopped, keyboard dictation, participant on mobile data; rotate the DeepSeek key; a real scoped enrichment run (Jobs pop-up, skip counts, cap 25, paused-no-network, ⚡ Enrich, Regenerate side by side, caffeinate exits); walk 5 republish.
-Rule: Code tests whatever it can (unit tests + the walkthrough script); only what needs a real phone, network or keys goes to Melvin.
+- Batch 17 (28 Oct, implemented, unverified live): Scan page pre-filter note now reads "🔍 Pre-filter green threshold: N% (default/custom)" (was blank); Lists → expand a species (if the dropdown is reachable at all — toggleExpand has no caller) shows "Always printed" / "Not printed" instead of checkboxes for Lookalike warnings / Edibility conditions; Settings → Add device, pair the phone, the laptop row turns "signed in" within ~5 s without a reload, and a revoke on another device shows when the tab is focused again; Species page Large / List views show photos straight away (one /api/species/ request, no /api/map/geojson in the Network tab outside select mode); after the final sw.js bump, an open tab shows "New version available — Reload" and only reloads when tapped (also on Encounters and Workshops), and the first-ever install shows no bar; PDF download is named landmemory-list.pdf, its title and disclaimer say LandMemory; /docs title LandMemory; server log no longer fills with /api/processes/active, /api/queue/list, /health lines (errors still show) and no [TIMING] lines unless LOG_TIMING=1; logs/ keeps 10 server logs after the next launcher start.
+Rule: Code tests whatever it can (unit tests); only what needs a browser, a real phone, network or keys goes to Melvin.
 
 ### Melvin's review queue
-- 11b_review (28). genus_reid (6: Usnea ×2, Salix, Crocus, Taraxacum ×2). bryony_check (8229). Photo 24429 on 286 Taraxacum officinale (13%, suggestion Hyoseris radiata). 286 taste_notes reads "test draft". hazard_review cards (18) + 17052, 17737. 22 recipes needing a title. Five rejected photos restored in July (15958, 15970, 21333, 21673, 21799). Warning review cards. Text tidy-up (352 edible_parts / 689 id_notes). 347 Takeout person_animal rejects (mount DIGIERA). Draft #3252 Amaranthus hybridus.
-
-## Current State — 22 Oct 2026, evening
-
-### Build
-- Alembic head 0057 (encounters.shared_with_guests) — applied to the live DB after snapshot db_20261022_162240. CLAUDE.md still says 0050 (fix in batch 17).
-- Tests: 25 files, 303 counted + test_taxonomy, all pass. Service worker foragingid-v13 (hard refresh once).
-- Uncommitted until this End Session: enrichment scope, handout rule, batch 8, Fix A, Fix B.
-
-### Done this session (22 Oct)
-- Tidy route order on walk 5 "Morning sunshine Gresgen to Adelsberg": crossings 3→0, 13 legs changed, 11,499→7,609 m / 93 min, members unchanged (108). Snapshot db_20261022_132801, commit 45c81a9. Straight dashed legs: 38→12, 32→27.
-- Removed CHANGELOG placeholder line in the older 22 Oct block.
-- Enrichment scope (app/services/enrichment_scope.py): one resolver; scope = saved walk (walk_membership) / Current list (Foraging List) / all eligible; no default; no scope = 400. Cap 25 per run, walk species first, remainder reported. dry-run.js scope picker on every bulk button. Scoped on enrich/run, re-enrich-empty, enrichment/run, drafts/backfill (incl. ID notes), redraft-medicinal, backfill-fungi-edibility (both now have a dry run + button on Scan → Backfill). enrichment_run saves its species list with the paused/interrupted run record; resume stays within it; old unscoped bp 203 is never resumed.
-- Handout rule (safety_decision): a caution species prints culinary content with a curator prep OR look-alike warning. Withheld→shown: 817 Agaricus campestris, 295 Allium ursinum, 98 Artemisia vulgaris, 363 Gentiana lutea, 816/821/405/820 Macrolepiota, 711 Marasmius oreades, 590 Pimpinella major, 603 Pimpinella saxifraga.
-- Fix A: redraft-medicinal eligible only when medicinal_notes is empty or a placeholder (medicinal_notes_redraftable), not curator-written, no pending draft; toxic skipped.
-- Fix B: SafetyGate.culinaryWarnings / culinary_warnings (look-alike + preparation) with all culinary content — species page culinary/taste/recipes/field recipes, Lists panel, workshop foraging + recipe (Lists, print, PDF), experience Recipes tab, Find, encounter field recipes, personal card. Not repeated where the species block sits beside (map pop-up, Export summary, field-guide entries, PDF booklet, experience plant panel).
-- Batch 8: guest access deny-by-default (app/services/guest_access.py in the middleware); media gate (thumbnails/uploads: confirmed only; encounter audio: visible encounters only; recorded-walk audio: never). is_guest_visible_observation predicate. Encounters: shared_with_guests + encounter_visible_to; curator "Share with guests" toggle; Participant notes tab. Guest notes (guest-notes.js) on species page + walk stops, text only (audio/photo refused), escaped; own notes print in Lists/print/PDF (guest PDF now allowed). Record tab hides audio for participants.
-- Recon files: RECON_enrichment_scope_22oct.md, RECON_batch8_22oct.md.
-
-### Next (order)
-1. Browser walkthroughs for this session's work (A, B, C, E, F, G additions below).
-2. Small follow-ups: Record tab Photo button still shown to participants (server refuses participant photos); POST /api/recorded-walks still open to guests (table has no owner column).
-3. Stage C publish panel.
-4. Batches 9, 10, 11, 11b, 12, 13, 15, 15b, 16, 17 per REPORT.md section 9.
-
-### Settled (Melvin, 22 Oct)
-- "Enrich selected" = scope "Current list" (Foraging List). Encounter field recipes carry the warnings.
-- Handout rule: curator prep OR look-alike warning. All cautionary text travels with culinary content; no duplicate where the species block sits beside it.
-- Redraft-medicinal button on Scan → Backfill. Participant devices: text notes only, no audio.
-- Pimpinella major/saxifraga keep culinary content on handouts via curator look-alike warning; no carrot-family rule (Melvin, 22 Oct).
-
-### Open decisions (Melvin)
-- None.
-
-### Rules learned
-- Don't run a full enrichment; use a scope + the 25 cap.
-- Auto-enrichment after an ID correction has no dry run but goes through the same guards.
-- Renaming a helper used under app/ crashes the uvicorn reload until all callers are updated — make such edits in one pass.
-- Tests that start the redraft task write logs/redraft_medicinal_jq*.json into the real logs/ (not gitignored) — the test now removes what it wrote.
-
-### Scope added (keep)
-- 11b, 15b, 17 as in the previous Current State (merges, genus/family sweep, non-European card sweep, G3-held drafts, English common-name backfill; empty saved walk stops; Lists lookalike toggle, reload banner, thumbnail field, CLAUDE.md Alembic head, scan.html:1795, curator-device list refresh).
-
-### Melvin's review queue
-- Warning review cards (all verdicts, walk species first). Edit Oxalis grandis 3493. Text tidy-up (352 edible_parts / 689 id_notes with no history). 347 Takeout person_animal rejects (mount DIGIERA). Draft #3252 Amaranthus hybridus.
-
-### Browser checks: walkthroughs
-Test species: Conium maculatum, Oenanthe crocata, Sambucus nigra, 229 St John's wort, 295 Ramsons, 97 Aspen, Pineapple weed.
-- A. Species page: three views, safety sort, filters kept, capitalised names, test species pages; species resources load. NEW: Culinary section, Taste notes, every recipe card and field recipe show look-alike + preparation warnings (uncurated labelled "Source text — not yet reviewed"); a species with none looks unchanged.
-- B. Map + walks: Conium pin full look-alike; Ramsons labelled; ☠ on 155/688/745; walk stop cards; Edit walk → Save → Re-route; Tidy route order; Export summary; published Rümmelsbühl page; Discover/Find cards, ✎ rename, Enrich, note tags. NEW: walk 5 shows the tidied order, 7.6 km, dashed 38→12 and 32→27; map pop-up warnings once; Export summary species block once (none inside the recipe box); Find → Make? cards carry both warnings; participant phone: walk stops show "📝 Add a note" and it saves.
-- C. Handouts: Lists → print (field guide, workshop) + PDF in 3 layouts: Conium uncut, 229 withheld label, no PFAF Folklore, corners present. NEW: field-guide entries show warnings once; workshop pages show warnings before Foraging and Recipe; booklet PDF warnings once; Ramsons and a Macrolepiota print culinary content, 229 still withheld; a participant's PDF/print shows only their own notes under the right species, yours shows none.
-- D. Review: Critical section; verdict queue; warning cards (Approve / Edit / Remove); Regenerate side by side; Run now dry run + Cancel; AI-draft card buttons; reviewer notes.
-- E. Phone: pair via Add device; installed app signed in; used link → "Link already used"; bare URL → "Ask Melvin"; Revoke works; unpaired shows "not signed in", not "offline"; List view at 390px; proximity alert folds; airplane-mode short walk (outbox). NEW (participant phone): species page note box with "Type, or dictate using the mic on your keyboard." and keyboard dictation works; a pending/rejected photo URL gives 404; species gallery shows confirmed photos only; Record tab has no 🎙 button and a typed note saves; on your laptop the 🎙 button still records.
-- F. Settings/system: "Your devices & sharing"; no guest toggle; device list (no Add device on phone); every enrichment button asks first; paused run shows "paused — no network"; run summary skip counts; DeepSeek key; Jobs pop-up; caffeinate exits. NEW: every bulk button opens the scope dialog first; Continue disabled until a scope is chosen; walk dropdown lists saved walks; dry run shows "Scope: … queued (cap 25); N not queued"; 🍄 Fungi edibility and 💊 Re-draft medicinal notes buttons work (Cancel writes nothing); Review run summary shows "Not queued (cap 25)".
-- G. Workshops: participant link uses the ngrok address; guest view loads on a second phone; used link refused; revoke works; works on mobile data. NEW: tick "Share with guests" on one of your encounters — a participant sees its text, transcript, confirmed photos and audio; your unshared encounters and other participants' notes stay hidden; Participant notes tab groups by session and person, names with <b> show as plain text.
-Rule: Code tests whatever it can; new browser checks go into a walkthrough, not numbered.
-
-## Current State — 22 Oct 2026, afternoon
-
-### Build
-- Alembic head 0056 (CLAUDE.md still states an older head — fix in batch 17). 288 tests pass (24 files). Service worker foragingid-v11 (hard refresh needed once).
-- No app/ or frontend/ changes this session.
-
-### Done this session (22 Oct)
-- Context-warning hook + status line (config only): scripts/dev/context_check.py — UserPromptSubmit hook prints CONTEXT WARNING at 400k–500k and CONTEXT LIMIT above 500k (raised from 120k/150k: the app shows 141k as 15% of the window); --statusline prints "ctx ~Nk"; one shared context_tokens() helper; never fails a prompt. Wired in .claude/settings.local.json (not committed). Tested on this session's transcript and fake 130k/160k transcripts; the hook fired live (~149k, ~150k at the old thresholds).
-- CLAUDE.md: "If a CONTEXT WARNING or CONTEXT LIMIT note appears, follow it before anything else." (Session Start) and "The End Session block is always complete and paste-ready. Never placeholders, never instructions for Melvin to edit it." (Session End).
-- Enrichment scope / handout rule / prep-warnings-with-recipes: Step 1 recon only → RECON_enrichment_scope_22oct.md (file:line quotes). Nothing built.
-
-### Next (order)
-1. Build from RECON_enrichment_scope_22oct.md (Melvin's 22 Oct prompt, Steps 2–3): scope picker on every bulk enrichment + backfill endpoint through dry-run.js — scopes: a saved walk (walk_membership, same members as the map), "Current list" (the Foraging List species), all eligible (never the default); no scope = nothing runs; per-run cap 25, walk species first, remainder reported in the run summary; persist the scoped list so resume keeps it; id_notes backfill gets a names filter; dry run counts the chosen scope only; handout rule in safety_decision (curator prep OR look-alike warning) + withheld→shown species list; one shared prep-warning-with-recipe helper (JS + Python twin) on every recipe surface incl. encounter field recipes; tests + full suite.
-2. Confirm the walk tidy-order / warning cards / UI fixes report; then Tidy route order on Morning sunshine walk.
-3. Batch 8 (guest visibility), then Stage C publish panel.
-4. Batches 9, 10, 11, 11b, 12, 13, 15, 15b, 16, 17 per REPORT.md section 9.
-
-### Settled (Melvin, 22 Oct)
-- Handout culinary rule: a caution species may print culinary content on handouts when it has a curator-authored preparation_warnings OR look_alike_warnings (to be built, Next #1).
-- "Enrich selected" = a scope called "Current list" (the Foraging List species). No new select mode on the Species page.
-- Encounter field recipes (encounters-main.js:1063, species.html:3348) carry the prep warning too.
-
-### Open decisions (Melvin)
-- None.
-
-### Rules learned
-- Don't run a full enrichment: the dry run shows ~900 new drafts. Run it for walk species only, in small batches (the cap in Next #1 builds this in).
-- Auto-enrichment after an ID correction has no dry run, but goes through the same guards.
-
-### Scope added (keep)
-- 11b: merges 704→457, 758↔757, 708↔412, 608↔589, 103↔531, 600↔749, 82↔200; relink Collybia nuda (obs 8410) and Conyza canadensis; GBIF check 187; genus/family sweep (Aconitum, Alchemilla, Bellis, Erigeron, Imleria, Matricaria, "Rubus subg. Rubus", "Rosa sect. Caninae", 494 puffball) + find the fill that wrote them; non-European card sweep (Rubus occidentalis, Quercus bicolor/velutina, Acer macrophyllum, Juglans nigra, Picea mariana, Tilia americana, Salix barclayi, Erigeron aliceae, Chrysosplenium americanum, Luffa, Ulmus davidiana, Viburnum trilobum, Carpinus caroliniana, Larix lyallii, Pinus radiata, Hydrocotyle, 808 Ambrosia confertiflora); G3-held drafts decided after the sweep; English common-name backfill (Dianthus carthusianorum → Carthusian pink).
-- 15b: empty saved walk stops hide or drop.
-- 17: Lists "Lookalike warnings" toggle dead; reload banner on new app version; thumbnail field on /api/species/; CLAUDE.md Alembic head; scan.html:1795 loadPrefilterThreshold; curator-device list refreshes itself; enrichment species-limit option (covered by the Next #1 cap).
-
-### Melvin's review queue
-- Warning review cards (all verdicts, walk species first).
-- Edit Oxalis grandis 3493.
-- Text tidy-up (on the simmer): 352 edible_parts / 689 id_notes with no history, many long PFAF dumps or "North America" text.
-- 347 Takeout person_animal rejects (mount DIGIERA). Draft #3252 Amaranthus hybridus.
-
-### Browser checks: walkthroughs
-Test species: Conium maculatum, Oenanthe crocata, Sambucus nigra, 229 St John's wort, 295 Ramsons, 97 Aspen, Pineapple weed.
-- A. Species page: three views, safety sort, filters kept, capitalised names, test species pages; species resources load.
-- B. Map + walks: Conium pin full look-alike; Ramsons labelled; ☠ on 155/688/745; walk stop cards; Edit walk → Save → Re-route; Tidy route order; Export summary; published Rümmelsbühl page; Discover/Find cards, ✎ rename, Enrich, note tags.
-- C. Handouts: Lists → print (field guide, workshop) + PDF in 3 layouts: Conium uncut, 229 withheld label, no PFAF Folklore, corners present.
-- D. Review: Critical section; verdict queue; warning cards (Approve / Edit / Remove); Regenerate side by side; Run now dry run + Cancel; AI-draft card buttons; reviewer notes.
-- E. Phone: pair via Add device; installed app signed in; used link → "Link already used"; bare URL → "Ask Melvin"; Revoke works; unpaired shows "not signed in", not "offline"; List view at 390px; proximity alert folds; airplane-mode short walk (outbox).
-- F. Settings/system: "Your devices & sharing"; no guest toggle; device list (no Add device on phone); every enrichment button asks first; paused run shows "paused — no network"; run summary skip counts; DeepSeek key; Jobs pop-up; caffeinate exits.
-- G. Workshops: participant link uses the ngrok address; guest view loads on a second phone; used link refused; revoke works; works on mobile data.
-Rule: Code tests whatever it can; new browser checks go into a walkthrough, not numbered.
-
-## Current State — 22 Oct 2026, afternoon
-
-### Build
-- Alembic head 0056 (CLAUDE.md still states an older head — fix in batch 17). 288 tests pass (24 files). Service worker foragingid-v11 (hard refresh needed once).
-- No app/ or frontend/ changes this session.
-
-### Done this session (22 Oct)
-- Context-warning hook + status line (config only): scripts/dev/context_check.py — UserPromptSubmit hook prints CONTEXT WARNING at 120k–150k and CONTEXT LIMIT above 150k; --statusline prints "ctx ~Nk"; one shared context_tokens() helper; never fails a prompt. Wired in .claude/settings.local.json (not committed). Tested on this session's transcript and fake 130k/160k transcripts; the hook fired live at ~149k. CLAUDE.md: "If a CONTEXT WARNING or CONTEXT LIMIT note appears, follow it before anything else."
-- Enrichment scope / handout rule / prep-warnings-with-recipes: Step 1 recon only → RECON_enrichment_scope_22oct.md (file:line quotes). Nothing built.
-
-### Next (order)
-1. Build from RECON_enrichment_scope_22oct.md (Melvin's 22 Oct prompt, Steps 2–3): scope picker (walk / selected / all, never default; no scope = nothing runs) on every bulk enrichment + backfill endpoint through dry-run.js; per-run cap 25, walk species first, remainder reported; persist the scoped list so resume keeps it; id_notes backfill gets a names filter; handout rule in safety_decision (curator prep OR look-alike) + withheld→shown list; one shared prep-warning-with-recipe helper (JS + Python twin) on every recipe surface; tests + full suite.
-2. Confirm the walk tidy-order / warning cards / UI fixes report; then Tidy route order on Morning sunshine walk.
-3. Batch 8 (guest visibility), then Stage C publish panel.
-4. Batches 9, 10, 11, 11b, 12, 13, 15, 15b, 16, 17 per REPORT.md section 9.
-
-### Open decisions (Melvin)
-- "Enrich selected": reuse the Species page Foraging List selection (select=1 picker) or a separate enrichment selection?
-- Should encounter field recipes (encounters-main.js:1063, species.html:3348) also carry the prep warning?
-- (Settled 22 Oct: a caution species may print culinary content on handouts with a curator prep OR look-alike warning — to be built.)
-
-### Rules learned
-- Don't run a full enrichment: the dry run shows ~900 new drafts. Run it for walk species only, in small batches (the cap in Next #1 builds this in).
-- Auto-enrichment after an ID correction has no dry run, but goes through the same guards.
-- Big multi-surface prompts: start them in a fresh session (the context hook warns at 120k).
-
-### Scope added (keep)
-- 11b: merges 704→457, 758↔757, 708↔412, 608↔589, 103↔531, 600↔749, 82↔200; relink Collybia nuda (obs 8410) and Conyza canadensis; GBIF check 187; genus/family sweep (Aconitum, Alchemilla, Bellis, Erigeron, Imleria, Matricaria, "Rubus subg. Rubus", "Rosa sect. Caninae", 494 puffball) + find the fill that wrote them; non-European card sweep (Rubus occidentalis, Quercus bicolor/velutina, Acer macrophyllum, Juglans nigra, Picea mariana, Tilia americana, Salix barclayi, Erigeron aliceae, Chrysosplenium americanum, Luffa, Ulmus davidiana, Viburnum trilobum, Carpinus caroliniana, Larix lyallii, Pinus radiata, Hydrocotyle, 808 Ambrosia confertiflora); G3-held drafts decided after the sweep; English common-name backfill (Dianthus carthusianorum → Carthusian pink).
-- 15b: empty saved walk stops hide or drop.
-- 17: Lists "Lookalike warnings" toggle dead; reload banner on new app version; thumbnail field on /api/species/; CLAUDE.md Alembic head; scan.html:1795 loadPrefilterThreshold; curator-device list refreshes itself; enrichment species-limit option (superseded by Next #1 cap).
-
-### Melvin's review queue
-- Warning review cards (all verdicts, walk species first).
-- Edit Oxalis grandis 3493.
-- Text tidy-up (on the simmer): 352 edible_parts / 689 id_notes with no history, many long PFAF dumps or "North America" text.
-- 347 Takeout person_animal rejects (mount DIGIERA). Draft #3252 Amaranthus hybridus.
-
-### Browser checks: walkthroughs
-Rule: Code tests whatever it can; new browser checks go into a walkthrough, not numbered.
-
-## Current State — 21 Oct 2026, evening
-
-### Build
-- Alembic head 0055 (CLAUDE.md still states an older head — fix in batch 17).
-- 202+ tests pass (plus 13 new orphan tests). Service worker v9 (species cache renamed, old cached profiles dropped).
-
-### Done since 16:00
-- Batch 6: one shared warnings helper. In-app shows full text; uncurated text is labelled "Source text — not yet reviewed" and is never dropped. Handouts (Lists, print, PDF, Export summary, experience page) show curator text only, uncut, read from the DB. Caution species with no curator prep warning print no culinary content ("⚠ caution — warning not yet reviewed"): 25 of 45 caution species. Marker writes are refused by a DB trigger (0055).
-- Aspen (97) edible + edible_parts (edibility history #2229, culinary history #3388). Recipe #48 shows. David's-harp stays toxic, recipe #37 hidden.
-- Oenanthe crocata (653) look-alike text, curator-authored (#3389).
-- E-14 cleanup: 10 marker fields got a real human row (#3390–3399); drafts 3181/3194/3202/3209/3223/3232 approved. Melvin read the Keck and Meum texts.
-- Common names in sentence case through the shared helpers (no DB writes).
-- Species page: Large / Grid / List views; List sorts by every column, including safety.
-- 1b: dual-API-agreed harmless species are now included on published walks (rule 7 hazard blocker unchanged). Walk 4 republished: ed3b4d9, 63 species, 31 stops, 244 photos with clean EXIF/GPS, live pages byte-identical to the build. w/walk-4/ not published.
-- Orphan species cards: one shared rule (species_has_live_observation / species_is_reference); rejected photos no longer back a card; GC runs on every reject and un-reject path; verdict and edibility queues filtered; kingdom gate at card creation (no card for non-plant/fungi top candidates). 44 cards orphan-marked, 72 drafts invalidated (snapshot db_20261021_193804). Stale markers cleared on 808 and 810 (db_20261021_194150). Verdict queue 33 → 5 (Hoheria, Fagus × taurica, Ulmus laciniata, Aspalathus, Bowlesia — fix the photo IDs in Species ID review).
-- Grid "toxicity unknown" everywhere was a stale browser cache, not a bug.
-
-### Next (order)
-1. Batch 7: share-link secret gates LAN/ngrok (localhost exempt) + escape source text on all pages (review.html:1962 first).
-2. Batch 8.
-3. Stage C publish panel (in-app republish) after batch 8.
-4. Batches 9, 10, 11, 11b, 12, 13, 15, 15b, 16, 17 per REPORT.md section 9.
-
-### Scope added (keep)
-- 11b, first:
-  - Merges: 704→457 Trametes versicolor; 758↔757 Coronilla varia; 708↔412 Thelypteris limbosperma; 608↔589 Cota tinctoria; 103↔531 Chamaenerion angustifolium; 600↔749 Mycelis muralis; 82↔200 Cirsium ferox.
-  - Relink the Collybia nuda and Conyza canadensis observations (incl. obs 8410 species_primary vs species_id 505). GBIF check on 187 "Hypericum perfoliatum".
-  - Genus/family sweep (family column holding a genus: Aconitum, Alchemilla, Bellis, Erigeron, Imleria, Matricaria, "Rubus subg. Rubus", "Rosa sect. Caninae"; 494 puffball as Caprifoliaceae) + find the fill that wrote them.
-  - Non-European species card sweep against data/reference/plantnet_europe_species.json (e.g. Rubus occidentalis, Quercus bicolor/velutina, Acer macrophyllum, Juglans nigra, Picea mariana, Tilia americana, Salix barclayi, Erigeron aliceae, Chrysosplenium americanum, Luffa, 808 Ambrosia confertiflora/obs 24222). Junk cards carrying a human census verdict are protected as reference cards and need deliberate removal. "norway spruce" 685 stays marked (C-04).
-  - English common-name backfill (e.g. Dianthus carthusianorum → Carthusian pink).
-- 15b: empty saved walk stops (walk 5 stop 35) hide or drop.
-- 17: the Lists "Lookalike warnings" toggle is now dead (remove or relabel); a reload banner on a new app version; a thumbnail field on /api/species/ (Large/List views currently load all map data); CLAUDE.md Alembic head; scan.html:1795 loadPrefilterThreshold.
-
-### Open decisions (Melvin)
-- Should a curator look-alike warning (not only prep) let a caution species print culinary content on handouts? Affects 817 Meadow Mushroom, 711 Marasmius.
-
-### Melvin's review queue
-- Caution species with no warning text: 817, 460, 810, 677, 381, 702, 816, 821, 405, 820, 711, 411.
-- Uncurated caution text to review: 295 Ramsons, 764, 98, 672, 639, 149, 363, 229, 148, 590, 603, 194, 399.
-- 5 verdict-queue photos to re-ID (above). 92 medicinal drafts + Verbena 3544; edit Oxalis grandis 3493. Refusal drafts to reject. 347 Takeout person_animal rejects (mount DIGIERA). Draft #3252 Amaranthus hybridus.
-
-### Browser checks: six walkthroughs (replace the old numbered list)
-Test species: Conium maculatum, Oenanthe crocata, Sambucus nigra, 229 St John's wort, 295 Ramsons, 97 Aspen, Pineapple weed.
-- A. Species page: three views, safety sort, filters kept, capitalised names, test species pages (badges, full warnings, labels, recipe #48).
-- B. Map + walk 4: Conium pin full look-alike; Ramsons labelled; ☠ on 155/688/745; walk panel stop cards (817 look-alike, Sambucus open, "Also here" lines); Edit walk → Save → Re-route; Export summary; published Rümmelsbühl page (Stellaria graminea present, caution recipes withheld).
-- C. Handouts: Lists → browser print (field guide with ID notes off; workshop) + PDF in 3 layouts: Conium uncut, 229 withheld label, no PFAF Folklore section, corners present.
-- D. Review: Critical section + red badge; verdict queue shows 5; warning drafts; Second Opinion 24149; capitalised names.
-- E. Phone: SW v9; List view at 390px; proximity alert folds and opens; guest /api/settings 403 over ngrok.
-- F. Settings/system: DeepSeek key set; API dashboard; species chat; About regenerate; Jobs pop-up drag; caffeinate exits with the server.
-Rule: Code tests whatever it can (real JS via jsc, real PDFs); new browser checks are added to a walkthrough, not numbered.
+- 11b_review (28). genus_reid (6: Usnea ×2, Salix, Crocus, Taraxacum ×2). bryony_check (8229). dandelion_check (24429 on 286 Taraxacum officinale, 13%, suggestion Hyoseris radiata — approve it before the walk 5 republish). hazard_review cards (18) + 17052, 17737. 22 recipes needing a title. Five rejected photos restored in July (15958, 15970, 21333, 21673, 21799). Warning review cards. Text tidy-up (352 edible_parts / 689 id_notes). 347 Takeout person_animal rejects (mount DIGIERA). Draft #3252 Amaranthus hybridus.
 
 ## History
+
+### 2026-10-28 08:07
+**Final audit pass combined recon (15b, 15, 16, 17) + step 0 small items**
+
+**Built:**
+- RECON_final_pass_28oct.md: per-item tables, build order 17 to 15 to 15b with one sw.js bump, batch 16 split plan, 31 decisions
+**Fixed:**
+- obs 24429 to needs_review, label dandelion_check, reviewer note (edits 22040-22042); snapshot db_20261028_042247
+- card 286 taste_notes test draft cleared to NULL (history 3785, human)
+- CHANGELOG Current State: Backlog entry for walk route-line zoom/drag bug
+**Files:** `docs/audit/2026-10-20/RECON_final_pass_28oct.md`, `CHANGELOG.md`
+**Pending:**
+- Walk 5 republish held: plan clean but 64 species not 66 (Dandelion only on 24429, now in Review) - Melvin decides
+- Melvin answers the 31 decisions, then prompt B
 
 ### 2026-10-28 04:20
 **Snapshot** — End of session — Session ended from Settings page
@@ -9025,6 +8846,206 @@ DB: `snapshots/db_20260528_234754.sqlite`
 **Files:** `app/services/settings_service.py`, `app/models/observation.py`, `app/api/scan.py`, `app/services/identification.py`, `frontend/scan.html`
 
 ## Archive — earlier Current State blocks
+
+_Moved here 28 Oct 2026 from the top of the file: four superseded Current State snapshots (21–22 Oct 2026) that End Session had left stacked under the live block; kept unchanged; headings demoted one level._
+
+### Current State — 22 Oct 2026, evening
+
+#### Build
+- Alembic head 0057 (encounters.shared_with_guests) — applied to the live DB after snapshot db_20261022_162240. CLAUDE.md still says 0050 (fix in batch 17).
+- Tests: 25 files, 303 counted + test_taxonomy, all pass. Service worker foragingid-v13 (hard refresh once).
+- Uncommitted until this End Session: enrichment scope, handout rule, batch 8, Fix A, Fix B.
+
+#### Done this session (22 Oct)
+- Tidy route order on walk 5 "Morning sunshine Gresgen to Adelsberg": crossings 3→0, 13 legs changed, 11,499→7,609 m / 93 min, members unchanged (108). Snapshot db_20261022_132801, commit 45c81a9. Straight dashed legs: 38→12, 32→27.
+- Removed CHANGELOG placeholder line in the older 22 Oct block.
+- Enrichment scope (app/services/enrichment_scope.py): one resolver; scope = saved walk (walk_membership) / Current list (Foraging List) / all eligible; no default; no scope = 400. Cap 25 per run, walk species first, remainder reported. dry-run.js scope picker on every bulk button. Scoped on enrich/run, re-enrich-empty, enrichment/run, drafts/backfill (incl. ID notes), redraft-medicinal, backfill-fungi-edibility (both now have a dry run + button on Scan → Backfill). enrichment_run saves its species list with the paused/interrupted run record; resume stays within it; old unscoped bp 203 is never resumed.
+- Handout rule (safety_decision): a caution species prints culinary content with a curator prep OR look-alike warning. Withheld→shown: 817 Agaricus campestris, 295 Allium ursinum, 98 Artemisia vulgaris, 363 Gentiana lutea, 816/821/405/820 Macrolepiota, 711 Marasmius oreades, 590 Pimpinella major, 603 Pimpinella saxifraga.
+- Fix A: redraft-medicinal eligible only when medicinal_notes is empty or a placeholder (medicinal_notes_redraftable), not curator-written, no pending draft; toxic skipped.
+- Fix B: SafetyGate.culinaryWarnings / culinary_warnings (look-alike + preparation) with all culinary content — species page culinary/taste/recipes/field recipes, Lists panel, workshop foraging + recipe (Lists, print, PDF), experience Recipes tab, Find, encounter field recipes, personal card. Not repeated where the species block sits beside (map pop-up, Export summary, field-guide entries, PDF booklet, experience plant panel).
+- Batch 8: guest access deny-by-default (app/services/guest_access.py in the middleware); media gate (thumbnails/uploads: confirmed only; encounter audio: visible encounters only; recorded-walk audio: never). is_guest_visible_observation predicate. Encounters: shared_with_guests + encounter_visible_to; curator "Share with guests" toggle; Participant notes tab. Guest notes (guest-notes.js) on species page + walk stops, text only (audio/photo refused), escaped; own notes print in Lists/print/PDF (guest PDF now allowed). Record tab hides audio for participants.
+- Recon files: RECON_enrichment_scope_22oct.md, RECON_batch8_22oct.md.
+
+#### Next (order)
+1. Browser walkthroughs for this session's work (A, B, C, E, F, G additions below).
+2. Small follow-ups: Record tab Photo button still shown to participants (server refuses participant photos); POST /api/recorded-walks still open to guests (table has no owner column).
+3. Stage C publish panel.
+4. Batches 9, 10, 11, 11b, 12, 13, 15, 15b, 16, 17 per REPORT.md section 9.
+
+#### Settled (Melvin, 22 Oct)
+- "Enrich selected" = scope "Current list" (Foraging List). Encounter field recipes carry the warnings.
+- Handout rule: curator prep OR look-alike warning. All cautionary text travels with culinary content; no duplicate where the species block sits beside it.
+- Redraft-medicinal button on Scan → Backfill. Participant devices: text notes only, no audio.
+- Pimpinella major/saxifraga keep culinary content on handouts via curator look-alike warning; no carrot-family rule (Melvin, 22 Oct).
+
+#### Open decisions (Melvin)
+- None.
+
+#### Rules learned
+- Don't run a full enrichment; use a scope + the 25 cap.
+- Auto-enrichment after an ID correction has no dry run but goes through the same guards.
+- Renaming a helper used under app/ crashes the uvicorn reload until all callers are updated — make such edits in one pass.
+- Tests that start the redraft task write logs/redraft_medicinal_jq*.json into the real logs/ (not gitignored) — the test now removes what it wrote.
+
+#### Scope added (keep)
+- 11b, 15b, 17 as in the previous Current State (merges, genus/family sweep, non-European card sweep, G3-held drafts, English common-name backfill; empty saved walk stops; Lists lookalike toggle, reload banner, thumbnail field, CLAUDE.md Alembic head, scan.html:1795, curator-device list refresh).
+
+#### Melvin's review queue
+- Warning review cards (all verdicts, walk species first). Edit Oxalis grandis 3493. Text tidy-up (352 edible_parts / 689 id_notes with no history). 347 Takeout person_animal rejects (mount DIGIERA). Draft #3252 Amaranthus hybridus.
+
+#### Browser checks: walkthroughs
+Test species: Conium maculatum, Oenanthe crocata, Sambucus nigra, 229 St John's wort, 295 Ramsons, 97 Aspen, Pineapple weed.
+- A. Species page: three views, safety sort, filters kept, capitalised names, test species pages; species resources load. NEW: Culinary section, Taste notes, every recipe card and field recipe show look-alike + preparation warnings (uncurated labelled "Source text — not yet reviewed"); a species with none looks unchanged.
+- B. Map + walks: Conium pin full look-alike; Ramsons labelled; ☠ on 155/688/745; walk stop cards; Edit walk → Save → Re-route; Tidy route order; Export summary; published Rümmelsbühl page; Discover/Find cards, ✎ rename, Enrich, note tags. NEW: walk 5 shows the tidied order, 7.6 km, dashed 38→12 and 32→27; map pop-up warnings once; Export summary species block once (none inside the recipe box); Find → Make? cards carry both warnings; participant phone: walk stops show "📝 Add a note" and it saves.
+- C. Handouts: Lists → print (field guide, workshop) + PDF in 3 layouts: Conium uncut, 229 withheld label, no PFAF Folklore, corners present. NEW: field-guide entries show warnings once; workshop pages show warnings before Foraging and Recipe; booklet PDF warnings once; Ramsons and a Macrolepiota print culinary content, 229 still withheld; a participant's PDF/print shows only their own notes under the right species, yours shows none.
+- D. Review: Critical section; verdict queue; warning cards (Approve / Edit / Remove); Regenerate side by side; Run now dry run + Cancel; AI-draft card buttons; reviewer notes.
+- E. Phone: pair via Add device; installed app signed in; used link → "Link already used"; bare URL → "Ask Melvin"; Revoke works; unpaired shows "not signed in", not "offline"; List view at 390px; proximity alert folds; airplane-mode short walk (outbox). NEW (participant phone): species page note box with "Type, or dictate using the mic on your keyboard." and keyboard dictation works; a pending/rejected photo URL gives 404; species gallery shows confirmed photos only; Record tab has no 🎙 button and a typed note saves; on your laptop the 🎙 button still records.
+- F. Settings/system: "Your devices & sharing"; no guest toggle; device list (no Add device on phone); every enrichment button asks first; paused run shows "paused — no network"; run summary skip counts; DeepSeek key; Jobs pop-up; caffeinate exits. NEW: every bulk button opens the scope dialog first; Continue disabled until a scope is chosen; walk dropdown lists saved walks; dry run shows "Scope: … queued (cap 25); N not queued"; 🍄 Fungi edibility and 💊 Re-draft medicinal notes buttons work (Cancel writes nothing); Review run summary shows "Not queued (cap 25)".
+- G. Workshops: participant link uses the ngrok address; guest view loads on a second phone; used link refused; revoke works; works on mobile data. NEW: tick "Share with guests" on one of your encounters — a participant sees its text, transcript, confirmed photos and audio; your unshared encounters and other participants' notes stay hidden; Participant notes tab groups by session and person, names with <b> show as plain text.
+Rule: Code tests whatever it can; new browser checks go into a walkthrough, not numbered.
+
+### Current State — 22 Oct 2026, afternoon
+
+#### Build
+- Alembic head 0056 (CLAUDE.md still states an older head — fix in batch 17). 288 tests pass (24 files). Service worker foragingid-v11 (hard refresh needed once).
+- No app/ or frontend/ changes this session.
+
+#### Done this session (22 Oct)
+- Context-warning hook + status line (config only): scripts/dev/context_check.py — UserPromptSubmit hook prints CONTEXT WARNING at 400k–500k and CONTEXT LIMIT above 500k (raised from 120k/150k: the app shows 141k as 15% of the window); --statusline prints "ctx ~Nk"; one shared context_tokens() helper; never fails a prompt. Wired in .claude/settings.local.json (not committed). Tested on this session's transcript and fake 130k/160k transcripts; the hook fired live (~149k, ~150k at the old thresholds).
+- CLAUDE.md: "If a CONTEXT WARNING or CONTEXT LIMIT note appears, follow it before anything else." (Session Start) and "The End Session block is always complete and paste-ready. Never placeholders, never instructions for Melvin to edit it." (Session End).
+- Enrichment scope / handout rule / prep-warnings-with-recipes: Step 1 recon only → RECON_enrichment_scope_22oct.md (file:line quotes). Nothing built.
+
+#### Next (order)
+1. Build from RECON_enrichment_scope_22oct.md (Melvin's 22 Oct prompt, Steps 2–3): scope picker on every bulk enrichment + backfill endpoint through dry-run.js — scopes: a saved walk (walk_membership, same members as the map), "Current list" (the Foraging List species), all eligible (never the default); no scope = nothing runs; per-run cap 25, walk species first, remainder reported in the run summary; persist the scoped list so resume keeps it; id_notes backfill gets a names filter; dry run counts the chosen scope only; handout rule in safety_decision (curator prep OR look-alike warning) + withheld→shown species list; one shared prep-warning-with-recipe helper (JS + Python twin) on every recipe surface incl. encounter field recipes; tests + full suite.
+2. Confirm the walk tidy-order / warning cards / UI fixes report; then Tidy route order on Morning sunshine walk.
+3. Batch 8 (guest visibility), then Stage C publish panel.
+4. Batches 9, 10, 11, 11b, 12, 13, 15, 15b, 16, 17 per REPORT.md section 9.
+
+#### Settled (Melvin, 22 Oct)
+- Handout culinary rule: a caution species may print culinary content on handouts when it has a curator-authored preparation_warnings OR look_alike_warnings (to be built, Next #1).
+- "Enrich selected" = a scope called "Current list" (the Foraging List species). No new select mode on the Species page.
+- Encounter field recipes (encounters-main.js:1063, species.html:3348) carry the prep warning too.
+
+#### Open decisions (Melvin)
+- None.
+
+#### Rules learned
+- Don't run a full enrichment: the dry run shows ~900 new drafts. Run it for walk species only, in small batches (the cap in Next #1 builds this in).
+- Auto-enrichment after an ID correction has no dry run, but goes through the same guards.
+
+#### Scope added (keep)
+- 11b: merges 704→457, 758↔757, 708↔412, 608↔589, 103↔531, 600↔749, 82↔200; relink Collybia nuda (obs 8410) and Conyza canadensis; GBIF check 187; genus/family sweep (Aconitum, Alchemilla, Bellis, Erigeron, Imleria, Matricaria, "Rubus subg. Rubus", "Rosa sect. Caninae", 494 puffball) + find the fill that wrote them; non-European card sweep (Rubus occidentalis, Quercus bicolor/velutina, Acer macrophyllum, Juglans nigra, Picea mariana, Tilia americana, Salix barclayi, Erigeron aliceae, Chrysosplenium americanum, Luffa, Ulmus davidiana, Viburnum trilobum, Carpinus caroliniana, Larix lyallii, Pinus radiata, Hydrocotyle, 808 Ambrosia confertiflora); G3-held drafts decided after the sweep; English common-name backfill (Dianthus carthusianorum → Carthusian pink).
+- 15b: empty saved walk stops hide or drop.
+- 17: Lists "Lookalike warnings" toggle dead; reload banner on new app version; thumbnail field on /api/species/; CLAUDE.md Alembic head; scan.html:1795 loadPrefilterThreshold; curator-device list refreshes itself; enrichment species-limit option (covered by the Next #1 cap).
+
+#### Melvin's review queue
+- Warning review cards (all verdicts, walk species first).
+- Edit Oxalis grandis 3493.
+- Text tidy-up (on the simmer): 352 edible_parts / 689 id_notes with no history, many long PFAF dumps or "North America" text.
+- 347 Takeout person_animal rejects (mount DIGIERA). Draft #3252 Amaranthus hybridus.
+
+#### Browser checks: walkthroughs
+Test species: Conium maculatum, Oenanthe crocata, Sambucus nigra, 229 St John's wort, 295 Ramsons, 97 Aspen, Pineapple weed.
+- A. Species page: three views, safety sort, filters kept, capitalised names, test species pages; species resources load.
+- B. Map + walks: Conium pin full look-alike; Ramsons labelled; ☠ on 155/688/745; walk stop cards; Edit walk → Save → Re-route; Tidy route order; Export summary; published Rümmelsbühl page; Discover/Find cards, ✎ rename, Enrich, note tags.
+- C. Handouts: Lists → print (field guide, workshop) + PDF in 3 layouts: Conium uncut, 229 withheld label, no PFAF Folklore, corners present.
+- D. Review: Critical section; verdict queue; warning cards (Approve / Edit / Remove); Regenerate side by side; Run now dry run + Cancel; AI-draft card buttons; reviewer notes.
+- E. Phone: pair via Add device; installed app signed in; used link → "Link already used"; bare URL → "Ask Melvin"; Revoke works; unpaired shows "not signed in", not "offline"; List view at 390px; proximity alert folds; airplane-mode short walk (outbox).
+- F. Settings/system: "Your devices & sharing"; no guest toggle; device list (no Add device on phone); every enrichment button asks first; paused run shows "paused — no network"; run summary skip counts; DeepSeek key; Jobs pop-up; caffeinate exits.
+- G. Workshops: participant link uses the ngrok address; guest view loads on a second phone; used link refused; revoke works; works on mobile data.
+Rule: Code tests whatever it can; new browser checks go into a walkthrough, not numbered.
+
+### Current State — 22 Oct 2026, afternoon
+
+#### Build
+- Alembic head 0056 (CLAUDE.md still states an older head — fix in batch 17). 288 tests pass (24 files). Service worker foragingid-v11 (hard refresh needed once).
+- No app/ or frontend/ changes this session.
+
+#### Done this session (22 Oct)
+- Context-warning hook + status line (config only): scripts/dev/context_check.py — UserPromptSubmit hook prints CONTEXT WARNING at 120k–150k and CONTEXT LIMIT above 150k; --statusline prints "ctx ~Nk"; one shared context_tokens() helper; never fails a prompt. Wired in .claude/settings.local.json (not committed). Tested on this session's transcript and fake 130k/160k transcripts; the hook fired live at ~149k. CLAUDE.md: "If a CONTEXT WARNING or CONTEXT LIMIT note appears, follow it before anything else."
+- Enrichment scope / handout rule / prep-warnings-with-recipes: Step 1 recon only → RECON_enrichment_scope_22oct.md (file:line quotes). Nothing built.
+
+#### Next (order)
+1. Build from RECON_enrichment_scope_22oct.md (Melvin's 22 Oct prompt, Steps 2–3): scope picker (walk / selected / all, never default; no scope = nothing runs) on every bulk enrichment + backfill endpoint through dry-run.js; per-run cap 25, walk species first, remainder reported; persist the scoped list so resume keeps it; id_notes backfill gets a names filter; handout rule in safety_decision (curator prep OR look-alike) + withheld→shown list; one shared prep-warning-with-recipe helper (JS + Python twin) on every recipe surface; tests + full suite.
+2. Confirm the walk tidy-order / warning cards / UI fixes report; then Tidy route order on Morning sunshine walk.
+3. Batch 8 (guest visibility), then Stage C publish panel.
+4. Batches 9, 10, 11, 11b, 12, 13, 15, 15b, 16, 17 per REPORT.md section 9.
+
+#### Open decisions (Melvin)
+- "Enrich selected": reuse the Species page Foraging List selection (select=1 picker) or a separate enrichment selection?
+- Should encounter field recipes (encounters-main.js:1063, species.html:3348) also carry the prep warning?
+- (Settled 22 Oct: a caution species may print culinary content on handouts with a curator prep OR look-alike warning — to be built.)
+
+#### Rules learned
+- Don't run a full enrichment: the dry run shows ~900 new drafts. Run it for walk species only, in small batches (the cap in Next #1 builds this in).
+- Auto-enrichment after an ID correction has no dry run, but goes through the same guards.
+- Big multi-surface prompts: start them in a fresh session (the context hook warns at 120k).
+
+#### Scope added (keep)
+- 11b: merges 704→457, 758↔757, 708↔412, 608↔589, 103↔531, 600↔749, 82↔200; relink Collybia nuda (obs 8410) and Conyza canadensis; GBIF check 187; genus/family sweep (Aconitum, Alchemilla, Bellis, Erigeron, Imleria, Matricaria, "Rubus subg. Rubus", "Rosa sect. Caninae", 494 puffball) + find the fill that wrote them; non-European card sweep (Rubus occidentalis, Quercus bicolor/velutina, Acer macrophyllum, Juglans nigra, Picea mariana, Tilia americana, Salix barclayi, Erigeron aliceae, Chrysosplenium americanum, Luffa, Ulmus davidiana, Viburnum trilobum, Carpinus caroliniana, Larix lyallii, Pinus radiata, Hydrocotyle, 808 Ambrosia confertiflora); G3-held drafts decided after the sweep; English common-name backfill (Dianthus carthusianorum → Carthusian pink).
+- 15b: empty saved walk stops hide or drop.
+- 17: Lists "Lookalike warnings" toggle dead; reload banner on new app version; thumbnail field on /api/species/; CLAUDE.md Alembic head; scan.html:1795 loadPrefilterThreshold; curator-device list refreshes itself; enrichment species-limit option (superseded by Next #1 cap).
+
+#### Melvin's review queue
+- Warning review cards (all verdicts, walk species first).
+- Edit Oxalis grandis 3493.
+- Text tidy-up (on the simmer): 352 edible_parts / 689 id_notes with no history, many long PFAF dumps or "North America" text.
+- 347 Takeout person_animal rejects (mount DIGIERA). Draft #3252 Amaranthus hybridus.
+
+#### Browser checks: walkthroughs
+Rule: Code tests whatever it can; new browser checks go into a walkthrough, not numbered.
+
+### Current State — 21 Oct 2026, evening
+
+#### Build
+- Alembic head 0055 (CLAUDE.md still states an older head — fix in batch 17).
+- 202+ tests pass (plus 13 new orphan tests). Service worker v9 (species cache renamed, old cached profiles dropped).
+
+#### Done since 16:00
+- Batch 6: one shared warnings helper. In-app shows full text; uncurated text is labelled "Source text — not yet reviewed" and is never dropped. Handouts (Lists, print, PDF, Export summary, experience page) show curator text only, uncut, read from the DB. Caution species with no curator prep warning print no culinary content ("⚠ caution — warning not yet reviewed"): 25 of 45 caution species. Marker writes are refused by a DB trigger (0055).
+- Aspen (97) edible + edible_parts (edibility history #2229, culinary history #3388). Recipe #48 shows. David's-harp stays toxic, recipe #37 hidden.
+- Oenanthe crocata (653) look-alike text, curator-authored (#3389).
+- E-14 cleanup: 10 marker fields got a real human row (#3390–3399); drafts 3181/3194/3202/3209/3223/3232 approved. Melvin read the Keck and Meum texts.
+- Common names in sentence case through the shared helpers (no DB writes).
+- Species page: Large / Grid / List views; List sorts by every column, including safety.
+- 1b: dual-API-agreed harmless species are now included on published walks (rule 7 hazard blocker unchanged). Walk 4 republished: ed3b4d9, 63 species, 31 stops, 244 photos with clean EXIF/GPS, live pages byte-identical to the build. w/walk-4/ not published.
+- Orphan species cards: one shared rule (species_has_live_observation / species_is_reference); rejected photos no longer back a card; GC runs on every reject and un-reject path; verdict and edibility queues filtered; kingdom gate at card creation (no card for non-plant/fungi top candidates). 44 cards orphan-marked, 72 drafts invalidated (snapshot db_20261021_193804). Stale markers cleared on 808 and 810 (db_20261021_194150). Verdict queue 33 → 5 (Hoheria, Fagus × taurica, Ulmus laciniata, Aspalathus, Bowlesia — fix the photo IDs in Species ID review).
+- Grid "toxicity unknown" everywhere was a stale browser cache, not a bug.
+
+#### Next (order)
+1. Batch 7: share-link secret gates LAN/ngrok (localhost exempt) + escape source text on all pages (review.html:1962 first).
+2. Batch 8.
+3. Stage C publish panel (in-app republish) after batch 8.
+4. Batches 9, 10, 11, 11b, 12, 13, 15, 15b, 16, 17 per REPORT.md section 9.
+
+#### Scope added (keep)
+- 11b, first:
+  - Merges: 704→457 Trametes versicolor; 758↔757 Coronilla varia; 708↔412 Thelypteris limbosperma; 608↔589 Cota tinctoria; 103↔531 Chamaenerion angustifolium; 600↔749 Mycelis muralis; 82↔200 Cirsium ferox.
+  - Relink the Collybia nuda and Conyza canadensis observations (incl. obs 8410 species_primary vs species_id 505). GBIF check on 187 "Hypericum perfoliatum".
+  - Genus/family sweep (family column holding a genus: Aconitum, Alchemilla, Bellis, Erigeron, Imleria, Matricaria, "Rubus subg. Rubus", "Rosa sect. Caninae"; 494 puffball as Caprifoliaceae) + find the fill that wrote them.
+  - Non-European species card sweep against data/reference/plantnet_europe_species.json (e.g. Rubus occidentalis, Quercus bicolor/velutina, Acer macrophyllum, Juglans nigra, Picea mariana, Tilia americana, Salix barclayi, Erigeron aliceae, Chrysosplenium americanum, Luffa, 808 Ambrosia confertiflora/obs 24222). Junk cards carrying a human census verdict are protected as reference cards and need deliberate removal. "norway spruce" 685 stays marked (C-04).
+  - English common-name backfill (e.g. Dianthus carthusianorum → Carthusian pink).
+- 15b: empty saved walk stops (walk 5 stop 35) hide or drop.
+- 17: the Lists "Lookalike warnings" toggle is now dead (remove or relabel); a reload banner on a new app version; a thumbnail field on /api/species/ (Large/List views currently load all map data); CLAUDE.md Alembic head; scan.html:1795 loadPrefilterThreshold.
+
+#### Open decisions (Melvin)
+- Should a curator look-alike warning (not only prep) let a caution species print culinary content on handouts? Affects 817 Meadow Mushroom, 711 Marasmius.
+
+#### Melvin's review queue
+- Caution species with no warning text: 817, 460, 810, 677, 381, 702, 816, 821, 405, 820, 711, 411.
+- Uncurated caution text to review: 295 Ramsons, 764, 98, 672, 639, 149, 363, 229, 148, 590, 603, 194, 399.
+- 5 verdict-queue photos to re-ID (above). 92 medicinal drafts + Verbena 3544; edit Oxalis grandis 3493. Refusal drafts to reject. 347 Takeout person_animal rejects (mount DIGIERA). Draft #3252 Amaranthus hybridus.
+
+#### Browser checks: six walkthroughs (replace the old numbered list)
+Test species: Conium maculatum, Oenanthe crocata, Sambucus nigra, 229 St John's wort, 295 Ramsons, 97 Aspen, Pineapple weed.
+- A. Species page: three views, safety sort, filters kept, capitalised names, test species pages (badges, full warnings, labels, recipe #48).
+- B. Map + walk 4: Conium pin full look-alike; Ramsons labelled; ☠ on 155/688/745; walk panel stop cards (817 look-alike, Sambucus open, "Also here" lines); Edit walk → Save → Re-route; Export summary; published Rümmelsbühl page (Stellaria graminea present, caution recipes withheld).
+- C. Handouts: Lists → browser print (field guide with ID notes off; workshop) + PDF in 3 layouts: Conium uncut, 229 withheld label, no PFAF Folklore section, corners present.
+- D. Review: Critical section + red badge; verdict queue shows 5; warning drafts; Second Opinion 24149; capitalised names.
+- E. Phone: SW v9; List view at 390px; proximity alert folds and opens; guest /api/settings 403 over ngrok.
+- F. Settings/system: DeepSeek key set; API dashboard; species chat; About regenerate; Jobs pop-up drag; caffeinate exits with the server.
+Rule: Code tests whatever it can (real JS via jsc, real PDFs); new browser checks are added to a walkthrough, not numbered.
+
 
 _Moved here 16 Oct 2026 from the top of the file: superseded Current State snapshots (3 Jul – 15 Oct 2026), kept unchanged for reference; headings demoted one level._
 

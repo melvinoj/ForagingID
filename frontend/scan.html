@@ -1805,7 +1805,7 @@ async function loadPrefilterThreshold() {
     const r = await fetch('/api/settings');
     if (!r.ok) return;
     const list = await r.json();
-    const entry = list.find(s => s.key === 'prefilter_pipeline2_green_threshold');
+    const entry = (list.settings || []).find(s => s.key === 'prefilter_pipeline2_green_threshold');
     if (!entry) return;
     const pct  = Math.round(entry.current_value * 100);
     const tag  = entry.overridden ? ' (custom)' : ' (default)';
@@ -1993,12 +1993,6 @@ function onP1SessionChange() {
   _renderP1SessionChips(_p1SelectedSession);
 }
 
-// Called when user changes P2 session selector
-function onP2SessionChange() {
-  const selVal = document.getElementById('s2-session-select')?.value;
-  _p2SelectedSession = _p2Sessions.find(s => String(s.id) === selVal) || null;
-  _renderP2SessionChips(_p2SelectedSession);
-}
 
 // ── Shared stage-driven chip renderer ─────────────────────────────────────
 // Works for any pipeline; pipeline differences express through which fields
@@ -2611,78 +2605,8 @@ async function _processFolder(dirHandle) {
   }
 }
 
-// Pause — signal the backend to pause the running batch.
-// During a reprocess-pending run there is no session row, so we drain the
-// queue by calling reprocess-pending with concurrency:0 instead.
-async function onPauseClick() {
-  const btn     = document.getElementById('btn-pause');
-  const _setBtns = (disabled, label) => {
-    if (btn) { btn.disabled = disabled; btn.textContent = label; }
-  };
 
-  if (_reprocessActive) {
-    _setBtns(true, '⏸ Stopping…');
-    try {
-      await fetch('/api/scan/reprocess-pending', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ concurrency: 0 }),
-      });
-    } catch(_) {}
-    _reprocessActive    = false;
-    _reprocessLastCount = null;
-    _reprocessLastSeen  = null;
-    _freezeNarration('stopped');
-    _startP2Polling(_P2_POLL_IDLE_MS);
-    return;
-  }
 
-  const s = _p2SelectedSession;
-  if (!s || s.status !== 'running' || s.is_stalled) return;
-  _setBtns(true, '⏸ Pausing…');
-  try {
-    const r = await fetch(`/api/scan/pause/${s.id}`, { method: 'POST' });
-    if (!r.ok) {
-      const e = await r.json().catch(() => ({}));
-      alert(`Pause failed: ${e.detail || r.status}`);
-      _setBtns(false, '⏸ Pause');
-      return;
-    }
-    _freezeNarration('paused');
-    if (_p2Sse) { _p2Sse.close(); _p2Sse = null; }
-    _startP2Polling(_P2_POLL_IDLE_MS);
-    _scheduleP2SessionRefresh();
-  } catch(e) {
-    alert(`Pause error: ${e.message}`);
-    _setBtns(false, '⏸ Pause');
-  }
-}
-
-// Process delta — user-triggered after reconciliation is complete
-async function onProcessDeltaClick() {
-  const btn = document.getElementById('btn-process');
-  if (btn) { btn.disabled = true; btn.textContent = '▶ Starting…'; }
-  if (!_p2FolderState) return;
-  const { sessionId, imageFiles, retryableObs } = _p2FolderState;
-  if (btn) btn.style.display = 'none';
-  await _runProcessPass(sessionId, imageFiles, retryableObs);
-}
-
-// Resume — re-arm a paused or stalled session (triggered via Rescan + Process flow)
-async function onResumeClick() {
-  const s = _p2SelectedSession;
-  if (!s || (!s.is_stalled && s.status !== 'paused')) return;
-
-  if (!_p2FolderState || _p2FolderState.sessionId !== s.id) {
-    alert('Select the same folder again to resume — the files need to be re-hashed to find what\'s still pending.');
-    return;
-  }
-
-  const { sessionId, imageFiles, retryableObs } = _p2FolderState;
-  const processBtn = document.getElementById('btn-process');
-  if (processBtn) processBtn.style.display = 'none';
-  await _runProcessPass(sessionId, imageFiles, retryableObs);
-}
 
 // Core: arm session via process-delta, open SSE, upload new files, retry retryable
 async function _runProcessPass(sessionId, imageFiles, retryableObs) {
@@ -2727,23 +2651,6 @@ async function _runProcessPass(sessionId, imageFiles, retryableObs) {
   _scheduleP2SessionRefresh();
 }
 
-// Delete session — confirm then DELETE /api/scan/sessions/{id}
-async function onDeleteSessionClick() {
-  const s = _p2SelectedSession;
-  if (!s) return;
-  if (!confirm(`Delete session "${s.label}"?\n\nThis removes the session record only — no observations will be affected.`)) return;
-  try {
-    const r = await fetch(`/api/scan/sessions/${s.id}`, { method: 'DELETE' });
-    if (!r.ok) {
-      const e = await r.json().catch(() => ({}));
-      alert(`Could not delete: ${e.detail || r.status}`);
-      return;
-    }
-    await loadP2Sessions();
-  } catch(e) {
-    alert(`Delete error: ${e.message}`);
-  }
-}
 
 // ── P2 durable-state polling ──────────────────────────────────────────────
 
@@ -2760,10 +2667,6 @@ function _startP2Polling(intervalMs) {
   }, intervalMs);
 }
 
-function _stopP2Polling() {
-  clearInterval(_p2Poller);
-  _p2Poller = null;
-}
 
 function _showNarration(text) {
   const el = document.getElementById('p2-narration');
@@ -2773,10 +2676,6 @@ function _showNarration(text) {
   el.classList.add('visible');
 }
 
-function _hideNarration() {
-  const el = document.getElementById('p2-narration');
-  if (el) { el.classList.remove('visible', 'frozen'); }
-}
 
 function _freezeNarration(label) {
   const el = document.getElementById('p2-narration');
@@ -3779,10 +3678,6 @@ function _escHtml(str) {
     .replace(/"/g, '&quot;');
 }
 
-function _escAttr(str) {
-  // Escape a JSON string for use in an HTML onclick attribute
-  return _escHtml(JSON.stringify(str));
-}
 
 // ── Send-to-review (single + batch) ─────────────────────────────────────────
 // Issues are kept in _auditIssues (index = data-idx) and acted on via event

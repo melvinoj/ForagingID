@@ -82,6 +82,3 @@ def pipeline_holder() -> Optional[str]:
     return _holder
 
 
-def pipeline_acquired_at() -> Optional[datetime]:
-    """Return the UTC datetime when the lock was last acquired, or None."""
-    return _acquired_at

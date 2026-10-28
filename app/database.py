@@ -4,7 +4,7 @@ from sqlalchemy import event
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 from sqlalchemy.orm import DeclarativeBase
-from app.config import settings
+from app.config import log_timing, settings
 
 
 class Base(DeclarativeBase):
@@ -76,11 +76,11 @@ async def get_db():
 
 async def init_db():
     _t0 = _time.perf_counter()
-    print(f"[TIMING] init_db: start", flush=True)
+    log_timing(f"[TIMING] init_db: start")
 
     async with engine.begin() as conn:
         _t_conn = _time.perf_counter()
-        print(f"[TIMING] init_db: engine.begin() (connection): {_t_conn - _t0:.1f}s", flush=True)
+        log_timing(f"[TIMING] init_db: engine.begin() (connection): {_t_conn - _t0:.1f}s")
 
         # WAL mode (SQLite only): idempotent, but acquiring the exclusive lock
         # needed to switch modes can block if another connection is still open
@@ -102,7 +102,7 @@ async def init_db():
                 # and any non-OperationalError propagates instead of being hidden.
                 print(f"[init_db] WARNING: WAL pragma switch skipped (transient lock?): {_e}", flush=True)
         _t_wal = _time.perf_counter()
-        print(f"[TIMING] init_db: WAL pragma check/set: {_t_wal - _t_conn:.1f}s", flush=True)
+        log_timing(f"[TIMING] init_db: WAL pragma check/set: {_t_wal - _t_conn:.1f}s")
 
         # create_all bootstraps a fresh DB from the current models (it never
         # alters existing tables). Incremental schema changes to an existing
@@ -110,7 +110,7 @@ async def init_db():
         # `alembic upgrade head` — not by ad-hoc ALTER statements here.
         await conn.run_sync(Base.metadata.create_all)
         _t_create_all = _time.perf_counter()
-        print(f"[TIMING] init_db: Base.metadata.create_all: {_t_create_all - _t_wal:.1f}s", flush=True)
+        log_timing(f"[TIMING] init_db: Base.metadata.create_all: {_t_create_all - _t_wal:.1f}s")
 
         # Fix 6 rescue: P1 (syncthing) observations that were auto-rejected on
         # confidence (below_threshold / failed_identification) must surface in the
@@ -137,7 +137,7 @@ async def init_db():
                   AND reviewed_at IS NULL
             """))
         _t_probe1 = _time.perf_counter()
-        print(f"[TIMING] init_db: probe gate + syncthing fix: {_t_probe1 - _t_probe0:.1f}s", flush=True)
+        log_timing(f"[TIMING] init_db: probe gate + syncthing fix: {_t_probe1 - _t_probe0:.1f}s")
 
         # Idempotent FK backfill: set observations.species_id for any rows that
         # have species_primary populated but species_id not yet set (e.g. records
@@ -159,7 +159,7 @@ async def init_db():
             )
         """))
         _t_fk1 = _time.perf_counter()
-        print(f"[TIMING] init_db: FK backfill (species_id): {_t_fk1 - _t_fk0:.1f}s", flush=True)
+        log_timing(f"[TIMING] init_db: FK backfill (species_id): {_t_fk1 - _t_fk0:.1f}s")
 
         _t_ev0 = _time.perf_counter()
         # Phase 12 Prompt 3 — edibility_verified_by provenance backfill.
@@ -212,7 +212,7 @@ async def init_db():
         """))
 
         _t_ev1 = _time.perf_counter()
-        print(f"[TIMING] init_db: edibility_verified_by backfill (A–E): {_t_ev1 - _t_ev0:.1f}s", flush=True)
+        log_timing(f"[TIMING] init_db: edibility_verified_by backfill (A–E): {_t_ev1 - _t_ev0:.1f}s")
 
         # Phase 12 Prompt 1 — Mushroom Observer data source registry entry.
         # Idempotent: INSERT OR IGNORE — safe to run on every server start.
@@ -254,5 +254,5 @@ async def init_db():
                 ON CONFLICT (url) DO NOTHING
             """))
         _t_mo1 = _time.perf_counter()
-        print(f"[TIMING] init_db: INSERT OR IGNORE data_sources (MO): {_t_mo1 - _t_mo0:.1f}s", flush=True)
-        print(f"[TIMING] init_db: TOTAL: {_t_mo1 - _t0:.1f}s", flush=True)
+        log_timing(f"[TIMING] init_db: INSERT OR IGNORE data_sources (MO): {_t_mo1 - _t_mo0:.1f}s")
+        log_timing(f"[TIMING] init_db: TOTAL: {_t_mo1 - _t0:.1f}s")

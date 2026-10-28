@@ -1818,10 +1818,6 @@ function _catLabel(cat) {
   }[cat] || cat;
 }
 
-function topScore(obs) {
-  try { const c = JSON.parse(obs.species_candidates_json || '[]'); return c.length ? c[0].score : 0; }
-  catch { return 0; }
-}
 // ONE confidence rule for the card: the % colour, the block border and the
 // confidence chip all take their band from confClass() of the same shown score.
 const CONF_BAND_LABEL = { 'conf-high': 'High confidence', 'conf-mid': 'Medium confidence', 'conf-low': 'Low confidence' };
@@ -2964,60 +2960,6 @@ function _corrSaveFromLookup(id, sci, common) {
 
 // ── Species correction (direct save) ──────────────────────────────────────
 
-async function saveCorrection(id) {
-  const input = document.getElementById(`corr-${id}`);
-  const btn = input ? input.nextElementSibling : null;
-  const savedEl = document.getElementById(`corr-saved-${id}`);
-  if (!input) return;
-
-  const name = input.value.trim();
-  if (!name) { input.focus(); return; }
-
-  if (btn) btn.disabled = true;
-
-  try {
-    const r = await fetch(`/api/observations/${id}/correct`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ species_name: name }),
-    });
-    if (!r.ok) {
-      const err = await r.json().catch(() => ({}));
-      throw new Error(err.detail || `HTTP ${r.status}`);
-    }
-
-    // Update the species name shown in the card without a full reload
-    const spNameEl = document.querySelector(`#card-${id} .sp-name`);
-    if (spNameEl) spNameEl.textContent = name;
-
-    // Swap the review-status badge to "manually verified"
-    const badge = document.getElementById(`badge-${id}`);
-    if (badge) {
-      badge.className = 'badge badge-manually_verified';
-      badge.textContent = 'manually verified';
-      badge.style.background = '#e2d9f3';
-      badge.style.color = '#4a235a';
-    }
-
-    // Fire-and-forget enrichment — fills empty fields (common name, edibility,
-    // preparation, etc.) via PFAF + Wikidata re-fetch.  re_enrich=True so
-    // existing species cards with missing common names get refilled.
-    // If the Species row doesn't exist yet the 404 is silently ignored —
-    // trigger_ai_drafts_for_species (queued server-side) will create it.
-    fetch(`/api/culinary/${encodeURIComponent(name)}/enrich`, { method: 'POST' })
-      .catch(() => {});
-
-    // Show ✓ Saved + enrichment-queued message, then remove card from queue
-    const enrichEl = document.getElementById(`corr-enrich-${id}`);
-    if (enrichEl) { enrichEl.style.display = 'block'; }
-    if (savedEl) { savedEl.style.display = 'block'; }
-    setTimeout(() => removeCard(id), 1400);
-
-  } catch (e) {
-    toast(`❌ Could not save correction: ${e.message}`);
-    if (btn) btn.disabled = false;
-  }
-}
 
 // ── Notes editing ─────────────────────────────────────────────────────────
 
@@ -6146,67 +6088,6 @@ window.addEventListener('unhandledrejection', function(ev) {
   grid.innerHTML = '<div style="color:#c0392b;padding:20px">❌ Unhandled error: ' + msg + '</div>';
 });
 
-async function loadLocationReview() {
-  const grid  = document.getElementById('loc-grid');
-  const empty = document.getElementById('loc-empty');
-  const badge = document.getElementById('loc-tab-badge');
-  const count = document.getElementById('loc-count-display');
-  if (!grid) return;
-
-  grid.innerHTML = '<div style="text-align:center;color:#999;padding:40px">Loading…</div>';
-  if (empty) empty.style.display = 'none';
-
-  // ── Step 1: Fetch ──────────────────────────────────────────────────────
-  let obs = [];
-  let fetchErr = null;
-  try {
-    const r = await fetch('/api/observations/location-review');
-    if (!r.ok) { fetchErr = 'HTTP ' + r.status; }
-    else {
-      const d = await r.json();
-      obs = d.observations || [];
-      _locDefaultCenter = d.default_center || null;
-    }
-  } catch(e) {
-    fetchErr = (e && e.message) ? e.message : String(e);
-  }
-
-  if (fetchErr) {
-    grid.innerHTML = '<div style="color:#c0392b;padding:20px">❌ Failed to load: ' + fetchErr + '</div>';
-    return;
-  }
-
-  // ── Step 2: Update counts ─────────────────────────────────────────────
-  if (badge) badge.textContent = obs.length || '';
-  if (count) count.textContent = obs.length
-    ? (obs.length + ' observation' + (obs.length !== 1 ? 's' : '') + ' awaiting location tagging')
-    : 'No observations need location tagging';
-
-  if (!obs.length) {
-    grid.innerHTML = '';
-    if (empty) empty.style.display = 'block';
-    return;
-  }
-
-  // ── Step 3: Destroy old maps ──────────────────────────────────────────
-  Object.values(_locMaps).forEach(function(m) { try { m.remove(); } catch(_){} });
-  _locMaps = {}; _locMarkers = {}; _locCoords = {};
-
-  // ── Step 4: Render cards ──────────────────────────────────────────────
-  let cardsHtml = '';
-  for (var ci = 0; ci < obs.length; ci++) {
-    try {
-      cardsHtml += _renderLocCard(obs[ci]);
-    } catch(e) {
-      var cardErr = (e && e.message) ? e.message : String(e);
-      cardsHtml += '<div style="color:#c0392b;border:1px solid #fca;border-radius:8px;padding:10px;margin:4px 0">'
-        + '❌ Card render error (obs ' + obs[ci].id + '): ' + cardErr + '</div>';
-    }
-  }
-  grid.innerHTML = cardsHtml;
-
-  // Maps init lazily when each card's "Set GPS" button is clicked (_toggleLocMap).
-}
 
 function _renderLocCard(obs) {
   const thumbName = obs.thumbnail_path ? obs.thumbnail_path.split('/').pop() : null;
@@ -6484,7 +6365,7 @@ async function shareCardPhoto(obsId, thumbName) {
         if (!res.ok) throw new Error('photo fetch failed');
         const blob = await res.blob();
         const ext  = blob.type === 'image/png' ? 'png' : 'jpg';
-        const file = new File([blob], `foragingid_obs${obsId}.${ext}`, { type: blob.type });
+        const file = new File([blob], `landmemory_obs${obsId}.${ext}`, { type: blob.type });
         if (navigator.canShare({ files: [file] })) {
           await navigator.share({ files: [file], title: shareData.title, text: shareData.text });
           return; // success

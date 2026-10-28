@@ -25,6 +25,8 @@ from urllib.parse import quote
 import httpx
 from bs4 import BeautifulSoup
 
+from app.config import HTTP_USER_AGENT
+
 log = logging.getLogger(__name__)
 
 PFAF_BASE = "https://pfaf.org/user/Plant.aspx?LatinName={name}"
@@ -32,7 +34,7 @@ PFAF_BASE = "https://pfaf.org/user/Plant.aspx?LatinName={name}"
 REQUEST_TIMEOUT_S = 8
 # Be polite — PFAF is a small charity site
 _HEADERS = {
-    "User-Agent": "ForagingID/0.1 (local foraging research tool; contact: foragingid@local)",
+    "User-Agent": HTTP_USER_AGENT,
 }
 
 # PFAF is a plants-only database — these fungal genera never have entries.

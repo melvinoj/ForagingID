@@ -2814,10 +2814,6 @@ function _toggleSheetExpanded() {
 
 // ── Map Redesign P1: search chip (top-right, expands in place) ───────────
 
-function _expandSearchChip() {
-  document.getElementById('search-chip-wrap').classList.add('expanded');
-  document.getElementById('map-search-input').focus();
-}
 function _collapseSearchChip() {
   // Deferred so a click on the clear button / dropdown still registers before collapse.
   setTimeout(() => {
@@ -3032,19 +3028,6 @@ Object.assign(_baseLayers, {
   }),
 });
 
-// 5-second tile-fail detection — marks a layer unavailable and falls back to Standard
-function _watchLayerHealth(key, layer) {
-  const timer = setTimeout(() => {
-    // No error yet → still loading; stop watching
-    layer.off('tileerror', onErr);
-  }, 5000);
-  function onErr() {
-    clearTimeout(timer);
-    layer.off('tileerror', onErr);
-    _markLayerUnavailable(key);
-  }
-  layer.on('tileerror', onErr);
-}
 
 function _markLayerUnavailable(key) {
   if (_currentBaseLayerKey === key) {
@@ -4357,12 +4340,6 @@ function _closeTabPanels() {
 
 // ── Filter toggles ────────────────────────────────────────────────────────
 
-function _toggleSpecies(cb) {
-  if (cb.checked) filterState.species.add(cb.value);
-  else            filterState.species.delete(cb.value);
-  _updateFilterFab();
-  renderMarkers();
-}
 
 const _SEASON_MONTHS = {
   spring: [3, 4, 5],
@@ -4371,14 +4348,6 @@ const _SEASON_MONTHS = {
   winter: [12, 1, 2],
 };
 
-function _toggleMonth(m) {
-  if (filterState.months.has(m)) filterState.months.delete(m);
-  else                            filterState.months.add(m);
-  _syncMonthBtns();
-  _syncSeasonBtns();
-  _updateFilterFab();
-  renderMarkers();
-}
 
 function _toggleSeason(season) {
   const months = _SEASON_MONTHS[season];
@@ -6401,20 +6370,6 @@ function _summaryRecipe(recipes, shown) {
   return null;
 }
 
-function _pickSeasonalRecipe(recipes, season) {
-  if (!recipes || !recipes.length) return null;
-  const pref = r => r.is_preferred;
-  const bySeason = s => recipes.filter(r => r.season === s);
-  const yearRound = recipes.filter(r => r.season === 'year-round');
-  const seasonHits = bySeason(season);
-  return seasonHits.find(pref)   ||
-         seasonHits[0]           ||
-         yearRound.find(pref)    ||
-         yearRound[0]            ||
-         recipes.find(pref)      ||
-         recipes[0]              ||
-         null;
-}
 
 // ── Render walk panel ──────────────────────────────────────────────────────
 
@@ -6988,10 +6943,6 @@ async function loadSavedWalksList() {
   } catch (_) {}
 }
 
-function toggleSavedWalksList() {
-  // Delegate to the wbs version — the wbs list is now the only copy
-  _wbsToggleSavedWalks();
-}
 
 // Load-sequence token: a load is "current" only while no newer loadSavedWalk has
 // started. Every step after an await checks it, so two loads clicked back to
@@ -9532,16 +9483,6 @@ async function _saveNoteForm() {
   await _submitNote(lat, lng);
 }
 
-function _closeNotePanel() {
-  // If a placement or form is active, cancel the whole flow
-  if (_notePlacing || _notePinLat !== null) { _cancelNote(); return; }
-  if (!_notePanelOpen) return;
-  _notePanelOpen = false;
-  const panel = document.getElementById('panel-note');
-  const btn   = document.getElementById('btn-layer-note');
-  if (panel) panel.style.display = 'none';
-  if (btn)   btn.classList.remove('active');
-}
 
 function _noteSpeciesSearch(q) {
   const dd = document.getElementById('note-species-dd');

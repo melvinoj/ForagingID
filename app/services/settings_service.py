@@ -137,8 +137,9 @@ def _build_registry() -> List[Dict]:
         # ── AI ────────────────────────────────────────────────────────────
         # DeepSeek is the one AI backend (Melvin D1, 21 Oct 2026 — every AI call
         # site; no Anthropic, no Ollama, no fallback). The retired
-        # enrichment_backend / anthropic_model / ollama_model keys may still sit
-        # in app_settings; nothing reads them and the cache loader skips them.
+        # enrichment_backend / anthropic_model rows were deleted from
+        # app_settings on 28 Oct 2026 (batch 17, A-07); the cache loader skips
+        # any key outside this registry anyway.
         {
             "key": "deepseek_api_key",
             "default": "",

@@ -10,11 +10,23 @@ Structure expected:
     (append-only; new entries prepended after the ## History header)
 """
 
+import re
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
 CHANGELOG_PATH = Path(__file__).parent.parent.parent / "CHANGELOG.md"
+
+# "## Current State" bare or dated ("## Current State — 22 Oct 2026, evening").
+# A dated heading used to count as a DIFFERENT section, so a body that began
+# with one became the next rewrite's end boundary and every older block stayed
+# stacked under the live one (17-B8, 28 Oct 2026). Both forms are now part of
+# the one section; it ends at the first other "## " heading (## History).
+_CURRENT_STATE_RE = re.compile(r"^## Current State(?:\s*$|\s+[—–-]\s*(?P<date>.*)$)")
+
+
+def _is_current_state_heading(line: str) -> bool:
+    return bool(_CURRENT_STATE_RE.match(line.strip()))
 
 
 # ---------------------------------------------------------------------------
@@ -35,14 +47,12 @@ def get_current_state() -> str:
     in_section = False
     result: list[str] = []
     for line in lines:
-        if line.strip() == "## Current State":
+        if not in_section and _is_current_state_heading(line):
             in_section = True
             continue
-        # End boundary must not match a duplicate of our own header — otherwise a
-        # stacked "## Current State" line terminates the section immediately and
-        # this returns the empty gap between duplicate headers. Stop only at a
-        # DIFFERENT "## " section ("## Current State — <date>", "## History", …).
-        if in_section and line.startswith("## ") and line.strip() != "## Current State":
+        # Stop at the next section that is not a Current State heading (bare or
+        # dated) — a stacked duplicate never ends the section early.
+        if in_section and line.startswith("## ") and not _is_current_state_heading(line):
             break
         if in_section:
             result.append(line)
@@ -62,17 +72,14 @@ def rewrite_current_state(new_state: str) -> None:
     state_end:   Optional[int] = None
 
     for i, line in enumerate(lines):
-        if line.strip() == "## Current State":
-            # Anchor to the FIRST header only. Duplicate "## Current State" lines
-            # then fall through this branch as no-ops, so the replaced span
-            # [state_start, state_end) covers every consecutive duplicate header
-            # plus the stale body beneath them.
+        if _is_current_state_heading(line):
+            # Anchor to the FIRST header only. Later Current State headings (bare
+            # or dated) fall through as no-ops, so the replaced span
+            # [state_start, state_end) covers every stacked block beneath.
             if state_start is None:
                 state_start = i
-        elif state_start is not None and line.startswith("## ") and line.strip() != "## Current State":
-            # End boundary excludes a duplicate of our own header, so the scan
-            # walks past all duplicates and stops at the next DIFFERENT section
-            # ("## Current State — <date>", "## History", …).
+        elif state_start is not None and line.startswith("## "):
+            # The next section that is not a Current State heading (## History).
             state_end = i
             break
 
@@ -80,11 +87,16 @@ def rewrite_current_state(new_state: str) -> None:
     # CLAUDE.md end-session contract invites "a fresh ## Current State block").
     # Strip a leading header line + its trailing blanks so exactly one header is
     # prepended. Idempotent: input with or without the header yields the same block.
+    # A dated header ("## Current State — 28 Oct 2026") keeps its date as the
+    # body's first line, so it never becomes a heading of its own.
     body_lines = new_state.strip().splitlines()
-    if body_lines and body_lines[0].strip() == "## Current State":
+    m = _CURRENT_STATE_RE.match(body_lines[0].strip()) if body_lines else None
+    if m:
         body_lines = body_lines[1:]
         while body_lines and body_lines[0].strip() == "":
             body_lines = body_lines[1:]
+        if m.group("date"):
+            body_lines = [m.group("date").strip(), ""] + body_lines
     body = "\n".join(body_lines).strip()
     new_block = f"## Current State\n\n{body}"
 

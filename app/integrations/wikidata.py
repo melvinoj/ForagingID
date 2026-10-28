@@ -17,6 +17,8 @@ from typing import Dict, List, Optional
 
 import httpx
 
+from app.config import HTTP_USER_AGENT
+
 log = logging.getLogger(__name__)
 
 WIKIDATA_SPARQL = "https://query.wikidata.org/sparql"
@@ -25,7 +27,7 @@ REQUEST_TIMEOUT_S = 8
 
 # Wikidata requires a descriptive User-Agent or it returns 403
 _HEADERS = {
-    "User-Agent": "ForagingID/0.1 (local foraging research tool; https://github.com/foragingid)",
+    "User-Agent": HTTP_USER_AGENT,
     "Accept": "application/sparql-results+json",
 }
 

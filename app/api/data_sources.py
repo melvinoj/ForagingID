@@ -207,7 +207,8 @@ async def test_data_source(source_id: int, db: AsyncSession = Depends(get_db)):
     http_status: Optional[int] = None
     detail: Optional[str] = None
 
-    headers = {"User-Agent": "ForagingID-DataSourceRegistry/1.0"}
+    from app.config import HTTP_USER_AGENT
+    headers = {"User-Agent": HTTP_USER_AGENT}
     try:
         async with httpx.AsyncClient(
             timeout=REQUEST_TIMEOUT_S, follow_redirects=True, headers=headers

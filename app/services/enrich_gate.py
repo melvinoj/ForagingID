@@ -160,10 +160,6 @@ def queue_card_enrichment(scientific_name: str) -> None:
     _ensure_worker()
 
 
-def queued_names() -> List[str]:
-    return list(_queue)
-
-
 def _ensure_worker() -> None:
     """Start the worker if it is not running (first use, or it ever died)."""
     global _worker

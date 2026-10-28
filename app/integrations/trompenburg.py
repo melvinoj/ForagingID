@@ -25,11 +25,13 @@ from urllib.parse import quote_plus
 
 from bs4 import BeautifulSoup
 
+from app.config import HTTP_USER_AGENT
+
 log = logging.getLogger(__name__)
 
 TROMPENBURG_SEARCH = "https://trompenburg.nl/planten/?s={query}"
 REQUEST_TIMEOUT_S = 20
-_UA = "ForagingID/0.1 (local foraging research tool; educational use)"
+_UA = HTTP_USER_AGENT
 
 # curl path — present on all macOS and most Linux systems
 _CURL = shutil.which("curl") or "curl"

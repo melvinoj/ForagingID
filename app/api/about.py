@@ -31,7 +31,7 @@ router = APIRouter(tags=["about"])
 
 _CONFIRMED = ["approved", "manually_verified"]
 _REGEN_SYSTEM_PROMPT = (
-    "You are helping maintain the About page for ForagingID, a foraging "
+    "You are helping maintain the About page for LandMemory, a foraging "
     "intelligence platform. Generate a punchy, warm, 4-6 sentence summary of "
     "the following description suitable for a guest-facing landing page. Capture "
     "the core USP (getting to know individual plants not just species), the "

@@ -355,5 +355,5 @@ def render_pdf(body: PdfRequest, safety: Dict[str, Dict], my_notes: Optional[Dic
     return Response(
         content=pdf_bytes,
         media_type="application/pdf",
-        headers={"Content-Disposition": 'attachment; filename="foragingid-list.pdf"'},
+        headers={"Content-Disposition": 'attachment; filename="landmemory-list.pdf"'},
     )

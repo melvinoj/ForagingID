@@ -165,7 +165,7 @@ def _view_js():
         _slice(page, "function _sortKey(sp) {", "\n}\n", True),
         _slice(page, "function _selToggleCard(el) {", "\n}\n", True),
         _slice(page, "// Species views (Large / Grid / List) — declared before", "let _spThumbsPromise = null;\n", True),
-        _slice(page, "// ── Species views (Melvin, 21 Oct 2026)", "// Legacy alias (old oninput handler)"),
+        _slice(page, "// ── Species views (Melvin, 21 Oct 2026)", "function toggleDeNames() {"),
     ]
     return "\n".join(parts)
 
@@ -326,7 +326,7 @@ def test_toggle_markup_and_phone_layout():
     # the state is declared before the router calls into the views (TDZ)
     assert page.index("let _spView = ") < page.index("if (speciesParam) {")
     # no new safety logic: the views read the served decision only
-    views = page[page.index("// ── Species views (Melvin"):page.index("// Legacy alias")]
+    views = page[page.index("// ── Species views (Melvin"):page.index("function toggleDeNames() {")]
     assert "toxicity_severity" not in views and "edibility_status ===" not in views
 
 

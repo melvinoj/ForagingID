@@ -8,7 +8,7 @@ Verdict drafts (POST /api/edibility/verdict-drafts/{id}/approve).
 In scope: edibility_status NULL / 'unknown' / 'unclear', or a severity outside
 ALLOWED_SEVERITIES for its verdict. Left out: cards with no live observation
 that are not reference cards (species_link.species_is_listable_clause — which
-also leaves out orphan-marked non-reference cards) and '_merged_into:' markers.
+also leaves out orphan-marked non-reference cards).
 
 Sources per species (no network; app/services/verdict_drafts.py decides):
   severity    recorded toxic / deadly toxicity_severity (+ its history row)
@@ -64,8 +64,6 @@ def in_scope(verdict, severity) -> bool:
     v = (verdict or "").strip().lower()
     if v in ("", "unknown", "unclear"):
         return True
-    if v.startswith("_merged_into:"):
-        return False
     return v in ALLOWED_SEVERITIES and (severity or "") not in ALLOWED_SEVERITIES[v]
 
 

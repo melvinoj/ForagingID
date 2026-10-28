@@ -52,11 +52,13 @@ from urllib.parse import quote_plus, urljoin
 import httpx
 from bs4 import BeautifulSoup
 
+from app.config import HTTP_USER_AGENT
+
 log = logging.getLogger(__name__)
 
 REQUEST_TIMEOUT_S = 15
 _HEADERS = {
-    "User-Agent": "ForagingID/0.1 (local foraging research tool; educational use)",
+    "User-Agent": HTTP_USER_AGENT,
 }
 # Maximum links returned per site
 MAX_LINKS_PER_SITE = 3

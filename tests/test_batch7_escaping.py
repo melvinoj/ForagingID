@@ -129,8 +129,9 @@ SITES = [
     # lists.html
     ("frontend/lists.html", [], "onclick=\"removeFromList(${lmJsArg(name)})\">",
      ("call", "removeFromList", 0), ""),
-    ("frontend/lists.html", ["    const safe = _esc((x.scientific_name || '').replace(/'/g, \"\\\\'\"));"],
-     "<div class=\"sp-lookup-item\" onclick=\"addSessionSpecies('${safe}')\">", ("call", "addSessionSpecies", 0), ""),
+    ("frontend/lists.html", [],          # safety batch item 10 (28 Oct): lmJsArg, was escape-then-apostrophe
+     "<div class=\"sp-lookup-item\" onclick=\"addSessionSpecies(${lmJsArg(x.scientific_name || '')})\">",
+     ("call", "addSessionSpecies", 0), ""),
 ]
 
 

@@ -2454,10 +2454,9 @@ function _spLookup(q) {
   const box = document.getElementById('sp-add-results');
   if (!results.length) { box.style.display = 'none'; return; }
   box.innerHTML = results.map(x => {
-    const safe = _esc((x.scientific_name || '').replace(/'/g, "\\'"));
     const xc = spPickCommon(x.preferred_common_name, x.common_names);
     const common = xc ? ` — ${_esc(xc)}` : '';
-    return `<div class="sp-lookup-item" onclick="addSessionSpecies('${safe}')">
+    return `<div class="sp-lookup-item" onclick="addSessionSpecies(${lmJsArg(x.scientific_name || '')})">
       <span class="sp-lookup-sci">${_esc(x.scientific_name)}</span>
       <span class="sp-lookup-common">${common}</span>
     </div>`;

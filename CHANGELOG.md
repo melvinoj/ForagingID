@@ -1,32 +1,35 @@
 ## Current State
 
-28 Oct 2026, afternoon (closing the session that ended from Settings at 15:09 without a full End Session)
+28 Oct 2026, evening
 
 ### Session summary
-Pre-split fixes (182f5e6), batch 16 index.html split (prep 0cf780e, split 2b49db7), Part A held items (3403705: removeFromList via lmJsArg, sw v20 caches tokens.css + site-header.css, loadFeatures timer guard). REPORT.md section 9 status marks corrected and CLOSEOUT_28oct.md added (Part B). Batches 9 and 10 shipped in snapshot commit b1138f0 (22 Oct) without a Built entry — recorded in History now. The 15:09 Settings End Session collapsed this block to one line; content restored from 2b49db7.
+Safety batch 28 Oct (CLOSEOUT_28oct.md section 4) complete: items 1–4 (4498f88 + sw v21) and 5–10 this session. 5 B5-03: /api/map/geojson description (reviewer_notes) is None for guests on every pin, scenes included. 6: sightings viewer caption says "pending review" like the grid tile. 7: Data Trust "Auto-approved" → "Approved, uncorrected", "Below 60% conf" → "Below 60% top score" (label only, definition unchanged); obs 9536 NOT moved — its approval is human (19 Jul, edit 19199), terminal. 8: "⚡ fungi suggested?" (escaped). 9: 9 id_notes "[iNaturalist] ..." → NULL (snapshot db_20261028_165411, history 3790–3798 system:clear_placeholder, read back by id) + LmMd.stripCitations hides dots-only text + enrichment never stores it. 10: lists.html addSessionSpecies via lmJsArg. Snapshot commit 31322206 mid-session.
 
 ### Build
-- Alembic head 0059. Service worker foragingid-v20 (tokens.css + site-header.css now in APP_SHELL), species cache foragingid-species-3.
-- Tests: 47 files in tests/, all pass at 3403705 (plain scripts, no pytest; JS via jsc).
-- Batch 16: static/css/index.css + 9 static/js/index files, verbatim; tests/index_source.py re-inlines the page (byte-equal to the prep commit).
+- Alembic head 0059. Service worker foragingid-v21, species cache foragingid-species-4.
+- Tests: 49 files in tests/, all pass (plain scripts, no pytest; JS via jsc). New: test_safety_b5_03_reviewer_notes.py, test_safety_sightings_viewer_pending.py, test_safety_items_7_10.py.
+- Smoke (evidence only): /, /sightings, /scan, /review, /lists, /lists/print — 0 errors. Guest-mode smoke still needs a join token in the scratch DB.
 
 ### Next (order)
-1. Safety batch (CLOSEOUT_28oct.md section 4): items 1–4 done (4498f88). **Resume at item 5** (B5-03 reviewer notes curator-only on every guest-reachable path, test as guest), then 6–10, report with ≤3 Melvin checks, End Session. CLAUDE.md workflow change done (Step 0).
-3. Melvin, phone: tap "Upload pending walks (N)" if shown; one reload per device.
-4. Live checks below before any further index work.
+1. Melvin, phone: tap "Upload pending walks (N)" if shown; one reload per device.
+2. Live checks below before any further index work.
+3. CLOSEOUT_28oct.md section 4 items 11–29 (decisions marked there), smallest first: 11 PFAF chip / Wikipedia label, 12 bare-domain links, 17 import summary duplicates, 18 Background Processes catch-all.
 
 ### Open decisions (Melvin)
-- None (section 4 decisions = Claude.ai defaults, Melvin 28 Oct).
+- Obs 9536 (Prunus cerasifera, human-approved 19 Jul): leave approved (default) or send back to Review.
 
 ### Backlog
 - Walk route line distorts, then disappears after zooming in and dragging, until the walk is reloaded (REPORT.md batch 15b item 4). Melvin reproduces first; no fix from code reading alone.
-- lists.html addSessionSpecies still uses the old escape-then-apostrophe pattern (safety batch item 10).
+- Map deep-link marker shows only "Observation #id" (pins-filters.js:577).
+- Guest scene pins say "No description added yet — edit in review queue" (detail-card.js:101) — curator wording on a guest screen.
+- 113 id_notes are truncated iNat summaries ending in "..." / "…".
 
 ### Settled (Melvin)
 - All recon defaults accepted 28 Oct, with: Loop threshold 600 m label only; PDF disclaimer name only; UA LandMemory/0.2 (+https://melvinjarman.co.uk); recording UI hidden only.
 - Merges only via merge_species_cards; no genus cards, ever; 879 Bryonia dioica toxic/toxic; 136 orphan-marked.
 - 28 Oct: POST mark-verified stays the 410 stub (writes nothing). New walks stay built as loops (the 600 m rule is the label only). Lists dropdown wired back (▾ on each selected-species row → toggleExpand), not removed.
 - 28 Oct: device list — ✕ on every entry (live paired device = revoke + remove; revoked device / unused link = delete the entry), app confirm dialog. Auto-prune only revoked devices and links unused after 7 days, on every list load; never a paired device for being offline.
+- 28 Oct: section 4 decisions = Claude.ai defaults. B5-03 = curator-only (scenes included). Data Trust = relabel, not redefine.
 
 ### Rules learned
 - Any app/ save reloads uvicorn — check /api/processes/active right before each save.
@@ -34,9 +37,13 @@ Pre-split fixes (182f5e6), batch 16 index.html split (prep 0cf780e, split 2b49db
 - Python str.splitlines() splits on U+2028 — use split("\n") when reading jsc JSON output.
 - Static files are served from disk: a sw.js bump is live as soon as it is written.
 - Settings → End session replaces Current State with exactly what is pasted in its box: paste the full block from chat, never a one-line summary (15:09 on 28 Oct a one-liner wiped every section).
+- An audit "auto-approved" finding must be checked against observation_edits before any status write: a later human approval makes the row terminal (9536).
+- Clearing a source-filled field to NULL lets enrichment refill it — guard the source before clearing.
+- Smoke pass routes are the app routes (/sightings, /lists/print), not the .html filenames.
 
 ### Unverified live
 Rule (CLAUDE.md, 28 Oct): one list, grouped by batch, each line = the symptom to look for. Melvin reports bugs from normal use; this maps them to a batch. Entries leave only when Melvin reports them checked or they are superseded.
+- **Safety batch 28 Oct, items 5–10 (this session):** a guest phone tapping a map pin shows any reviewer note text (B5-03 miss); the map shows no scene descriptions for you as curator (over-blocked). Sightings viewer: a pending photo opened full-size lacks "· pending review". Data Trust tab still says "Auto-approved" anywhere except the pipeline status chip. Review card still says "fungi detected". Elder / foxglove / chanterelle in Lists, print or PDF print "..." under Identification or Field ID notes. Lists "Add species" search: picking a name with an apostrophe adds nothing or the wrong name.
 - **Safety batch 28 Oct, items 1–4 (4498f88 + sw v21):** Lists 🌿 Returns shows Off by default; at 10, Digitalis purpurea shows ☠ deadly + look-alike/preparation lines in Lists, print and PDF (missing = gate miss). Species page for Sambucus nigra: the ground-elder and 3 Brill links carry "⚑ may not be this species"; a guest phone never shows them; printing the species page drops them. Workshop page (Lists / print / PDF) prints each warning once, in the Safety & edibility box. Elder's "Compost Cosmetic Dye…" sits under "Other uses", not "Medicinal preparations". After sw v21: any console "SafetyGate.seasonalReturn is not a function" = stale safety-gate.js.
 - **Part A held items (3403705, 28 Oct):** Lists × on shepherd's purse / St John's wort / lady's smock removes the wrong row or nothing → lmJsArg miss. Offline map page loses header styling → sw v20 not caching tokens.css / site-header.css. Console "loadFeatures is not defined" after a resize during map load → timer guard miss.
 - **Batch 16 index.html split (2b49db7, 28 Oct):** after one reload — any console "X is not defined" on the map page = a load-order miss; pin tap gives no detail card / no enrichment; build a walk → no route, panel or edibility badges; saved walk won't load; Edit walk stop tap / ⬚ Lasso / Start here / Loop label / stop 58 hidden / Tidy route order misbehave; Export summary broken; recording UI visible; Find tab, note panel or search broken; offline reload after one online load fails (index.css + index/*.js precache); note pins don't resize on zoom (moved zoomend line); zoom + drag a walk breaks; phone/guest view over the share link broken; no reload banner after the sw bump.
@@ -51,6 +58,32 @@ Rule (CLAUDE.md, 28 Oct): one list, grouped by batch, each line = the symptom to
 - 11b_review (28). genus_reid (6). bryony_check (8229). hazard_review cards (18) + 17052, 17737. 22 recipes needing a title. Five rejected photos restored in July (15958, 15970, 21333, 21673, 21799). Warning review cards. Text tidy-up (352 edible_parts / 689 id_notes). 347 Takeout person_animal rejects (mount DIGIERA). Draft #3252 Amaranthus hybridus. data/ old DBs (293 MB) + thumbnails_quarantine/ → copy to DIGIERA, delete in Finder.
 
 ## History
+
+### 2026-10-28 18:21
+**Snapshot** — End of session — Session ended from Settings page
+DB: `snapshots/db_20261028_182154.sqlite`
+
+### 2026-10-28 18:21
+**Session ended** — Session ended from Settings page
+
+### 2026-10-28 18:05
+**Safety batch items 7-10 (CLOSEOUT section 4 #8, #9, #10, #21): Data Trust labels, fungi suggestion wording, id_notes placeholders cleared + guarded, addSessionSpecies lmJsArg**
+
+**Built:**
+- scan.html Data Trust: 'Auto-approved' -> 'Approved, uncorrected', 'Below 60% conf' -> 'Below 60% top score' (12 strings; definition unchanged so bulk Send-to-review/Accept sets are identical; pipeline chip u-stat-auto-approved untouched)
+- review.html: '⚡ fungi detected' -> '⚡ fungi suggested?' (escaped, title says it is iNat's top match)
+- md.js LmMd.stripCitations returns '' for dots/ellipsis-only text (all 6 callers are Lists/print id_notes)
+- enrichment._apply_id_notes never stores a dots-only iNat text
+- lists.html addSessionSpecies onclick via lmJsArg
+- tests/test_safety_items_7_10.py (5 tests incl. hostile-name round trip)
+**Fixed:**
+- DB: culinary_info 20,67,262,328,354,355,365,407,725 id_notes '[iNaturalist] ...' -> NULL, history rows 3790-3798 changed_by system:clear_placeholder (snapshot db_20261028_165411, read back by id; 0 placeholders left)
+- Obs 9536 NOT moved to needs_review: current approval is human (observation_edits 19199, 19 Jul 16:33) after the 17 Jul sweep; terminal decision. Its 0.0059 is the B1-08 backfill own-score for Prunus cerasifera
+- test_batch7_escaping site 21 updated to the lmJsArg template
+**Files:** `frontend/scan.html`, `frontend/review.html`, `frontend/static/js/md.js`, `app/services/enrichment.py`, `frontend/lists.html`, `tests/test_safety_items_7_10.py`, `tests/test_batch7_escaping.py`
+**Pending:**
+- Safety batch 28 Oct items 1-10 all implemented; tests 49/49; smoke /scan /review /lists /lists/print 0 errors (evidence only). Next: End Session (Melvin, Settings, paste the block from chat)
+- Not done (outside item scope): map deep-link marker shows only Observation #id (pins-filters.js:577); guest scene pins say 'No description added yet — edit in review queue' (detail-card.js:101); 113 truncated id_notes ending in ...
 
 ### 2026-10-28 16:54
 **Snapshot** — before item 9: clear 9 id_notes placeholders

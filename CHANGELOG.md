@@ -1,53 +1,15 @@
 ## Current State
 
-28 Oct 2026, late morning
-
-### Session summary
-Final audit pass built (prompt B): batch 17 tidy, batch 15 (one Markdown dialect, one escaper + lmJsArg, one names rule), batch 15b (walk changes), one service-worker bump (v18). Step 0: obs 24429 → needs_review dandelion_check (Melvin then approved it); card 286 taste_notes "test draft" cleared (history 3785). 41 test files pass. Commits 5830833, 94afbbe, 0f47e98, 536b7e7 (not pushed until this End Session). Snapshots db_20261028_042247, _082151, _082939, _085440, _090626.
-
-### Build
-- Alembic head 0059 (CLAUDE.md now says 0059). Service worker foragingid-v18, species cache foragingid-species-3, APP_SHELL + esc.js / md.js / species-names.js.
-- 28 Oct, later: pre-split fixes (182f5e6) + batch 16 index.html split (prep 0cf780e, split commit after it). Service worker now foragingid-v19. Tests: 44 files, all pass.
-- Tests (before 28 Oct later): 41 files, all pass (plain scripts, no pytest; JS via jsc). New: test_batch17_tidy, test_changelog_service, test_batch15_markdown, test_batch15_esc_names, test_batch15b_walk.
-- Batch 17: CLAUDE.md / architecture.md fixes; docs/current_phase.md + its end-session writer removed; dead code removed after repo-wide re-grep (6 Python, 25 JS functions, git-banner.js, scratch page + route, geopy/piexif/aiofiles); migrate_*.py → scripts/archive; scan.html prefilter threshold fix; Lists fixed rows; device list self-refresh; APP_VERSION 0.2.0 + HTTP_USER_AGENT "LandMemory/0.2 (+https://melvinjarman.co.uk)"; log filter for 8 polling paths, [TIMING] behind LOG_TIMING, launcher keeps 10 logs; rename group 1 (PDF title/filename/disclaimer name, /docs, shared photo, start.sh, About prompt); /api/species/ thumbnail; reload banner (prompt only); End Session no longer stacks Current State blocks (4 stale blocks archived first); 4 dead app_settings rows deleted.
-- Batch 15: app/services/markdown.py + static/js/md.js, byte-identical on every live recipe; PDF no longer drops recipe text (53, 125, 198, 206, 234); curator warnings render verbatim (tested in app, print/Lists, PDF ×3 layouts); static/js/esc.js loads first on every escaping page, all escape-then-apostrophe handler args → lmJsArg; display_common_name on server picks (PDF honours preferred name) + spPickCommon JS twin; profile ai_drafts_blocked.
-- Batch 15b: Loop / One-way read-only label at 600 m (walks 1, 3, 4, 5 all Loop; lines unchanged; PATCH …/loop and stored flag kept; new walks still built as loops); Start here on every saved stop (closed line rotates, open line via Re-route preview k…N then k−1…1); empty saved stops hidden (panel, map, Export summary), Save opens Re-route, Renumber drops them; GPS recording start controls hidden (code, IndexedDB, upload, endpoints kept; upload buttons guest-hidden); Edit walk: tap a stop marks it for removal, ⬚ Lasso toggles pins.
-
-### Next (order)
-1. Melvin, phone: open the app, tap "↑ Upload pending walks (N)" if shown; then one reload per device.
-2. Walk 5 republish (Melvin approved 24429 on 28 Oct): fresh session — confirm 24429 approved, re-run plan (expect 65), publish with Front page ticked. Checked: no live page uses the site-root photos/ (safe to remove). Note: front page is currently the all-walks collection (commit 400907f) — Front page ticked replaces it with walk 5.
-3. Live walkthrough checks for batches 17 / 15 / 15b (Browser checks below).
-4. Batch 16 index.html split: built 28 Oct, implemented, unverified — Melvin's live checks (Browser checks) before any further index work.
-
-### Open decisions (Melvin)
-- None.
-
-### Backlog
-- Walk route line distorts, then disappears after zooming in and dragging, until the walk is reloaded (REPORT.md batch 15b item 4). Moved out of 15b by Melvin, 28 Oct. Melvin reproduces first; no fix from code reading alone.
-
-### Settled (Melvin)
-- All recon defaults accepted 28 Oct, with: Loop threshold 600 m label only; PDF disclaimer name only; UA LandMemory/0.2 (+https://melvinjarman.co.uk); recording UI hidden only.
-- Merges only via merge_species_cards; no genus cards, ever; 879 Bryonia dioica toxic/toxic; 136 orphan-marked.
-- 28 Oct: POST mark-verified stays the 410 stub (writes nothing). New walks stay built as loops (the 600 m rule is the label only). Lists dropdown wired back (▾ on each selected-species row → toggleExpand), not removed.
-- 28 Oct: device list — ✕ on every entry (live paired device = revoke + remove; revoked device / unused link = delete the entry), app confirm dialog. Auto-prune only revoked devices and links unused after 7 days, on every list load; never a paired device for being offline.
-
-### Rules learned
-- Any app/ save reloads uvicorn — check /api/processes/active right before each save.
-- Escaping is 5-char now: inline-handler string args must use lmJsArg, never escape-then-replace(/'/).
-- Python str.splitlines() splits on U+2028 — use split("\n") when reading jsc JSON output.
-- Static files are served from disk: a sw.js bump is live as soon as it is written.
-
-### Browser checks
-- Batch 16 split (28 Oct) — implemented, unverified. One reload first (sw v19), then: (1) map loads with no console errors (any "X is not defined" = a load-order miss); (2) tap a pin → detail card with enrichment; (3) build a walk → route, panel, edibility badges; (4) a saved walk loads; Edit walk: tap a stop marks it, ⬚ Lasso toggles pins; Start here on a stop; Loop label shows; stop 58 stays hidden; Tidy route order; (5) Export summary; (6) no recording UI; (7) Find tab, note panel, search; (8) offline reload after one online load (index.css + index/*.js now precached); (9) zoom in/out → note pins resize (moved zoomend line); zoom + drag a walk; (10) phone/guest view over the share link; reload banner appears after the sw bump. Known residual: a window resize while the page is still loading could log one "loadFeatures is not defined" from the 200 ms pin refetch timer (harmless; Init loads pins anyway).
-- Device list (28 Oct): Settings → Curator devices shows only "Melvino's" (rows 2–4, all revoked, pruned live). ✕ opens the in-app dialog (no browser popup), Cancel / click outside / Esc close it; on the live device it says "Revoke and remove". Don't confirm on your only signed-in phone unless you mean it — ✕ there cuts that phone off at once.
-- Lists dropdown (28 Oct): ▾ on a selected-species row opens fill status + Include in PDF toggles (Warnings "Always printed", Conditions "Not printed"); unticking a section removes it from the preview; ▾ rotates when open.
-- scripts/dev/walkthrough_check.py drives a browser, so Melvin runs it after UI batches; Code does not.
-- Batch 17, 15, 15b and the sw.js bump: full checklists in CHANGELOG Browser checks (pre-filter note, Lists rows, device list, Large/List thumbnails, reload banner, PDF/print recipes 125/206, apostrophe names on every converted button, preferred names, Loop label, Start here, stop 58 hidden, Edit walk stop tap + lasso, no recording UI, upload button).
-
-### Melvin's review queue
-- 11b_review (28). genus_reid (6). bryony_check (8229). hazard_review cards (18) + 17052, 17737. 22 recipes needing a title. Five rejected photos restored in July (15958, 15970, 21333, 21673, 21799). Warning review cards. Text tidy-up (352 edible_parts / 689 id_notes). 347 Takeout person_animal rejects (mount DIGIERA). Draft #3252 Amaranthus hybridus. data/ old DBs (293 MB) + thumbnails_quarantine/ → copy to DIGIERA, delete in Finder.
+Pre-split fixes + batch 16. Device list: red ✕ on every entry with in-app confirm (live paired = revoke + remove; revoked/unused link = delete); auto-prune of revoked devices and links unused 7+ days on every list load, never a paired device for being offline — live prune removed guest_tokens 2–4, kept 5 (snapshot db_20261028_100138). Lists ▾ dropdown wired back to toggleExpand. Settled: mark-verified 410 stub kept, new walks stay loops. Batch 16: prep 0cf780e (zoomend line moved), split 2b49db7 — index.css + 9 static/js/index files, verbatim, byte-equal to the prep commit when put back inline, no load-time forward reference left; sw v19 with the new files and 9 missing index scripts in the offline cache; app_styles repointed. Commits 182f5e6, 0cf780e, 2b49db7. 44 test files pass. Implemented, unverified: Melvin's batch 16 + device list + Lists checks in CHANGELOG Browser checks. Held: removeFromList apostrophe pattern; tokens.css/site-header.css not in the offline cache; one-off loadFeatures timer error possible on resize during load.
 
 ## History
+
+### 2026-10-28 15:09
+**Snapshot** — End of session — Session ended from Settings page
+DB: `snapshots/db_20261028_150904.sqlite`
+
+### 2026-10-28 15:09
+**Session ended** — Session ended from Settings page
 
 ### 2026-10-28 13:24
 **Batch 16: frontend/index.html split into index.css + 9 static/js/index files (verbatim), prep commit 0cf780e first**

@@ -127,7 +127,7 @@ SITES = [
     ("frontend/species.html", [], '<div class="empty-state">Error loading profile: ${_esc(e.message)}</div>',
      ("text",), ""),
     # lists.html
-    ("frontend/lists.html", [], "onclick=\"removeFromList('${_esc(String(name).replace(/'/g, \"\\\\'\"))}')\">",
+    ("frontend/lists.html", [], "onclick=\"removeFromList(${lmJsArg(name)})\">",
      ("call", "removeFromList", 0), ""),
     ("frontend/lists.html", ["    const safe = _esc((x.scientific_name || '').replace(/'/g, \"\\\\'\"));"],
      "<div class=\"sp-lookup-item\" onclick=\"addSessionSpecies('${safe}')\">", ("call", "addSessionSpecies", 0), ""),

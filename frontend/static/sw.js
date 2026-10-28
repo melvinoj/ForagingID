@@ -13,7 +13,7 @@
 //
 // Writes (POST / PATCH / DELETE) are never intercepted — they always go to the network.
 
-const CACHE_VERSION  = 'foragingid-v19';   // bump → old STATIC/RUNTIME caches evicted on activate
+const CACHE_VERSION  = 'foragingid-v20';   // bump → old STATIC/RUNTIME caches evicted on activate
 const STATIC_CACHE   = CACHE_VERSION + '-static';
 const RUNTIME_CACHE  = CACHE_VERSION + '-runtime';
 // TILE_CACHE and SPECIES_CACHE are deliberately version-independent. Both
@@ -53,6 +53,8 @@ const APP_SHELL = [
   '/static/js/species-names.js', // names rule (spCommon / spPickCommon) — the map page needs it offline
   '/static/js/safety-gate.js',   // batch 5 safety gate — every map/species/list page needs it offline
   '/static/js/hazard-ack.js',    // hazard candidates second tap (22 Oct 2026) — map page approve
+  '/static/css/tokens.css',       // design tokens + site header: every page links both (held item, 28 Oct 2026)
+  '/static/css/site-header.css',
   // Batch 16 (28 Oct 2026): the map page is split into index.css + static/js/index/*
   // (load order as in index.html), and the page's other scripts that were missing.
   '/static/css/index.css',

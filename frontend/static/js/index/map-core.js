@@ -159,8 +159,11 @@ map.on('moveend', function() {
     localStorage.setItem('fid_map_pos', JSON.stringify({ lat: c.lat, lng: c.lng, z: map.getZoom() }));
   } catch (_) {}
   // Refetch bbox-bounded pins for the new viewport (debounced).
+  // loadFeatures lives in pins-filters.js: a resize while the split files are
+  // still loading fires moveend before it exists. Skip then — the load-time
+  // loadFeatures() call at the end of search-notes-find.js fetches this view.
   clearTimeout(_moveDebounce);
-  _moveDebounce = setTimeout(loadFeatures, 200);
+  _moveDebounce = setTimeout(() => { if (typeof loadFeatures === 'function') loadFeatures(); }, 200);
 });
 
 // ── Base layers ───────────────────────────────────────────────────────────────

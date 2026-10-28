@@ -174,7 +174,7 @@ def test_js_pick_sites_use_sppickcommon():
 
 def test_one_service_worker_bump_for_the_final_pass():
     sw = _src("frontend/static/sw.js")
-    assert "const CACHE_VERSION  = 'foragingid-v19';" in sw
+    assert "const CACHE_VERSION  = 'foragingid-v20';" in sw
     assert "const SPECIES_CACHE  = 'foragingid-species-3';" in sw          # /api/species/ thumbnails (17-B3)
     shell = sw[sw.index("const APP_SHELL = ["):sw.index("];", sw.index("const APP_SHELL = ["))]
     for f in ("/static/js/esc.js", "/static/js/md.js", "/static/js/species-names.js", "/static/js/safety-gate.js"):

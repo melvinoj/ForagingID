@@ -1174,7 +1174,7 @@ function render() {
         <button class="sp-compact-exp" title="PDF sections" aria-label="PDF sections"
                 onclick="toggleExpand(${lmJsArg(name)})">▾</button>
         <button class="sp-compact-rm" title="Remove"
-                onclick="removeFromList('${_esc(String(name).replace(/'/g, "\\'"))}')">×</button>
+                onclick="removeFromList(${lmJsArg(name)})">×</button>
       </div>
       <div class="lc-detail" id="detail-${safe}"></div>
       </div>`;

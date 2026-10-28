@@ -213,7 +213,8 @@ var allSpecies = %(species)s;
        "throws": "true" if storage_throws else "false", "select": "true" if select else "false",
        "species": json.dumps(_species())}
     return _jsc(harness + _src("frontend/static/js/esc.js") + "\n" + _src("frontend/static/js/safety-gate.js") + "\n"
-                + _src("frontend/static/js/species-names.js") + "\n" + _view_js() + "\n" + extra)
+                + _src("frontend/static/js/species-names.js") + "\n" + _src("frontend/static/js/view-switch.js") + "\n"
+                + _view_js() + "\n" + extra)
 
 
 def _per_species(html):
@@ -321,8 +322,9 @@ print(JSON.stringify(res));"""))
 
 def test_toggle_markup_and_phone_layout():
     page = _src("frontend/species.html")
-    for v, tip in (("large", "Large"), ("grid", "Grid"), ("list", "List")):
-        assert f'data-view="{v}" onclick="setSpeciesView(\'{v}\')" title="{tip}' in page
+    # 28 Oct 2026: the buttons come from the shared view-switch.js (test_view_switch_recipes.py
+    # checks them byte-for-byte against the old static markup)
+    assert "LmViewSwitch.toggleHtml('sp-view-btn', 'setSpeciesView')" in page
     css = page[page.index("/* ── Species views: Large / Grid / List"):page.index("/* ── Filter chips")]
     assert ".sp-table .col-family { display: none; }" in css and "table-layout: fixed" in css
     assert "overflow-wrap: anywhere" in css

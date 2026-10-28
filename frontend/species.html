@@ -1083,18 +1083,8 @@
     <button class="de-toggle" id="de-toggle-btn" onclick="toggleDeNames()" title="Show/hide German folk names">
       <span class="flag">🇩🇪</span> <span class="de-label">Deutsche Namen</span>
     </button>
-    <!-- View toggle (Large / Grid / List) — setSpeciesView() -->
-    <div class="sp-view-toggle" role="group" aria-label="View">
-      <button type="button" class="sp-view-btn" data-view="large" onclick="setSpeciesView('large')" title="Large — big photo cards" aria-label="Large view">
-        <svg viewBox="0 0 16 16" aria-hidden="true"><rect x="1" y="1" width="6" height="6" rx="1"/><rect x="9" y="1" width="6" height="6" rx="1"/><rect x="1" y="9" width="6" height="6" rx="1"/><rect x="9" y="9" width="6" height="6" rx="1"/></svg>
-      </button>
-      <button type="button" class="sp-view-btn" data-view="grid" onclick="setSpeciesView('grid')" title="Grid — compact cards" aria-label="Grid view">
-        <svg viewBox="0 0 16 16" aria-hidden="true"><rect x="1" y="1" width="4" height="4" rx=".6"/><rect x="6" y="1" width="4" height="4" rx=".6"/><rect x="11" y="1" width="4" height="4" rx=".6"/><rect x="1" y="6" width="4" height="4" rx=".6"/><rect x="6" y="6" width="4" height="4" rx=".6"/><rect x="11" y="6" width="4" height="4" rx=".6"/><rect x="1" y="11" width="4" height="4" rx=".6"/><rect x="6" y="11" width="4" height="4" rx=".6"/><rect x="11" y="11" width="4" height="4" rx=".6"/></svg>
-      </button>
-      <button type="button" class="sp-view-btn" data-view="list" onclick="setSpeciesView('list')" title="List — sortable rows" aria-label="List view">
-        <svg viewBox="0 0 16 16" aria-hidden="true"><rect x="1" y="2" width="3" height="3" rx=".6"/><rect x="6" y="2.75" width="9" height="1.5" rx=".5"/><rect x="1" y="6.5" width="3" height="3" rx=".6"/><rect x="6" y="7.25" width="9" height="1.5" rx=".5"/><rect x="1" y="11" width="3" height="3" rx=".6"/><rect x="6" y="11.75" width="9" height="1.5" rx=".5"/></svg>
-      </button>
-    </div>
+    <!-- View toggle (Large / Grid / List) — buttons from LmViewSwitch.toggleHtml (view-switch.js), setSpeciesView() -->
+    <div class="sp-view-toggle" id="sp-view-toggle" role="group" aria-label="View"></div>
   </div>
 
   <!-- Filter chips row -->
@@ -1487,6 +1477,7 @@
 <script src="/static/js/safety-gate.js"></script>
 <script src="/static/js/md.js"></script>
 <script src="/static/js/species-names.js"></script>
+<script src="/static/js/view-switch.js"></script>
 <script src="/static/js/lists.js"></script>
 <script src="/static/js/gps.js"></script>
 <script src="/static/js/guest-notes.js"></script>
@@ -1501,18 +1492,17 @@ let allSpecies = [];
 let obsMap = null;
 let _spThumbs = {};   // species name -> [{file, conf}] sorted by confidence desc (select mode, Large, List)
 // Species views (Large / Grid / List) — declared before the router runs (TDZ).
-const _SP_VIEWS = ['large', 'grid', 'list'];
+// The switch itself is shared with the Recipes page (static/js/view-switch.js).
 const _SP_VIEW_KEY = 'foragingid_species_view';
-let _spView = (() => {
-  try { const v = localStorage.getItem(_SP_VIEW_KEY); return _SP_VIEWS.includes(v) ? v : 'grid'; }
-  catch (_) { return 'grid'; }
-})();
+let _spView = LmViewSwitch.stored(_SP_VIEW_KEY, 'grid');
 let _spListSort = { key: 'name', dir: 1 };   // List view column sort
 let _spLastItems = [];                       // the filtered set the current view shows
 let _spThumbsPromise = null;
 // Track the current species name so the rename form knows the old name.
 // Must be declared here (before loadProfile is called) to avoid TDZ ReferenceError.
 let _profCurrentSciName = '';
+
+document.getElementById('sp-view-toggle').innerHTML = LmViewSwitch.toggleHtml('sp-view-btn', 'setSpeciesView');
 
 if (speciesParam) {
   document.getElementById('list-view').style.display = 'none';
@@ -1752,10 +1742,10 @@ function _spThumbImg(name, cls) {
 }
 
 function setSpeciesView(view) {
-  if (!_SP_VIEWS.includes(view) || view === _spView) return;
+  if (!LmViewSwitch.VIEWS.includes(view) || view === _spView) return;
   const anchor = _spFirstVisibleName();
   _spView = view;
-  try { localStorage.setItem(_SP_VIEW_KEY, view); } catch (_) {}
+  LmViewSwitch.remember(_SP_VIEW_KEY, view);
   _syncSpViewButtons();
   if (!allSpecies.length) return;            // list not loaded yet — loadSpeciesList renders it
   renderList(_spLastItems);
@@ -1770,31 +1760,11 @@ function setSpeciesView(view) {
   }
 }
 
-function _syncSpViewButtons() {
-  document.querySelectorAll('.sp-view-btn').forEach(b => {
-    const on = b.dataset.view === _spView;
-    b.classList.toggle('active', on);
-    b.setAttribute('aria-pressed', on ? 'true' : 'false');
-  });
-}
+function _syncSpViewButtons() { LmViewSwitch.sync('.sp-view-btn', _spView); }
 
-// Scroll anchor: the first species still on screen and its offset from the
-// top of the window, so a view switch keeps the reader's place where possible
-// (at the top of the page nothing moves).
-function _spFirstVisibleName() {
-  if (window.scrollY <= 0) return null;
-  for (const el of document.querySelectorAll('#species-grid [data-name]')) {
-    const top = el.getBoundingClientRect().top;
-    if (el.getBoundingClientRect().bottom > 60) return { name: el.dataset.name, top };
-  }
-  return null;
-}
-
-function _spScrollToName(anchor) {
-  if (!anchor) return;
-  const el = [...document.querySelectorAll('#species-grid [data-name]')].find(e => e.dataset.name === anchor.name);
-  if (el) window.scrollBy(0, el.getBoundingClientRect().top - anchor.top);
-}
+// Scroll anchor (LmViewSwitch): a view switch keeps the reader's place.
+function _spFirstVisibleName() { return LmViewSwitch.firstVisible('#species-grid [data-name]'); }
+function _spScrollToName(anchor) { LmViewSwitch.scrollTo(anchor, '#species-grid [data-name]'); }
 
 // The species' badge — the grid's existing reading of the served decision
 // (SafetyGate), moved here unchanged so all three views share it.
@@ -1837,13 +1807,8 @@ function _spAllNames(sp) {
 }
 
 // List sort order for the safety column: deadly, toxic, unknown, caution,
-// edible, not edible — read from the served decision (ordering only).
-const _SP_SAFETY_ORDER = { deadly: 0, toxic: 1, unknown: 2, caution: 3 };
-function _spSafetyRank(sp) {
-  const d = SafetyGate.decision(sp.safety);
-  if (d.level in _SP_SAFETY_ORDER) return _SP_SAFETY_ORDER[d.level];
-  return d.verdict === 'edible' ? 4 : 5;
-}
+// edible, not edible (LmViewSwitch.safetyRank — shared with the Recipes page).
+function _spSafetyRank(sp) { return LmViewSwitch.safetyRank(sp.safety); }
 
 const _SP_SORTS = {
   name:      sp => _sortKey(sp),

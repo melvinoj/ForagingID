@@ -20,7 +20,10 @@ to a missing folder IN THE SCRATCH DB ONLY so the syncthing loop ingests nothing
 The server is started and stopped by this script.
 
 Run:  ~/foragingid-venv/bin/python scripts/dev/smoke_pass.py /lists.html /print.html
-      --guest  also loads each page as a LAN guest (X-Forwarded-For), not curator
+      --guest  also loads each page as a LAN guest (X-Forwarded-For), not curator,
+               signed in as a workshop participant through a one-time /join link
+               (a scratch-only participant + one token per page, written to the
+               SCRATCH DB only)
       --keep   leave the 8001 server running afterwards (prints its PID)
 """
 import argparse
@@ -92,6 +95,24 @@ def build_scratch() -> None:
     dst.close()
 
 
+def guest_join_tokens(n: int) -> list:
+    """n one-time participant join tokens in the SCRATCH DB (never the live one)."""
+    import secrets
+    db = TREE / "data" / "foragingid.db"
+    assert SCRATCH in db.parents
+    con = sqlite3.connect(str(db))
+    pid = con.execute("INSERT INTO workshop_participants (name, notes) VALUES (?, ?)",
+                      ("smoke guest", "scratch smoke pass only")).lastrowid
+    toks = []
+    for _ in range(n):
+        t = "smoke-" + secrets.token_urlsafe(16)
+        con.execute("INSERT INTO guest_tokens (token, participant_id, is_active) VALUES (?, ?, 1)", (t, pid))
+        toks.append(t)
+    con.commit()
+    con.close()
+    return toks
+
+
 def start_server() -> subprocess.Popen:
     try:
         urllib.request.urlopen(f"{BASE}/api/processes/active", timeout=2)
@@ -123,8 +144,10 @@ def start_server() -> subprocess.Popen:
 
 
 def load_pages(pages, guest: bool):
+    from urllib.parse import quote
     from playwright.sync_api import sync_playwright
     results = []
+    tokens = guest_join_tokens(len(pages)) if guest else []
     with sync_playwright() as pw:
         browser = pw.chromium.launch()
         for path in pages:
@@ -138,7 +161,10 @@ def load_pages(pages, guest: bool):
             page.on("requestfailed", lambda q, r=r: r["failed"].append(f"{q.url[:160]} {q.failure}"))
             page.on("response", lambda s, r=r: s.status >= 400 and r["http_errors"].append(f"{s.status} {s.url[:160]}"))
             try:
-                page.goto(BASE + path, wait_until="load", timeout=45000)
+                if guest:   # one-time link → participant cookie → 303 to the page
+                    page.goto(f"{BASE}/join/{tokens.pop()}?next={quote(path)}", wait_until="load", timeout=45000)
+                else:
+                    page.goto(BASE + path, wait_until="load", timeout=45000)
             except Exception as exc:  # timeout on a page that keeps polling is reported, not fatal
                 r["page_errors"].append(f"goto: {str(exc)[:200]}")
             page.wait_for_timeout(3000)  # polling pages never reach networkidle

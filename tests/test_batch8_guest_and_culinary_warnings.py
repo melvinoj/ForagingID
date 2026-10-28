@@ -62,6 +62,9 @@ RECIPE_BODY = "RECIPE-SENTINEL fry gently"
 
 
 def _src(p):
+    if p == "frontend/index.html":   # batch 16: split page, read re-inlined
+        from index_source import index_source
+        return index_source()
     return open(os.path.join(ROOT, p), encoding="utf-8").read()
 
 

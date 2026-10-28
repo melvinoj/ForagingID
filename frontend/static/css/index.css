@@ -1,0 +1,1910 @@
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: system-ui, sans-serif;
+      background: #2a3330;
+      display: flex;
+      flex-direction: column;
+      height: 100dvh;
+      overflow: hidden;
+    }
+
+
+    /* ── Main layout ─────────────────────────────────────────────────────── */
+    #main { display: flex; flex: 1; min-height: 0; overflow: hidden; position: relative; }
+
+    /* ── Map ─────────────────────────────────────────────────────────────── */
+    #map { flex: 1; min-width: 0; z-index: 0; position: relative; }
+
+    /* ── Sidebar — out of flex flow, acts as float anchor ───────────────── */
+    #sidebar {
+      position: absolute; right: 0; top: 0; bottom: 0;
+      width: 0; overflow: visible; z-index: 900;
+      /* No flex, no border, no background — children are absolutely positioned */
+    }
+    #drawer-handle { display: none; }
+
+    /* ── Floating content pane — slides in from right over the map ──────── */
+    /* Holds detail-view / walk-detail-view / nearme-view / find-view / the
+       filter-view empty-state. Settings content (base layer, filters, etc.)
+       lives in #config-sheet now — see Map Redesign P1. */
+    #rp-pane {
+      position: absolute; right: 0; top: 0; bottom: 0;
+      width: 300px; overflow: hidden;
+      display: flex; flex-direction: column;
+      background: white;
+      border-left: 1px solid #d0dbb8;
+      box-shadow: -4px 0 20px rgba(0,0,0,.22);
+      transform: translateX(300px);
+      transition: transform 0.25s cubic-bezier(.32,1,.56,1);
+      pointer-events: none;
+    }
+    #rp-pane.rp-open {
+      transform: translateX(0);
+      pointer-events: auto;
+    }
+
+    /* ── Filter view (default sidebar state) ────────────────────────────── */
+    #filter-view {
+      display: flex; flex-direction: column; flex: 1; overflow: hidden;
+    }
+    #filters { padding: 12px; border-bottom: 1px solid #eee; flex-shrink: 0; }
+    #filters h3 {
+      font-size: 0.8rem; font-weight: 600; color: #555;
+      margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.05em;
+    }
+    .filter-row { margin-bottom: 8px; }
+    .filter-row label { font-size: 0.83rem; color: #333; display: block; margin-bottom: 3px; }
+    .filter-row select,
+    .filter-row input[type=text] {
+      width: 100%; padding: 5px 8px;
+      border: 1px solid #ccc; border-radius: 5px;
+      font-size: 0.82rem; background: white; -webkit-appearance: none;
+    }
+    .filter-row select:focus,
+    .filter-row input[type=text]:focus {
+      outline: none; border-color: #7a9e50; box-shadow: 0 0 0 2px #7a9e5030;
+    }
+    .filter-row.check-row { display: flex; align-items: center; gap: 8px; }
+    .filter-row.check-row input[type=checkbox] {
+      width: 16px; height: 16px; accent-color: #2d5016; flex-shrink: 0; cursor: pointer;
+    }
+    .filter-row.check-row label { margin-bottom: 0; cursor: pointer; }
+
+    #filter-empty-state {
+      flex: 1; display: flex; align-items: center; justify-content: center;
+    }
+    .empty-state { color: #aaa; font-size: 0.85rem; text-align: center; line-height: 1.6; padding: 0 20px; }
+
+    /* ── Detail view (shown when a pin is clicked) ───────────────────────── */
+    #detail-view {
+      display: none; flex-direction: column; flex: 1; overflow: hidden;
+    }
+    #detail-back-bar {
+      display: flex; align-items: center; gap: 8px;
+      padding: 8px 12px; border-bottom: 1px solid #e0e8d0;
+      flex-shrink: 0; background: #fafbf7;
+    }
+    #detail-back-btn {
+      background: none; border: 1px solid #c8d8a8; border-radius: 5px;
+      padding: 4px 10px; font-size: 0.78rem; color: #555; cursor: pointer;
+      -webkit-tap-highlight-color: transparent; white-space: nowrap;
+    }
+    #detail-back-btn:hover { background: #f0f4e8; border-color: #7a9e50; color: #2d5016; }
+    #detail-back-species {
+      font-size: 0.78rem; color: #888; font-style: italic;
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1;
+    }
+    #detail-scroll {
+      flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; padding: 12px;
+    }
+
+    /* ── Detail panel content styles ─────────────────────────────────────── */
+    .obs-thumb {
+      width: 100%; border-radius: 6px; margin-bottom: 10px;
+      object-fit: cover; max-height: 200px; display: block; cursor: zoom-in;
+    }
+    .det-common-name { font-size: 1rem; font-weight: 600; color: #1a2e0a; margin-bottom: 2px; }
+    .det-sci-name { font-size: 0.88rem; font-style: italic; color: #555; margin-bottom: 6px; }
+    .det-unknown { font-size: 0.88rem; color: #888; margin-bottom: 6px; }
+    .meta-row { font-size: 0.82rem; color: #666; margin-bottom: 3px; }
+    .badge {
+      display: inline-block; padding: 2px 8px;
+      border-radius: 12px; font-size: 0.74rem; font-weight: 600; margin-bottom: 8px;
+    }
+    .badge-confirmed   { background: #d1e7dd; color: #0f5132; }
+    .badge-human       { background: #e2d9f3; color: #4a235a; }
+    .badge-enriched    { background: #dcfce7; color: #166534; }
+    .badge-pending     { background: #f0f4e8; color: #5a6a40; }
+
+    .det-actions { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+    .det-btn {
+      padding: 7px 14px; border-radius: 6px; font-size: 0.8rem;
+      border: 1px solid #ccc; background: white; cursor: pointer;
+      text-decoration: none; color: #333; display: inline-block;
+      -webkit-tap-highlight-color: transparent; touch-action: manipulation; min-height: 38px;
+    }
+    .det-btn:hover, .det-btn:active { background: #f0f4e8; border-color: #7a9e50; }
+    .det-btn.primary { background: #2d5016; color: white; border-color: #2d5016; }
+    .det-btn.primary:hover, .det-btn.primary:active { background: #3a6b1e; }
+    .det-btn.enrich { background: #fffbeb; color: #92400e; border-color: #fcd34d; }
+    .det-btn.enrich:hover { background: #fef3c7; border-color: #f59e0b; }
+    .det-btn.danger { color: #dc2626; border-color: #fca5a5; background: white; }
+    .det-btn.danger:hover, .det-btn.danger:active { background: #fef2f2; border-color: #dc2626; }
+    .det-btn:disabled { opacity: 0.55; cursor: default; pointer-events: none; }
+
+    /* Editable species name field (for unidentified observations) */
+    .det-species-edit {
+      background: #f8f9fa; border: 1px dashed #aaa; border-radius: 6px;
+      padding: 10px 12px; margin: 6px 0 10px;
+    }
+    .det-species-edit label { font-size: 0.78rem; color: #666; display: block; margin-bottom: 5px; }
+    .det-species-edit input {
+      width: 100%; padding: 6px 8px; font-size: 0.85rem;
+      border: 1px solid #ccc; border-radius: 4px; font-family: inherit;
+    }
+    .det-species-edit input:focus { outline: none; border-color: #7a9e50; }
+    .det-species-edit .edit-save-btn {
+      margin-top: 6px; padding: 5px 12px; border-radius: 4px; font-size: 0.78rem;
+      background: #2d5016; color: white; border: none; cursor: pointer;
+    }
+
+    /* Enrichment result / snippet */
+    .map-enrich { margin: 8px 0 10px; }
+    .map-safety-warn {
+      background: #fff4f4; border-left: 3px solid #e53e3e;
+      border-radius: 0 6px 6px 0; padding: 8px 10px; margin-bottom: 6px;
+      font-size: 0.8rem; color: #7b0000; line-height: 1.4;
+    }
+    .map-safety-warn strong { display: block; margin-bottom: 2px; font-size: 0.75rem; }
+    .map-culinary-row {
+      background: #f0fbf4; border-left: 3px solid #16a34a;
+      border-radius: 0 6px 6px 0; padding: 8px 10px;
+      font-size: 0.8rem; color: #14532d; line-height: 1.4;
+    }
+    .map-culinary-row strong { display: block; margin-bottom: 2px; font-size: 0.75rem; }
+    .map-culinary-row a { color: #2d5016; font-weight: 600; }
+    .map-enrich-loading { font-size: 0.78rem; color: #aaa; padding: 4px 0; }
+    .map-enrich-pending {
+      font-size: 0.78rem; color: #888; padding: 6px 10px;
+      background: #f8f9fa; border: 1px dashed #ddd; border-radius: 6px;
+    }
+    .enrich-result-ok {
+      background: #f0fdf4; border: 1px solid #86efac; border-radius: 6px;
+      padding: 8px 10px; font-size: 0.79rem; color: #166534; margin-top: 6px;
+      line-height: 1.5;
+    }
+    .enrich-result-err {
+      background: #fef2f2; border: 1px solid #fca5a5; border-radius: 6px;
+      padding: 8px 10px; font-size: 0.79rem; color: #991b1b; margin-top: 6px;
+    }
+
+    /* ── Rename species form (detail panel) ─────────────────────────────── */
+    .rename-btn {
+      background: none; border: 1px solid #d0dbb8; border-radius: 4px;
+      padding: 1px 6px; font-size: 0.72rem; color: #888; cursor: pointer;
+      vertical-align: middle; margin-left: 5px; white-space: nowrap;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .rename-btn:hover { background: #f0f4e8; border-color: #7a9e50; color: #2d5016; }
+    .rename-form {
+      background: #f8f9fa; border: 1px dashed #bbb; border-radius: 6px;
+      padding: 10px 12px; margin: 8px 0;
+    }
+    .rename-form label { font-size: 0.75rem; color: #666; display: block; margin-bottom: 3px; }
+    .rename-form input {
+      width: 100%; padding: 5px 8px; font-size: 0.85rem; font-style: italic;
+      border: 1px solid #ccc; border-radius: 4px; font-family: inherit; margin-bottom: 6px;
+    }
+    .rename-form input:focus { outline: none; border-color: #7a9e50; }
+    .rename-form .rename-actions { display: flex; gap: 6px; }
+    .rename-form .btn-rename-save {
+      padding: 5px 14px; background: #2d5016; color: white; border: none;
+      border-radius: 4px; font-size: 0.8rem; cursor: pointer; flex-shrink: 0;
+    }
+    .rename-form .btn-rename-save:disabled { opacity: 0.5; cursor: default; }
+    .rename-form .btn-rename-cancel {
+      padding: 5px 10px; background: white; color: #666;
+      border: 1px solid #ccc; border-radius: 4px; font-size: 0.8rem; cursor: pointer;
+    }
+    .rename-result-ok {
+      background: #f0fdf4; border: 1px solid #86efac; border-radius: 5px;
+      padding: 7px 10px; font-size: 0.78rem; color: #166534; margin-top: 6px; line-height: 1.5;
+    }
+    .rename-result-warn {
+      background: #fffbeb; border: 1px solid #fde68a; border-radius: 5px;
+      padding: 7px 10px; font-size: 0.78rem; color: #78350f; margin-top: 6px; line-height: 1.5;
+    }
+    .rename-result-err {
+      background: #fef2f2; border: 1px solid #fca5a5; border-radius: 5px;
+      padding: 7px 10px; font-size: 0.78rem; color: #991b1b; margin-top: 6px;
+    }
+
+    /* ── Mobile FAB ──────────────────────────────────────────────────────── */
+    #fab-filters {
+      display: none; position: absolute; bottom: 20px; right: 14px; z-index: 500;
+      background: #2d5016; color: white; border: none; border-radius: 24px;
+      padding: 10px 16px; font-size: 0.85rem; font-weight: 600;
+      box-shadow: 0 3px 12px rgba(0,0,0,.3); cursor: pointer; gap: 6px;
+      align-items: center; -webkit-tap-highlight-color: transparent;
+      touch-action: manipulation; min-height: 44px;
+    }
+
+    #drawer-close {
+      display: none; position: absolute; top: 12px; right: 14px;
+      background: #f0f4e8; border: none; border-radius: 50%;
+      width: 28px; height: 28px; font-size: 1rem; line-height: 1; cursor: pointer;
+      align-items: center; justify-content: center; color: #555; z-index: 2;
+    }
+
+    @media (max-width: 700px) {
+      body { height: 100dvh; }
+      #main { flex-direction: column; }
+      #map { flex: 1; width: 100%; }
+      /* Sidebar is position:absolute in #main — no mobile-specific overrides needed */
+      #drawer-handle { display: none !important; }
+      #drawer-close { display: flex; }
+      .det-btn { padding: 10px 16px; font-size: 0.85rem; }
+    }
+
+    .leaflet-touch .leaflet-interactive { stroke-width: 3; }
+    /* Species name labels on walk pins / stops (names rule: Common (Latin)) */
+    .leaflet-tooltip.walk-pin-label { font-size: 0.72rem; padding: 2px 7px; line-height: 1.35; }
+
+    /* ── Note panel (still uses the old dropdown-panel look) ─────────────── */
+    .tbar-panel {
+      background: white; border: 1px solid #c8d8a8;
+      border-radius: 8px; box-shadow: 0 4px 14px rgba(0,0,0,.18);
+    }
+    /* ── Filter count badge (moved onto the config-sheet gear chip) ──────── */
+    .filter-count-badge {
+      display: none; background: var(--amber); color: var(--ink);
+      border-radius: 10px; padding: 0 5px; font-size: 0.62rem;
+      font-weight: 700; min-width: 16px; text-align: center;
+      position: absolute; top: -2px; right: -2px;
+    }
+    .filter-count-badge.visible { display: inline-block; }
+
+    /* ── Highlighted pin pulse ───────────────────────────────────────────── */
+    @keyframes pin-pulse {
+      0%   { transform: scale(1);   box-shadow: 0 0 0  0   rgba(45,128,22,.7); }
+      50%  { transform: scale(1.4); box-shadow: 0 0 0 12px rgba(45,128,22,0); }
+      100% { transform: scale(1);   box-shadow: 0 0 0  0   rgba(45,128,22,.7); }
+    }
+    .pin-pulse { animation: pin-pulse 1.1s ease-in-out infinite; }
+
+    #drawer-scrim {
+      display: none; position: absolute; inset: 0;
+      background: rgba(0,0,0,.22); z-index: 850;
+      /* Sits above map content but below the floating panel (z-index:900) */
+    }
+    #drawer-scrim.show { display: block; }
+    /* Only show scrim on touch/mobile — desktop floating panel doesn't need dimming */
+    @media (pointer: fine) { #drawer-scrim { display: none !important; } }
+
+    /* ── Legend (moved into config sheet LEGEND section) ─────────────────── */
+    #map-legend-body {
+      padding: 5px 10px 6px; font-size: 0.72rem; color: #444; line-height: 2;
+    }
+    .legend-dot {
+      display: inline-block; width: 10px; height: 10px;
+      border-radius: 50%; margin-right: 5px; vertical-align: middle;
+    }
+    .legend-dot-ring {
+      display: inline-block; width: 10px; height: 10px;
+      border-radius: 50%; margin-right: 5px; vertical-align: middle;
+      background: white; border: 2px solid #7a9e50;
+    }
+
+    /* ── Walk mode ───────────────────────────────────────────────────────── */
+    /* Instruction banner shown while draw is active */
+    /* Clear/cancel button for walk mode */
+    #walk-clear-btn {
+      display: none;
+      position: absolute; top: 84px; right: 12px;
+      z-index: 501;
+      background: white; color: #c0392b;
+      border: 1.5px solid #c0392b; border-radius: 7px;
+      padding: 5px 13px; font-size: 0.78rem; font-weight: 600;
+      cursor: pointer; box-shadow: 0 2px 6px rgba(0,0,0,.15);
+      touch-action: manipulation;
+    }
+    #walk-clear-btn.visible { display: block; }
+    /* Walk-mode drag rectangle */
+    #walk-rect-canvas {
+      display: none;
+      position: absolute; pointer-events: none; z-index: 499;
+      border: 2px dashed #2d5016; background: rgba(45,80,22,0.12);
+    }
+    /* Walk-mode circle preview */
+    #walk-circle-canvas {
+      display: none;
+      position: absolute; pointer-events: none; z-index: 499;
+      border: 2px dashed #2d5016; background: rgba(45,80,22,0.12);
+      border-radius: 50%;
+    }
+    /* Walk draw mode toggle (Rect / Circle) */
+    #walk-mode-toggle {
+      display: none;
+      position: absolute; top: 84px; left: 12px;
+      z-index: 502;
+      background: white; border: 1.5px solid #ccc; border-radius: 7px;
+      overflow: hidden; box-shadow: 0 2px 6px rgba(0,0,0,.15);
+    }
+    #walk-mode-toggle.visible { display: flex; align-items: center; }
+    .wmt-label {
+      font-size: 0.75rem; color: #555; white-space: nowrap;
+      padding: 0 8px 0 10px; pointer-events: none;
+      border-right: 1px solid #ddd;
+    }
+    .wmt-btn {
+      padding: 5px 11px; font-size: 0.75rem; font-weight: 600;
+      cursor: pointer; border: none; background: none; color: #666;
+      touch-action: manipulation; font-family: inherit;
+    }
+    .wmt-btn.active { background: #2d5016; color: white; }
+    /* Walk-mode view in sidebar */
+    /* #walk-view removed — migrated to #walk-bottom-sheet */
+
+    /* ── Walk bottom sheet — phone-only, slides up from bottom ───────────── */
+    #walk-bottom-sheet {
+      /* fully off-screen by default; wbs-open slides it up */
+      display: flex; flex-direction: column;
+      position: fixed;
+      bottom: 0; left: 0; right: 0; z-index: 550;
+      background: #fff;
+      border-radius: 14px 14px 0 0;
+      box-shadow: 0 -3px 16px rgba(0,0,0,.18);
+      transform: translateY(100%); /* fully hidden until walk mode activates */
+      transition: transform 0.3s ease;
+      max-height: 70vh;
+    }
+    /* walk mode active = handle peeks; open = full sheet slides up */
+    #walk-bottom-sheet.wbs-active { transform: translateY(calc(100% - 44px)); }
+    #walk-bottom-sheet.wbs-open { transform: translateY(0); }
+    /* "Create from map": the sheet gets out of the way while the area is drawn */
+    #walk-bottom-sheet.wbs-drawing { transform: translateY(100%) !important; }
+    /* ── Laptop: slide-up with quickbar above handle ─────────────────────────── */
+    #wbs-quickbar { display: none; flex-direction: column; border-bottom: 1px solid #eef0ea; flex-shrink: 0; }
+    .wbs-qb-btn {
+      display: flex; align-items: center; gap: 10px;
+      width: 100%; padding: 9px 16px;
+      background: none; border: none; cursor: pointer; font-family: inherit;
+      text-align: left; border-bottom: 1px solid #f0f4ea;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .wbs-qb-btn:last-child { border-bottom: none; }
+    .wbs-qb-btn:hover { background: #f5faf0; }
+    .wbs-qb-icon { font-size: 1rem; flex-shrink: 0; width: 20px; text-align: center; }
+    .wbs-qb-label { font-size: 0.8rem; font-weight: 600; color: #2d5016; flex: 1; }
+    .wbs-qb-sub { font-size: 0.7rem; color: #aaa; }
+    @media (min-width: 701px) {
+      #walk-bottom-sheet { max-height: 68vh; }
+      .walk-stops-scroll  { max-height: 30vh; overflow-y: auto; }
+      /* Peek shows quickbar (3 × ~38px) + handle (44px) = ~158px; use 195px for breathing room */
+      #walk-bottom-sheet.wbs-active:not(.wbs-route-active):not(.wbs-open) { transform: translateY(calc(100% - 195px)); }
+      /* Quickbar visible only: active + no route + sheet not fully open */
+      #walk-bottom-sheet.wbs-active:not(.wbs-route-active):not(.wbs-open) #wbs-quickbar { display: flex; }
+      /* Loaded saved walk (laptop): the sheet becomes a full-height right-hand
+         panel so the map stays draggable and the route is not covered.
+         !important beats the bottom-sheet transform classes and any inline
+         transform left by a handle drag. */
+      #walk-bottom-sheet.wbs-side {
+        top: 0; bottom: 0; left: auto; right: 0; width: 360px;
+        max-height: none; border-radius: 0;
+        box-shadow: -4px 0 20px rgba(0,0,0,.22);
+        transform: none !important; transition: none;
+      }
+      #walk-bottom-sheet.wbs-side #wbs-handle { display: none; }
+      #walk-bottom-sheet.wbs-side .walk-stops-scroll { max-height: none; } /* the panel body scrolls */
+      body:has(#walk-bottom-sheet.wbs-side) .leaflet-top.leaflet-right,
+      body:has(#walk-bottom-sheet.wbs-side) .leaflet-bottom.leaflet-right {
+        right: 370px !important; /* 10px base gutter + 360px panel */
+      }
+      body:has(#walk-bottom-sheet.wbs-side) #walk-clear-btn,
+      body:has(#walk-bottom-sheet.wbs-side) #search-chip-wrap,
+      body:has(#walk-bottom-sheet.wbs-side) #config-sheet-chip {
+        right: 372px; /* 12px base gutter + 360px panel */
+      }
+    }
+    #wbs-handle {
+      display: flex; flex-direction: column; align-items: center;
+      padding: 8px 14px 6px; cursor: pointer;
+      user-select: none; -webkit-tap-highlight-color: transparent;
+      border-bottom: 1px solid #eef0ea; flex-shrink: 0;
+    }
+    .wbs-drag-bar {
+      width: 36px; height: 4px; border-radius: 2px;
+      background: #c8d4b8; margin-bottom: 4px;
+    }
+    #wbs-chevron {
+      font-size: 1.1rem; font-weight: 700; opacity: 0.75; color: #2d5016;
+      line-height: 1;
+    }
+    #wbs-label {
+      display: none; font-size: 0.68rem; color: #6a7f55; margin-top: 2px;
+      letter-spacing: 0.02em;
+    }
+    #walk-bottom-sheet.wbs-active:not(.wbs-open) #wbs-label { display: block; }
+    #wbs-body {
+      overflow-y: auto; -webkit-overflow-scrolling: touch;
+      flex: 1; padding: 0 0 env(safe-area-inset-bottom, 0px);
+    }
+
+    #wbs-saved-walks-section, #wbs-recorded-walks-section {
+      border-top: 1px solid #e8eee0; flex-shrink: 0;
+    }
+    #wbs-saved-walks-header, #wbs-recorded-walks-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 9px 14px; cursor: pointer; font-size: 0.8rem; font-weight: 600;
+      color: #2d5016; user-select: none; touch-action: manipulation;
+    }
+    #wbs-saved-walks-header:hover { background: #f5faf0; }
+    #wbs-recorded-walks-header { color: #7c2d12; }
+    #wbs-recorded-walks-header:hover { background: #fff7ed; }
+    #wbs-saved-walks-list, #wbs-recorded-walks-list { padding: 0 10px 6px; }
+    .wbs-import-gpx-btn {
+      padding: 2px 8px; border: 1px solid #f87171; border-radius: 4px;
+      background: none; color: #b91c1c; font-size: 0.68rem; font-weight: 600;
+      cursor: pointer; font-family: inherit; flex-shrink: 0; margin-right: 6px;
+      touch-action: manipulation;
+    }
+    .wbs-import-gpx-btn:hover { background: #fee2e2; }
+
+    /* ── Walk bottom sheet — new sections ──────────────────────────────────── */
+    /* Walk summary */
+    #wbs-summary {
+      display: none; border-bottom: 1px solid #e8eee0; padding: 10px 14px;
+    }
+    #wbs-summary-title {
+      font-size: 0.82rem; color: #2d5016; font-weight: 600; margin-bottom: 2px;
+    }
+    #wbs-summary-sub { font-size: 0.75rem; color: #888; }
+
+    /* Upload pending walks */
+    #wbs-upload {
+      display: none; border-bottom: 1px solid #e8eee0; padding: 6px 10px;
+    }
+    #wbs-sync-btn {
+      width: 100%; padding: 7px 12px; border-radius: 6px;
+      border: 1px solid #f59e0b; background: #fffbeb; color: #92400e;
+      font-size: 0.78rem; font-weight: 600; cursor: pointer;
+      font-family: inherit; text-align: center;
+    }
+    #wbs-sync-btn:disabled { opacity: 0.6; cursor: default; }
+    #wbs-sync-status {
+      margin-top: 6px; font-size: 0.75rem; line-height: 1.5;
+    }
+    .wbs-sync-row { display: flex; justify-content: space-between; gap: 6px; padding: 1px 0; }
+    .wbs-sync-name { color: #444; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
+    .wbs-sync-ok   { color: #2d6a2d; font-weight: 600; flex-shrink: 0; }
+    .wbs-sync-skip { color: #888;    flex-shrink: 0; }
+    .wbs-sync-err  { color: #b91c1c; font-weight: 600; flex-shrink: 0; }
+    #wbs-sync-summary { margin-top: 5px; font-size: 0.74rem; font-weight: 600; text-align: center; padding: 3px 0; border-top: 1px solid #e8eee0; }
+
+    /* Lasso-selected species */
+    #wbs-lasso { display: none; border-bottom: 1px solid #e8eee0; }
+    #wbs-lasso-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 9px 14px; font-size: 0.8rem; font-weight: 600; color: #3d5a2a;
+      user-select: none;
+    }
+    #wbs-lasso-list {
+      padding: 0 10px 6px; max-height: 200px; overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+    }
+    .wbs-lasso-item {
+      display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+      padding: 6px 4px; border-bottom: 1px solid #f0f4ea;
+      font-size: 0.78rem;
+    }
+    .wbs-lasso-item:last-child { border-bottom: none; }
+    .wbs-lasso-name { font-weight: 600; color: #2d5016; }
+    .wbs-lasso-common { color: #777; font-size: 0.72rem; }
+    .wbs-lasso-link {
+      margin-left: auto; color: #4a7c30; text-decoration: none;
+      font-size: 0.7rem; padding: 2px 6px; border: 1px solid #b8d48a;
+      border-radius: 4px; white-space: nowrap;
+    }
+
+    /* Walk bottom sheet empty state — shown on both phone and laptop when walk active, no route */
+    #wbs-empty-state { display: none; padding: 14px 12px 6px; }
+    /* phone: open high enough to show all three entry cards (~handle 44px + cards ~215px) */
+    @media (max-width: 700px) {
+      #walk-bottom-sheet.wbs-active:not(.wbs-route-active):not(.wbs-open) { transform: translateY(calc(100% - 275px)); }
+      /* Loaded saved walk (phone): peek bar tall enough for handle + walk-name label.
+         62px is also the fit padding in _fitSavedWalk — change both together. */
+      /* .wbs-active required: _closeWalkSheet (e.g. opening a recorded walk) drops
+         it to hide the sheet fully, and the peek must not keep it on screen. */
+      #walk-bottom-sheet.wbs-peek.wbs-active:not(.wbs-open) { transform: translateY(calc(100% - 62px)); }
+    }
+    .wbs-entry-card {
+      display: flex; align-items: flex-start; gap: 10px;
+      padding: 10px 12px; margin-bottom: 8px;
+      border-radius: 8px; border: 1px solid #d4e6c0;
+      background: #f5faf0; cursor: pointer;
+      transition: background 0.15s; -webkit-tap-highlight-color: transparent;
+    }
+    .wbs-entry-card:hover { background: #eaf2e0; border-color: #b8d48a; }
+    .wbs-entry-card-icon { font-size: 1.3rem; flex-shrink: 0; margin-top: 1px; }
+    .wbs-entry-card-title { font-size: 0.82rem; font-weight: 600; color: #2d5016; margin-bottom: 2px; }
+    .wbs-entry-card-sub { font-size: 0.72rem; color: #888; line-height: 1.35; }
+
+    /* Hide Google Maps nav button on phones — too wide, deep-link only useful desktop */
+    @media (max-width: 1023px) { #walk-google-btn { display: none !important; } }
+    .walk-header {
+      padding: 12px 16px 8px;
+      border-bottom: 1px solid #e8eee0;
+      flex-shrink: 0;
+    }
+    .walk-header h3 { font-size: 0.9rem; color: #2d5016; margin-bottom: 2px; }
+    .walk-header .walk-sub { font-size: 0.75rem; color: #888; }
+    .walk-export-row {
+      display: flex; gap: 8px; padding: 10px 16px;
+      border-bottom: 1px solid #e8eee0; flex-shrink: 0;
+      flex-wrap: wrap;
+    }
+    /* Labels wrap at spaces (no nowrap): at 1280px the three-per-row loaded-walk
+       buttons clipped "Tidy route order" / "Export summary". */
+    .walk-map-btn {
+      flex: 1; min-width: 100px;
+      padding: 7px 10px; border: 1.5px solid; border-radius: 7px;
+      font-size: 0.78rem; font-weight: 600; cursor: pointer;
+      text-align: center; white-space: normal;
+      touch-action: manipulation; text-decoration: none;
+    }
+    .walk-map-btn.apple  { border-color: #555; color: #333; background: white; }
+    .walk-map-btn.google { border-color: #4285f4; color: #4285f4; background: white; }
+    .walk-map-btn:hover.apple  { background: #f5f5f5; }
+    .walk-map-btn:hover.google { background: #e8f0fe; }
+    .walk-stops-scroll { flex: 1; overflow-y: auto; padding: 10px 14px; }
+    .walk-stop-card {
+      background: #f8fdf4; border: 1px solid #d8e8c8;
+      border-radius: 8px; padding: 10px 12px; margin-bottom: 8px;
+    }
+    .walk-stop-num {
+      display: inline-block; min-width: 22px; height: 22px; padding: 0 4px; box-sizing: border-box;
+      background: #2d5016; color: white; border-radius: 11px;   /* pill: fits "12a" */
+      font-size: 0.7rem; font-weight: 700;
+      text-align: center; line-height: 22px;
+      margin-right: 7px; flex-shrink: 0; vertical-align: middle;
+    }
+    .walk-stop-species { font-size: 0.82rem; font-weight: 600; color: #2d5016; }
+    .walk-stop-common  { font-size: 0.75rem; color: #666; margin-top: 2px; }
+    .walk-stop-meta    { font-size: 0.72rem; color: #999; margin-top: 2px; }
+    .walk-stop-dist    { font-size: 0.7rem; color: #888; float: right; }
+
+    /* ── Discover view (Map Redesign P2 — merges Near me + Find) ─────────── */
+    #discover-view { display: none; flex-direction: column; height: 100%; overflow: hidden; }
+    #discover-view.active { display: flex; }
+    .nearme-radius-row {
+      display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+      padding: 8px 16px; border-bottom: 1px solid #e8eee0; flex-shrink: 0;
+    }
+    .nearme-radius-label { font-size: 0.74rem; color: #888; margin-right: 2px; }
+    .nearme-radius-btn {
+      padding: 4px 10px; border: 1px solid #c8d8a8; border-radius: 14px;
+      background: white; color: #555; font-size: 0.74rem; font-weight: 600;
+      cursor: pointer; touch-action: manipulation;
+    }
+    .nearme-radius-btn.active { background: #2d5016; border-color: #2d5016; color: white; }
+    .nearme-card {
+      display: flex; align-items: flex-start; gap: 10px;
+      background: #f8fdf4; border: 1px solid #d8e8c8;
+      border-radius: 8px; padding: 10px; margin-bottom: 8px;
+      cursor: pointer; text-decoration: none; -webkit-tap-highlight-color: transparent;
+    }
+    .nearme-card:hover { background: #f0f7e8; border-color: #b8d48a; }
+    .nearme-thumb {
+      width: 52px; height: 52px; object-fit: cover; border-radius: 6px;
+      border: 1px solid #e0e0e0; flex-shrink: 0; background: #f0f4e8;
+    }
+    .nearme-info { flex: 1; min-width: 0; }
+    .nearme-name { font-size: 0.84rem; font-weight: 600; font-style: italic; color: #a8c88a;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .nearme-common { font-size: 0.75rem; color: #666; margin-top: 1px;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .nearme-meta { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-top: 5px; }
+    .nearme-edib {
+      font-size: 0.68rem; padding: 1px 7px; border-radius: 4px; font-weight: 600;
+    }
+    .nearme-inseason {
+      font-size: 0.68rem; padding: 1px 7px; border-radius: 4px; font-weight: 600;
+      background: #dcfce7; color: #166534;
+    }
+    .nearme-dim { font-size: 0.72rem; color: #888; }
+    .nearme-state { color: #888; font-size: 0.85rem; text-align: center; padding: 30px 20px; line-height: 1.6; }
+    .nearme-fallback-hint { font-size: 0.78rem; color: #999; text-align: center; padding: 4px 16px 12px; }
+    /* ── Find modes (season/recipes/medicinal), inside #discover-view ────── */
+    .find-mode-row {
+      display: flex; gap: 4px; flex-wrap: wrap;
+      padding: 8px 12px 6px; border-bottom: 1px solid #e8eee0; flex-shrink: 0;
+    }
+    .find-mode-btn {
+      flex: 1; min-width: 0; padding: 5px 6px; border: 1px solid #c8d8a8;
+      border-radius: 14px; background: white; color: #555;
+      font-size: 0.7rem; font-weight: 600; cursor: pointer;
+      touch-action: manipulation; white-space: nowrap; text-align: center;
+    }
+    .find-mode-btn.active { background: #2d5016; border-color: #2d5016; color: white; }
+    .find-mode-btn:hover:not(.active) { background: #f0f7e8; }
+    .find-input-row {
+      display: none; padding: 8px 12px 4px; border-bottom: 1px solid #e8eee0; flex-shrink: 0;
+    }
+    .find-input-row.visible { display: flex; gap: 6px; align-items: center; }
+    .find-input {
+      flex: 1; padding: 6px 10px; border: 1px solid #c8d8a8; border-radius: 16px;
+      font-size: 0.82rem; background: white; outline: none;
+    }
+    .find-input:focus { border-color: #2d5016; }
+    .find-search-btn {
+      padding: 6px 12px; background: #2d5016; color: white; border: none;
+      border-radius: 14px; font-size: 0.78rem; font-weight: 600; cursor: pointer;
+    }
+    .find-opts-row {
+      display: none; padding: 4px 14px 6px; flex-shrink: 0;
+    }
+    .find-opts-row.visible { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+    .find-opt-label { font-size: 0.74rem; color: #555; display: flex; gap: 4px; align-items: center; cursor: pointer; }
+    .find-results-scroll {
+      flex: 1; overflow-y: auto; padding: 8px 10px;
+    }
+    .find-state { color: #888; font-size: 0.84rem; text-align: center; padding: 30px 16px; line-height: 1.6; }
+    /* Result cards — same visual language as nearme-card */
+    .find-card {
+      display: flex; align-items: flex-start; gap: 10px;
+      background: #f8fdf4; border: 1px solid #d8e8c8;
+      border-radius: 8px; padding: 10px; margin-bottom: 8px;
+      cursor: pointer; text-decoration: none; color: inherit;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .find-card:hover { background: #f0f7e8; border-color: #b8d48a; }
+    .find-thumb {
+      width: 48px; height: 48px; object-fit: cover; border-radius: 6px;
+      border: 1px solid #e0e0e0; flex-shrink: 0; background: #f0f4e8;
+    }
+    .find-thumb-empty { width: 48px; height: 48px; border-radius: 6px;
+      background: #e8f0d8; flex-shrink: 0; }
+    .find-info { flex: 1; min-width: 0; }
+    .find-name { font-size: 0.83rem; font-weight: 600; font-style: italic; color: #a8c88a;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .find-common { font-size: 0.74rem; color: #666; margin-top: 1px;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .find-meta { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; margin-top: 4px; }
+    .find-badge { font-size: 0.67rem; padding: 1px 7px; border-radius: 4px; font-weight: 600; }
+    .find-inseason { background: #dcfce7; color: #166534; }
+    .find-recipe-count { font-size: 0.67rem; color: #888; }
+    .find-snippet { font-size: 0.74rem; color: #555; margin-top: 4px;
+      display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+    .find-section-hdr { font-size: 0.72rem; font-weight: 700; text-transform: uppercase;
+      letter-spacing: 0.06em; color: #888; padding: 6px 2px 4px; }
+
+    /* ── Walk proximity alert panel (10a.5) ─────────────────────────────── */
+    #walk-prox-panel {
+      position: fixed; bottom: 80px; left: 10px; z-index: 1200;
+      display: none; flex-direction: column; gap: 8px;
+      width: 270px; max-width: calc(100vw - 20px);
+      pointer-events: auto;
+    }
+    .walk-prox-card {
+      background: white; border: 1px solid #c5d9a0; border-radius: 10px;
+      padding: 10px 26px 10px 12px; box-shadow: 0 3px 12px rgba(0,0,0,.15);
+      position: relative; animation: proxSlideIn 0.2s ease;
+    }
+    @keyframes proxSlideIn {
+      from { opacity: 0; transform: translateX(-10px); }
+      to   { opacity: 1; transform: translateX(0); }
+    }
+    .walk-prox-dismiss {
+      position: absolute; top: 6px; right: 7px;
+      background: none; border: none; color: #bbb; font-size: 0.8rem;
+      cursor: pointer; padding: 2px 4px; line-height: 1;
+    }
+    .walk-prox-dismiss:hover { color: #666; }
+    .walk-prox-body  { display: flex; align-items: flex-start; gap: 9px; }
+    .walk-prox-thumb {
+      width: 44px; height: 44px; border-radius: 6px; object-fit: cover;
+      flex-shrink: 0; background: #e8f0d8;
+    }
+    .walk-prox-thumb-empty { background: #e8f0d8; }
+    .walk-prox-info  { flex: 1; min-width: 0; }
+    .walk-prox-name  {
+      font-size: 0.8rem; font-weight: 600; font-style: italic; color: #2d5016;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+      display: block; text-decoration: none; line-height: 1.35;
+    }
+    .walk-prox-name:hover { text-decoration: underline; }
+    .walk-prox-common { font-size: 0.73rem; color: #666; margin-top: 1px;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .walk-prox-meta  { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; margin-top: 4px; }
+    .walk-prox-dist  { font-size: 0.72rem; color: #888; }
+    /* Goethean prompt placeholder — structural only, wired in Phase 11c */
+    .walk-prox-goethean { font-size: 0.72rem; color: #ccc; font-style: italic; min-height: 0; margin-top: 2px; }
+
+    .nearme-filter-notice {
+      display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+      background: #fffbe6; border: 1px solid #f0e0a0; border-radius: 7px;
+      padding: 7px 10px; margin-bottom: 10px; font-size: 0.76rem; color: #7a6500;
+    }
+    .nearme-filter-notice button {
+      margin-left: auto; padding: 3px 9px; border: 1px solid #d8c870; border-radius: 5px;
+      background: white; color: #7a6500; font-size: 0.72rem; font-weight: 600; cursor: pointer;
+    }
+    .walk-stop-recipe  {
+      margin-top: 6px; padding: 5px 8px;
+      background: #fffbe6; border-left: 3px solid #e5a800;
+      border-radius: 0 4px 4px 0; font-size: 0.73rem; color: #6b5200;
+    }
+    .walk-stop-recipe strong { color: #e5a800; }
+    .walk-back-btn {
+      flex-shrink: 0; padding: 8px 16px;
+      border-top: 1px solid #e8eee0;
+      background: none; border-left: none; border-right: none; border-bottom: none;
+      color: #888; font-size: 0.78rem; cursor: pointer;
+      text-align: left; touch-action: manipulation;
+    }
+    .walk-back-btn:hover { color: #2d5016; }
+    /* Walk save button */
+    .walk-save-btn {
+      flex: 1; min-width: 90px;
+      padding: 7px 10px; border: 1.5px solid #2d5016; border-radius: 7px;
+      font-size: 0.78rem; font-weight: 600; cursor: pointer;
+      text-align: center; white-space: normal; touch-action: manipulation;
+      background: #f0f4e8; color: #2d5016; font-family: inherit;
+    }
+    .walk-save-btn:hover { background: #2d5016; color: white; }
+    /* ORS route quality note */
+    #walk-ors-note {
+      display: none;
+      font-size: 0.7rem; color: #888; font-style: italic;
+      padding: 3px 16px 5px; border-bottom: 1px solid #f0f4e8; flex-shrink: 0;
+    }
+    #walk-ors-note.visible { display: block; }
+    /* Route problems (stop cap, ORS failure) — must be read, not italic-grey */
+    #walk-ors-note.walk-route-warn {
+      font-style: normal; color: #7c2d12; background: #fff7ed;
+      border-bottom: 1px solid #fed7aa; line-height: 1.4;
+    }
+    #walk-ors-note .walk-route-act {
+      margin: 4px 6px 0 0; padding: 2px 9px; font-size: 0.7rem; font-weight: 600;
+      border-radius: 10px; border: 1px solid #b8d48a; background: #e8f4e0; color: #2d5016;
+      cursor: pointer; font-family: inherit;
+    }
+    /* Saved walks collapsible */
+    #saved-walks-section { border-top: 1px solid #e8eee0; flex-shrink: 0; }
+    #saved-walks-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 8px 14px; cursor: pointer; font-size: 0.78rem; font-weight: 600;
+      color: #2d5016; background: #f8fdf4; user-select: none; touch-action: manipulation;
+    }
+    #saved-walks-header:hover { background: #edf7e2; }
+    #saved-walks-list { padding: 0 10px 6px; }
+    .saved-walk-row {
+      display: flex; align-items: center;
+      padding: 5px 2px; border-bottom: 1px solid #f0f0f0; font-size: 0.78rem;
+    }
+    .saved-walk-row:last-child { border-bottom: none; }
+    .saved-walk-info { flex: 1; overflow: hidden; cursor: pointer; }
+    .saved-walk-info:hover .saved-walk-name { text-decoration: underline; }
+    .saved-walk-name { font-weight: 600; color: #2d5016; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .saved-walk-meta { font-size: 0.7rem; color: #888; margin-top: 1px; }
+    .saved-walk-del {
+      padding: 3px 8px; border: 1px solid #f87171; border-radius: 4px;
+      background: none; color: #b91c1c; font-size: 0.7rem; cursor: pointer;
+      margin-left: 6px; flex-shrink: 0; font-family: inherit;
+    }
+    .saved-walk-del:hover { background: #fee2e2; }
+
+    /* ── Floating Record button (phone only, top-right on map) ──────────── */
+    @keyframes wrec-pulse {
+      0%, 100% { opacity: 1; }
+      50%       { opacity: 0.75; }
+    }
+    #wrec-float-btn {
+      display: none; /* shown by JS in _enterWalkMode() only */
+      position: absolute;
+      /* Below the search chip (top:12px + 44px + gap) — Map Redesign P1 removed
+         the old top toolbar/zoom/locate stack this offset used to clear. */
+      top: 64px; right: 12px; z-index: 500;
+      width: 38px; height: 38px; border-radius: 50%;
+      border: 2.5px solid #b91c1c; background: white;
+      color: #b91c1c; font-size: 18px; line-height: 1;
+      cursor: pointer; touch-action: manipulation;
+      align-items: center; justify-content: center;
+      box-shadow: 0 2px 8px rgba(0,0,0,.25);
+      -webkit-tap-highlight-color: transparent;
+    }
+    #wrec-float-btn.recording {
+      background: #b91c1c; color: white; border-color: #b91c1c;
+      animation: wrec-pulse 1.4s ease-in-out infinite;
+    }
+    @media (min-width: 701px) { #wrec-float-btn { display: none !important; } }
+    /* GPS walk recording: hidden from the interface (Melvin, 28 Oct 2026 — batch 15b).
+       The code, endpoints, IndexedDB store and the Upload pending walks flush stay;
+       to bring it back, drop this class from the 3 start controls and set
+       WALK_RECORDING_UI = true. */
+    .rec-ui-off { display: none !important; }
+
+    /* ── GPS Recording HUD — floats at bottom of map during recording ─────── */
+    #walk-rec-hud {
+      display: none;
+      position: fixed;
+      bottom: calc(env(safe-area-inset-bottom, 0px) + 54px);
+      left: 50%; transform: translateX(-50%);
+      z-index: 600;
+      background: rgba(30,10,10,0.88); color: white;
+      border-radius: 10px; padding: 8px 14px;
+      backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+      box-shadow: 0 3px 12px rgba(0,0,0,.4);
+      align-items: center; gap: 14px;
+      font-size: 0.82rem; white-space: nowrap;
+      min-width: 280px; max-width: 92vw;
+    }
+    #walk-rec-hud.active { display: flex; }
+    .wrec-dot {
+      width: 10px; height: 10px; border-radius: 50%; background: #f87171;
+      flex-shrink: 0; animation: wrec-pulse 1.4s ease-in-out infinite;
+    }
+    .wrec-stats { display: flex; gap: 10px; flex: 1; }
+    .wrec-stat  { display: flex; flex-direction: column; align-items: center; }
+    .wrec-val   { font-size: 1rem; font-weight: 700; line-height: 1.1; }
+    .wrec-lbl   { font-size: 0.62rem; color: rgba(255,255,255,.6); text-transform: uppercase; letter-spacing: 0.04em; }
+    .wrec-actions { display: flex; gap: 6px; flex-shrink: 0; }
+    .wrec-btn {
+      padding: 5px 10px; border-radius: 6px; border: none;
+      font-size: 0.75rem; font-weight: 700; cursor: pointer; font-family: inherit;
+      touch-action: manipulation;
+    }
+    .wrec-btn-audio { background: #374151; color: white; }
+    .wrec-btn-audio.recording { background: #b91c1c; animation: wrec-pulse 1.4s ease-in-out infinite; }
+    .wrec-btn-audio:hover { background: #4b5563; }
+    .wrec-btn-stop  { background: #b91c1c; color: white; }
+    .wrec-btn-stop:hover  { background: #991b1b; }
+    /* Wake-lock notice */
+    #walk-rec-wakelock-note {
+      display: none; position: fixed;
+      bottom: calc(env(safe-area-inset-bottom, 0px) + 60px);
+      left: 50%; transform: translateX(-50%);
+      z-index: 601; background: #1c1917; color: #d6d3d1;
+      border-radius: 7px; padding: 6px 14px; font-size: 0.75rem;
+      white-space: nowrap; pointer-events: none;
+      box-shadow: 0 2px 8px rgba(0,0,0,.4);
+    }
+    #walk-rec-wakelock-note.visible { display: block; }
+
+    /* ── Recording GPS trace on map (dark red / terracotta polyline) ─────── */
+    .walk-rec-trace { /* Leaflet applies colour via options; no extra CSS needed */ }
+
+    /* ── Accuracy warning modal ──────────────────────────────────────────── */
+    #walk-rec-accuracy-modal {
+      display: none; position: fixed; inset: 0; z-index: 9800;
+      background: rgba(0,0,0,.5); align-items: center; justify-content: center;
+    }
+    #walk-rec-accuracy-modal.visible { display: flex; }
+    .wram-box {
+      background: white; border-radius: 12px; padding: 22px 24px; max-width: 340px;
+      box-shadow: 0 8px 30px rgba(0,0,0,.35); font-size: 0.88rem;
+    }
+    .wram-box h3 { margin-bottom: 8px; font-size: 1rem; color: #b91c1c; }
+    .wram-box p  { color: #444; line-height: 1.5; margin-bottom: 16px; }
+    .wram-btns  { display: flex; gap: 10px; }
+    .wram-cancel { flex: 1; padding: 9px; border-radius: 7px; border: 1px solid #ccc;
+                   background: white; cursor: pointer; font-family: inherit; font-size: 0.85rem; }
+    .wram-proceed { flex: 1; padding: 9px; border-radius: 7px; border: none;
+                    background: #b91c1c; color: white; cursor: pointer;
+                    font-family: inherit; font-size: 0.85rem; font-weight: 700; }
+
+    /* ── Save walk modal ─────────────────────────────────────────────────── */
+    #walk-save-modal {
+      display: none; position: fixed; inset: 0; z-index: 9800;
+      background: rgba(0,0,0,.5); align-items: center; justify-content: center;
+    }
+    #walk-save-modal.visible { display: flex; }
+    .wsm-box {
+      background: white; border-radius: 12px; padding: 22px 24px; max-width: 360px; width: 90vw;
+      box-shadow: 0 8px 30px rgba(0,0,0,.35);
+    }
+    .wsm-box h3 { font-size: 1rem; margin-bottom: 14px; color: #2d5016; }
+    .wsm-label  { font-size: 0.8rem; color: #555; margin-bottom: 4px; display: block; }
+    .wsm-input  {
+      width: 100%; padding: 8px 10px; border-radius: 6px; border: 1px solid #ccc;
+      font-size: 0.88rem; font-family: inherit; margin-bottom: 12px; box-sizing: border-box;
+    }
+    .wsm-input:focus { outline: none; border-color: #7a9e50; }
+    .wsm-audio-row  { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; }
+    .wsm-audio-btn  {
+      padding: 7px 14px; border-radius: 6px; border: 1px solid #b8d48a;
+      background: #f0f4e8; color: #2d5016; font-size: 0.8rem; font-weight: 600;
+      cursor: pointer; font-family: inherit;
+    }
+    .wsm-audio-btn.recording { background: #fee2e2; border-color: #fca5a5; color: #b91c1c; }
+    .wsm-audio-status { font-size: 0.75rem; color: #888; }
+    .wsm-btns   { display: flex; gap: 10px; }
+    .wsm-cancel { flex: 1; padding: 9px; border-radius: 7px; border: 1px solid #ccc;
+                  background: white; cursor: pointer; font-family: inherit; font-size: 0.85rem; }
+    .wsm-save   { flex: 1; padding: 9px; border-radius: 7px; border: none;
+                  background: #2d5016; color: white; cursor: pointer;
+                  font-family: inherit; font-size: 0.85rem; font-weight: 700; }
+    .wsm-save:disabled { opacity: 0.5; cursor: default; }
+
+    /* ── Recorded walks list (in Walk panel) ────────────────────────────── */
+    #recorded-walks-section { border-top: 1px solid #e8eee0; flex-shrink: 0; }
+    #recorded-walks-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 8px 14px; cursor: pointer; font-size: 0.78rem; font-weight: 600;
+      color: #7c2d12; background: #fff7ed; user-select: none; touch-action: manipulation;
+    }
+    #recorded-walks-header:hover { background: #ffedd5; }
+    #recorded-walks-list { padding: 0 10px 6px; }
+    .rec-walk-row {
+      display: flex; align-items: center;
+      padding: 6px 2px; border-bottom: 1px solid #f5f0eb; font-size: 0.78rem;
+      cursor: pointer;
+    }
+    .rec-walk-row:last-child { border-bottom: none; }
+    .rec-walk-info { flex: 1; min-width: 0; }
+    .rec-walk-info:hover .rec-walk-name { text-decoration: underline; }
+    .rec-walk-name { font-weight: 600; color: #7c2d12; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .rec-walk-meta { font-size: 0.7rem; color: #888; margin-top: 1px; }
+    .rec-walk-del {
+      padding: 3px 8px; border: 1px solid #f87171; border-radius: 4px;
+      background: none; color: #b91c1c; font-size: 0.7rem; cursor: pointer;
+      margin-left: 6px; flex-shrink: 0; font-family: inherit;
+    }
+    .rec-walk-del:hover { background: #fee2e2; }
+
+    /* ── Offline sync button ─────────────────────────────────────────────── */
+    #walk-sync-btn {
+      display: none; width: calc(100% - 20px); margin: 4px 10px 8px;
+      padding: 7px 12px; border-radius: 6px; border: 1px solid #f59e0b;
+      background: #fffbeb; color: #92400e; font-size: 0.78rem; font-weight: 600;
+      cursor: pointer; font-family: inherit; text-align: center;
+    }
+    #walk-sync-btn.visible { display: block; }
+    #walk-sync-btn:disabled { opacity: 0.6; cursor: default; }
+    .pending-walk-row {
+      display: flex; align-items: flex-start; flex-direction: column;
+      padding: 5px 4px; border-bottom: 1px solid #f5f0eb; font-size: 0.75rem;
+    }
+    .pending-walk-row:last-child { border-bottom: none; }
+    .pending-walk-name { font-weight: 600; color: #92400e; }
+    .pending-walk-status { font-size: 0.7rem; color: #888; margin-top: 1px; }
+
+    /* ── Walk detail view (rp-detail, reuses detail-view pattern) ────────── */
+    #walk-detail-view {
+      display: none; flex-direction: column; flex: 1; overflow: hidden;
+    }
+    #walk-detail-back-bar {
+      display: flex; align-items: center; gap: 8px;
+      padding: 8px 12px; border-bottom: 1px solid #e0e8d0;
+      flex-shrink: 0; background: #fafbf7;
+    }
+    #walk-detail-back-btn {
+      background: none; border: 1px solid #c8d8a8; border-radius: 5px;
+      padding: 4px 10px; font-size: 0.78rem; color: #555; cursor: pointer;
+      -webkit-tap-highlight-color: transparent; white-space: nowrap;
+    }
+    #walk-detail-back-btn:hover { background: #f0f4e8; border-color: #7a9e50; color: #2d5016; }
+    #walk-detail-title-bar {
+      font-size: 0.78rem; color: #7c2d12; font-weight: 600;
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1;
+    }
+    #walk-detail-scroll {
+      flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; padding: 12px;
+    }
+    .wd-name      { font-size: 1rem; font-weight: 700; color: #1a1a1a; margin-bottom: 3px; }
+    .wd-date      { font-size: 0.75rem; color: #888; margin-bottom: 12px; }
+    .wd-stats-row {
+      display: grid; grid-template-columns: repeat(4, 1fr);
+      gap: 6px; margin-bottom: 14px;
+    }
+    .wd-stat      { text-align: center; background: #f8fdf4; border-radius: 7px; padding: 8px 4px; }
+    .wd-stat-val  { font-size: 0.95rem; font-weight: 700; color: #2d5016; line-height: 1.2; }
+    .wd-stat-lbl  { font-size: 0.62rem; color: #888; text-transform: uppercase; letter-spacing: 0.04em; margin-top: 2px; }
+    /* Elevation chart */
+    .wd-elev-wrap { margin-bottom: 14px; }
+    .wd-elev-label { font-size: 0.72rem; color: #888; font-weight: 600; margin-bottom: 4px; }
+    .wd-elev-svg  { width: 100%; display: block; border-radius: 4px; overflow: hidden; background: #f8f8f4; }
+    /* Photo grid */
+    .wd-photos-label { font-size: 0.72rem; color: #888; font-weight: 600; margin-bottom: 6px; }
+    .wd-photos-grid {
+      display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px; margin-bottom: 14px;
+    }
+    .wd-photo-cell {
+      aspect-ratio: 1; border-radius: 6px; overflow: hidden; cursor: pointer;
+      position: relative; background: #e8eee0;
+    }
+    .wd-photo-cell img { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .wd-photo-species {
+      position: absolute; bottom: 0; left: 0; right: 0;
+      background: rgba(0,0,0,0.55); color: white; font-size: 0.58rem;
+      font-style: italic; padding: 2px 4px; line-height: 1.3;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    /* Audio player */
+    .wd-audio-wrap { margin-bottom: 14px; }
+    .wd-audio-label { font-size: 0.72rem; color: #888; font-weight: 600; margin-bottom: 6px; }
+    .wd-audio-player { width: 100%; }
+    .wd-share { display: flex; align-items: center; gap: 6px; margin: 4px 0 8px; font-size: 0.8rem; color: #2d5016; cursor: pointer; }
+    .wd-share-note { color: #777; font-size: 0.74rem; }
+
+    /* ── Thumbnail pins on recorded walk trace ───────────────────────────── */
+    .rec-thumb-pin {
+      width: 40px; height: 40px; border-radius: 50%;
+      border: 2.5px solid white; overflow: hidden; cursor: pointer;
+      box-shadow: 0 2px 6px rgba(0,0,0,.35);
+    }
+    .rec-thumb-pin img { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .rec-thumb-pin-empty {
+      width: 40px; height: 40px; border-radius: 50%;
+      border: 2.5px solid white; background: #e8f0d8; cursor: pointer;
+      box-shadow: 0 2px 6px rgba(0,0,0,.35);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1.1rem;
+    }
+
+    /* ── Walk panel: minimise bar ────────────────────────────────────────── */
+    #walk-min-bar {
+      display: none; position: absolute; bottom: 0; left: 0; right: 0;
+      z-index: 601;
+      background: rgba(255,255,255,0.96); border-top: 1px solid #d0dbb8;
+      padding: 10px 16px; cursor: pointer;
+      box-shadow: 0 -2px 10px rgba(0,0,0,.12);
+      align-items: center; gap: 10px;
+      touch-action: manipulation;
+    }
+    #walk-min-bar.visible { display: flex; }
+    .wmb-icon  { font-size: 1.2rem; flex-shrink: 0; }
+    .wmb-info  { flex: 1; min-width: 0; }
+    .wmb-name  { font-size: 0.82rem; font-weight: 700; color: #2d5016;
+                  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .wmb-dist  { font-size: 0.72rem; color: #888; }
+    .wmb-expand { font-size: 0.8rem; color: #888; flex-shrink: 0; }
+
+    /* ── Walk panel: tab switcher (Route stops / Walk stats) ────────────── */
+    #walk-tabs {
+      display: flex; flex-shrink: 0; border-bottom: 1px solid #e8eee0;
+    }
+    .walk-tab-btn {
+      flex: 1; padding: 7px 4px; border: none; background: none;
+      font-size: 0.76rem; font-weight: 600; color: #888; cursor: pointer;
+      border-bottom: 2.5px solid transparent; font-family: inherit;
+      touch-action: manipulation;
+    }
+    .walk-tab-btn.active { color: #2d5016; border-bottom-color: #2d5016; }
+    .walk-tab-btn:hover:not(.active) { background: #f0f4e8; color: #556040; }
+    #walk-tab-stops { display: flex; flex-direction: column; flex: 1; overflow: hidden; }
+    #walk-tab-stats { display: none; padding: 12px 14px; overflow-y: auto; }
+    .wts-row { display: flex; justify-content: space-between; align-items: center;
+               padding: 6px 0; border-bottom: 1px solid #f0f4e8; font-size: 0.82rem; }
+    .wts-row:last-child { border-bottom: none; }
+    .wts-key  { color: #666; }
+    .wts-val  { font-weight: 600; color: #2d5016; }
+    /* Publish block (static/js/walk-publish.js) — its own outlined box below a divider */
+    .wpub-divider { border: none; border-top: 2px solid #d8e2c8; margin: 14px 0 12px; }
+    .wpub-divider-inner { border: none; border-top: 1px dashed #e0d0c8; margin: 12px 0 10px; }
+    .wpub-box { border: 1.5px solid #b8d48a; border-radius: 10px; padding: 10px 12px 12px; background: #fbfdf7;
+                font-size: 0.8rem; color: #333; }
+    .wpub-h { margin: 0 0 8px; font-size: 0.92rem; color: #2d5016; }
+    .wpub-sub { margin: 10px 0 4px; font-weight: 700; color: #2d5016; font-size: 0.78rem; }
+    .wpub-row { display: flex; gap: 8px; align-items: baseline; padding: 3px 0; flex-wrap: wrap; }
+    .wpub-k { color: #666; min-width: 58px; }
+    .wpub-row code, .wpub-box code { font-size: 0.74rem; background: #eef3e6; padding: 0 3px; border-radius: 3px; word-break: break-all; }
+    .wpub-check { display: flex; gap: 6px; align-items: flex-start; cursor: pointer; padding: 4px 0; }
+    .wpub-field { display: block; margin: 6px 0; color: #555; }
+    .wpub-field input, .wpub-field select { display: block; width: 100%; box-sizing: border-box; margin-top: 2px;
+                font: inherit; padding: 5px 7px; border: 1px solid #c8d4b4; border-radius: 6px; }
+    .wpub-slug { font: inherit; padding: 2px 5px; border: 1px solid #c8d4b4; border-radius: 5px; width: 150px; }
+    .wpub-btn, .wpub-btn-sm { font: inherit; cursor: pointer; border-radius: 7px; border: 1px solid #b8d48a;
+                background: #fff; color: #2d5016; }
+    .wpub-btn { padding: 7px 12px; margin-top: 8px; font-weight: 600; }
+    .wpub-btn-sm { padding: 3px 8px; font-size: 0.74rem; }
+    .wpub-btn:disabled, .wpub-btn-sm:disabled { opacity: 0.45; cursor: not-allowed; }
+    .wpub-primary { background: #2d5016; color: #fff; border-color: #2d5016; }
+    .wpub-danger { background: #fff; color: #9b1c1c; border-color: #e3a6a6; }
+    .wpub-danger.wpub-btn:not(:disabled):hover { background: #fdecec; }
+    .wpub-actions { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; margin-top: 6px; }
+    .wpub-muted { color: #777; }
+    .wpub-hint { color: #888; font-size: 0.72rem; margin-bottom: 4px; }
+    .wpub-err { color: #9b1c1c; background: #fdecec; border-radius: 6px; padding: 6px 8px; margin: 6px 0; }
+    .wpub-ok { color: #2d5016; background: #eef6e4; border-radius: 6px; padding: 6px 8px; margin: 6px 0; }
+    .wpub-bad { color: #9b1c1c; }
+    .wpub-warn { color: #8a5a00; background: #fff6e0; border-radius: 6px; padding: 6px 8px; margin: 6px 0; }
+    .wpub-list { margin: 2px 0 4px; padding-left: 18px; }
+    .wpub-ai { display: flex; gap: 8px; padding: 6px; border: 1px solid #e6ecdc; border-radius: 7px; margin: 4px 0; background: #fff; }
+    .wpub-ai.hazard { border-color: #e3a6a6; background: #fff7f7; }
+    .wpub-ai img, .wpub-noimg { width: 52px; height: 52px; object-fit: cover; border-radius: 5px; flex-shrink: 0;
+                display: flex; align-items: center; justify-content: center; background: #f0f4e8; }
+    .wpub-ai-body { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+    .wpub-tag { font-size: 0.68rem; padding: 0 5px; border-radius: 8px; background: #eef3e6; color: #556040; }
+    .wpub-tag.wpub-bad { background: #fdecec; color: #9b1c1c; }
+    .wpub-confirm { border: 1px solid #b8d48a; border-radius: 8px; padding: 8px 10px; margin-top: 10px; background: #fff; }
+    .wpub-confirm p { margin: 0 0 6px; }
+    .wpub-confirm-danger { border-color: #e3a6a6; background: #fffafa; }
+    .wpub-confirm-q { font-weight: 600; }
+    .wpub-steps { list-style: none; padding: 0; margin: 4px 0 8px; }
+    .wpub-steps li { padding: 2px 0; }
+    .wpub-steps .st-ok .wpub-ic { color: #2d5016; } .wpub-steps .st-failed { color: #9b1c1c; }
+    .wpub-steps .st-pending { color: #999; } .wpub-steps .st-running { font-weight: 600; }
+
+    /* ── Walk panel: live recording stats ────────────────────────────────── */
+    #walk-live-stats {
+      display: none; flex-direction: column; padding: 14px; gap: 10px; flex-shrink: 0;
+    }
+    #walk-live-stats.active { display: flex; }
+    .wls-header { font-size: 0.78rem; font-weight: 700; color: #b91c1c;
+                  display: flex; align-items: center; gap: 6px; }
+    .wls-dot    { width: 8px; height: 8px; border-radius: 50%; background: #f87171;
+                  animation: wrec-pulse 1.4s ease-in-out infinite; flex-shrink: 0; }
+    .wls-grid   { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+    .wls-cell   { text-align: center; background: #fff5f5; border-radius: 6px; padding: 8px 4px; }
+    .wls-val    { font-size: 0.95rem; font-weight: 700; color: #b91c1c; line-height: 1.2; }
+    .wls-lbl    { font-size: 0.62rem; color: #888; text-transform: uppercase;
+                  letter-spacing: 0.04em; margin-top: 2px; }
+
+    /* ── Filter panel content styles (used inside #panel-filters dropdown) ─ */
+    .fp-active-row {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 8px 14px; border-bottom: 1px solid #f0f4e8; flex-shrink: 0; min-height: 36px;
+    }
+    .fp-active-label { font-size: 0.75rem; color: #888; }
+    .fp-clear-btn {
+      font-size: 0.72rem; padding: 3px 10px; border-radius: 4px;
+      border: 1px solid #ccc; background: white; cursor: pointer; color: #666; font-family: inherit;
+    }
+    .fp-clear-btn:not(:disabled):hover { background: #fee2e2; border-color: #f87171; color: #b91c1c; }
+    .fp-clear-btn:disabled { opacity: 0.4; cursor: default; }
+    .fp-body { }
+    .fp-section { padding: 10px 14px 8px; border-bottom: 1px solid #f0f4e8; }
+    .fp-section:last-child { border-bottom: none; }
+    .fp-section-title {
+      font-size: 0.68rem; font-weight: 700; text-transform: uppercase;
+      letter-spacing: 0.06em; color: #888; margin-bottom: 8px;
+    }
+    .fp-search-input {
+      width: 100%; padding: 5px 8px; border: 1px solid #ccc; border-radius: 5px;
+      font-size: 0.82rem; margin-bottom: 6px; box-sizing: border-box; font-family: inherit;
+    }
+    .fp-search-input:focus { outline: none; border-color: #7a9e50; }
+    .fp-checklist { max-height: 150px; overflow-y: auto; -webkit-overflow-scrolling: touch; }
+    .fp-check-item {
+      display: flex; align-items: center; gap: 8px;
+      padding: 4px 2px; border-radius: 4px; cursor: pointer;
+    }
+    .fp-check-item:hover { background: #f8faf4; }
+    .fp-check-item input[type=checkbox] {
+      width: 15px; height: 15px; accent-color: #2d5016; flex-shrink: 0; cursor: pointer;
+    }
+    .fp-check-item label {
+      font-size: 0.79rem; color: #333; cursor: pointer;
+      flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .fp-select {
+      width: 100%; border: 1px solid #c8d8a8; border-radius: 5px;
+      font-size: 0.78rem; font-family: inherit; padding: 2px;
+      background: white; color: #333;
+    }
+    .fp-select option { padding: 3px 6px; }
+    .fp-select option:checked { background: #2d5016; color: white; }
+    .fp-select-single { height: auto; padding: 4px 6px; }
+    .fp-month-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px; }
+    .fp-month-btn {
+      padding: 5px 4px; border: 1px solid #d0dbb8; border-radius: 5px;
+      font-size: 0.76rem; cursor: pointer; background: white; color: #444;
+      text-align: center; font-family: inherit;
+      touch-action: manipulation; -webkit-tap-highlight-color: transparent;
+    }
+    .fp-month-btn.active { background: #d1f0b0; border-color: #7a9e50; color: #2d5016; font-weight: 600; }
+    .fp-season-row { display: flex; flex-wrap: wrap; gap: 6px; }
+    .fp-season-btn {
+      flex: 1; min-width: 100px; padding: 7px 8px; border: 1px solid #d0dbb8;
+      border-radius: 6px; font-size: 0.78rem; cursor: pointer; background: white;
+      color: #444; text-align: center; font-family: inherit;
+      touch-action: manipulation; -webkit-tap-highlight-color: transparent;
+    }
+    .fp-season-btn.active { background: #d1f0b0; border-color: #7a9e50; color: #2d5016; font-weight: 600; }
+    .fp-other-check {
+      display: flex; align-items: center; gap: 8px; padding: 5px 2px; cursor: pointer;
+    }
+    .fp-other-check input[type=checkbox] {
+      width: 16px; height: 16px; accent-color: #2d5016; flex-shrink: 0; cursor: pointer;
+    }
+    .fp-other-check label { font-size: 0.82rem; color: #333; cursor: pointer; }
+
+    /* ── Base layer switcher (inside #panel-layers dropdown) ─────────────── */
+    .bls-section-title {
+      font-size: 0.66rem; font-weight: 700; text-transform: uppercase;
+      letter-spacing: 0.05em; color: #aaa; margin-bottom: 5px;
+    }
+    .bls-base-options {
+      display: flex; flex-direction: column; gap: 4px; margin-bottom: 2px;
+    }
+    .bls-layer-row { display: flex; gap: 4px; align-items: center; }
+    .bls-base-btn {
+      padding: 5px 10px; font-size: 0.78rem; border-radius: 5px;
+      border: 1px solid #c8d8a8; background: white; color: #555;
+      cursor: pointer; font-family: inherit; line-height: 1.4; text-align: left;
+      touch-action: manipulation; flex: 1; min-width: 0;
+    }
+    .bls-base-btn:hover:not(.active) { background: #f0f4e8; }
+    .bls-base-btn.active { background: #2d5016; color: white; border-color: #2d5016; font-weight: 600; }
+    .bls-default-btn {
+      flex-shrink: 0; padding: 4px 7px; font-size: 0.8rem; line-height: 1;
+      border: 1px solid #d1d5db; border-radius: 5px; background: white;
+      color: #bbb; cursor: pointer; touch-action: manipulation;
+    }
+    .bls-default-btn:hover { background: #f9fafb; color: #888; }
+    .bls-default-btn.is-default { color: #d97706; border-color: #d97706; }
+    .bls-divider { border: none; border-top: 1px solid #eee; margin: 6px 0 4px; }
+
+    /* ── Note placing bar (pan-to-place flow) ────────────────────────────── */
+    #note-placing-bar {
+      display: none; align-items: center; gap: 10px;
+      position: absolute; top: 64px; left: 50%; transform: translateX(-50%);
+      z-index: 501; white-space: nowrap;
+      background: #1e293b; color: white; border-radius: 10px;
+      padding: 9px 14px; font-size: 0.8rem;
+      box-shadow: 0 4px 16px rgba(0,0,0,.35);
+      touch-action: manipulation;
+    }
+    #note-placing-bar.visible { display: flex; }
+    #note-placing-label { flex: 1; }
+    #note-placing-confirm {
+      padding: 5px 13px; background: #22c55e; color: white; border: none;
+      border-radius: 6px; font-size: 0.78rem; font-weight: 600; cursor: pointer;
+      white-space: nowrap; touch-action: manipulation;
+    }
+    #note-placing-confirm:hover { background: #16a34a; }
+    #note-placing-cancel {
+      padding: 5px 10px; background: none; border: 1.5px solid rgba(255,255,255,.4);
+      color: rgba(255,255,255,.8); border-radius: 6px; font-size: 0.78rem; cursor: pointer;
+      touch-action: manipulation;
+    }
+    #note-placing-cancel:hover { border-color: white; color: white; }
+    /* ── Map crosshair (shown during pan-to-place) ───────────────────────── */
+    #note-crosshair {
+      display: none;
+      position: absolute; top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+      width: 32px; height: 32px; pointer-events: none; z-index: 500;
+    }
+    #note-crosshair.visible { display: block; }
+    #note-crosshair::before, #note-crosshair::after {
+      content: ''; position: absolute; background: #f59e0b;
+    }
+    #note-crosshair::before { left: 50%; top: 0; width: 2px; height: 100%; transform: translateX(-50%); }
+    #note-crosshair::after  { top: 50%; left: 0; width: 100%; height: 2px; transform: translateY(-50%); }
+    .bls-unavailable { opacity: 0.45; font-style: italic; }
+
+    /* ── Soil pH legend ──────────────────────────────────────────────────── */
+    #soil-legend {
+      display: none;
+      position: absolute; bottom: 28px; left: 12px;
+      background: rgba(255,255,255,.93); border: 1px solid #d0dbb8;
+      border-radius: 7px; padding: 8px 10px;
+      font-size: 0.7rem; color: #444; z-index: 2000;
+      box-shadow: 0 2px 8px rgba(0,0,0,.14); min-width: 150px;
+    }
+    #soil-legend.visible { display: block; }
+    .sl-title { font-weight: 700; font-size: 0.72rem; margin-bottom: 5px; color: #333; }
+    .sl-bar {
+      height: 10px; border-radius: 4px; margin-bottom: 4px;
+      background: linear-gradient(to right,
+        #9e0142 0%,   /* pH 3.5 — very acidic */
+        #d53e4f 14%,
+        #f46d43 28%,
+        #fdae61 42%,
+        #fee08b 50%,  /* pH 6.5 — neutral */
+        #e6f598 60%,
+        #abdda4 71%,
+        #66c2a5 82%,
+        #3288bd 92%,
+        #5e4fa2 100%  /* pH 9.5 — very alkaline */
+      );
+    }
+    .sl-labels { display: flex; justify-content: space-between; font-size: 0.65rem; color: #777; margin-bottom: 3px; }
+    .sl-source { font-size: 0.62rem; color: #aaa; margin-top: 3px; }
+
+    /* ── Land use legend ─────────────────────────────────────────────────── */
+    #landuse-legend {
+      display: none;
+      position: absolute; bottom: 28px; left: 12px;
+      background: rgba(255,255,255,.95); border: 1px solid #d0dbb8;
+      border-radius: 7px; padding: 8px 10px;
+      font-size: 0.7rem; color: #444; z-index: 2000;
+      box-shadow: 0 2px 8px rgba(0,0,0,.14); min-width: 140px;
+    }
+    #landuse-legend.visible { display: block; }
+    .lu-title { font-weight: 700; font-size: 0.72rem; margin-bottom: 6px; color: #333; }
+    .lu-row { display: flex; align-items: center; gap: 6px; margin-bottom: 3px; line-height: 1.3; }
+    .lu-swatch {
+      width: 12px; height: 12px; border-radius: 2px; flex-shrink: 0;
+      border: 1px solid rgba(0,0,0,.12);
+    }
+    .lu-source { font-size: 0.62rem; color: #aaa; margin-top: 5px; border-top: 1px solid #eee; padding-top: 4px; }
+
+    /* ── Combined legend panel (pin legend + Schutzgebiete) ───────────────── */
+    /* bottom:126px clears the legend chip (bottom:70px + 44px + gap), which
+       replaces the old soil/landuse-legend-style bottom:28px placement now
+       that the legend is opened by a standing chip, not just an auto-toggle. */
+    #schutz-legend {
+      display: none;
+      position: absolute; bottom: 126px; left: 12px;
+      background: rgba(255,255,255,.96); border: 1px solid #d0dbb8;
+      border-radius: 7px; padding: 8px 26px 8px 10px;
+      font-size: 0.7rem; color: #444; z-index: 2000;
+      box-shadow: 0 2px 8px rgba(0,0,0,.14); min-width: 180px;
+    }
+    #schutz-legend.visible { display: block; }
+    #schutz-legend-close {
+      position: absolute; top: 4px; right: 4px;
+      min-width: 20px; min-height: 20px; padding: 0;
+      background: none; border: none; color: #999; font-size: 0.8rem; cursor: pointer;
+    }
+    #schutz-legend-close:hover { color: #444; }
+    .sz-title { font-weight: 700; font-size: 0.72rem; margin-bottom: 6px; color: #333; }
+    .sz-row { display: flex; align-items: center; gap: 6px; margin-bottom: 3px; line-height: 1.3; }
+    .sz-swatch {
+      width: 12px; height: 12px; border-radius: 2px; flex-shrink: 0;
+      border: 1px solid rgba(0,0,0,.12);
+    }
+    #schutz-legend .sz-divider { border: none; border-top: 1px solid #eee; margin: 6px 0; }
+
+    /* Schutzgebiete toggle buttons in Layers panel */
+    .bls-overlay-btn {
+      flex: 1; padding: 5px 8px; border: 1px solid #ddd; border-radius: 4px;
+      background: #f8f8f4; color: #555; cursor: pointer; font-size: 0.75rem;
+      display: flex; align-items: center; gap: 5px;
+    }
+    .bls-overlay-btn:hover { background: #eef2e6; }
+    .bls-overlay-btn.active { background: #e8f0d8; border-color: #8aaf5a; color: #2d5016; font-weight: 600; }
+    .bls-overlay-swatch { width: 10px; height: 10px; border-radius: 2px; flex-shrink: 0; }
+
+    /* ── Geology identification toast ────────────────────────────────────── */
+    #geo-toast {
+      display: none;
+      position: absolute; bottom: 150px; right: 12px;
+      background: rgba(30,41,59,.93); color: white;
+      border-radius: 9px; padding: 10px 13px;
+      font-size: 0.76rem; z-index: 600; max-width: 260px;
+      box-shadow: 0 4px 16px rgba(0,0,0,.35);
+    }
+    #geo-toast.visible { display: block; }
+    .gt-name { font-weight: 700; font-size: 0.78rem; margin-bottom: 4px; line-height: 1.35; }
+    .gt-lith { font-size: 0.7rem; color: rgba(255,255,255,.75); margin-bottom: 3px; line-height: 1.4; }
+    .gt-age  { font-size: 0.69rem; color: #93c5fd; }
+    .gt-spinner { font-size: 0.72rem; color: rgba(255,255,255,.6); }
+
+    /* ── Offset Leaflet controls; shift left when the 300px sidebar pane is open ── */
+    .leaflet-top.leaflet-right,
+    .leaflet-bottom.leaflet-right {
+      right: 10px !important;
+      transition: right 0.25s cubic-bezier(.32,1,.56,1);
+    }
+    /* Zoom (top-right) sits below the search chip (top:12px + 44px + gap) */
+    .leaflet-top.leaflet-right { top: 68px !important; }
+    body:has(#rp-pane.rp-open) .leaflet-top.leaflet-right,
+    body:has(#rp-pane.rp-open) .leaflet-bottom.leaflet-right {
+      right: 310px !important; /* 10px base + 300px pane */
+    }
+    /* Hide the custom chips while the sidebar pane is open, rather than
+       shifting them — a fixed-pixel shift big enough to clear the 300px
+       pane pushes them into the opposite-corner nav/legend chips on narrow
+       viewports (e.g. 390px leaves only ~90px to the pane's left). Each
+       chip's job (search, settings, legend) is already accessible from the
+       open panel or moot while it's showing, so hiding is correct at any
+       width, not just a stopgap for small screens. */
+    body:has(#rp-pane.rp-open) #search-chip-wrap,
+    body:has(#rp-pane.rp-open) #config-sheet-chip,
+    body:has(#rp-pane.rp-open) #legend-chip {
+      display: none;
+    }
+
+    /* ── VIEW sheet (#config-sheet) open — shift/hide controls ─────────────
+       Separate from the #rp-pane.rp-open rules above: that pane is 300px, this
+       sheet is 360px, so the offset differs (do NOT reuse 310px). Desktop
+       (>=1024px, where #config-sheet is a 360px right side-sheet): shift the
+       right-hand Leaflet controls + top/bottom-right chips inward past it, keep
+       them visible. #legend-chip is bottom-LEFT — a right sheet never overlaps
+       it, so it is left alone. Mobile (<1024px, where the sheet is full-width):
+       nothing can shift inward, so hide the controls + chips instead. */
+    @media (min-width: 1024px) {
+      body:has(#config-sheet.open) .leaflet-top.leaflet-right,
+      body:has(#config-sheet.open) .leaflet-bottom.leaflet-right {
+        right: 370px !important; /* 10px base gutter + 360px sheet */
+      }
+      body:has(#config-sheet.open) #search-chip-wrap,
+      body:has(#config-sheet.open) #config-sheet-chip {
+        right: 372px; /* 12px base gutter + 360px sheet — kept visible */
+      }
+    }
+    @media (max-width: 1023px) {
+      body:has(#config-sheet.open) .leaflet-top.leaflet-right,
+      body:has(#config-sheet.open) .leaflet-bottom.leaflet-right,
+      body:has(#config-sheet.open) #search-chip-wrap,
+      body:has(#config-sheet.open) #config-sheet-chip,
+      body:has(#config-sheet.open) #legend-chip {
+        display: none;
+      }
+    }
+
+    /* ── Attribution — kept legible (links/text intact) but less prominent ── */
+    .leaflet-control-attribution {
+      font-size: 0.62rem !important;
+      padding: 1px 6px !important;
+    }
+
+    /* ── Locate control + "you are here" marker ──────────────────────────── */
+    .leaflet-control-locate a {
+      display: flex; align-items: center; justify-content: center;
+      width: 30px; height: 30px; color: #333; cursor: pointer;
+    }
+    .leaflet-control-locate a svg { width: 18px; height: 18px; }
+    .leaflet-control-locate a.active { color: #1a73e8; }
+    .leaflet-control-locate a.locating svg { animation: fid-locate-spin 0.9s linear infinite; }
+    @keyframes fid-locate-spin { to { transform: rotate(360deg); } }
+
+    /* Override Leaflet's default white box/border on divIcon */
+    .fid-locate-icon { background: transparent; border: none; }
+    .fid-locate-core {
+      position: absolute; top: 50%; left: 50%; width: 16px; height: 16px;
+      margin: -8px 0 0 -8px; background: #1a73e8; border: 2.5px solid #fff;
+      border-radius: 50%; box-shadow: 0 0 4px rgba(0,0,0,.45); z-index: 2;
+    }
+    .fid-locate-pulse {
+      position: absolute; top: 50%; left: 50%; width: 16px; height: 16px;
+      margin: -8px 0 0 -8px; border-radius: 50%; background: rgba(26,115,232,.5);
+      z-index: 1; animation: fid-locate-pulse 1.8s ease-out infinite;
+    }
+    @keyframes fid-locate-pulse {
+      0%   { transform: scale(1);   opacity: .7; }
+      100% { transform: scale(4.2); opacity: 0; }
+    }
+    /* Deep-link target marker (?lat&lng&z) — standalone, independent of the
+       geojson pin layer, so it shows for ANY observation regardless of review
+       status. Deliberately distinct from the blue "locate me" dot. */
+    .fid-deeplink-icon { background: transparent; border: none; }
+    .fid-deeplink-pin {
+      position: absolute; top: 50%; left: 50%; width: 18px; height: 18px;
+      margin: -9px 0 0 -9px; background: #e23b3b; border: 3px solid #fff;
+      border-radius: 50%; box-shadow: 0 0 0 2px rgba(226,59,59,.45), 0 1px 5px rgba(0,0,0,.5);
+    }
+
+    /* Location toast — same visual pattern as #geo-toast */
+    #locate-toast {
+      display: none; position: absolute; bottom: 150px; right: 12px;
+      background: rgba(30,41,59,.93); color: white; border-radius: 9px;
+      padding: 10px 13px; font-size: 0.78rem; z-index: 600; max-width: 240px;
+      box-shadow: 0 4px 16px rgba(0,0,0,.35);
+    }
+    #locate-toast.visible { display: block; }
+
+    /* ── Heatmap sliders (inside the VIEW section of #config-sheet) ──────── */
+    #view-heatmap-sliders {
+      display: flex; flex-direction: column; align-items: stretch; gap: 0;
+    }
+    .hc-sliders-row {
+      display: flex; justify-content: space-around; align-items: flex-end;
+      gap: 6px; padding: 8px 4px 4px;
+    }
+    .hc-col {
+      display: flex; flex-direction: column; align-items: center; gap: 4px; flex: 1;
+    }
+    .hc-label { font-size: 0.7rem; color: #555; white-space: nowrap; text-align: center; }
+    .hc-val   { font-size: 0.7rem; color: #2d5016; font-weight: 600; text-align: center; min-width: 24px; }
+    .hc-col input[type=range] {
+      writing-mode: vertical-lr; direction: rtl;
+      cursor: pointer; -webkit-appearance: slider-vertical; appearance: slider-vertical;
+      width: 24px; height: 100px; background: transparent; outline: none;
+    }
+    /* WebKit vertical track/thumb */
+    .hc-col input[type=range]::-webkit-slider-runnable-track {
+      width: 4px; background: #d0d8c0; border-radius: 2px;
+    }
+    .hc-col input[type=range]::-webkit-slider-thumb {
+      -webkit-appearance: none; appearance: none;
+      width: 18px; height: 18px; border-radius: 50%;
+      background: #2d5016; margin-left: -7px; cursor: grab;
+      box-shadow: 0 1px 4px rgba(0,0,0,.3);
+    }
+    .hc-col input[type=range]::-webkit-slider-thumb:active { cursor: grabbing; }
+    /* Firefox */
+    .hc-col input[type=range]::-moz-range-track {
+      width: 4px; background: #d0d8c0; border-radius: 2px;
+    }
+    .hc-col input[type=range]::-moz-range-thumb {
+      width: 18px; height: 18px; border-radius: 50%;
+      background: #2d5016; border: none; cursor: grab;
+      box-shadow: 0 1px 4px rgba(0,0,0,.3);
+    }
+    /* Keep old .hc-row for any legacy references */
+    .hc-row { display: none; }
+
+    /* ── Lightbox ────────────────────────────────────────────────────────── */
+    #lightbox {
+      position: fixed; inset: 0; z-index: 9999;
+      background: rgba(0,0,0,.92);
+      align-items: center; justify-content: center; gap: 8px;
+    }
+    #lightbox .lb-inner {
+      max-width: calc(100vw - 112px); max-height: 90vh;
+      display: flex; flex-direction: column; align-items: center;
+    }
+    #lightbox .lb-inner img {
+      max-width: 100%; max-height: calc(90vh - 44px);
+      object-fit: contain; border-radius: 4px;
+      box-shadow: 0 8px 40px rgba(0,0,0,.5); display: block;
+    }
+    #lightbox .lb-footer {
+      color: rgba(255,255,255,.6); font-size: 0.78rem;
+      margin-top: 8px; display: flex;
+      justify-content: space-between; width: 100%; gap: 16px;
+    }
+    .lb-close {
+      position: fixed; top: 14px; right: 18px;
+      background: none; border: none; color: white;
+      font-size: 2rem; line-height: 1; cursor: pointer;
+      opacity: .7; z-index: 10000; padding: 4px 8px;
+    }
+    .lb-close:hover { opacity: 1; }
+    .lb-nav {
+      background: rgba(255,255,255,.15); border: none; color: white;
+      font-size: 2.4rem; cursor: pointer; border-radius: 50%;
+      width: 48px; height: 48px; flex-shrink: 0;
+      display: flex; align-items: center; justify-content: center;
+      line-height: 1; padding: 0; padding-bottom: 3px;
+    }
+    .lb-nav:hover { background: rgba(255,255,255,.28); }
+    @media (max-width: 600px) {
+      #lightbox .lb-inner { max-width: calc(100vw - 80px); }
+      .lb-nav { width: 36px; height: 36px; font-size: 1.8rem; }
+    }
+
+    /* ── Confirm dialog ──────────────────────────────────────────────────── */
+    #confirm-dialog {
+      display: none; position: fixed; inset: 0; z-index: 9000;
+      background: rgba(0,0,0,.5); align-items: center; justify-content: center;
+    }
+    #confirm-dialog.show { display: flex; }
+    .confirm-box {
+      background: white; border-radius: 12px; padding: 24px 20px;
+      max-width: 320px; width: calc(100% - 40px);
+      box-shadow: 0 8px 32px rgba(0,0,0,.3); text-align: center;
+    }
+    .confirm-box h3 { font-size: 1rem; margin-bottom: 8px; color: #222; }
+    .confirm-box p  { font-size: 0.85rem; color: #666; margin-bottom: 20px; line-height: 1.5; }
+    .confirm-btns   { display: flex; gap: 10px; justify-content: center; }
+    .c-btn-cancel {
+      padding: 9px 22px; border-radius: 6px; border: 1px solid #ccc;
+      background: white; cursor: pointer; font-size: 0.85rem; color: #333;
+    }
+    .c-btn-danger {
+      padding: 9px 22px; border-radius: 6px; border: 1px solid #dc2626;
+      background: #dc2626; color: white; cursor: pointer;
+      font-size: 0.85rem; font-weight: 600;
+    }
+    .c-btn-cancel:hover { background: #f5f5f5; }
+    .c-btn-danger:hover  { background: #b91c1c; }
+
+    /* ── Undo toast ──────────────────────────────────────────────────────── */
+    #undo-toast {
+      display: none; position: fixed;
+      bottom: 24px; left: 50%; transform: translateX(-50%);
+      background: #1e293b; color: white;
+      border-radius: 8px; padding: 12px 18px; font-size: 0.85rem; z-index: 9500;
+      align-items: center; gap: 12px; box-shadow: 0 4px 16px rgba(0,0,0,.3);
+      white-space: nowrap; min-width: 260px;
+    }
+    #undo-toast.show { display: flex; }
+    #undo-toast-btn {
+      background: #22c55e; color: white; border: none; border-radius: 5px;
+      padding: 5px 12px; cursor: pointer; font-size: 0.82rem; font-weight: 600;
+      flex-shrink: 0;
+    }
+    #undo-toast-btn:hover { background: #16a34a; }
+    #undo-countdown { font-size: 0.76rem; color: rgba(255,255,255,.6); }
+
+    /* ── Delete dialog ───────────────────────────────────────────────────── */
+    #delete-dialog {
+      display: none; position: fixed; inset: 0; z-index: 9100;
+      background: rgba(0,0,0,.55); align-items: center; justify-content: center;
+    }
+    #delete-dialog.show { display: flex; }
+    #delete-dialog .confirm-box { max-width: 340px; }
+    #delete-dialog .confirm-box h3 { color: #b91c1c; }
+    #delete-dialog textarea {
+      width: 100%; padding: 7px 10px; font-size: 0.83rem;
+      border: 1px solid #ccc; border-radius: 6px; resize: vertical; min-height: 60px;
+      margin-bottom: 16px; font-family: inherit;
+    }
+    #delete-dialog textarea:focus { outline: none; border-color: #dc2626; }
+
+    /* ── Search bar (in layer-toggle row 1) ──────────────────────────────── */
+    #map-search-wrap {
+      position: relative; display: flex; align-items: center;
+      padding: 0 6px; border-left: 1px solid #e8eee0; flex: 1 1 120px; min-width: 0;
+    }
+    #map-search-input {
+      flex: 1; height: 26px; padding: 0 22px 0 8px;
+      border: 1px solid #4a5e5a; border-radius: 13px; font-size: 0.74rem;
+      font-family: inherit; outline: none; background: #2f3d3a; min-width: 0;
+      color: #d8e4d8;
+    }
+    #map-search-input:focus { border-color: #7a9e50; background: #2f3d3a; }
+    #map-search-clear {
+      position: absolute; right: 9px; background: none; border: none;
+      font-size: 0.78rem; cursor: pointer; color: #aaa; padding: 2px 3px;
+      line-height: 1; display: none;
+    }
+    #map-search-clear:hover { color: #555; }
+    #map-search-dropdown {
+      position: absolute; top: calc(100% + 4px); left: 6px; right: 6px;
+      background: white; border: 1px solid #c8d8a8; border-radius: 7px;
+      box-shadow: 0 4px 14px rgba(0,0,0,.18); z-index: 2000; overflow: hidden;
+      display: none;
+    }
+    .map-search-item {
+      padding: 7px 10px; font-size: 0.77rem; cursor: pointer;
+      border-bottom: 1px solid #f0f4e8; display: flex; align-items: baseline; gap: 4px;
+    }
+    .map-search-item:last-child { border-bottom: none; }
+    .map-search-item:hover { background: #f0f4e8; }
+    .msearch-type { font-size: 0.65rem; color: #2d5016; background: #e8f5e9;
+      border-radius: 8px; padding: 1px 5px; margin-left: auto; flex-shrink: 0; }
+    .msearch-sub { font-size: 0.7rem; color: #888; overflow: hidden;
+      text-overflow: ellipsis; white-space: nowrap; }
+
+    /* ── Note panel — floats top-center (its Tools trigger is in the config
+       sheet, but the form itself stays a map overlay, unchanged from before) */
+    #panel-note {
+      position: absolute; top: 10px; left: 50%; transform: translateX(-50%);
+      z-index: 900; min-width: 260px; padding: 10px 14px 12px;
+    }
+    .np-label { font-size: 0.72rem; color: #555; font-weight: 600; margin-bottom: 3px; }
+    .np-row { margin-bottom: 8px; }
+    #note-text-input {
+      width: 100%; height: 68px; padding: 6px 8px; font-size: 0.78rem;
+      border: 1px solid #ccc; border-radius: 5px; resize: vertical;
+      font-family: inherit; box-sizing: border-box;
+    }
+    #note-text-input:focus { outline: none; border-color: #2d5016; }
+    .np-species-wrap { position: relative; }
+    #note-species-input {
+      width: 100%; padding: 4px 8px; font-size: 0.76rem;
+      border: 1px solid #ccc; border-radius: 5px; font-family: inherit; box-sizing: border-box;
+    }
+    #note-species-input:focus { outline: none; border-color: #2d5016; }
+    #note-species-dd {
+      position: absolute; top: 100%; left: 0; right: 0;
+      background: white; border: 1px solid #c8d8a8; border-radius: 5px;
+      box-shadow: 0 4px 14px rgba(0,0,0,.15); z-index: 3000;
+      max-height: 140px; overflow-y: auto; display: none;
+    }
+    .nsp-item { padding: 5px 8px; font-size: 0.74rem; cursor: pointer; border-bottom: 1px solid #f0f4e8; }
+    .nsp-item:last-child { border-bottom: none; }
+    .nsp-item:hover { background: #f0f4e8; }
+    .np-tags { display: flex; flex-wrap: wrap; gap: 3px; margin-top: 4px; }
+    .np-tag {
+      background: #e8f5e9; border: 1px solid #a5d6a7; border-radius: 10px;
+      padding: 1px 7px; font-size: 0.69rem; cursor: pointer; color: #2d5016;
+      font-style: italic;
+    }
+    .np-tag:hover { background: #ffebee; border-color: #ef9a9a; color: #b71c1c; }
+    .np-actions { display: flex; gap: 6px; margin-top: 8px; }
+    .np-btn {
+      flex: 1; padding: 6px 8px; font-size: 0.76rem; border-radius: 5px; cursor: pointer;
+      border: 1px solid #2d5016; color: #2d5016; background: white; font-family: inherit;
+    }
+    .np-btn:hover { background: #f0f4e8; }
+    .np-btn.placing { background: #2d5016; color: white; }
+    .np-btn-save {
+      flex: 2; padding: 6px 8px; font-size: 0.76rem; font-weight: 600; border-radius: 5px;
+      cursor: pointer; border: 1px solid #2d5016; background: #2d5016; color: white;
+      font-family: inherit;
+    }
+    .np-btn-save:hover { background: #1a3a09; }
+    .np-btn-cancel {
+      flex: 1; padding: 6px 8px; font-size: 0.76rem; border-radius: 5px;
+      cursor: pointer; border: 1px solid #ccc; background: white; color: #666;
+      font-family: inherit;
+    }
+    .np-btn-cancel:hover { border-color: #dc2626; color: #dc2626; }
+    #note-placed-loc {
+      font-size: 0.72rem; color: #f59e0b; font-weight: 600;
+      margin-bottom: 5px; display: none;
+    }
+    /* Amber note pin badge (in detail view) */
+    .note-badge { font-size: 0.7rem; background: #fef3c7; border: 1px solid #fcd34d;
+      border-radius: 8px; padding: 1px 7px; color: #92400e; display: inline-block; }
+    .note-sp-badge {
+      display: inline-block; background: #e8f5e9; border: 1px solid #a5d6a7;
+      border-radius: 10px; padding: 1px 8px; font-size: 0.72rem; color: #2d5016;
+      font-style: italic; margin: 1px;
+    }
+
+    /* ── Map select mode (reach-back from /lists) ─────────────────────────── */
+    #select-bar {
+      position: sticky; top: 0; z-index: 1200;
+      background: #2d5016; color: #fff;
+      display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+      padding: 9px 16px; box-shadow: 0 2px 8px rgba(0,0,0,.25);
+    }
+    #select-bar .sb-text { font-size: 0.86rem; flex: 1 1 auto; }
+    #select-bar .sb-done {
+      background: #fff; color: #2d5016; border: none; border-radius: 8px;
+      padding: 7px 16px; font-size: 0.86rem; font-weight: 700; cursor: pointer;
+      white-space: nowrap;
+    }
+    #select-bar .sb-done:hover { background: #eef5e3; }
+    #select-bar .sb-tool {
+      background: rgba(255,255,255,0.15); color: #fff; border: 1.5px solid rgba(255,255,255,0.5);
+      border-radius: 8px; padding: 6px 13px; font-size: 0.82rem; font-weight: 600;
+      cursor: pointer; white-space: nowrap; transition: background .15s;
+    }
+    #select-bar .sb-tool:hover { background: rgba(255,255,255,0.28); }
+    #select-bar .sb-tool.active { background: rgba(255,255,255,0.35); border-color: #fff; }
+    #lasso-canvas {
+      display: none; position: absolute; pointer-events: none; z-index: 500;
+      border: 2px dashed #fff; background: rgba(255,255,255,0.12); border-radius: 2px;
+    }
+    #lasso-hint {
+      display: none; position: absolute; top: 56px; left: 50%; transform: translateX(-50%);
+      background: rgba(30,50,20,.82); color: #fff; font-size: 0.78rem; font-weight: 600;
+      padding: 5px 14px; border-radius: 20px; pointer-events: none; z-index: 510;
+      white-space: nowrap; box-shadow: 0 2px 8px rgba(0,0,0,.25);
+    }
+    @media (max-width: 700px) { #lasso-hint { display: none !important; } }
+
+    /* ══ Map Redesign P1 — full-bleed shell chrome ═══════════════════════════
+       Map-page-only. See DESIGN.md for the principles behind these tokens. */
+
+    #main, #map { height: 100%; }
+    html, body { height: 100vh; height: 100dvh; }
+
+    .mr-chip {
+      position: absolute; z-index: 1000;
+      display: flex; align-items: center; justify-content: center;
+      min-width: 44px; min-height: 44px;
+      background: var(--ink); color: var(--paper);
+      border: none; border-radius: 50%;
+      box-shadow: 0 2px 10px rgba(0,0,0,.28);
+      cursor: pointer; font-family: var(--font-ui);
+      touch-action: manipulation; -webkit-tap-highlight-color: transparent;
+    }
+    .mr-chip:hover { background: var(--moss); }
+    /* Nav chip + drawer moved to /static/css/site-header.css (Map Redesign P3-nav) —
+       .mr-chip above still styles the map-only config-sheet and legend chips. */
+
+    /* ── Counts pill ──────────────────────────────────────────────────────── */
+    #counts-pill {
+      display: none; position: absolute; top: 12px; left: 50%; transform: translateX(-50%);
+      z-index: 900; background: var(--ink); color: var(--paper);
+      font-family: var(--font-ui); font-size: 0.78rem;
+      padding: 7px 16px; border-radius: 20px; white-space: nowrap;
+      box-shadow: 0 2px 10px rgba(0,0,0,.28);
+    }
+    #counts-pill.visible { display: block; }
+
+    /* ── Search chip — opens the discover view (Map Redesign P2) ─────────── */
+    #search-chip-wrap {
+      position: absolute; top: 12px; right: 12px; z-index: 1000;
+      display: flex; justify-content: flex-end;
+    }
+    #search-chip-btn {
+      min-width: 44px; min-height: 44px; border-radius: 50%; border: none;
+      background: var(--ink); color: var(--paper); cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      box-shadow: 0 2px 10px rgba(0,0,0,.28);
+      touch-action: manipulation; -webkit-tap-highlight-color: transparent;
+    }
+
+    /* ── Discover view — search field sits in the sidebar now, not the chip ── */
+    #discover-view #map-search-wrap {
+      display: flex; margin: 0 12px 10px; border-left: none;
+    }
+    #discover-view #map-search-dropdown { left: 0; right: 0; }
+    .discover-nearme-toggle {
+      display: flex; align-items: center; gap: 6px; width: calc(100% - 24px);
+      margin: 0 12px 8px; padding: 8px 12px; min-height: 40px;
+      background: white; border: 1px solid #c8d8a8; border-radius: 8px;
+      font-size: 0.82rem; font-weight: 600; color: #555; cursor: pointer;
+      touch-action: manipulation; -webkit-tap-highlight-color: transparent;
+    }
+    .discover-nearme-toggle:hover { background: #f0f4e8; }
+    .discover-nearme-toggle.active { background: #2d5016; color: white; border-color: #2d5016; }
+
+    /* ── Config sheet chip (above locate-me) ──────────────────────────────── */
+    #config-sheet-chip { right: 12px; bottom: 112px; font-size: 1.4rem; }
+
+    /* ── Legend chip (bottom-left, above the legend panel it opens) ───────── */
+    #legend-chip { left: 12px; bottom: 70px; }
+
+    /* ── Config sheet (bottom sheet <1024px, right panel >=1024px) ───────── */
+    #config-sheet-scrim {
+      display: none; position: fixed; inset: 0; z-index: 1400;
+      background: rgba(0,0,0,.3);
+    }
+    #config-sheet-scrim.show { display: block; }
+
+    #config-sheet {
+      position: fixed; z-index: 1500;
+      background: var(--paper); color: var(--ink); font-family: var(--font-ui);
+      display: flex; flex-direction: column;
+      box-shadow: 0 -2px 16px rgba(0,0,0,.25);
+    }
+    #config-sheet-handle {
+      display: none; width: 40px; height: 5px; border-radius: 3px;
+      background: var(--hairline); margin: 8px auto 4px; flex-shrink: 0;
+    }
+    #config-sheet-close {
+      position: absolute; top: 8px; right: 8px; min-width: 44px; min-height: 44px;
+      background: none; border: none; color: var(--moss); font-size: 1.1rem; cursor: pointer;
+    }
+    #config-sheet-body { overflow-y: auto; padding: 8px 16px 20px; -webkit-overflow-scrolling: touch; }
+
+    .cs-section { padding: 14px 0; border-bottom: 1px solid var(--hairline); }
+    .cs-section:last-child { border-bottom: none; }
+    .cs-section-title {
+      font-family: var(--font-ui); font-size: 0.72rem; font-weight: 700;
+      text-transform: uppercase; letter-spacing: .04em; color: var(--moss);
+      margin-bottom: 10px;
+    }
+    .cs-tool-row {
+      display: flex; align-items: center; gap: 10px; min-height: 44px;
+      padding: 0 4px; background: none; border: none; width: 100%;
+      font-family: var(--font-ui); font-size: 0.9rem; color: var(--ink);
+      cursor: pointer; text-align: left; border-radius: 8px;
+    }
+    .cs-tool-row:hover { background: var(--leaf-pale); }
+
+    .cs-segmented {
+      display: flex; border: 1px solid var(--hairline); border-radius: 8px;
+      overflow: hidden; margin-bottom: 4px;
+    }
+    .cs-seg-btn {
+      flex: 1; min-height: 40px; border: none; background: var(--paper);
+      font-family: var(--font-ui); font-size: 0.82rem; color: var(--moss);
+      cursor: pointer; border-right: 1px solid var(--hairline);
+    }
+    .cs-seg-btn:last-child { border-right: none; }
+    .cs-seg-btn.active { background: var(--ink); color: var(--paper); font-weight: 600; }
+    .cs-seg-btn:hover:not(.active) { background: var(--leaf-pale); }
+    #view-heatmap-sliders { margin-top: 10px; }
+
+    /* ── Heatmap controls disclosure (below Overlays; heatmap view only) ──── */
+    #heatmap-disclosure .cs-disclosure-summary {
+      cursor: pointer; list-style: none;
+      font-family: var(--font-ui); font-size: 0.72rem; font-weight: 700;
+      text-transform: uppercase; letter-spacing: .04em; color: var(--moss);
+    }
+    #heatmap-disclosure .cs-disclosure-summary::-webkit-details-marker { display: none; }
+    #heatmap-disclosure .cs-disclosure-summary::before { content: '▸ '; }
+    #heatmap-disclosure[open] .cs-disclosure-summary::before { content: '▾ '; }
+
+    @media (max-width: 1023px) {
+      #config-sheet {
+        left: 0; right: 0; bottom: 0;
+        height: 50vh; max-height: 85vh;
+        border-radius: 16px 16px 0 0;
+        transform: translateY(100%);
+        transition: transform .25s ease, height .25s ease;
+      }
+      #config-sheet.open { transform: translateY(0); }
+      #config-sheet.expanded { height: 85vh; }
+      #config-sheet-handle { display: block; }
+    }
+    @media (min-width: 1024px) {
+      #config-sheet {
+        top: 0; right: 0; bottom: 0; width: 360px;
+        transform: translateX(100%);
+        transition: transform .22s ease;
+      }
+      #config-sheet.open { transform: translateX(0); }
+      #config-sheet-scrim { display: none !important; }
+    }
+
+    /* ── Zoom controls: pointer devices only ─────────────────────────────── */
+    .leaflet-control-zoom { display: none !important; }
+    @media (pointer: fine) {
+      .leaflet-control-zoom { display: block !important; }
+    }

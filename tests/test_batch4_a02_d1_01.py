@@ -238,6 +238,9 @@ def test_curator_sees_set_not_set_and_lan_or_ngrok_without_a_device_do_not():
 def test_frontend_never_reads_a_secret_value():
     for rel in ("frontend/settings.html", "frontend/scan.html", "frontend/index.html"):
         src = (PROJECT / rel).read_text()
+        if rel == "frontend/index.html":   # batch 16: split page, read re-inlined
+            from index_source import index_source
+            src = index_source()
         assert "deepseek_api_key" not in src, rel
 
 

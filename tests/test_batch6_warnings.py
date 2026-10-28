@@ -339,6 +339,9 @@ def test_migration_triggers_refuse_markers():
 # ── pages read the shared helper; no truncation (source checks — no JS runtime) ─
 
 def _src(rel):
+    if rel == "frontend/index.html":   # batch 16: split page, read re-inlined
+        from index_source import index_source
+        return index_source()
     with open(os.path.join(ROOT, rel), encoding="utf-8") as f:
         return f.read()
 

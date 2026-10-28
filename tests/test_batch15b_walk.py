@@ -54,6 +54,9 @@ JSC = "/System/Library/Frameworks/JavaScriptCore.framework/Versions/Current/Help
 
 
 def _src(p):
+    if p == "frontend/index.html":   # batch 16: split page, read re-inlined
+        from index_source import index_source
+        return index_source()
     return pathlib.Path(ROOT, p).read_text(encoding="utf-8")
 
 

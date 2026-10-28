@@ -11,9 +11,11 @@ Sources
   frontend/static/css/tokens.css  — the :root design tokens (verbatim)
   frontend/species.html            — dark page shell (#2a3330), species cards, headings
   frontend/lists.html              — deep shell colour (#1e2b28)
-  frontend/index.html              — walk-panel stop cards / recipe strip (CSS), and
-                                     the walk-panel edibility badge colours (inline in
-                                     renderWalkPanel(), so read from the JS)
+  frontend/static/css/index.css    — walk-panel stop cards / recipe strip (the map
+                                     page's CSS since the batch 16 split, 28 Oct 2026)
+  frontend/static/js/index/walk-build.js
+                                   — the walk edibility badge colours (inline in
+                                     _walkEdibBadge(), so read from the JS)
 """
 from __future__ import annotations
 
@@ -24,7 +26,8 @@ REPO = Path(__file__).resolve().parents[2]
 TOKENS_CSS = REPO / "frontend" / "static" / "css" / "tokens.css"
 SPECIES_HTML = REPO / "frontend" / "species.html"
 LISTS_HTML = REPO / "frontend" / "lists.html"
-INDEX_HTML = REPO / "frontend" / "index.html"
+INDEX_CSS = REPO / "frontend" / "static" / "css" / "index.css"
+WALK_BUILD_JS = REPO / "frontend" / "static" / "js" / "index" / "walk-build.js"
 SAFETY_GATE_JS = REPO / "frontend" / "static" / "js" / "safety-gate.js"
 
 TOKEN_NAMES = ("--ink", "--ground", "--paper", "--moss", "--moss-light", "--leaf", "--leaf-pale",
@@ -33,15 +36,15 @@ TOKEN_NAMES = ("--ink", "--ground", "--paper", "--moss", "--moss-light", "--leaf
 
 # (source file, selector) — the rule is copied verbatim.
 RULES = [
-    (INDEX_HTML,   ".walk-stop-card"),
-    (INDEX_HTML,   ".walk-stop-num"),
-    (INDEX_HTML,   ".walk-stop-species"),
-    (INDEX_HTML,   ".walk-stop-common"),
-    (INDEX_HTML,   ".walk-stop-meta"),
-    (INDEX_HTML,   ".walk-stop-recipe"),
-    (INDEX_HTML,   ".walk-stop-recipe strong"),
-    (INDEX_HTML,   ".walk-header h3"),
-    (INDEX_HTML,   ".walk-header .walk-sub"),
+    (INDEX_CSS,    ".walk-stop-card"),
+    (INDEX_CSS,    ".walk-stop-num"),
+    (INDEX_CSS,    ".walk-stop-species"),
+    (INDEX_CSS,    ".walk-stop-common"),
+    (INDEX_CSS,    ".walk-stop-meta"),
+    (INDEX_CSS,    ".walk-stop-recipe"),
+    (INDEX_CSS,    ".walk-stop-recipe strong"),
+    (INDEX_CSS,    ".walk-header h3"),
+    (INDEX_CSS,    ".walk-header .walk-sub"),
     (SPECIES_HTML, ".species-card"),
     (SPECIES_HTML, ".species-card .common"),
     (SPECIES_HTML, ".species-card .sci-name"),
@@ -82,7 +85,7 @@ def _body_colours(src: Path) -> dict:
 
 def _walk_badges() -> dict:
     """renderWalkPanel()'s inline badge colours (toxic + per-status)."""
-    js = INDEX_HTML.read_text(encoding="utf-8")
+    js = WALK_BUILD_JS.read_text(encoding="utf-8")
     # Toxic badge colours live in SafetyGate.badge() (static/js/safety-gate.js)
     # since batch 5, 21 Oct 2026 — _culinaryGateBadge() in index.html now calls
     # it (before: inline in _culinaryGateBadge since 16 Oct; before that an
@@ -90,8 +93,8 @@ def _walk_badges() -> dict:
     tox = _one(r"background:' \+ \(red \? '(#[0-9a-fA-F]{6})' : '#[0-9a-fA-F]{6}'\) \+\s*';color:' \+ \(red \? '(#[0-9a-fA-F]{3,6})'",
                SAFETY_GATE_JS.read_text(encoding="utf-8"), "safety-gate.js walk toxic badge (SafetyGate.badge)", re.S)
     statuses = r"\$\{edib==='edible'\?'(#\w+)':edib==='toxic'\?'(#\w+)':edib==='inedible'\?'(#\w+)':edib==='medicinal'\?'(#\w+)':'(#\w+)'\}"
-    bg = _one(r"background:" + statuses, js, "index.html walk badge backgrounds")
-    fg = _one(r"color:" + statuses, js, "index.html walk badge colours")
+    bg = _one(r"background:" + statuses, js, "walk-build.js walk badge backgrounds")
+    fg = _one(r"color:" + statuses, js, "walk-build.js walk badge colours")
     # Badge shape: SafetyGate.badge() too (batch 5) — same span the walk shows.
     shape = _one(r"font-size:(0\.\d+rem);' \+\s*'padding:(\d+px \d+px);border-radius:(\d+px);font-weight:700;",
                  SAFETY_GATE_JS.read_text(encoding="utf-8"), "safety-gate.js walk badge shape (SafetyGate.badge)", re.S)

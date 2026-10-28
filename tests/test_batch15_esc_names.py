@@ -35,6 +35,9 @@ JSC = "/System/Library/Frameworks/JavaScriptCore.framework/Versions/Current/Help
 
 
 def _src(p):
+    if p == "frontend/index.html":   # batch 16: split page, read re-inlined
+        from index_source import index_source
+        return index_source()
     return pathlib.Path(ROOT, p).read_text(encoding="utf-8")
 
 
@@ -91,7 +94,7 @@ def test_every_escaping_page_loads_esc_js_first():
 
 
 def test_no_local_escape_logic_left():
-    files = list(pathlib.Path(ROOT, "frontend").glob("*.html")) + list(pathlib.Path(ROOT, "frontend/static/js").glob("*.js"))
+    files = list(pathlib.Path(ROOT, "frontend").glob("*.html")) + list(pathlib.Path(ROOT, "frontend/static/js").rglob("*.js"))   # rglob: static/js/index/* (batch 16)
     for f in files:
         if f.name == "esc.js":
             continue
@@ -171,7 +174,7 @@ def test_js_pick_sites_use_sppickcommon():
 
 def test_one_service_worker_bump_for_the_final_pass():
     sw = _src("frontend/static/sw.js")
-    assert "const CACHE_VERSION  = 'foragingid-v18';" in sw
+    assert "const CACHE_VERSION  = 'foragingid-v19';" in sw
     assert "const SPECIES_CACHE  = 'foragingid-species-3';" in sw          # /api/species/ thumbnails (17-B3)
     shell = sw[sw.index("const APP_SHELL = ["):sw.index("];", sw.index("const APP_SHELL = ["))]
     for f in ("/static/js/esc.js", "/static/js/md.js", "/static/js/species-names.js", "/static/js/safety-gate.js"):

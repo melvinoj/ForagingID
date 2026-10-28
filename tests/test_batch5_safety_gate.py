@@ -335,6 +335,9 @@ def test_export_summary_regates_server_side():
 # ── pages: grep-style (B2-01 / B2-04 / P1) ───────────────────────────────────
 
 def _src(rel):
+    if rel == "frontend/index.html":   # batch 16: split page, read re-inlined
+        from index_source import index_source
+        return index_source()
     with open(os.path.join(ROOT, rel), encoding="utf-8") as f:
         return f.read()
 
@@ -351,7 +354,7 @@ def test_every_page_loads_the_helper_and_sw_caches_it():
     sw = _src("frontend/static/sw.js")
     # v11: dry-run.js joined the app shell (22 Oct 2026, enrichment safety).
     # v15: hazard-ack.js joined it (22 Oct 2026, hazard candidates).
-    assert "'/static/js/safety-gate.js'" in sw and "foragingid-v18" in sw
+    assert "'/static/js/safety-gate.js'" in sw and "foragingid-v19" in sw
 
 
 def test_no_page_rederives_the_rule():
@@ -373,6 +376,10 @@ def test_culinary_reads_go_through_the_gate():
         for f in files:
             rel = os.path.relpath(os.path.join(root, f), ROOT)
             if not f.endswith((".html", ".js")) or rel in EXEMPT or rel.endswith("safety-gate.js"):
+                continue
+            # Batch 16: static/js/index/* is the map page, scanned as "frontend/index.html"
+            # (re-inlined), where the allow-list below applies.
+            if rel.startswith(os.path.join("frontend", "static", "js", "index") + os.sep):
                 continue
             for n, line in enumerate(_src(rel).splitlines(), 1):
                 probe = re.sub(r"\b(ct|prefs)\.recipes\b", "", line)     # content toggles, not data

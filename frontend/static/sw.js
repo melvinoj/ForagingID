@@ -13,7 +13,7 @@
 //
 // Writes (POST / PATCH / DELETE) are never intercepted — they always go to the network.
 
-const CACHE_VERSION  = 'foragingid-v18';   // bump → old STATIC/RUNTIME caches evicted on activate
+const CACHE_VERSION  = 'foragingid-v19';   // bump → old STATIC/RUNTIME caches evicted on activate
 const STATIC_CACHE   = CACHE_VERSION + '-static';
 const RUNTIME_CACHE  = CACHE_VERSION + '-runtime';
 // TILE_CACHE and SPECIES_CACHE are deliberately version-independent. Both
@@ -53,6 +53,27 @@ const APP_SHELL = [
   '/static/js/species-names.js', // names rule (spCommon / spPickCommon) — the map page needs it offline
   '/static/js/safety-gate.js',   // batch 5 safety gate — every map/species/list page needs it offline
   '/static/js/hazard-ack.js',    // hazard candidates second tap (22 Oct 2026) — map page approve
+  // Batch 16 (28 Oct 2026): the map page is split into index.css + static/js/index/*
+  // (load order as in index.html), and the page's other scripts that were missing.
+  '/static/css/index.css',
+  '/static/js/index/map-core.js',
+  '/static/js/index/pins-filters.js',
+  '/static/js/index/detail-card.js',
+  '/static/js/index/walk-build.js',
+  '/static/js/index/walk-panel.js',
+  '/static/js/index/walk-saved.js',
+  '/static/js/index/walk-alerts.js',
+  '/static/js/index/recording.js',
+  '/static/js/index/search-notes-find.js',
+  '/static/js/gps.js',
+  '/static/js/guest-notes.js',
+  '/static/js/walk-record.js',
+  '/static/js/reidentify.js',
+  '/static/js/lists.js',
+  '/static/js/walk-publish.js',
+  '/static/js/lightbox.js',
+  '/static/js/seasonal-returns.js',
+  '/static/js/site-header.js',
   '/static/icons/icon-192.png',
   '/static/icons/icon-512.png',
   '/static/icons/dandelion-icon.svg',

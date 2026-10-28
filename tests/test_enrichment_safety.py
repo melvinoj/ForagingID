@@ -565,6 +565,9 @@ def test_every_frontend_button_asks_the_dry_run_first():
     AUTO = {"review.html": 3}
     for page in ("review.html", "scan.html", "settings.html", "species.html", "index.html"):
         src = open(os.path.join(ROOT, "frontend", page), encoding="utf-8").read()
+        if page == "index.html":   # batch 16: split page, read re-inlined
+            from index_source import index_source
+            src = index_source()
         assert '<script src="/static/js/dry-run.js"></script>' in src, page
         unguarded = []
         for m in re.finditer(r"(?:await\s+)?(fetch|lmDryRunConfirm|lmDryRunCheck|lmScopedDryRunConfirm|lmScopedDryRunCheck)\(\s*[`'\"]([^`'\"]+)", src):

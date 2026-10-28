@@ -303,7 +303,8 @@ def test_build_walk_tidy_order_endpoint():
 
 
 def test_build_walk_uses_the_server_order():
-    src = open(os.path.join(ROOT, "frontend/index.html"), encoding="utf-8").read()
+    from index_source import index_source   # batch 16: split page, read re-inlined
+    src = index_source()
     assert src.count("await _tidyRoute(_clusterStops(") == 2
     assert "_nnRoute(_clusterStops(" not in src
 

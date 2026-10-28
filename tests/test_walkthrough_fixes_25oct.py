@@ -42,6 +42,9 @@ NOTE = "Stem hairy — recheck the umbel next visit."
 
 
 def _src(rel):
+    if rel == "frontend/index.html":   # batch 16: split page, read re-inlined
+        from index_source import index_source
+        return index_source()
     with open(os.path.join(ROOT, rel), encoding="utf-8") as f:
         return f.read()
 

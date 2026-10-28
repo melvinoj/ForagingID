@@ -1,28 +1,31 @@
 ## Current State
 
-28 Oct 2026, evening
+28 Oct 2026, late evening
 
 ### Session summary
-Safety batch 28 Oct (CLOSEOUT_28oct.md section 4) complete: items 1–4 (4498f88 + sw v21) and 5–10 this session. 5 B5-03: /api/map/geojson description (reviewer_notes) is None for guests on every pin, scenes included. 6: sightings viewer caption says "pending review" like the grid tile. 7: Data Trust "Auto-approved" → "Approved, uncorrected", "Below 60% conf" → "Below 60% top score" (label only, definition unchanged); obs 9536 NOT moved — its approval is human (19 Jul, edit 19199), terminal. 8: "⚡ fungi suggested?" (escaped). 9: 9 id_notes "[iNaturalist] ..." → NULL (snapshot db_20261028_165411, history 3790–3798 system:clear_placeholder, read back by id) + LmMd.stripCitations hides dots-only text + enrichment never stores it. 10: lists.html addSessionSpecies via lmJsArg. Snapshot commit 31322206 mid-session.
+Recipes batch 28 Oct, steps 1–5, checkpoint commits e1820ef, e4dc34e, c5bdd9c, c443989, 8ad0559. 1: static/js/view-switch.js (LmViewSwitch) — the one Large/Grid/List switch (remembered view per page key, scroll anchor, safety rank, list badge); species.html uses it, behaviour unchanged (existing executed view tests pass; toggle markup byte-equal). 2: Recipes page in Large/Grid/List — species badge on every card/row (LmViewSwitch.badge = the species list's badge, moved unchanged), List = recipe/species/season/safety sorted safety first, species best confirmed photo via best_confirmed_thumbnails (now shared with /api/species/), lazy, over an inline SVG placeholder. 3: is_safety_note_line + JS twin widened (always cook / never / do not / don't / avoid) — only recipe 258 changes; recipe_list_title: own or heading title only, else "Untitled recipe · species" (recipes page) / "Untitled recipe" (species card, which used the body's first line); 22 untitled = the 22 needs_title. 4: recipe_season — curator-set (not ai_generated) wins, else a title season word beats the keyword guess; every served season (recipes, profile, walk panel, Find, export) + the draft-approve guess read it; only recipe 74 changes (served spring, stored autumn untouched). 5: lighter recipes page, page-scoped CSS, local serif titles, safety CSS untouched (tested). No DB write. smoke_pass.py --guest now joins as a scratch-only workshop participant.
 
 ### Build
-- Alembic head 0059. Service worker foragingid-v21, species cache foragingid-species-4.
-- Tests: 49 files in tests/, all pass (plain scripts, no pytest; JS via jsc). New: test_safety_b5_03_reviewer_notes.py, test_safety_sightings_viewer_pending.py, test_safety_items_7_10.py.
-- Smoke (evidence only): /, /sightings, /scan, /review, /lists, /lists/print — 0 errors. Guest-mode smoke still needs a join token in the scratch DB.
+- Alembic head 0059. Service worker foragingid-v23, species cache foragingid-species-5.
+- Tests: 50 files in tests/, all pass (plain scripts, no pytest; JS via jsc). New: test_view_switch_recipes.py (19).
+- Smoke (evidence only): /recipes, /species, /species?s=Laetiporus%20sulphureus, /species?s=Fagus%20sylvatica, /recipes?view=season — curator 0 errors; guest only the pre-existing 403 below.
 
 ### Next (order)
-1. Melvin, phone: tap "Upload pending walks (N)" if shown; one reload per device.
+1. Melvin, phone: tap "Upload pending walks (N)" if shown; one reload per device (sw v23).
 2. Live checks below before any further index work.
-3. CLOSEOUT_28oct.md section 4 items 11–29 (decisions marked there), smallest first: 11 PFAF chip / Wikipedia label, 12 bare-domain links, 17 import summary duplicates, 18 Background Processes catch-all.
+3. CLOSEOUT_28oct.md section 4 items 11–29 (decisions marked there; 3 and 19 done this session), smallest first: 11 PFAF chip / Wikipedia label, 12 bare-domain links, 17 import summary duplicates, 18 Background Processes catch-all.
 
 ### Open decisions (Melvin)
 - Obs 9536 (Prunus cerasifera, human-approved 19 Jul): leave approved (default) or send back to Review.
+- Recipe season provenance: no record of who set an ai_generated recipe's season, so a curator edit there can be overridden by a contradicting title season word (none today). Add a small season-source column (migration), or accept.
 
 ### Backlog
 - Walk route line distorts, then disappears after zooming in and dragging, until the walk is reloaded (REPORT.md batch 15b item 4). Melvin reproduces first; no fix from code reading alone.
 - Map deep-link marker shows only "Observation #id" (pins-filters.js:577).
 - Guest scene pins say "No description added yet — edit in review queue" (detail-card.js:101) — curator wording on a guest screen.
 - 113 id_notes are truncated iNat summaries ending in "..." / "…".
+- site-header.js:218 fetches /api/observations/stats on every page; guests get 403 (harmless, swallowed) — skip the call for guests.
+- Medicinal-prep search (find.py second endpoint) still serves the stored season, not recipe_season.
 
 ### Settled (Melvin)
 - All recon defaults accepted 28 Oct, with: Loop threshold 600 m label only; PDF disclaimer name only; UA LandMemory/0.2 (+https://melvinjarman.co.uk); recording UI hidden only.
@@ -30,6 +33,7 @@ Safety batch 28 Oct (CLOSEOUT_28oct.md section 4) complete: items 1–4 (4498f88
 - 28 Oct: POST mark-verified stays the 410 stub (writes nothing). New walks stay built as loops (the 600 m rule is the label only). Lists dropdown wired back (▾ on each selected-species row → toggleExpand), not removed.
 - 28 Oct: device list — ✕ on every entry (live paired device = revoke + remove; revoked device / unused link = delete the entry), app confirm dialog. Auto-prune only revoked devices and links unused after 7 days, on every list load; never a paired device for being offline.
 - 28 Oct: section 4 decisions = Claude.ai defaults. B5-03 = curator-only (scenes included). Data Trust = relabel, not redefine.
+- 28 Oct recipes batch: no fabricated titles — untitled shows "Untitled recipe" and stays in the needs_title queue; season = curator-set, else title word, else keyword guess, read-time only.
 
 ### Rules learned
 - Any app/ save reloads uvicorn — check /api/processes/active right before each save.
@@ -40,10 +44,17 @@ Safety batch 28 Oct (CLOSEOUT_28oct.md section 4) complete: items 1–4 (4498f88
 - An audit "auto-approved" finding must be checked against observation_edits before any status write: a later human approval makes the row terminal (9536).
 - Clearing a source-filled field to NULL lets enrichment refill it — guard the source before clearing.
 - Smoke pass routes are the app routes (/sightings, /lists/print), not the .html filenames.
+- Season words in titles can be ingredients ("Spring Onions", "Winter Savory") or purposes ("for Winter") — recipe_title_season strips those first.
+- A local variable named like an imported helper shadows it (culinary approve path had local recipe_season) — grep for the name before importing.
 
 ### Unverified live
 Rule (CLAUDE.md, 28 Oct): one list, grouped by batch, each line = the symptom to look for. Melvin reports bugs from normal use; this maps them to a batch. Entries leave only when Melvin reports them checked or they are superseded.
-- **Safety batch 28 Oct, items 5–10 (this session):** a guest phone tapping a map pin shows any reviewer note text (B5-03 miss); the map shows no scene descriptions for you as curator (over-blocked). Sightings viewer: a pending photo opened full-size lacks "· pending review". Data Trust tab still says "Auto-approved" anywhere except the pipeline status chip. Review card still says "fungi detected". Elder / foxglove / chanterelle in Lists, print or PDF print "..." under Identification or Field ID notes. Lists "Add species" search: picking a name with an apostrophe adds nothing or the wrong name.
+- **Recipes batch 28 Oct, step 1 (e1820ef):** Species page: Large/Grid/List buttons missing or not highlighted; view not remembered after reload; switching view jumps to the top mid-list; select mode (from Lists) loses ticks. Console "LmViewSwitch is not defined" = view-switch.js not loaded / stale cache.
+- **Step 2 (e4dc34e):** Recipes page: switching to Large/List changes the recipe count or a card/row lacks its badge (⚠ caution / ✓ edible / ⚡ conditional); List not safety-first (caution rows not on top); a photo that isn't that species; a broken-image icon instead of the drawn bowl; tapping ⚠ Warnings in a List row navigates away instead of opening.
+- **Step 3 (c5bdd9c):** Chicken of the woods (258) shows "Always cook well…" as a title anywhere (recipes page, species card, Export summary); an "Untitled recipe" that you know has a title or heading; "needs a title" chip count ≠ 22.
+- **Step 4 (c443989):** Spring Beech Leaf Salad (74) under Autumn on the recipes page or the beech species page tabs; Ox-eye daisy / wood sorrel "Spring Onions" recipes or wood blewit "Winter Savory" in a different season than before; a season you set yourself shown differently. After sw v23 / species-5: species page offline loses recently viewed profiles until revisited (expected once).
+- **Step 5 (8ad0559):** Recipes page still dark; titles not serif on phone; a badge, warning box or ☠ looking different from the species page; page title hidden under the nav chip on phone; text hard to read anywhere on the cream background.
+- **Safety batch 28 Oct, items 5–10:** a guest phone tapping a map pin shows any reviewer note text (B5-03 miss); the map shows no scene descriptions for you as curator (over-blocked). Sightings viewer: a pending photo opened full-size lacks "· pending review". Data Trust tab still says "Auto-approved" anywhere except the pipeline status chip. Review card still says "fungi detected". Elder / foxglove / chanterelle in Lists, print or PDF print "..." under Identification or Field ID notes. Lists "Add species" search: picking a name with an apostrophe adds nothing or the wrong name.
 - **Safety batch 28 Oct, items 1–4 (4498f88 + sw v21):** Lists 🌿 Returns shows Off by default; at 10, Digitalis purpurea shows ☠ deadly + look-alike/preparation lines in Lists, print and PDF (missing = gate miss). Species page for Sambucus nigra: the ground-elder and 3 Brill links carry "⚑ may not be this species"; a guest phone never shows them; printing the species page drops them. Workshop page (Lists / print / PDF) prints each warning once, in the Safety & edibility box. Elder's "Compost Cosmetic Dye…" sits under "Other uses", not "Medicinal preparations". After sw v21: any console "SafetyGate.seasonalReturn is not a function" = stale safety-gate.js.
 - **Part A held items (3403705, 28 Oct):** Lists × on shepherd's purse / St John's wort / lady's smock removes the wrong row or nothing → lmJsArg miss. Offline map page loses header styling → sw v20 not caching tokens.css / site-header.css. Console "loadFeatures is not defined" after a resize during map load → timer guard miss.
 - **Batch 16 index.html split (2b49db7, 28 Oct):** after one reload — any console "X is not defined" on the map page = a load-order miss; pin tap gives no detail card / no enrichment; build a walk → no route, panel or edibility badges; saved walk won't load; Edit walk stop tap / ⬚ Lasso / Start here / Loop label / stop 58 hidden / Tidy route order misbehave; Export summary broken; recording UI visible; Find tab, note panel or search broken; offline reload after one online load fails (index.css + index/*.js precache); note pins don't resize on zoom (moved zoomend line); zoom + drag a walk breaks; phone/guest view over the share link broken; no reload banner after the sw bump.
@@ -52,12 +63,37 @@ Rule (CLAUDE.md, 28 Oct): one list, grouped by batch, each line = the symptom to
 - **Batches 17, 15, 15b + sw v18 (5830833, 94afbbe, 0f47e98, 536b7e7, 28 Oct):** pre-filter note wrong on scan.html; Lists fixed rows; device list self-refresh; Large/List thumbnails; reload banner; PDF/print recipes 125/206 missing text; apostrophe names break any converted button; preferred common names not shown; Loop label; Start here; stop 58 visible; Edit walk stop tap + lasso; any recording UI visible; upload button missing.
 - **Walk 5 republish (site 28f9e80, 28 Oct):** live walk 5 page or the collection page broken / wrong front page.
 - **Rename to genus (28 Oct):** renaming a card to a genus doesn't show the refusal message.
-- Tool note: scripts/dev/walkthrough_check.py drives a browser on a scratch :8765 — Melvin runs it; Code's own pass is scripts/dev/smoke_pass.py (evidence only).
+- Tool note: scripts/dev/walkthrough_check.py drives a browser on a scratch :8765 — Melvin runs it; Code's own pass is scripts/dev/smoke_pass.py (evidence only; --guest now signs in as a scratch participant).
 
 ### Melvin's review queue
-- 11b_review (28). genus_reid (6). bryony_check (8229). hazard_review cards (18) + 17052, 17737. 22 recipes needing a title. Five rejected photos restored in July (15958, 15970, 21333, 21673, 21799). Warning review cards. Text tidy-up (352 edible_parts / 689 id_notes). 347 Takeout person_animal rejects (mount DIGIERA). Draft #3252 Amaranthus hybridus. data/ old DBs (293 MB) + thumbnails_quarantine/ → copy to DIGIERA, delete in Finder.
+- 11b_review (28). genus_reid (6). bryony_check (8229). hazard_review cards (18) + 17052, 17737. 22 recipes needing a title (incl. 258 Chicken of the woods). Five rejected photos restored in July (15958, 15970, 21333, 21673, 21799). Warning review cards. Text tidy-up (352 edible_parts / 689 id_notes). 347 Takeout person_animal rejects (mount DIGIERA). Draft #3252 Amaranthus hybridus. data/ old DBs (293 MB) + thumbnails_quarantine/ → copy to DIGIERA, delete in Finder.
 
 ## History
+
+### 2026-10-28 18:59
+**Snapshot** — End of session — Session ended from Settings page
+DB: `snapshots/db_20261028_185938.sqlite`
+
+### 2026-10-28 18:59
+**Session ended** — Session ended from Settings page
+
+### 2026-10-28 18:57
+**Recipes batch 28 Oct (steps 1-5): shared Large/Grid/List switch, recipes in three views, safety-sentence titles, title season, lighter recipes page**
+
+**Built:**
+- static/js/view-switch.js (LmViewSwitch): one Large/Grid/List switch, remembered view per page key, scroll anchor, safety rank, list badge; species.html and recipes.html both use it
+- Recipes page Large/Grid/List: species badge on every card/row, List = title/species/season/safety (safety first), species best confirmed photo (best_confirmed_thumbnails, shared with /api/species/) lazy over an inline SVG placeholder
+- recipe_list_title: own or heading title only, else 'Untitled recipe' + species (recipes page) / 'Untitled recipe' (species card)
+- recipe_season / recipe_title_season: curator-set (not ai_generated) wins, else title season word, else stored keyword guess; all served seasons + draft-approve guess
+- Lighter recipes page CSS (page-scoped)
+- smoke_pass.py --guest joins via a scratch-only participant token
+**Fixed:**
+- Recipe 258 'Always cook well...' no longer a title (is_safety_note_line + JS twin widened: always cook / never / do not / don't / avoid)
+- Recipe 74 'Spring Beech Leaf Salad' served as spring (stored autumn unchanged)
+**Files:** `frontend/static/js/view-switch.js`, `frontend/species.html`, `frontend/recipes.html`, `frontend/static/js/index/walk-panel.js`, `frontend/static/sw.js`, `app/models/species.py`, `app/api/recipes.py`, `app/api/culinary.py`, `app/api/find.py`, `scripts/experience_export/export.py`, `scripts/dev/smoke_pass.py`, `tests/test_view_switch_recipes.py`, `tests/test_names_and_species_views.py`, `tests/test_recipes_page.py`, `tests/test_batch5_safety_gate.py`, `tests/test_batch15_esc_names.py`, `tests/test_held_items_28oct.py`, `tests/test_batch6_warnings.py`
+**Pending:**
+- Curator season edits on ai_generated recipes are not recorded; a contradicting title season word would override one (none today)
+- site-header.js review badge 403s for guests on every page (pre-existing)
 
 ### 2026-10-28 18:21
 **Snapshot** — End of session — Session ended from Settings page

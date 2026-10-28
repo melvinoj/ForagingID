@@ -45,6 +45,22 @@ Final audit pass built (prompt B): batch 17 tidy, batch 15 (one Markdown dialect
 
 ## History
 
+### 2026-10-28 09:59
+**Snapshot** — before re-route of saved walk 4
+DB: `snapshots/db_20261028_095904.sqlite`
+
+### 2026-10-28 09:46
+**Walk 5 republished: obs 24429 approved (Melvin), plan 65 species / 59 stops / 35 recipes, published with Front page at site commit 28f9e80**
+
+**Built:**
+- Walk 5 Morning sunshine Gresgen to Adelsberg republished as featured walk (site 28f9e80)
+**Fixed:**
+- obs 24429 needs_review -> approved via PATCH review (edits 22043-22045, snapshot db_20261028_094315)
+- Site-root photos/ (244 files) removed in the publish commit
+**Files:** `~/foraging-experience: index.html, preview.html, w/morning-sunshine-gresgen-to-adelsberg/*, walks.json, photos/ removed`
+**Pending:**
+- Melvin: open the live walk 5 page and the collection page in own browser
+
 ### 2026-10-28 09:43
 **Snapshot** — Manual snapshot
 DB: `snapshots/db_20261028_094315.sqlite`

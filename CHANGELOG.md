@@ -45,6 +45,10 @@ Final audit pass built (prompt B): batch 17 tidy, batch 15 (one Markdown dialect
 
 ## History
 
+### 2026-10-28 09:43
+**Snapshot** — Manual snapshot
+DB: `snapshots/db_20261028_094315.sqlite`
+
 ### 2026-10-28 09:36
 **Snapshot** — End of session — Session ended from Settings page
 DB: `snapshots/db_20261028_093618.sqlite`

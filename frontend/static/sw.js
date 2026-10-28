@@ -13,7 +13,7 @@
 //
 // Writes (POST / PATCH / DELETE) are never intercepted — they always go to the network.
 
-const CACHE_VERSION  = 'foragingid-v17';   // bump → old STATIC/RUNTIME caches evicted on activate
+const CACHE_VERSION  = 'foragingid-v18';   // bump → old STATIC/RUNTIME caches evicted on activate
 const STATIC_CACHE   = CACHE_VERSION + '-static';
 const RUNTIME_CACHE  = CACHE_VERSION + '-runtime';
 // TILE_CACHE and SPECIES_CACHE are deliberately version-independent. Both
@@ -27,7 +27,9 @@ const TILE_CACHE     = 'foragingid-tiles';
 // '-2' since batch 6 (safety.warnings / handout_warnings, 21 Oct 2026) — a
 // profile cached before it has no warnings, so the activate cleanup below
 // deletes the old 'foragingid-species' instead of serving it for 7 days.
-const SPECIES_CACHE  = 'foragingid-species-2';
+// '-3' since batch 17 (28 Oct 2026): /api/species/ carries a thumbnail per
+// species (Large / List views) — a list cached before it has none.
+const SPECIES_CACHE  = 'foragingid-species-3';
 
 const TILE_TTL_MS    = 30 * 24 * 60 * 60 * 1000;   // 30 days — bulk cache expiry
 const SPECIES_TTL_MS =  7 * 24 * 60 * 60 * 1000;   // 7 days  — per-entry TTL
@@ -46,6 +48,9 @@ const APP_SHELL = [
   '/static/js/guest-mode.js',
   '/static/js/offline.js',
   '/static/js/dry-run.js',
+  '/static/js/esc.js',           // batch 15 — the one escaper; loads first on every page, so it must be offline too
+  '/static/js/md.js',            // batch 15 — the one recipe Markdown renderer (Lists, print, species, encounters)
+  '/static/js/species-names.js', // names rule (spCommon / spPickCommon) — the map page needs it offline
   '/static/js/safety-gate.js',   // batch 5 safety gate — every map/species/list page needs it offline
   '/static/js/hazard-ack.js',    // hazard candidates second tap (22 Oct 2026) — map page approve
   '/static/icons/icon-192.png',

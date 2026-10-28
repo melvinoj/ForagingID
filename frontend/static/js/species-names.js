@@ -6,11 +6,7 @@
 // show Latin and common on separate lines keep their own layout.
 // The ONLY frontend formatter for this — pages pass the common name they have.
 (function () {
-  function esc(s) {
-    return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
-      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
-    });
-  }
+  function esc(s) { return window.lmEsc(s); }
   // Sentence case for ONE English common name (Melvin, 21 Oct 2026): the first
   // character upper-cased when it is a letter, the rest exactly as sourced —
   // "disc mayweed" → "Disc mayweed", never "Disc Mayweed". Display only; stored
@@ -26,6 +22,21 @@
   }
   // One English common name for display ('' when none).
   window.spCommon = sentence;
+  // The ONE pick rule, twin of display_common_name() in app/models/species.py:
+  // preferred_common_name (unless it is a stray JSON list), else the first of
+  // common_names (an array or its JSON string), sentence-cased; '' when none.
+  window.spPickCommon = function (preferred, commonNames) {
+    var p = (preferred == null ? '' : String(preferred)).trim();
+    if (p && p.charAt(0) !== '[') return sentence(p);
+    var raw = preferred || commonNames;
+    if (!raw) return '';
+    var v = raw;
+    if (typeof raw === 'string') {
+      try { v = JSON.parse(raw); } catch (e) { return sentence(raw.split(',')[0].trim()); }
+    }
+    if (Array.isArray(v)) return v.length ? sentence(String(v[0]).trim()) : '';
+    return sentence(String(v).trim());
+  };
   // A list of English common names, each sentence-cased, joined
   // ("disc mayweed · pineapple weed" → "Disc mayweed · Pineapple weed").
   window.spCommonList = function (names, sep) {

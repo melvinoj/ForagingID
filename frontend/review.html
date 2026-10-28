@@ -1317,6 +1317,7 @@
   </style>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
         integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
+  <script src="/static/js/esc.js"></script>
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
           integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
 <style>
@@ -1927,7 +1928,7 @@ function _makeCardHtml(obs) {
     // The share button lets the user send the full-res photo to the Android share sheet
     // (where Google Lens appears as a target — the proper Lens bridge on the Pixel PWA).
     const shareBtn = thumbName
-      ? `<button class="btn-share-photo" onclick="shareCardPhoto(${obs.id},'${_resc(thumbName).replace(/'/g, "\\'")}')" title="Share photo — opens Google Lens on Android">📤</button>`
+      ? `<button class="btn-share-photo" onclick="shareCardPhoto(${obs.id},${lmJsArg(thumbName)})" title="Share photo — opens Google Lens on Android">📤</button>`
       : '';
     const thumb = `<div class="thumb-wrap">${
       thumbName
@@ -2141,11 +2142,11 @@ function _makeCardHtml(obs) {
     if (obs.itis_name_match === 'synonym' && obs.itis_accepted_name) {
       const itisNameEsc  = _esc(obs.itis_accepted_name);
       const itisNameSafe = (obs.itis_accepted_name).replace(/'/g,"&#39;").replace(/"/g,'&quot;');
-      const spPrimSafe   = _resc(obs.species_primary || '').replace(/'/g, "\\'");
+      const spPrimSafe   = lmJsArg(obs.species_primary || '');
       itisBannerHtml = `<div class="itis-banner-synonym">
         <span style="flex:1">⚠ ITIS suggests: <em>${itisNameEsc}</em></span>
         <button class="btn-itis-rename"
-                onclick="itisAcceptRename('${spPrimSafe}', 'species_id')">Rename to accepted name</button>
+                onclick="itisAcceptRename(${spPrimSafe}, 'species_id')">Rename to accepted name</button>
       </div>`;
     } else if (obs.itis_name_match === 'no_match' && obs.gbif_match_type === 'EXACT') {
       // GBIF's backbone has this exact name: most often a newer name ITIS lacks.
@@ -2292,9 +2293,9 @@ async function loadCritical() {
 
 function _critCardHtml(it) {
   const sev = it.severity === 'deadly' ? 'deadly' : 'toxic';
-  const sp = _resc(spNameText(it.species || '', it.common)).replace(/'/g, "\\'");
+  const sp = lmJsArg(spNameText(it.species || '', it.common));
   const img = it.thumbnail
-    ? `<img src="${_esc(it.thumbnail)}" alt="photo" loading="lazy" onclick="_critOpenPhoto(${it.obs_id}, '${sp}')">`
+    ? `<img src="${_esc(it.thumbnail)}" alt="photo" loading="lazy" onclick="_critOpenPhoto(${it.obs_id}, ${sp})">`
     : '<div class="no-thumb">🌿</div>';
   return `<div class="crit-card" id="crit-${it.obs_id}-${it.walk_id}">
     ${img}
@@ -2304,7 +2305,7 @@ function _critCardHtml(it) {
       <span>Walk: ${_esc(it.walk_name)} · stop ${_esc(it.stop)}</span>
       <span style="color:#888">#${it.obs_id} · ${_esc(it.review_status)} (AI-agreed)</span>
       <div class="crit-actions">
-        <button class="crit-confirm" onclick="critConfirm(${it.obs_id}, '${sp}', '${sev}', this)">✓ Confirm species</button>
+        <button class="crit-confirm" onclick="critConfirm(${it.obs_id}, ${sp}, '${sev}', this)">✓ Confirm species</button>
         <button onclick="showRetryId(${it.obs_id}, this)">🔄 Re-identify</button>
       </div>
       <div id="retry-panel-${it.obs_id}" style="display:none"></div>
@@ -2563,11 +2564,11 @@ function _renderSOPResults(obsId, data, withRef = false) {
       </div>` : '';
 
     // JS-escape single quotes so apostrophes in a common name don't break the onclick string
-    const sciArg = _resc(r.scientific_name).replace(/'/g, "\\'");
-    const comArg = _resc(r.common_name || '').replace(/'/g, "\\'");
+    const sciArg = lmJsArg(r.scientific_name);
+    const comArg = lmJsArg(r.common_name || '');
 
     return `<div class="sop-card">
-      <div class="sop-row" onclick="_sopSelect(${obsId},'${sciArg}','${comArg}',${confArg})">
+      <div class="sop-row" onclick="_sopSelect(${obsId},${sciArg},${comArg},${confArg})">
         <div class="sop-conf" style="color:${confColor}">${confLabel}</div>
         <div class="sop-name">
           <div class="sop-sci">${_esc(r.scientific_name)}</div>
@@ -2723,8 +2724,8 @@ function _renderRetryResults(obsId, data) {
         : '';
       const confArg = scored ? c.confidence : 'null';
       // JS-escape single quotes so apostrophes in a common name don't break the onclick string
-      const sciArg = _resc(c.scientific_name).replace(/'/g, "\\'");
-      const comArg = _resc(c.common_name || '').replace(/'/g, "\\'");
+      const sciArg = lmJsArg(c.scientific_name);
+      const comArg = lmJsArg(c.common_name || '');
       return `<div class="retry-row">
         <div class="sop-conf" style="color:${confColor}" title="${scored ? 'Confidence score' : 'Recorded in Mushroom Observer'}">${confLabel}</div>
         <div class="sop-name">
@@ -2734,7 +2735,7 @@ function _renderRetryResults(obsId, data) {
           ${moLinkHtml}
         </div>
         <button class="retry-approve-btn"
-          onclick="_retryApprove(${obsId},'${sciArg}','${comArg}',${confArg},'${g.source}',this)">
+          onclick="_retryApprove(${obsId},${sciArg},${comArg},${confArg},'${g.source}',this)">
           Approve
         </button>
       </div>`;
@@ -2836,13 +2837,13 @@ async function _corrLookup(id) {
     // the inline attribute parser and silently swallow the click.
     // _resc handles &, <, >, " — the extra replace covers ' inside '...' delimiters.
     area.innerHTML = results.map(item => {
-      const sciArg = _resc(item.scientific_name).replace(/'/g, "\\'");
-      const comArg = _resc(item.common_name || '').replace(/'/g, "\\'");
+      const sciArg = lmJsArg(item.scientific_name);
+      const comArg = lmJsArg(item.common_name || '');
       const visionBadge = item.vision ? '<span class="corr-lookup-vision">👁 vision</span>' : '';
       const scoreLabel  = item.vision && item.score != null ? `<span class="corr-lookup-score">${item.score}%</span>` : '';
       return `
       <div class="corr-lookup-item"
-           onclick="_corrSaveFromLookup(${id},'${sciArg}','${comArg}')">
+           onclick="_corrSaveFromLookup(${id},${sciArg},${comArg})">
         <div style="flex:1;min-width:0">
           <div class="corr-lookup-sci">${_esc(item.scientific_name)}${visionBadge}${scoreLabel}</div>
           ${item.common_name ? `<div class="corr-lookup-common">${_esc(spCommon(item.common_name))}</div>` : ''}
@@ -4120,7 +4121,7 @@ function _renderAIDraftCard(sp) {
 
   const approveAllId = `approve-all-${_escId(sp.scientific_name)}`;
   const escName      = _resc(sp.scientific_name);
-  const escArg       = escName.replace(/'/g, "\\'");
+  const escArg       = lmJsArg(sp.scientific_name);
   const cardId       = `draft-card-${_escId(sp.scientific_name)}`;
 
   const draftCount = (sp.drafts || []).length;
@@ -4128,11 +4129,11 @@ function _renderAIDraftCard(sp) {
   // …nor do fields with two versions (you choose one first).
   const bulkCount  = (sp.drafts || []).filter(d => !_CURATOR_DRAFT_FIELDS.has(d.field_name) && !_versioned.has(d.field_name)).length;
   return `<div class="ai-draft-species-card" id="${cardId}">
-    <div class="ai-draft-species-header" onclick="aiDraftToggleCollapse('${escArg}', event)">
+    <div class="ai-draft-species-header" onclick="aiDraftToggleCollapse(${escArg}, event)">
       <div style="display:flex;align-items:center;gap:8px">
         <input type="checkbox" class="ai-draft-select-cb" title="Select for bulk regenerate"
                style="width:16px;height:16px;cursor:pointer;accent-color:#7c3aed;flex-shrink:0"
-               onchange="aiDraftToggleSelect('${escArg}', this.checked)"
+               onchange="aiDraftToggleSelect(${escArg}, this.checked)"
                onclick="event.stopPropagation()">
         <div>
           ${sp.common_names.length ? `<div style="font-size:0.95rem;font-weight:700;color:#3b0764">${_resc(spCommon(sp.common_names[0]))}</div>` : ''}
@@ -4144,7 +4145,7 @@ function _renderAIDraftCard(sp) {
       <div style="display:flex;align-items:center;gap:6px">
         ${thumbsHtml ? `<div class="ai-draft-thumbs">${thumbsHtml}</div>` : ''}
         <button title="Regenerate all drafts for this species from current source data"
-                onclick="event.stopPropagation();aiDraftRegenerate('${escArg}', this)"
+                onclick="event.stopPropagation();aiDraftRegenerate(${escArg}, this)"
                 style="padding:4px 10px;border:1px solid #7c3aed;border-radius:6px;
                        background:white;color:#5b21b6;font-size:0.74rem;font-weight:700;
                        cursor:pointer;white-space:nowrap;flex-shrink:0">
@@ -4156,7 +4157,7 @@ function _renderAIDraftCard(sp) {
     <div class="ai-draft-fields">
       ${fieldsHtml}
       ${bulkCount ? `<button class="ai-draft-approve-all-btn" id="${approveAllId}"
-        onclick="approveAllDrafts('${escArg}')">
+        onclick="approveAllDrafts(${escArg})">
         ✓ Approve all ${bulkCount} draft${bulkCount !== 1 ? 's' : ''} for this species${bulkCount < draftCount ? ' (not the review cards or two-version fields)' : ''}
       </button>` : ''}
     </div>
@@ -4178,7 +4179,7 @@ const _WARNING_DRAFT_ORIGIN = {
 
 function _renderAIDraftField(sciName, d, versionLabel) {
   const escName  = _resc(sciName);
-  const escArg   = escName.replace(/'/g, "\\'");
+  const escArg   = lmJsArg(sciName);
   const editId   = `ai-edit-${d.id}`;
   const isRecipe = d.field_name === 'recipe';
   const isTaste  = d.field_name === 'taste_notes';
@@ -4217,7 +4218,7 @@ function _renderAIDraftField(sciName, d, versionLabel) {
           placeholder="Edit command e.g. 'change shoots to flowers'"
           style="flex:1;padding:5px 9px;font-size:0.78rem;border:1px solid #c4b5fd;
                  border-radius:6px;outline:none;font-family:inherit">
-        <button class="btn-ai-edit" onclick="regenerateDraft('${escArg}', ${d.id})" id="btn-regen-${d.id}">
+        <button class="btn-ai-edit" onclick="regenerateDraft(${escArg}, ${d.id})" id="btn-regen-${d.id}">
           ↻ Regenerate
         </button>
       </div>
@@ -4227,7 +4228,7 @@ function _renderAIDraftField(sciName, d, versionLabel) {
   const tasteRegenHtml = isTaste ? `
     <div style="margin-bottom:4px">
       <button class="btn-ai-edit" id="btn-taste-regen-${d.id}"
-              onclick="aiDraftRegenerateField('${escArg}', 'taste_notes', ${d.id}, this)">
+              onclick="aiDraftRegenerateField(${escArg}, 'taste_notes', ${d.id}, this)">
         ↻ Regenerate taste notes
       </button>
     </div>` : '';
@@ -4246,14 +4247,14 @@ function _renderAIDraftField(sciName, d, versionLabel) {
     <div class="ai-draft-actions">
       <button class="btn-ai-approve"
         data-sci="${escName}" data-field="${d.field_name}" data-did="${d.id}"
-        onclick="approveDraftField('${escArg}', '${d.field_name}', ${d.id}, false)">✓ Approve as-is</button>
+        onclick="approveDraftField(${escArg}, '${d.field_name}', ${d.id}, false)">✓ Approve as-is</button>
       <button class="btn-ai-edit" onclick="toggleDraftEdit(${d.id})">✎ Edit then approve</button>
       <button class="btn-ai-approve" style="display:none" id="btn-edit-save-${d.id}"
-        onclick="approveDraftField('${escArg}', '${d.field_name}', ${d.id}, true)">✓ Save &amp; approve</button>
+        onclick="approveDraftField(${escArg}, '${d.field_name}', ${d.id}, true)">✓ Save &amp; approve</button>
       ${isRecipe ? `<button class="btn-ai-edit" onclick="toggleEditCmd(${d.id})">✦ Edit command</button>` : ''}
       ${isCurator && d.removable ? `<button class="btn-ai-reject" title="Clear this warning from the species (recorded as your decision)"
-        onclick="removeWarningField('${escArg}', '${d.field_name}', ${d.id})">🗑 Remove</button>` : ''}
-      <button class="btn-ai-reject" onclick="rejectDraftField('${escArg}', '${d.field_name}', ${d.id})">✗ Reject${isCurator ? ' (keep text)' : ''}</button>
+        onclick="removeWarningField(${escArg}, '${d.field_name}', ${d.id})">🗑 Remove</button>` : ''}
+      <button class="btn-ai-reject" onclick="rejectDraftField(${escArg}, '${d.field_name}', ${d.id})">✗ Reject${isCurator ? ' (keep text)' : ''}</button>
     </div>
     <div class="ai-draft-field-result" id="draft-result-${d.id}"></div>
   </div>`;
@@ -5083,7 +5084,7 @@ function _renderEnrichCard(sp) {
                  style="width:52px;height:52px;object-fit:cover;border-radius:5px;cursor:zoom-in;
                         border:1px solid #d0dbb8;flex-shrink:0"
                  title="Click to enlarge"
-                 onclick="openEnrichLightbox('${_resc(url).replace(/'/g, "\\'")}')"
+                 onclick="openEnrichLightbox(${lmJsArg(url)})"
                  onerror="this.style.display='none'">`;
   }).join('');
 
@@ -5093,7 +5094,7 @@ function _renderEnrichCard(sp) {
     <div style="display:flex;align-items:flex-start;gap:10px;margin-bottom:10px">
       <input type="checkbox" class="enrich-card-select-cb"
              style="display:${_enrichSelectMode ? 'block' : 'none'};margin-top:3px"
-             onchange="enrichToggleCard('${_resc(sp.scientific_name).replace(/'/g, "\\'")}', this.checked)">
+             onchange="enrichToggleCard(${lmJsArg(sp.scientific_name)}, this.checked)">
       ${thumbsHtml ? `<div style="display:flex;gap:4px;flex-shrink:0">${thumbsHtml}</div>` : ''}
       <div style="flex:1;min-width:0">
         ${enrichCommonName ? `<div style="font-weight:700;color:#2d5016;font-size:0.92rem">${_resc(enrichCommonName)}</div>` : ''}
@@ -5111,11 +5112,11 @@ function _renderEnrichCard(sp) {
     ${(()=>{
       if (sp.itis_name_match === 'synonym' && sp.itis_accepted_name) {
         const n = _resc(sp.itis_accepted_name);
-        const spSafe = _resc(sp.scientific_name).replace(/'/g, "\\'");
+        const spSafe = lmJsArg(sp.scientific_name);
         return `<div class="itis-banner-synonym">
           <span style="flex:1">⚠ ITIS suggests: <em>${n}</em></span>
           <button class="btn-itis-rename"
-                  onclick="itisAcceptRename('${spSafe}', 'enrich')">Rename to accepted name</button>
+                  onclick="itisAcceptRename(${spSafe}, 'enrich')">Rename to accepted name</button>
         </div>`;
       } else if (sp.itis_name_match === 'no_match') {
         return `<div class="itis-banner-no-match">⚠ No ITIS match found — may indicate misidentification or recent taxonomy change</div>`;
@@ -5133,7 +5134,7 @@ function _renderEnrichCard(sp) {
         ${sp.review_requested_at ? ` · ${new Date(sp.review_requested_at).toLocaleString('en-GB')}` : ''}
         ${sp.review_request_note ? `<div style="margin-top:3px;color:#7c5a10;white-space:pre-line">${_resc(sp.review_request_note)}</div>` : ''}
       </div>
-      <button onclick="clearEnrichFlag('${_resc(sp.scientific_name).replace(/'/g, "\\'")}', this)"
+      <button onclick="clearEnrichFlag(${lmJsArg(sp.scientific_name)}, this)"
               style="font-size:0.75rem;border:1px solid #d0a040;border-radius:5px;padding:4px 10px;
                      background:white;color:#92400e;cursor:pointer;flex-shrink:0;white-space:nowrap">
         ✓ Resolve flag
@@ -5150,13 +5151,13 @@ function _renderEnrichCard(sp) {
                 border-radius:5px;padding:4px 10px;background:#f0f9e8">
         View species page ↗
       </a>
-      <button onclick="enrichRepopulateCard('${_resc(sp.scientific_name).replace(/'/g, "\\'")}', this)"
+      <button onclick="enrichRepopulateCard(${lmJsArg(sp.scientific_name)}, this)"
               style="font-size:0.75rem;border:1px solid #a0c070;border-radius:5px;padding:4px 10px;
                      background:white;color:#2d5016;cursor:pointer;white-space:nowrap"
               title="Re-run enrichment for this species">
         ↻ Repopulate
       </button>
-      <button onclick="enrichSendForReId('${_resc(sp.scientific_name).replace(/'/g, "\\'")}', this)"
+      <button onclick="enrichSendForReId(${lmJsArg(sp.scientific_name)}, this)"
               style="font-size:0.75rem;border:1px solid #c0c8e0;border-radius:5px;padding:4px 10px;
                      background:white;color:#3b5080;cursor:pointer;white-space:nowrap"
               title="Send back to Species ID review — use when the species name looks wrong">
@@ -5167,7 +5168,7 @@ function _renderEnrichCard(sp) {
         : `<span style="font-size:0.72rem;color:#f59e0b">⚠ No PFAF data</span>`
       }
       ${!sp.review_requested ? `
-      <button onclick="enrichApproveCard('${_resc(sp.scientific_name).replace(/'/g, "\\'")}', this)"
+      <button onclick="enrichApproveCard(${lmJsArg(sp.scientific_name)}, this)"
               style="font-size:0.75rem;border:1px solid #6aaf3a;border-radius:5px;padding:4px 10px;
                      background:#f0f9e8;color:#2d5016;cursor:pointer;white-space:nowrap;font-weight:600;margin-left:auto"
               title="Approve this species' enrichment text">
@@ -5543,10 +5544,7 @@ async function loadEditHistory(sciName) {
 }
 
 // HTML escape helpers
-function _resc(s) {
-  if (s === null || s === undefined) return '';
-  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-}
+function _resc(s) { return window.lmEsc(s); }
 // Alias used by second-opinion panel and location-review card builder
 const _esc = _resc;
 
@@ -5844,11 +5842,11 @@ function _renderEdibCard(sp) {
   const thumbName = sp.thumbnail ? sp.thumbnail.split('/').pop() : null;
   const thumbSrc  = thumbName ? `/thumbnails/${_esc(thumbName)}` : null;
   const photoUrl = sp.thumbnail_obs_id
-    ? `/api/observations/${sp.thumbnail_obs_id}/photo`
-    : (thumbSrc ? thumbSrc.replace(/'/g, "\\'") : null);
+    ? lmJsArg(`/api/observations/${sp.thumbnail_obs_id}/photo`)
+    : (thumbName ? lmJsArg(`/thumbnails/${thumbName}`) : null);
   const thumbHtml = thumbSrc
     ? `<img class="edib-thumb" src="${thumbSrc}" alt="photo"
-            onclick="openEnrichLightbox('${photoUrl}')"
+            onclick="openEnrichLightbox(${photoUrl})"
             onerror="this.outerHTML='<div class=&quot;edib-no-thumb&quot;>🌿</div>'">`
     : '<div class="edib-no-thumb">🌿</div>';
 

@@ -13,11 +13,7 @@
   const UNKNOWN = Object.freeze({ culinary_allowed: false, level: 'unknown', label: '⚠ toxicity unknown', warning: null });
   const LEVELS = ['deadly', 'toxic', 'unknown', 'caution', 'none'];
 
-  function _h(s) {
-    return String(s == null ? '' : s)
-      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
-  }
+  function _h(s) { return window.lmEsc(s); }
 
   // The served decision, or the fail-closed one.
   function decision(safety) {

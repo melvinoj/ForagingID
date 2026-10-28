@@ -274,7 +274,7 @@ def test_recipes_page_tile_links_to_the_recipe_card_and_shows_caution():
             "function URLSearchParams(){ this.get = function(){ return null; }; } "
             "var document = {getElementById: function(){ return {value: 'az', style: {}, addEventListener: function(){} }; },"
             " querySelectorAll: function(){ return []; }};")
-    js = "\n".join([stub, _src("frontend/static/js/safety-gate.js"), _src("frontend/static/js/species-names.js"),
+    js = "\n".join([stub, _src("frontend/static/js/esc.js"), _src("frontend/static/js/safety-gate.js"), _src("frontend/static/js/species-names.js"),
                     _page_script(page),
                     "_data = %s;" % json.dumps(data),
                     "var vis = _visible().map(function (r) { return r.id; });",

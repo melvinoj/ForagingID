@@ -1547,14 +1547,13 @@
 
 </div><!-- /main -->
 
+<script src="/static/js/esc.js"></script>
 <script>
 // ═══════════════════════════════════════════════════════════════════════
 // SHARED UTILITIES
 // ═══════════════════════════════════════════════════════════════════════
 
-function _esc(s) {
-  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-}
+function _esc(s) { return window.lmEsc(s); }
 
 function getIdSource() { return 'both'; }
 function formatBytes(n) {
@@ -3669,14 +3668,7 @@ const _AUDIT_CULINARY_TYPES  = new Set(['toxic_enriched']);
 function _canSendToReview(type) { return _AUDIT_SEND_TO_REVIEW_TYPES.has(type); }
 
 // Simple HTML escaping for audit output
-function _escHtml(str) {
-  if (!str) return '';
-  return String(str)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
-}
+function _escHtml(str) { return window.lmEsc(str); }
 
 
 // ── Send-to-review (single + batch) ─────────────────────────────────────────

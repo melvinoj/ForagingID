@@ -509,11 +509,7 @@
 
   // ── Rendering ────────────────────────────────────────────────────────────
 
-  function esc(s) {
-    var d = document.createElement('span');
-    d.textContent = (s === null || s === undefined) ? '' : String(s);
-    return d.innerHTML;
-  }
+  function esc(s) { return window.lmEsc(s); }
 
   function n(v) {
     return (v || 0).toLocaleString();

@@ -13,10 +13,7 @@
 //                                      retries with hazard_ack — every approve
 //                                      caller goes through it.
 (function () {
-  function esc(s) {
-    return String(s == null ? '' : s).replace(/[&<>"']/g, c =>
-      ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-  }
+  function esc(s) { return window.lmEsc(s); }
   function key(s) { return String(s || '').trim().toLowerCase().replace(/\s+/g, ' '); }
 
   function lineHtml(hazards) {

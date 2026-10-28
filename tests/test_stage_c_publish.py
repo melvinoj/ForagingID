@@ -274,7 +274,7 @@ def test_unticked_confirm_is_refused():
         r, _ = _publish(env, Fakes(site), confirm=False, kind="unpublish")
         assert r.status_code == 400
         assert site.remote_count() == before and site.clean() and _pub(env)[0] == "draft"
-        js = _src("frontend/static/js/walk-publish.js")
+        js = _src("frontend/static/js/esc.js") + "\n" + _src("frontend/static/js/walk-publish.js")
         assert 'id="wpub-go" class="wpub-btn wpub-primary" disabled' in js        # button starts disabled
         assert "if (!tick || !tick.checked) return;" in js
         assert not re.search(r"(?<![\w.])(confirm|alert|prompt)\(", js)          # no browser dialogs
@@ -333,7 +333,7 @@ def test_publish_becomes_the_front_page_by_default():
         assert env.q('SELECT id, is_default FROM experience_publications ORDER BY id')==[(1,1),(2,0)]
         assert json.loads(site.remote_file('walks.json'))['featured']=='sunny-walk'
         assert b'w/sunny-walk/' in site.remote_file('preview.html')
-        js=_src('frontend/static/js/walk-publish.js')
+        js=_src("frontend/static/js/esc.js")+'\n'+_src('frontend/static/js/walk-publish.js')
         assert 'body.front_page = true;' in js
         assert 'all-walks collection' in js
     finally:_done(env,site)
@@ -463,6 +463,7 @@ def test_bulk_confirm_sends_only_safe_rows_one_at_a_time():
         "function fetch(url, o) { var m = (o && o.method) || 'GET'; calls.push(m + ' ' + url);",
         "  var b = url.indexOf('/panel') >= 0 ? PANEL : (url.indexOf('/plan') >= 0 ? PLAN : { ok: true });",
         "  return Promise.resolve({ ok: true, status: 200, json: function () { return Promise.resolve(b); } }); }",
+        _src("frontend/static/js/esc.js"),
         _src("frontend/static/js/walk-publish.js"),
         "var out = {};",
         "WalkPublish.show(5, 'W').then(function () { return WalkPublish.plan(); }).then(function () {",
@@ -614,7 +615,7 @@ def test_guests_never_reach_the_publish_endpoints_or_block():
         assert site.remote_count() == n and _pub(env)[0] == "draft"
         idx = _src("frontend/index.html")
         assert '<div id="walk-publish" data-guest-hide style="display:none"></div>' in idx
-        js = _src("frontend/static/js/walk-publish.js")
+        js = _src("frontend/static/js/esc.js") + "\n" + _src("frontend/static/js/walk-publish.js")
         assert "if (!walkId || isGuest())" in js and "e.status === 403" in js
     finally:
         _done(env, site)

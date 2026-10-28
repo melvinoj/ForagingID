@@ -296,6 +296,8 @@
   <div class="card-panel" id="card-panel"></div>
 </div>
 
+<script src="/static/js/esc.js"></script>
+<script src="/static/js/species-names.js"></script>
 <script>
 (function () {
   'use strict';
@@ -365,9 +367,7 @@
 
   function _doyToX(doy) { return (doy - 1) / DAYS_IN_YEAR * _bandWidth; }
 
-  function _esc(s) {
-    var d = document.createElement('div'); d.textContent = s; return d.innerHTML;
-  }
+  function _esc(s) { return window.lmEsc(s); }
 
   function _monthFromDoy(doy) {
     for (var i = 11; i >= 0; i--) {
@@ -1368,7 +1368,7 @@
       html += '<img class="card-thumb" src="/thumbnails/' + sp.thumbnail.split('/').pop() + '" alt="">';
     }
 
-    html += '<div class="card-name">' + _esc(sp.common_name || sp.scientific_name) + '</div>';
+    html += '<div class="card-name">' + _esc(spCommon(sp.common_name) || sp.scientific_name) + '</div>';
     html += '<div class="card-sci">' + _esc(sp.scientific_name) + '</div>';
 
     if (sp.edibility_status) {

@@ -33,7 +33,7 @@ from app.api.identity import Identity, get_identity
 from app.models.encounter import Encounter, encounter_visibility_clause
 from app.models.observation import Observation
 from app.models.personal_list import PersonalList, PersonalListSpecies
-from app.models.species import Species, SpeciesRecipe, culinary_allowed
+from app.models.species import Species, SpeciesRecipe, culinary_allowed, display_common_name
 from app.services.safety_gate import safety_for_species
 
 log = logging.getLogger(__name__)
@@ -66,12 +66,6 @@ async def _get_or_create_my_season(db: AsyncSession, user_id: int = USER_ID) -> 
         await db.commit()
         await db.refresh(pl)
     return pl
-
-
-def _first_common_name(common_names_json: Optional[str]) -> Optional[str]:
-    from app.api.culinary import _parse_json_list
-    names = _parse_json_list(common_names_json)
-    return names[0] if names else None
 
 
 async def _species_thumbnail(db: AsyncSession, species: Species) -> Optional[str]:
@@ -128,7 +122,7 @@ async def get_my_season(db: AsyncSession = Depends(get_db)):
         species_out.append({
             "species_id":       sp.id,
             "scientific_name":  sp.scientific_name,
-            "common_name":      sp.preferred_common_name or _first_common_name(sp.common_names),
+            "common_name":      (display_common_name(sp.preferred_common_name, sp.common_names) or None),
             "edibility_status": sp.edibility_status,
             "thumbnail":        thumb,
             "added_at":         member.added_at.isoformat() if member.added_at else None,
@@ -272,9 +266,9 @@ async def get_personal_card(species_id: int, db: AsyncSession = Depends(get_db),
         "species": {
             "id":               sp.id,
             "scientific_name":  sp.scientific_name,
-            "common_name":      sp.preferred_common_name or _first_common_name(sp.common_names),
+            "common_name":      (display_common_name(sp.preferred_common_name, sp.common_names) or None),
             "common_names":     [n for n in [
-                sp.preferred_common_name or _first_common_name(sp.common_names)
+                (display_common_name(sp.preferred_common_name, sp.common_names) or None)
             ] if n],
             "edibility_status": sp.edibility_status,
             "peak_season":      sp.peak_season,

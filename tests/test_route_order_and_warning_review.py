@@ -494,7 +494,8 @@ def test_warning_cards_stay_out_of_approve_all_and_offer_remove():
     src = open(os.path.join(ROOT, "frontend/review.html"), encoding="utf-8").read()
     consts = "\n".join(re.search(p, src, re.S).group(0) for p in (
         r"const _CURATOR_DRAFT_FIELDS = new Set\([^;]+\);", r"const _WARNING_DRAFT_ORIGIN = \{.*?\n\};"))
-    js = ("var window = this;\n" + open(os.path.join(ROOT, "frontend/static/js/species-names.js"), encoding="utf-8").read()
+    js = ("var window = this;\n" + open(os.path.join(ROOT, "frontend/static/js/esc.js"), encoding="utf-8").read() + "\n"
+          + open(os.path.join(ROOT, "frontend/static/js/species-names.js"), encoding="utf-8").read()
           + "\n" + _fn(src, "_resc") + "\nconst _esc = _resc;\n" + _fn(src, "_escId") + "\n" + _fn(src, "_fieldLabel")
           + "\n" + consts + "\n" + _fn(src, "_renderAIDraftField") + "\n" + _fn(src, "_renderAIDraftCard") + """
 function card(removable) {

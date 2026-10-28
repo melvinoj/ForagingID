@@ -14,7 +14,6 @@ Notifications are in-app only (no browser push), deduped per species per season
 via notification_dismissals (season_key).
 """
 
-import json
 import logging
 from datetime import date, datetime, timedelta
 from typing import Optional
@@ -25,7 +24,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.encounter import Encounter
 from app.models.notification import NotificationDismissal
 from app.models.observation import Observation
-from app.models.species import Species
+from app.models.species import Species, display_common_name
 from app.services.phenology import parse_months
 
 log = logging.getLogger(__name__)
@@ -60,18 +59,6 @@ def _anniversary(last: date, year: int) -> date:
         except ValueError:
             return date(year, 2, 28)
     return date(year, last.month, day)
-
-
-def _first_common_name(common_names_json: Optional[str]) -> Optional[str]:
-    if not common_names_json:
-        return None
-    try:
-        arr = json.loads(common_names_json)
-        if isinstance(arr, list) and arr:
-            return str(arr[0])
-    except (ValueError, TypeError):
-        pass
-    return None
 
 
 def _classify(sp: Species, last_seen: date, today: date, lead_days: int) -> Optional[dict]:
@@ -198,7 +185,7 @@ async def compute_seasonal_returns(
         items.append({
             "species_id":       sid,
             "scientific_name":  sp.scientific_name,
-            "common_name":      _first_common_name(sp.common_names),
+            "common_name":      display_common_name(sp.preferred_common_name, sp.common_names) or None,
             "reason":           verdict["reason"],
             "basis":            verdict["basis"],
             "category":         verdict["category"],

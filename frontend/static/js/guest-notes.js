@@ -12,10 +12,7 @@
   const HINT = 'Type, or dictate using the mic on your keyboard.';
   let _me = null;
 
-  function _h(s) {
-    return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
-  }
+  function _h(s) { return window.lmEsc(s); }
 
   function isParticipant() {
     if (!_me) _me = fetch('/api/me').then(r => (r.ok ? r.json() : {})).catch(() => ({}));

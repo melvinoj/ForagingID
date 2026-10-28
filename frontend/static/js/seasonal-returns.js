@@ -16,12 +16,7 @@
   var _allLoaded = false; // true once the full list has been fetched
   var _open = false;
 
-  function _esc(s) {
-    if (s == null) return "";
-    return String(s)
-      .replace(/&/g, "&amp;").replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;").replace(/"/g, "&quot;");
-  }
+  function _esc(s) { return window.lmEsc(s); }
 
   function _injectStyles() {
     if (document.getElementById("seasonal-returns-styles")) return;

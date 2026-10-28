@@ -9,7 +9,6 @@ Mode 4 (Near me + in season) is handled client-side by calling /api/nearby
 and filtering in_season=True — no separate endpoint needed.
 """
 
-import json as _json
 from typing import Optional
 
 from fastapi import APIRouter, Depends, Query
@@ -18,7 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.models.observation import Observation
-from app.models.species import Species, SpeciesRecipe, CULINARY_ALLOWED_SQL
+from app.models.species import Species, SpeciesRecipe, CULINARY_ALLOWED_SQL, display_common_name
 from app.services.phenology import species_in_season
 
 router = APIRouter(prefix="/api/find", tags=["find"])
@@ -86,16 +85,9 @@ async def find_in_season(
     for r in rows:
         key = r.species_primary
         if key not in agg:
-            cn = None
-            if r.common_names:
-                try:
-                    cl = _json.loads(r.common_names) or []
-                    cn = cl[0] if cl else None
-                except Exception:
-                    pass
             agg[key] = {
                 "scientific_name": key,
-                "common_name": r.preferred_common_name or cn,
+                "common_name": display_common_name(r.preferred_common_name, r.common_names) or None,
                 "edibility_status": r.edibility_status,
                 "flower_months": r.flower_months,
                 "fruit_months":  r.fruit_months,
@@ -201,16 +193,9 @@ async def find_recipes(
     for r in rows:
         key = r.scientific_name
         if key not in grouped:
-            cn = None
-            if r.common_names:
-                try:
-                    cl = _json.loads(r.common_names) or []
-                    cn = cl[0] if cl else None
-                except Exception:
-                    pass
             grouped[key] = {
                 "scientific_name": key,
-                "common_name": r.preferred_common_name or cn,
+                "common_name": display_common_name(r.preferred_common_name, r.common_names) or None,
                 "edibility_status": r.edibility_status,
                 "species_id": r.species_id,
                 "recipes": [],
@@ -284,16 +269,9 @@ async def find_medicinal(
     for r in rows:
         key = r.scientific_name
         if key not in grouped:
-            cn = None
-            if r.common_names:
-                try:
-                    cl = _json.loads(r.common_names) or []
-                    cn = cl[0] if cl else None
-                except Exception:
-                    pass
             grouped[key] = {
                 "scientific_name": key,
-                "common_name": r.preferred_common_name or cn,
+                "common_name": display_common_name(r.preferred_common_name, r.common_names) or None,
                 "edibility_status": r.edibility_status,
                 "species_id": r.species_id,
                 "preparations": [],

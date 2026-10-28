@@ -21,7 +21,6 @@ import asyncio
 import html
 import ipaddress
 import logging
-import re
 import secrets
 import socket
 from datetime import datetime, date
@@ -38,6 +37,7 @@ from app.api.identity import Identity, get_identity
 from app.database import get_db
 from app.models.species import sentence_case_name
 from app.models.workshop import GuestToken, is_curator_token, token_is_live
+from app.services.markdown import md_snippet
 from app.services.access import (
     cookie_kwargs, hash_secret, host_only, is_https, is_local_request,
     message_page, new_session_secret,
@@ -534,59 +534,6 @@ def _fmt_dist(m: Optional[float]) -> str:
     return f"{round(m)}m" if m < 1000 else f"{m / 1000:.1f}km"
 
 
-_MD_LIST = re.compile(r"^\s*(?:[-*+]|\d+[.)])\s+")
-
-
-def _md_inline(text: str) -> str:
-    """Escape, then **bold** / *italic* / _italic_ / `code`. Escaping first means
-    recipe text can never inject HTML."""
-    t = html.escape(text)
-    t = re.sub(r"\*\*(.+?)\*\*", r"<strong>\1</strong>", t)
-    t = re.sub(r"__(.+?)__", r"<strong>\1</strong>", t)
-    t = re.sub(r"(?<![\w*])\*(?!\s)(.+?)(?<!\s)\*(?![\w*])", r"<em>\1</em>", t)
-    t = re.sub(r"(?<!\w)_(?!\s)(.+?)(?<!\s)_(?!\w)", r"<em>\1</em>", t)
-    t = re.sub(r"`([^`]+)`", r"<code>\1</code>", t)
-    return t
-
-
-def _md_snippet(body: str, title: str, limit: int = 700) -> str:
-    """Recipe Markdown → small safe HTML: headings, paragraphs, bullet/numbered
-    lists, bold/italic. A leading heading that repeats the recipe title is
-    dropped (the title is already shown). Whole blocks are kept up to ~limit
-    characters, then '…'."""
-    blocks = [b.strip() for b in re.split(r"\n\s*\n", (body or "").replace("\r", "")) if b.strip()]
-    title_norm = re.sub(r"[#*_\s]+", " ", title or "").strip().lower()
-    out, used = [], 0
-    for i, b in enumerate(blocks):
-        if re.fullmatch(r"[-*_]{3,}", b):
-            continue                                            # horizontal rule
-        m = re.match(r"^(#{1,6})\s+(.*)$", b.split("\n", 1)[0])
-        if i <= 1 and not out and re.sub(r"[#*_\s]+", " ", b).strip().lower() == title_norm:
-            continue                                            # "**Title**" / "# Title" alone
-        if m and i == 0 and re.sub(r"[#*_\s]+", " ", m.group(2)).strip().lower() == title_norm:
-            rest = b.split("\n", 1)[1].strip() if "\n" in b else ""
-            if not rest:
-                continue
-            b, m = rest, re.match(r"^(#{1,6})\s+(.*)$", rest.split("\n", 1)[0])
-        if used and used + len(b) > limit:
-            out.append("<p style='margin:4px 0 0'>…</p>")
-            break
-        used += len(b)
-        lines = b.split("\n")
-        if m and len(lines) == 1:
-            out.append(f"<div style='font-weight:600;color:#2d5016;margin:6px 0 2px'>{_md_inline(m.group(2))}</div>")
-        elif all(_MD_LIST.match(l) for l in lines):
-            tag = "ol" if re.match(r"^\s*\d", lines[0]) else "ul"
-            items = "".join(f"<li>{_md_inline(_MD_LIST.sub('', l))}</li>" for l in lines)
-            out.append(f"<{tag} style='margin:4px 0 4px 18px;padding:0'>{items}</{tag}>")
-        else:
-            if m:                                               # heading line + text below it
-                out.append(f"<div style='font-weight:600;color:#2d5016;margin:6px 0 2px'>{_md_inline(m.group(2))}</div>")
-                lines = lines[1:]
-            out.append(f"<p style='margin:4px 0'>{_md_inline(' '.join(l.strip() for l in lines))}</p>")
-    return "".join(out)
-
-
 def _toxicity_warning_colors(label: str) -> tuple:
     """(background, text) for a toxicity warning badge — the ONE rule for the
     full species block and the "Also here" repeat line: red for ☠ (toxic /
@@ -646,7 +593,7 @@ def _walk_species_html(s: WalkSpecies, first: bool) -> str:
             f'<div style="font-size:0.78rem;font-weight:600;color:#2d5016;margin-bottom:4px">'
             f'{r_icon} {_h(r_label)}</div>'
             f'<div class="recipe-md" style="font-size:0.75rem;color:#555;line-height:1.55">'
-            f'{_md_snippet(s.recipe_body or "", s.recipe_title or "")}</div></div>'
+            f'{md_snippet(s.recipe_body or "", s.recipe_title or "")}</div></div>'
         )
 
     sep = "" if first else "border-top:1px dashed #e3ead7;margin-top:10px;padding-top:10px;"

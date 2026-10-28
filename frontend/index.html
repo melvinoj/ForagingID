@@ -2690,6 +2690,7 @@
   <button id="undo-toast-btn" onclick="undoRemovePhoto()">Undo</button>
 </div>
 
+<script src="/static/js/esc.js"></script>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
         integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
 <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
@@ -4273,7 +4274,7 @@ async function loadSpeciesFilter() {
     _allSpeciesList = data.slice().sort((a, b) => a.scientific_name.localeCompare(b.scientific_name));
     _allSpeciesOptions = _allSpeciesList.map(sp => ({
       value: sp.scientific_name,
-      label: spNameText(sp.scientific_name, sp.preferred_common_name || (sp.common_names && sp.common_names[0])),
+      label: spNameText(sp.scientific_name, spPickCommon(sp.preferred_common_name, sp.common_names)),
     }));
     _populateSpeciesSelect('');
   } catch (_) { /* non-fatal */ }
@@ -4714,7 +4715,7 @@ function showDetail(p) {
     const extraCommon = _allCommon.length > 1
       ? `<div class="meta-row" style="color:#888">${_esc(spCommonList(_allCommon.slice(1)))}</div>` : '';
     const renameBtn = `<button class="rename-btn" title="Correct species name"
-        onclick="openRenameForm(${p.id}, '${_esc(p.species_primary).replace(/'/g, "\\'")}')">✎ rename</button>`;
+        onclick="openRenameForm(${p.id}, ${lmJsArg(p.species_primary)})">✎ rename</button>`;
     speciesBlock = `${commonLine}
       <div class="det-sci-name">${_esc(p.species_primary)} ${renameBtn}</div>
       ${extraCommon}
@@ -4726,7 +4727,7 @@ function showDetail(p) {
         <input type="text" id="rename-common-${p.id}" placeholder="e.g. Stinging nettle" autocomplete="off">
         <div class="rename-actions">
           <button class="btn-rename-save" id="rename-save-${p.id}"
-            onclick="saveSpeciesRename(${p.id}, '${_esc(p.species_primary).replace(/'/g, "\\'")}')">Save &amp; re-enrich</button>
+            onclick="saveSpeciesRename(${p.id}, ${lmJsArg(p.species_primary)})">Save &amp; re-enrich</button>
           <button class="btn-rename-cancel"
             onclick="document.getElementById('rename-form-${p.id}').style.display='none'">Cancel</button>
         </div>
@@ -4755,7 +4756,7 @@ function showDetail(p) {
   // "Enrich this species" — shown when confirmed but not yet enriched (not landscape)
   const enrichBtn = (!isLandscapeObs && p.species_primary && !p.has_enrichment)
     ? `<button class="det-btn enrich" id="enrich-btn-${p.id}"
-         onclick="enrichSpeciesFromMap('${_esc(p.species_primary).replace(/'/g, "\\'")}', ${p.id})">⚡ Enrich this species</button>`
+         onclick="enrichSpeciesFromMap(${lmJsArg(p.species_primary)}, ${p.id})">⚡ Enrich this species</button>`
     : '';
 
   const removeBtn = `<button class="det-btn danger"
@@ -5130,9 +5131,9 @@ async function confirmDeleteObs() {
 
 // ── Utilities ─────────────────────────────────────────────────────────────
 
-function _esc(s) {
-  return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-}
+// The page's escaper → static/js/esc.js (batch 15). Inline-handler string
+// arguments use lmJsArg(), never the old escape-then-backslash-the-apostrophe pattern.
+function _esc(s) { return window.lmEsc(s); }
 
 // ── Fix 17: Species rename (detail panel) ────────────────────────────────
 
@@ -6473,8 +6474,8 @@ function renderWalkPanel(route, enrichMap) {
       // pin); loaded walks have no pins, so fall back to the culinary profile.
       const pinP = (_stop.pins || []).map(x => x.p).find(pp => pp.species_primary === spName)
                    || (spName === p.species_primary ? p : {});
-      const commonName = (pinP.common_names && pinP.common_names[0])
-                         || (spData?.common_names && spData.common_names[0]) || '';
+      const commonName = pinP.common_name
+                         || spPickCommon(spData?.preferred_common_name, spData?.common_names) || '';
       const edib = spData?.edibility_status || pinP.edibility_status;
 
       // Toxic guard (_culinaryGate): the edibility badge only when toxicity is
@@ -6678,8 +6679,7 @@ function _wbsRenderLasso() {
 
   const rows = selected.map(name => {
     const p = lookup[name] || {};
-    const common = p.common_names && p.common_names.length ? p.common_names[0]
-                 : (p.common_name || '');
+    const common = p.common_name || spPickCommon(p.preferred_common_name, p.common_names) || '';
     const edib = p.edibility_status || '';
     const ec = edibColour[edib] || { bg: '#f3f3f3', fg: '#666', label: edib };
     // Toxic guard: toxicity comes from the walk enrichment (map pins carry
@@ -6773,7 +6773,7 @@ function walkDownloadGpx() {
   const route = _activeWalkRoute || [];
   const line  = _walkLinePoints(route);
   if (!line.length) { alert('No walk route to export.'); return; }
-  const x = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  const x = window.lmEsc;   // XML-safe too (static/js/esc.js)
   const name = (_walkSavedNameFor(route) || _walkTitleText(route).replace('🥾 ', '')).trim() || 'Walk';
   const wpts = route.map((s, i) => {
     const sp = s.p && s.p.is_note ? 'Field note' : _stopSpecies(s).join(', ');
@@ -7168,7 +7168,7 @@ function _spCommonFor(sci, hint) {
   const names = _savedWalkData && _savedWalkData.names;
   if (names && names[sci]) return names[sci];
   const sp = _activeWalkEnrich && _activeWalkEnrich[sci] && _activeWalkEnrich[sci].species;
-  if (sp) return sp.preferred_common_name || (Array.isArray(sp.common_names) ? sp.common_names[0] : '') || '';
+  if (sp) return spPickCommon(sp.preferred_common_name, sp.common_names);
   return '';
 }
 
@@ -7875,8 +7875,8 @@ function _fireProxAlert(stop, distM) {
                  || (name === p.species_primary ? p : {});
     return {
       name:             name,
-      common_name:      (pinP.common_names && pinP.common_names[0]) || pinP.common_name ||
-                        (ed?.species?.common_names || [])[0] || null,
+      common_name:      pinP.common_name ||
+                        spPickCommon(ed?.species?.preferred_common_name, ed?.species?.common_names) || null,
       edibility_status: ed?.species?.edibility_status || pinP.edibility_status || null,
       safety:           (ed && ed._safety) || null,
     };
@@ -8376,7 +8376,7 @@ function _renderProxPanel() {
   }
 
   function _buildGpx(name, session) {
-    var esc = function (s) { return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); };
+    var esc = window.lmEsc;   // XML-safe too (static/js/esc.js)
     var startIso = (session.startedAt || new Date()).toISOString();
     var trkpts = (session.trackPoints || []).map(function (p) {
       var ts  = new Date(p.ts).toISOString();
@@ -8619,9 +8619,7 @@ function _renderProxPanel() {
   function _fmtElev(m) {
     return m != null ? Math.round(m) + ' m' : 'Calculating…';
   }
-  function _esc(s) {
-    return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-  }
+  // _esc: the page's one (→ static/js/esc.js, batch 15).
 
   // ── Recorded walks list ──────────────────────────────────────────────────
 
@@ -9187,7 +9185,7 @@ function onMapSearchInput(val) {
   if (hits.length) {
     _showSearchDrop(hits.map(sp => ({
       type: 'species', label: sp.scientific_name,
-      sub: spCommon(sp.preferred_common_name || (sp.common_names && sp.common_names[0]) || ''), data: sp,
+      sub: spPickCommon(sp.preferred_common_name, sp.common_names), data: sp,
     })));
     return;
   }
@@ -9493,8 +9491,8 @@ function _noteSpeciesSearch(q) {
   ).slice(0, 6);
   if (!hits.length) { dd.style.display = 'none'; return; }
   dd.innerHTML = hits.map(sp => {
-    const label = spNameText(sp.scientific_name, sp.preferred_common_name || (sp.common_names && sp.common_names[0]));
-    return `<div class="nsp-item" onclick="_addNoteTag('${_esc(sp.scientific_name).replace(/'/g, "\\'")}')">${_esc(label)}</div>`;
+    const label = spNameText(sp.scientific_name, spPickCommon(sp.preferred_common_name, sp.common_names));
+    return `<div class="nsp-item" onclick="_addNoteTag(${lmJsArg(sp.scientific_name)})">${_esc(label)}</div>`;
   }).join('');
   dd.style.display = 'block';
 }
@@ -9519,7 +9517,7 @@ function _renderNoteTags() {
   const row = document.getElementById('note-tags-row');
   if (!row) return;
   row.innerHTML = _noteSpeciesTags.map(t =>
-    `<span class="np-tag" onclick="_removeNoteTag('${_esc(t).replace(/'/g, "\\'")}')" title="Click to remove">${_esc(t)} ✕</span>`
+    `<span class="np-tag" onclick="_removeNoteTag(${lmJsArg(t)})" title="Click to remove">${_esc(t)} ✕</span>`
   ).join('');
 }
 
@@ -9728,10 +9726,7 @@ function _findCardHtml(sp, { badge = '', sub = '' } = {}) {
   </div>`;
 }
 
-function _escHtml(s) {
-  if (!s) return '';
-  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-}
+function _escHtml(s) { return window.lmEsc(s); }
 
 // ── Right-panel initialisation ─────────────────────────────────────────────
 // Map starts full-width with panel closed on all devices.

@@ -181,6 +181,7 @@
   <button class="lb-nav" id="lb-next" onclick="event.stopPropagation();_lbNav(+1)">›</button>
 </div>
 
+<script src="/static/js/esc.js"></script>
 <script src="/static/js/lightbox.js"></script>
 <script src="/static/js/pwa.js"></script>
 <script src="/static/js/offline.js"></script>
@@ -212,11 +213,7 @@ const _byId      = {};          // id → observation
 let _lastBandKey = null;        // last band header emitted (cross-page continuity)
 let _curMasonry  = null;        // masonry container of the current (open) band
 
-function _esc(s) {
-  return String(s == null ? '' : s)
-    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
-    .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
-}
+function _esc(s) { return window.lmEsc(s); }
 
 // ── Band grouping ───────────────────────────────────────────────────────────
 // Shared day/month labelling: Today / Yesterday / "12 July 2026" (this year, per

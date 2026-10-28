@@ -1881,6 +1881,10 @@ async def species_profile(
             "pfaf_fallback_fields": _pfaf_fallback_fields,
             "pending_draft_count": len(pending_drafts),
             "pending_draft_fields": [d.field_name for d in pending_drafts],
+            # The AI-content gate (AI_NO_CONTENT_VERDICTS) decided here, once —
+            # the species page hides its pending-draft section on it (batch 15:
+            # it kept its own copy of the verdict list).
+            "ai_drafts_blocked": (sp.edibility_status or "").lower() in AI_NO_CONTENT_VERDICTS,
             "pending_drafts": [
                 {
                     "id": d.id,

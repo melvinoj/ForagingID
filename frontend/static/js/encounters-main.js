@@ -566,8 +566,8 @@
       if (!sel) return;
       sel.innerHTML = '<option value="">' + placeholder + '</option>';
       _species.forEach(function (sp) {
-        var label = sp.scientific_name;
-        if (sp.common_names && sp.common_names.length) label += ' (' + sp.common_names[0] + ')';
+        // Names rule: "Common (Latin)", the one pick rule (species-names.js).
+        var label = spNameText(sp.scientific_name, spPickCommon(sp.preferred_common_name, sp.common_names));
         var o = document.createElement('option'); o.value = sp.id; o.textContent = label;
         sel.appendChild(o);
       });
@@ -1296,7 +1296,7 @@
       thumb +
       '<div class="season-body">' +
         '<div class="season-sci">' + _esc(s.scientific_name) + '</div>' +
-        '<div class="season-common">' + _esc(s.common_name || '') + '</div>' +
+        '<div class="season-common">' + _esc(spCommon(s.common_name)) + '</div>' +
         '<span class="pill ' + edib + '">' + _esc(s.edibility_status || 'unknown') + '</span>' +
         '<div class="season-count">' + countTxt + '</div>' +
       '</div>' +
@@ -1407,7 +1407,7 @@
     var html = '<div class="pc-head">' + photo +
       '<div class="pc-title">' +
         '<div class="pc-sci">' + _esc(sp.scientific_name || '--') + '</div>' +
-        (sp.common_name ? '<div class="pc-common">' + _esc(sp.common_name) + '</div>' : '') +
+        (sp.common_name ? '<div class="pc-common">' + _esc(spCommon(sp.common_name)) + '</div>' : '') +
         (meta.length ? '<div class="pc-meta">' + meta.join(' ') + '</div>' : '') +
       '</div></div>';
 
@@ -1417,7 +1417,9 @@
     if (d.recipe && d.recipe.body) {
       html += '<div class="pc-section"><h4>Recipe</h4>' +
         (d.recipe.title ? '<div class="pc-recipe-title">' + _esc(d.recipe.title) + '</div>' : '') +
-        '<div class="pc-text">' + _esc(d.recipe.body) + '</div></div>';
+        // Recipe Markdown through the shared dialect (static/js/md.js, batch 15) —
+        // it escapes first. Curator warnings above stay plain escaped text.
+        '<div class="pc-text pc-md">' + LmMd.render(d.recipe.body) + '</div></div>';
     }
     if (notes.id_notes)    html += '<div class="pc-section"><h4>Identification notes</h4><div class="pc-text">' + _esc(notes.id_notes) + '</div></div>';
     if (notes.taste_notes) html += '<div class="pc-section"><h4>Taste &amp; texture</h4><div class="pc-text">' + _esc(notes.taste_notes) + '</div></div>';
@@ -1445,11 +1447,7 @@
   }
 
   // -- Helpers ------------------------------------------------
-  function _esc(s) {
-    if (s == null) return '';
-    return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
-  }
+  function _esc(s) { return window.lmEsc(s); }
 
   // -- Reading note capture ------------------------------------
   // Separate recorder state -- isolated from the field-encounter recorder so

@@ -76,7 +76,7 @@ def test_server_sentence_case():
 
 def test_js_sentence_case_matches_server():
     cases = [c for c, _ in NAME_CASES]
-    got = _jsc("var window = this;\n" + _src("frontend/static/js/species-names.js") + """
+    got = _jsc("var window = this;\n" + _src("frontend/static/js/esc.js") + "\n" + _src("frontend/static/js/species-names.js") + """
 var cases = %s;
 print(JSON.stringify({
   one: cases.map(function (c) { return spCommon(c); }),
@@ -115,13 +115,13 @@ SURFACES = {
                             "walk-stop-common\">${_esc(spCommon(commonName))}", "wbs-lasso-common\">${_esc(spCommon(common))}",
                             "_esc(spCommon(sp.common_name)) + '</div>'", "nearme-common\">${_esc(spCommon(sp.common_name))}",
                             "find-common\">${_escHtml(spCommon(sp.common_name || ''))}",
-                            "sub: spCommon(", "var cn = _esc(spCommon(o.common_name || ''));"],
+                            "sub: spPickCommon(", "var cn = _esc(spCommon(o.common_name || ''));"],
     # Lists: compact rows, detail rows, print entries, seasonal returns, session species
-    "frontend/lists.html": ["sp-compact-common\">${_esc(spCommon(common))}", "_esc(spCommonList(sp.common_names, ', '))",
-                            "const common = spCommon((sp.common_names && sp.common_names[0])",
-                            "sr-common\">${_esc(spCommon(it.common_name))}", "sp-sp-common\">${_esc(spCommon("],
+    "frontend/lists.html": ["sp-compact-common\">${_esc(common)}", "_esc(spCommonList(sp.common_names, ', '))",
+                            "const common = spPickCommon(sp.preferred_common_name || base.preferred_common_name,",
+                            "sr-common\">${_esc(spCommon(it.common_name))}", "sp-sp-common\">${_esc(spPickCommon("],
     # browser print
-    "frontend/print.html": ["const common = spCommon((sp.common_names && sp.common_names[0])",
+    "frontend/print.html": ["const common = spPickCommon(sp.preferred_common_name || base.preferred_common_name,",
                             "sr-common\">${_esc(spCommon(it.common_name))}"],
     # review cards
     "frontend/review.html": ["spCommonList(top.common_names)", "spCommonList(sugMatch.common_names)",
@@ -209,7 +209,7 @@ var allSpecies = %(species)s;
 """ % {"store": json.dumps({"foragingid_species_view": stored_view} if stored_view else {}),
        "throws": "true" if storage_throws else "false", "select": "true" if select else "false",
        "species": json.dumps(_species())}
-    return _jsc(harness + _src("frontend/static/js/safety-gate.js") + "\n"
+    return _jsc(harness + _src("frontend/static/js/esc.js") + "\n" + _src("frontend/static/js/safety-gate.js") + "\n"
                 + _src("frontend/static/js/species-names.js") + "\n" + _view_js() + "\n" + extra)
 
 

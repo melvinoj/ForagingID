@@ -136,6 +136,8 @@ body {
                   border-bottom: 0.4pt solid #2d5016; }
 .entry-recipe p { font-size: 8pt; line-height: 1.5; margin-bottom: 3px; }
 .entry-recipe h3 { font-size: 9pt; font-weight: bold; margin: 3px 0 2px; }
+.entry-recipe ul, .entry-recipe ol { font-size: 8pt; line-height: 1.5; margin: 0 0 3px 4mm; padding: 0; }
+.entry-recipe em, .entry-body em { font-style: italic; }
 .rb-safety-deadly {
   background: #7f1d1d; border-left: 2pt solid #ef4444; color: #ffffff;
   padding: 3mm; margin: 4mm 0; border-radius: 2px;
@@ -177,6 +179,7 @@ body {
                    margin: 4mm 0 2mm; border-bottom: 0.4pt solid #2d5016; }
 .entry-body p { font-size: 8pt; line-height: 1.5; margin-bottom: 3px; }
 .entry-body h3 { font-size: 9pt; font-weight: bold; margin: 3px 0 2px; }
+.entry-body ul, .entry-body ol { font-size: 8pt; line-height: 1.5; margin: 0 0 3px 4mm; padding: 0; }
 .entry-notes  { margin-top: 6mm; }
 .rule { border-bottom: 0.4pt solid #ccc; margin: 3mm 0; }
 .credit { font-size: 6.5pt; color: #aaa; text-align: right; margin-top: 4mm; }
@@ -350,7 +353,7 @@ body {
   {% if sp.recipe_title and sp.culinary_allowed %}
   <div class="entry-recipe-h">{{ sp.recipe_title }}</div>
   {# Fix B: the look-alike + preparation lines directly above are this recipe's cautionary text — not repeated. #}
-  {# |safe: _mdlite escapes &, <, > in every block and heading before adding its own <h3>/<p>/<strong>/<br> (D1-01). #}
+  {# |safe: _mdlite (app/services/markdown.render_md) escapes &, <, >, ", ' in every line before adding its own <h3>/<p>/<ul>/<ol>/<li>/<strong>/<em>/<code>/<br> (D1-01, batch 15). #}
   <div class="entry-recipe">{{ sp.recipe_body | mdlite | safe }}</div>
   {% endif %}
   {# Batch 8: a participant's own notes, under their species (autoescaped; guest text never |safe). #}
@@ -411,7 +414,7 @@ body {
   {% if ct.recipes and sp.recipe_title and sp.culinary_allowed %}
   <div class="entry-section-h">Recipe</div>
   {% for w in sp.culinary_warnings %}<div class="safety-warn culinary-warning">⚠ {{ w.heading }}: {{ w.text }}</div>{% endfor %}
-  {# |safe: _mdlite escapes &, <, > in every block and heading before adding its own <h3>/<p>/<strong>/<br> (D1-01). #}
+  {# |safe: _mdlite (app/services/markdown.render_md) escapes &, <, >, ", ' in every line before adding its own <h3>/<p>/<ul>/<ol>/<li>/<strong>/<em>/<code>/<br> (D1-01, batch 15). #}
   <div class="entry-body">{{ sp.recipe_body | mdlite | safe }}</div>
   {% endif %}
   <div class="entry-notes">

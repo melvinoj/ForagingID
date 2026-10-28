@@ -838,16 +838,12 @@
   </div>
 </div>
 
+<script src="/static/js/esc.js"></script>
 <script>
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
-function _esc(s) {
-  if (s == null) return '';
-  return String(s)
-    .replace(/&/g, '&amp;').replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-}
+function _esc(s) { return window.lmEsc(s); }
 
 function _showToast(msg, isErr) {
   const t = document.getElementById('toast');
@@ -1990,7 +1986,7 @@ function _dsRow(s) {
     </td>
     <td style="white-space:nowrap">
       <button class="ds-btn" id="ds-test-${s.id}" onclick="testDsSource(${s.id})">Test</button>
-      <button class="ds-btn danger" onclick="deleteDsSource(${s.id}, '${_esc(s.label).replace(/'/g, "\\'")}')">Delete</button>
+      <button class="ds-btn danger" onclick="deleteDsSource(${s.id}, ${lmJsArg(s.label)})">Delete</button>
     </td>
   </tr>`;
 }

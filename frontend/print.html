@@ -4,7 +4,9 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>LandMemory — Print</title>
+  <script src="/static/js/esc.js"></script>
   <script src="/static/js/safety-gate.js"></script>
+  <script src="/static/js/md.js"></script>
 <script src="/static/js/guest-notes.js"></script>
   <script src="/static/js/species-names.js"></script>
   <script src="/static/js/lists.js"></script>
@@ -286,9 +288,7 @@
 
 <script>
 // ── Helpers ────────────────────────────────────────────────────────────────
-function _esc(s) {
-  return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-}
+function _esc(s) { return window.lmEsc(s); }
 
 const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 const NOW_MONTH = new Date().getMonth() + 1;
@@ -360,17 +360,6 @@ function _seasonText(sp) {
       ? `<strong>${MONTHS[m-1][0]}</strong>`
       : `<span class="off">${MONTHS[m-1][0]}</span>`;
   }).join(' ');
-}
-
-function _mdLite(text) {
-  if (!text) return '';
-  return String(text).replace(/\r/g,'').split(/\n{2,}/).map(b => {
-    b = b.trim();
-    if (!b) return '';
-    const h = b.match(/^#{1,6}\s+(.*)$/);
-    if (h) return '<h3>' + _esc(h[1]) + '</h3>';
-    return '<p>' + _esc(b).replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>').replace(/\n/g,'<br>') + '</p>';
-  }).join('');
 }
 
 function _loadCover() {
@@ -485,12 +474,13 @@ function _fieldEntry(name, prof, baseByName, photos, showPhotos, ct) {
   const base   = baseByName[name] || {};
   const sp     = (prof && prof.species)  || base;
   const cul    = _printCulinary(prof);
-  const common = spCommon((sp.common_names && sp.common_names[0]) || (base.common_names && base.common_names[0]) || '');
+  const common = spPickCommon(sp.preferred_common_name || base.preferred_common_name,
+                              (sp.common_names && sp.common_names.length) ? sp.common_names : base.common_names);
   const edib   = sp.edibility_status;
   const recipes = _printRecipes(prof);
   const key     = recipes.find(r => r.is_preferred) || recipes[0];
 
-  const idNote    = (cul.id_notes || '').replace(/\[[^\]]*\]\s*/g,'').trim();
+  const idNote    = LmMd.stripCitations(cul.id_notes);
   // Look-alike + preparation warnings — always printed, full text (batch 6, B2-03).
   const warningsHtml = _printWarnings(prof, 'div', 'fg-lookalike');
   const partsBits = [];
@@ -513,7 +503,7 @@ function _fieldEntry(name, prof, baseByName, photos, showPhotos, ct) {
     ${ct.id_notes && idNote    ? `<div class="fg-id-primary">${_esc(idNote)}</div>` : ''}
     ${warningsHtml}
     ${partsText  ? `<div class="fg-note">${_esc(partsText)}</div>` : ''}
-    ${ct.recipes && key ? `<div class="fg-recipe"><div class="rt">${_esc(key.title)}</div>${_mdLite(key.body)}</div>` : ''}
+    ${ct.recipes && key ? `<div class="fg-recipe"><div class="rt">${_esc(key.title)}</div>${LmMd.render(key.body)}</div>` : ''}
     ${_guestNotesHtml(name)}
   </div>`;
 }
@@ -523,7 +513,8 @@ function _workshopPage(name, prof, baseByName, photos, showPhotos, withFieldBloc
   const base   = baseByName[name] || {};
   const sp     = (prof && prof.species)  || base;
   const cul    = _printCulinary(prof);
-  const common = spCommon((sp.common_names && sp.common_names[0]) || (base.common_names && base.common_names[0]) || '');
+  const common = spPickCommon(sp.preferred_common_name || base.preferred_common_name,
+                              (sp.common_names && sp.common_names.length) ? sp.common_names : base.common_names);
   const edib   = sp.edibility_status;
   const recipes = _printRecipes(prof);
   const key     = recipes.find(r => r.is_preferred) || recipes[0];
@@ -548,7 +539,7 @@ function _workshopPage(name, prof, baseByName, photos, showPhotos, withFieldBloc
     </div>`;
 
   const recipeHtml = (ct.recipes && key)
-    ? `<div class="ws-section-h">Recipe</div>${_printCulinaryWarnings(prof)}<div class="ws-recipe">${_mdLite(key.body)}</div>` : '';
+    ? `<div class="ws-section-h">Recipe</div>${_printCulinaryWarnings(prof)}<div class="ws-recipe">${LmMd.render(key.body)}</div>` : '';
 
   const medBits = [_esc(cul.medicinal_notes), _esc(cul.medicinal_folklore),
     cul.traditional_uses ? '<span class="ws-fl">Traditional uses —</span> ' + _esc(cul.traditional_uses) : '']
@@ -557,7 +548,7 @@ function _workshopPage(name, prof, baseByName, photos, showPhotos, withFieldBloc
     ? `<div class="ws-section-h">Medicinal preparations</div><div class="ws-forage">${medBits.map(b=>`<p>${b}</p>`).join('')}</div>` : '';
 
   const forageBits = [];
-  const idn = (cul.id_notes || '').replace(/\[[^\]]*\]\s*/g,'').trim();
+  const idn = LmMd.stripCitations(cul.id_notes);
   if (ct.id_notes && idn)               forageBits.push(_esc(idn));
   if (ct.culinary && cul.edible_parts)  forageBits.push('<span class="ws-fl">Edible parts —</span> ' + _esc(cul.edible_parts));
   if (ct.culinary && cul.harvest_stage) forageBits.push('<span class="ws-fl">Harvest —</span> ' + _esc(cul.harvest_stage));

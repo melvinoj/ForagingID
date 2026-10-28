@@ -1476,7 +1476,9 @@
   <button class="lb-nav" id="lb-next" onclick="event.stopPropagation();_lbNav(+1)">›</button>
 </div>
 
+<script src="/static/js/esc.js"></script>
 <script src="/static/js/safety-gate.js"></script>
+<script src="/static/js/md.js"></script>
 <script src="/static/js/species-names.js"></script>
 <script src="/static/js/lists.js"></script>
 <script src="/static/js/gps.js"></script>
@@ -1897,7 +1899,7 @@ function _spCardHtml(sp) {
       ? thumbs.slice(0, 8).map(t =>
           `<img class="ps-thumb${t.file === chosen ? ' chosen' : ''}" data-file="${_esc(t.file)}"
                 src="/thumbnails/${_esc(t.file)}"
-                onclick="_selPickPhoto(event, '${_esc(name).replace(/'/g, "\\'")}', '${_esc(t.file).replace(/'/g, "\\'")}', this)"
+                onclick="_selPickPhoto(event, ${lmJsArg(name)}, ${lmJsArg(t.file)}, this)"
                 onerror="this.remove()">`).join('')
       : '<span class="ps-empty">No photos available</span>';
     return `
@@ -2549,7 +2551,7 @@ async function _loadFieldNotes(speciesName) {
     if (!r.ok) return;
     const notes = await r.json();
     if (!notes.length) return;
-    const fn = (s) => s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    const fn = _esc;
     const html = notes.map(n => {
       const date = new Date(n.created_at).toLocaleDateString('en-GB',
         { day: 'numeric', month: 'short', year: 'numeric' });
@@ -3310,7 +3312,7 @@ function _renderResources(items, sciName) {
         <a class="resources-item-url" href="${href}" target="_blank" rel="noopener">${_esc(linkText)}</a>
         ${label}
       </div>
-      <button onclick="deleteResource(${item.id}, '${_esc(sciName).replace(/'/g, "\\'")}')"
+      <button onclick="deleteResource(${item.id}, ${lmJsArg(sciName)})"
               title="Delete" data-guest-hide
               style="border:none;background:none;color:#bbb;cursor:pointer;font-size:0.9rem;padding:2px 4px;flex-shrink:0">✕</button>
     </div>`;
@@ -3895,10 +3897,11 @@ function initPendingDrafts(data) {
   if (!sec || !el) return;
 
   const drafts = data.pending_drafts || [];
-  const edib = (data.species.edibility_status || '').toLowerCase();
-  const isToxic = ['toxic', 'inedible', 'not_edible'].includes(edib);
+  // Server decides (profile.ai_drafts_blocked = AI_NO_CONTENT_VERDICTS); a
+  // profile without the flag fails closed.
+  const blocked = data.ai_drafts_blocked !== false;
 
-  if (!drafts.length || isToxic) { sec.style.display = 'none'; return; }
+  if (!drafts.length || blocked) { sec.style.display = 'none'; return; }
 
   sec.style.display = '';
   const sciName = data.species.scientific_name;
@@ -3911,11 +3914,11 @@ function initPendingDrafts(data) {
       <div class="pd-field-text">${_esc(d.draft_text || '')}</div>
       <textarea class="pd-edit-ta" id="pd-edit-${d.id}">${_esc(d.draft_text || '')}</textarea>
       <div class="pd-actions">
-        <button class="pd-approve" onclick="pdApprove('${escSci.replace(/'/g,"\\'")}', '${d.field_name}', ${d.id}, false)">✓ Approve</button>
+        <button class="pd-approve" onclick="pdApprove(${lmJsArg(sciName)}, '${d.field_name}', ${d.id}, false)">✓ Approve</button>
         <button onclick="pdToggleEdit(${d.id})">✎ Edit & approve</button>
         <button class="pd-approve" style="display:none" id="pd-save-${d.id}"
-          onclick="pdApprove('${escSci.replace(/'/g,"\\'")}', '${d.field_name}', ${d.id}, true)">✓ Save</button>
-        <button class="pd-reject" onclick="pdReject('${escSci.replace(/'/g,"\\'")}', '${d.field_name}', ${d.id})">✗ Reject</button>
+          onclick="pdApprove(${lmJsArg(sciName)}, '${d.field_name}', ${d.id}, true)">✓ Save</button>
+        <button class="pd-reject" onclick="pdReject(${lmJsArg(sciName)}, '${d.field_name}', ${d.id})">✗ Reject</button>
       </div>
       <div class="pd-result" id="pd-result-${d.id}"></div>
     </div>`;
@@ -4467,53 +4470,12 @@ function _buildStructuredLookalikeHtml(lookalikes) {
   </div>`;
 }
 
-function _esc(s) {
-  if (s === null || s === undefined) return '';
-  return String(s)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
-}
+function _esc(s) { return window.lmEsc(s); }
 
-/**
- * Minimal markdown → HTML for recipe blocks.
- * Handles: # headings, **bold**, *italic*, blank-line paragraphs.
- * Does NOT use pre-wrap — outputs styled <p> blocks instead.
- */
+// Recipe bank bodies: the shared dialect (static/js/md.js, batch 15) with this
+// page's heading scale — # → h4, ## → h5, ### and deeper → h6, class recipe-h.
 function _renderMd(raw) {
-  if (!raw) return '';
-  const lines = _esc(raw).split('\n');
-  const out = [];
-  let inPara = false;
-
-  const flushPara = () => { if (inPara) { out.push('</p>'); inPara = false; } };
-
-  for (let line of lines) {
-    // Inline: **bold** and *italic*
-    line = line
-      .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
-      .replace(/\*([^*]+)\*/g,     '<em>$1</em>');
-
-    if (!line.trim()) {
-      flushPara();
-      continue;
-    }
-
-    // h1-h3
-    const hm = line.match(/^(#{1,3}) (.+)/);
-    if (hm) {
-      flushPara();
-      const lvl = Math.min(hm[1].length + 3, 6); // h4–h6 for visual hierarchy
-      out.push(`<h${lvl} class="recipe-h">${hm[2]}</h${lvl}>`);
-      continue;
-    }
-
-    if (!inPara) { out.push('<p>'); inPara = true; } else { out.push('<br>'); }
-    out.push(line);
-  }
-  flushPara();
-  return out.join('');
+  return LmMd.render(raw, { heading: lvl => ['h' + Math.min(lvl + 3, 6), 'recipe-h'] });
 }
 
 // ── Lightbox — shared component (static/js/lightbox.js) ──────────────────

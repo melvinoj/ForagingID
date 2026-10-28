@@ -83,6 +83,7 @@
   <div id="rc-results"><div class="rc-state">Loading…</div></div>
 </div>
 
+<script src="/static/js/esc.js"></script>
 <script src="/static/js/safety-gate.js"></script>
 <script src="/static/js/species-names.js"></script>
 <script>
@@ -102,10 +103,7 @@ let _data = { recipes: [], safety: {}, types: [] };
 let _q = '';
 const _params = new URLSearchParams(location.search);
 
-function _esc(s) {
-  return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
-}
+function _esc(s) { return window.lmEsc(s); }
 
 // Today's season (same months as the species page recipe tabs).
 function currentSeason(d) {

@@ -193,14 +193,7 @@ window.ReID = (() => {
     return window.spCommon ? window.spCommon(s) : (s || '');
   }
 
-  function _esc(s) {
-    if (!s) return '';
-    return String(s)
-      .replace(/&/g,'&amp;')
-      .replace(/</g,'&lt;')
-      .replace(/>/g,'&gt;')
-      .replace(/"/g,'&quot;');
-  }
+  function _esc(s) { return window.lmEsc(s); }
 
   function _sourceBadge(source) {
     const cls = source === 'both' ? 'both' : source === 'inaturalist' ? 'inaturalist' : '';

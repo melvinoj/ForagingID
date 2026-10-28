@@ -28,7 +28,7 @@ from app.database import get_db
 from app.models.culinary import CulinaryInfo
 from app.models.observation import Observation
 from app.models.species import (Species, SpeciesEdibilityCondition, SpeciesLookalike, SpeciesEdibilityHistory,
-                                SeverityRuleError, severity_for_verdict)
+                                SeverityRuleError, display_common_name, severity_for_verdict)
 from app.api.identity import Identity, get_identity
 from app.services.species_link import species_is_listable_clause
 
@@ -255,20 +255,13 @@ async def edibility_review_queue(db: AsyncSession = Depends(get_db)):
         if sid not in thumb_map:
             thumb_map[sid] = (oid, tp)
 
-    import json as _json
     result = []
     for sp in species_rows:
         ci = ci_map.get(sp.id)
-        common_names: list = []
-        try:
-            common_names = _json.loads(sp.common_names or "[]") or []
-        except Exception:
-            pass
-
         result.append({
             "id":                 sp.id,
             "scientific_name":    sp.scientific_name,
-            "common_name":        sp.preferred_common_name or (common_names[0] if common_names else None),
+            "common_name":        display_common_name(sp.preferred_common_name, sp.common_names) or None,
             "family":             sp.family,
             "edibility_status":   sp.edibility_status or "unknown",
             "edibility_confidence": sp.edibility_confidence,  # PFAF rating/5 or None

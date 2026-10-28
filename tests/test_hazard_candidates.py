@@ -486,6 +486,7 @@ def _card(obs):
     page = _src("frontend/review.html")
     js = "\n".join([
         "var window = this;",
+        _src("frontend/static/js/esc.js"),
         _src("frontend/static/js/hazard-ack.js"),
         _fn(page, "_resc"), "const _esc = _resc;",
         _fn(page, "confClass"), _const(page, "CONF_BAND_LABEL"), _const(page, "_LABEL_DISPLAY"),

@@ -52,10 +52,13 @@ def _fn(src, name):
 
 
 def _helpers(page):
+    # batch 15: every page escaper delegates to static/js/esc.js (lmEsc), and
+    # inline-handler string arguments use lmJsArg.
     src = _src(page)
+    core = "var window = this;\n" + _src("frontend/static/js/esc.js") + "\nvar lmJsArg = window.lmJsArg;\n"
     if page.endswith("review.html"):
-        return _fn(src, "_resc") + "\nconst _esc = _resc;\n"
-    return _fn(src, "_esc") + "\n"
+        return core + _fn(src, "_resc") + "\nconst _esc = _resc;\n"
+    return core + _fn(src, "_esc") + "\n"
 
 
 VARS = """
@@ -75,48 +78,48 @@ var e = { message: H };
 SITES = [
     # review.html
     ("frontend/review.html", [], '<div class="sp-common">${_esc(common)}</div>', ("text",), "var common = H;"),
-    ("frontend/review.html", ["const spPrimSafe   = _resc(obs.species_primary || '').replace(/'/g, \"\\\\'\");"],
-     "onclick=\"itisAcceptRename('${spPrimSafe}', 'species_id')\"", ("call", "itisAcceptRename", 0), ""),
+    ("frontend/review.html", ["const spPrimSafe   = lmJsArg(obs.species_primary || '');"],
+     "onclick=\"itisAcceptRename(${spPrimSafe}, 'species_id')\"", ("call", "itisAcceptRename", 0), ""),
     ("frontend/review.html", ["const notesVal = _resc(obs.reviewer_notes || '');"],
      '<textarea id="notes-${obs.id}" placeholder="Add reviewer notes…" rows="2">${notesVal}</textarea>',
      ("textarea",), ""),
     ("frontend/review.html", [], '<div class="card-path" title="${_esc(obs.file_path)}">${_esc(fname)}</div>',
      ("text",), ""),
-    ("frontend/review.html", [], "onclick=\"shareCardPhoto(${obs.id},'${_resc(thumbName).replace(/'/g, \"\\\\'\")}')\"",
+    ("frontend/review.html", [], "onclick=\"shareCardPhoto(${obs.id},${lmJsArg(thumbName)})\"",
      ("call", "shareCardPhoto", 1), ""),
     ("frontend/review.html", ["  const escName      = _resc(sp.scientific_name);",
-                              "  const escArg       = escName.replace(/'/g, \"\\\\'\");"],
-     "onclick=\"aiDraftToggleCollapse('${escArg}', event)\"", ("call", "aiDraftToggleCollapse", 0), ""),
-    ("frontend/review.html", ["  const escName  = _resc(sciName);", "  const escArg   = escName.replace(/'/g, \"\\\\'\");"],
-     "onclick=\"approveDraftField('${escArg}', '${d.field_name}', ${d.id}, false)\"",
+                              "  const escArg       = lmJsArg(sp.scientific_name);"],
+     "onclick=\"aiDraftToggleCollapse(${escArg}, event)\"", ("call", "aiDraftToggleCollapse", 0), ""),
+    ("frontend/review.html", ["  const escName  = _resc(sciName);", "  const escArg   = lmJsArg(sciName);"],
+     "onclick=\"approveDraftField(${escArg}, '${d.field_name}', ${d.id}, false)\"",
      ("call", "approveDraftField", 0), ""),
-    ("frontend/review.html", [], "onclick=\"openEnrichLightbox('${_resc(url).replace(/'/g, \"\\\\'\")}')\"",
+    ("frontend/review.html", [], "onclick=\"openEnrichLightbox(${lmJsArg(url)})\"",
      ("call", "openEnrichLightbox", 0, "/thumbnails/"), ""),
-    ("frontend/review.html", [], "onclick=\"enrichApproveCard('${_resc(sp.scientific_name).replace(/'/g, \"\\\\'\")}', this)\"",
+    ("frontend/review.html", [], "onclick=\"enrichApproveCard(${lmJsArg(sp.scientific_name)}, this)\"",
      ("call", "enrichApproveCard", 0), ""),
-    ("frontend/review.html", ["        const spSafe = _resc(sp.scientific_name).replace(/'/g, \"\\\\'\");"],
-     "onclick=\"itisAcceptRename('${spSafe}', 'enrich')\"", ("call", "itisAcceptRename", 0), ""),
+    ("frontend/review.html", ["        const spSafe = lmJsArg(sp.scientific_name);"],
+     "onclick=\"itisAcceptRename(${spSafe}, 'enrich')\"", ("call", "itisAcceptRename", 0), ""),
     ("frontend/review.html", [], '<div style="color:#c0392b;font-size:0.85rem">Error: ${_esc(e.message)}</div>',
      ("text",), ""),
     # index.html
     ("frontend/index.html", [],
      "onclick=\"_discoverShowSpecies('${encodeURIComponent(sp.scientific_name).replace(/'/g, \"\\\\'\")}')\"",
      ("call", "_discoverShowSpecies", 0, "uri"), ""),
-    ("frontend/index.html", [], "onclick=\"openRenameForm(${p.id}, '${_esc(p.species_primary).replace(/'/g, \"\\\\'\")}')\"",
+    ("frontend/index.html", [], "onclick=\"openRenameForm(${p.id}, ${lmJsArg(p.species_primary)})\"",
      ("call", "openRenameForm", 1), ""),
-    ("frontend/index.html", [], "onclick=\"enrichSpeciesFromMap('${_esc(p.species_primary).replace(/'/g, \"\\\\'\")}', ${p.id})\"",
+    ("frontend/index.html", [], "onclick=\"enrichSpeciesFromMap(${lmJsArg(p.species_primary)}, ${p.id})\"",
      ("call", "enrichSpeciesFromMap", 0), ""),
-    ("frontend/index.html", [], "onclick=\"_addNoteTag('${_esc(sp.scientific_name).replace(/'/g, \"\\\\'\")}')\"",
+    ("frontend/index.html", [], "onclick=\"_addNoteTag(${lmJsArg(sp.scientific_name)})\"",
      ("call", "_addNoteTag", 0), ""),
     ("frontend/index.html", [],
-     "<span class=\"np-tag\" onclick=\"_removeNoteTag('${_esc(t).replace(/'/g, \"\\\\'\")}')\" title=\"Click to remove\">${_esc(t)} ✕</span>",
+     "<span class=\"np-tag\" onclick=\"_removeNoteTag(${lmJsArg(t)})\" title=\"Click to remove\">${_esc(t)} ✕</span>",
      ("call", "_removeNoteTag", 0), ""),
     ("frontend/index.html", [], '<div class="find-state">❌ ${_esc(e.message)}</div>', ("text",), ""),
     # species.html
     ("frontend/species.html", [],
-     "onclick=\"_selPickPhoto(event, '${_esc(name).replace(/'/g, \"\\\\'\")}', '${_esc(t.file).replace(/'/g, \"\\\\'\")}', this)\"",
+     "onclick=\"_selPickPhoto(event, ${lmJsArg(name)}, ${lmJsArg(t.file)}, this)\"",
      ("call", "_selPickPhoto", 1), "t = { file: H };"),
-    ("frontend/species.html", [], "onclick=\"deleteResource(${item.id}, '${_esc(sciName).replace(/'/g, \"\\\\'\")}')\"",
+    ("frontend/species.html", [], "onclick=\"deleteResource(${item.id}, ${lmJsArg(sciName)})\"",
      ("call", "deleteResource", 1), ""),
     ("frontend/species.html", [], '<div class="empty-state">Error loading profile: ${_esc(e.message)}</div>',
      ("text",), ""),
@@ -195,7 +198,8 @@ def test_print_workshop_medicinal_and_id_notes_escaped():
     start = src.index("  const medBits = [_esc(cul.medicinal_notes), _esc(cul.medicinal_folklore),")
     end = src.index("  let fieldBlockHtml = '';", start)
     block = src[start:end]
-    script = (_helpers("frontend/print.html") + "var H = %s;\n" % json.dumps(H)
+    script = (_helpers("frontend/print.html") + _src("frontend/static/js/md.js") + "\nvar LmMd = window.LmMd;\n"
+              + "var H = %s;\n" % json.dumps(H)
               + "var cul = { medicinal_notes: H, medicinal_folklore: H, traditional_uses: H, id_notes: H,"
                 " edible_parts: H, harvest_stage: H };\n"
               + "var ct = { herbal: true, id_notes: true, culinary: true, foraging: true }; var withFieldBlock = false;\n"

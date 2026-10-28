@@ -1,7 +1,6 @@
 import json
 import logging
 import os
-import re
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 from urllib.parse import unquote, urlparse
@@ -17,8 +16,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.identity import Identity, get_identity
 from app.database import get_db
 from app.services.taxonomy import normalize_taxon_key
-from app.models.species import culinary_warnings, safety_decision, sentence_case_name
+from app.models.species import culinary_warnings, display_common_name, safety_decision
 from app.services.safety_gate import safety_by_names
+from app.services.markdown import render_md, strip_citations
 
 log = logging.getLogger(__name__)
 
@@ -104,25 +104,10 @@ def _season_str(sp: Dict) -> str:
 
 
 def _mdlite(text: str) -> str:
-    if not text:
-        return ''
-    text = str(text).replace('\r', '')
-    blocks = re.split(r'\n{2,}', text)
-    out = []
-    for b in blocks:
-        b = b.strip()
-        if not b:
-            continue
-        h = re.match(r'^#{1,6}\s+(.*)', b)
-        if h:
-            heading = h.group(1).replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
-            out.append(f'<h3>{heading}</h3>')
-        else:
-            content = b.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
-            content = re.sub(r'\*\*(.+?)\*\*', r'<strong>\1</strong>', content)
-            content = content.replace('\n', '<br>')
-            out.append(f'<p>{content}</p>')
-    return ''.join(out)
+    """Recipe Markdown for the PDF — the one shared dialect (batch 15, P4):
+    escapes first, then headings (every line, not just a block's first),
+    lists, bold, italic. It used to render only a '#' block's first line."""
+    return render_md(text)
 
 
 _jinja_env.filters['mdlite'] = _mdlite
@@ -171,11 +156,12 @@ def _flatten_species(name: str, profile: Optional[Dict], base_by_name: Dict,
     if cul.get('harvest_stage'): parts_bits.append(cul['harvest_stage'])
 
     id_notes_raw = (cul.get('id_notes') or '').strip()
-    id_notes = re.sub(r'\[[^\]]*\]\s*', '', id_notes_raw).strip()
+    id_notes = strip_citations(id_notes_raw)
 
     return {
         'scientific_name': name,
-        'common_name':    sentence_case_name(common_names[0]) if common_names else '',   # names: sentence case
+        # names: the ONE pick rule — preferred_common_name first (it was ignored here, P5)
+        'common_name':    display_common_name(sp.get('preferred_common_name') or base.get('preferred_common_name'), common_names),
         'edibility_status': sp.get('edibility_status') or '',
         'culinary_allowed': allowed,
         'safety_level':    safety.get('level') or 'unknown',

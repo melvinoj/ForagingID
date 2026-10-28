@@ -109,7 +109,7 @@
       const r = await fetch('/api/walk/saves');
       if (r.ok) walks = ((await r.json()).walks || []);
     } catch (_) { /* no walks offered */ }
-    const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    const esc = window.lmEsc;
     return new Promise(resolve => {
       const ov = _el('div', { className: 'lm-scope-overlay' });
       ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:100000;display:flex;align-items:center;justify-content:center;padding:16px';

@@ -367,6 +367,7 @@
 
 <div id="toast"></div>
 
+<script src="/static/js/esc.js"></script>
 <script>
 'use strict';
 
@@ -438,9 +439,9 @@ function _renderParticipants() {
     const revokeBtn = p.token_status === 'active'
       ? `<button class="btn btn-danger" onclick="revokeActiveToken(${p.id})">Revoke</button>`
       : '';
-    const safeName = p.name.replace(/'/g, "\\'");
-    const historyBtn = `<button class="btn btn-secondary" onclick="showHistory(${p.id}, '${safeName}')">History</button>`;
-    const tokensBtn = `<button class="btn btn-secondary" onclick="showTokenList(${p.id}, '${safeName}')">Tokens</button>`;
+    const safeName = lmJsArg(p.name);
+    const historyBtn = `<button class="btn btn-secondary" onclick="showHistory(${p.id}, ${safeName})">History</button>`;
+    const tokensBtn = `<button class="btn btn-secondary" onclick="showTokenList(${p.id}, ${safeName})">Tokens</button>`;
     return `<tr>
       <td>${_esc(p.name)}</td>
       <td><span class="badge ${badgeCls}">${p.token_status}</span></td>
@@ -464,9 +465,7 @@ function _populateParticipantSelect() {
   if (prev) sel.value = prev;
 }
 
-function _esc(s) {
-  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-}
+function _esc(s) { return window.lmEsc(s); }
 
 // ── Recorded walks ─────────────────────────────────────────────────────────
 async function loadRecordedWalks() {
@@ -511,10 +510,10 @@ function _renderSessions() {
     const walkCell = walkName
       ? `<span style="font-size:0.75rem;color:#93c5fd">${_esc(walkName)}</span>`
       : '<span style="font-size:0.73rem;color:#5a7a6a">—</span>';
-    const safeName = s.name.replace(/'/g, "\\'");
-    const linkBtn = `<button class="btn btn-secondary" style="font-size:0.72rem;padding:2px 8px" onclick="openLinkWalk(${s.id},'${safeName}')">Link walk</button>`;
+    const safeName = lmJsArg(s.name);
+    const linkBtn = `<button class="btn btn-secondary" style="font-size:0.72rem;padding:2px 8px" onclick="openLinkWalk(${s.id},${safeName})">Link walk</button>`;
     const suggBtn = s.recorded_walk_id && s.encounter_count > 0
-      ? `<button class="btn btn-secondary" style="font-size:0.72rem;padding:2px 8px;margin-left:4px" onclick="openSuggestions(${s.id},'${safeName}')">Suggest locations</button>`
+      ? `<button class="btn btn-secondary" style="font-size:0.72rem;padding:2px 8px;margin-left:4px" onclick="openSuggestions(${s.id},${safeName})">Suggest locations</button>`
       : '';
     return `<tr>
       <td>${_esc(s.name)}</td>

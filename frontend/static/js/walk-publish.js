@@ -24,11 +24,7 @@
                 selectMode: false, selected: {}, bulk: null };
   var pollTimer = null;
 
-  function esc(s) {
-    return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
-      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
-    });
-  }
+  function esc(s) { return window.lmEsc(s); }
   function isGuest() { return document.body.classList.contains('guest-mode'); }
   function el() { return document.getElementById('walk-publish'); }
   function slugify(s) {

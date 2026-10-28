@@ -1025,17 +1025,15 @@
 
 </div>
 
+<script src="/static/js/esc.js"></script>
 <script src="/static/js/safety-gate.js"></script>
+<script src="/static/js/md.js"></script>
 <script src="/static/js/guest-notes.js"></script>
 <script src="/static/js/species-names.js"></script>
 <script src="/static/js/lists.js"></script>
 <script>
 // ── Helpers ─────────────────────────────────────────────────────────────────
-function _esc(s) {
-  return String(s == null ? '' : s)
-    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
-}
+function _esc(s) { return window.lmEsc(s); }
 const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 const NOW_MONTH = new Date().getMonth() + 1;   // 1–12
 
@@ -1156,10 +1154,10 @@ function render() {
   if (compact) {
     compact.innerHTML = list.species.map(name => {
       const base   = _baseByName[name] || {};
-      const common = (base.common_names && base.common_names[0]) || '';
+      const common = spPickCommon(base.preferred_common_name, base.common_names);
       return `<div class="sp-compact-row">
         <span class="sp-compact-sci">${_esc(name)}</span>
-        ${common ? `<span class="sp-compact-common">${_esc(spCommon(common))}</span>` : ''}
+        ${common ? `<span class="sp-compact-common">${_esc(common)}</span>` : ''}
         <button class="sp-compact-rm" title="Remove"
                 onclick="removeFromList('${_esc(String(name).replace(/'/g, "\\'"))}')">×</button>
       </div>`;
@@ -1795,19 +1793,7 @@ function _coverPageWorkshop(c) {
 
 // ── Print preview (Field Guide / Recipe Booklet / Workshops) ───────────────
 
-// Minimal Markdown → HTML for recipe bodies (headings, bold, paragraphs).
-function _mdLite(text) {
-  if (!text) return '';
-  const blocks = String(text).replace(/\r/g, '').split(/\n{2,}/);
-  return blocks.map(b => {
-    b = b.trim();
-    if (!b) return '';
-    const h = b.match(/^#{1,6}\s+(.*)$/);
-    if (h) return '<h3>' + _esc(h[1]) + '</h3>';
-    let html = _esc(b).replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>').replace(/\n/g, '<br>');
-    return '<p>' + html + '</p>';
-  }).join('');
-}
+// Recipe bodies render through static/js/md.js (LmMd.render — one dialect, batch 15).
 
 function _seasonText(sp) {
   const sm = seasonMonths(sp);
@@ -1937,7 +1923,7 @@ function _combinedPage(name, modes) {
 // Returns a ws-section fragment with ID notes and edible parts. The warnings are
 // in the page's safety box (always printed, batch 6), so not repeated here.
 function _fieldGuideBlock(cul) {
-  const idNote    = (cul.id_notes || '').replace(/\[[^\]]*\]\s*/g, '').trim();
+  const idNote    = LmMd.stripCitations(cul.id_notes);
   const parts     = [cul.edible_parts, cul.harvest_stage].filter(Boolean).join(' · ');
   const bits = [];
   if (idNote)    bits.push(`<p>${_esc(idNote)}</p>`);
@@ -1962,7 +1948,8 @@ function _fieldEntry(name) {
   const base = _baseByName[name] || {};
   const sp   = (prof && prof.species)  || base;
   const cul  = _printCulinary(prof);
-  const common = spCommon((sp.common_names && sp.common_names[0]) || (base.common_names && base.common_names[0]) || '');
+  const common = spPickCommon(sp.preferred_common_name || base.preferred_common_name,
+                              (sp.common_names && sp.common_names.length) ? sp.common_names : base.common_names);
   const edib   = sp.edibility_status;
   const recipes = _printRecipes(prof);
   const key     = recipes.find(r => r.is_preferred) || recipes[0];
@@ -1974,7 +1961,7 @@ function _fieldEntry(name) {
   const showRecipe    = ct.recipes   && (!prefs || prefs.recipes)  && !!key;
 
   // Primary: distinguishing features / ID notes — gated on ct.id_notes
-  const idNote = (cul.id_notes || '').replace(/\[[^\]]*\]\s*/g, '').trim();
+  const idNote = LmMd.stripCitations(cul.id_notes);
   const showId = ct.id_notes && !!idNote;
 
   // Look-alike + preparation warnings — always printed, full text (batch 6, B2-03).
@@ -2003,7 +1990,7 @@ function _fieldEntry(name) {
     ${showId       ? `<div class="fg-id-primary">${_esc(idNote)}</div>` : ''}
     ${warningsHtml}
     ${partsText    ? `<div class="fg-note">${_esc(partsText)}</div>` : ''}
-    ${showRecipe   ? `<div class="fg-recipe"><div class="rt">${_esc(key.title)}</div>${_mdLite(key.body)}</div>` : ''}
+    ${showRecipe   ? `<div class="fg-recipe"><div class="rt">${_esc(key.title)}</div>${LmMd.render(key.body)}</div>` : ''}
     ${_guestNotesHtml(name)}
   </div>`;
 }
@@ -2013,7 +2000,8 @@ function _workshopPage(name, withFieldBlock = false, isWorkshopHandout = false) 
   const base = _baseByName[name] || {};
   const sp   = (prof && prof.species)  || base;
   const cul  = _printCulinary(prof);
-  const common = spCommon((sp.common_names && sp.common_names[0]) || (base.common_names && base.common_names[0]) || '');
+  const common = spPickCommon(sp.preferred_common_name || base.preferred_common_name,
+                              (sp.common_names && sp.common_names.length) ? sp.common_names : base.common_names);
   const edib   = sp.edibility_status;
   const recipes = _printRecipes(prof);
   const key     = recipes.find(r => r.is_preferred) || recipes[0];
@@ -2038,11 +2026,11 @@ function _workshopPage(name, withFieldBlock = false, isWorkshopHandout = false) 
 
   // Recipe section.
   const recipeHtml = (ct.recipes && key && prefs.recipes !== false)
-    ? `<div class="ws-section-h">Recipe</div>${_printCulinaryWarnings(prof)}<div class="ws-recipe">${_mdLite(key.body)}</div>`
+    ? `<div class="ws-section-h">Recipe</div>${_printCulinaryWarnings(prof)}<div class="ws-recipe">${LmMd.render(key.body)}</div>`
     : '';
 
   // Medicinal section — strip bracket citations from all fields.
-  const _stripCite = t => (t || '').replace(/\[[^\]]*\]\s*/g, '').trim();
+  const _stripCite = t => LmMd.stripCitations(t);
   const medBits = [];
   if (cul.medicinal_notes)    medBits.push(_esc(_stripCite(cul.medicinal_notes)));
   if (cul.medicinal_folklore) medBits.push(_esc(_stripCite(cul.medicinal_folklore)));
@@ -2052,7 +2040,7 @@ function _workshopPage(name, withFieldBlock = false, isWorkshopHandout = false) 
     : '';
 
   // ID notes — gated independently on ct.id_notes only.
-  const idn = (cul.id_notes || '').replace(/\[[^\]]*\]\s*/g, '').trim();
+  const idn = LmMd.stripCitations(cul.id_notes);
   const idNotesHtml = (ct.id_notes && idn && !withFieldBlock)
     ? `<div class="ws-section-h">Identification</div><div class="ws-forage"><p>${_esc(idn)}</p></div>`
     : '';
@@ -2403,7 +2391,7 @@ function _spRenderSpecies() {
     const srcCls = s.source === 'auto' ? 'sp-sp-src-auto' : 'sp-sp-src-manual';
     return `<div class="sp-sp-row" id="spsp-${s.species_id}">
       <span class="sp-sp-name">${_esc(s.scientific_name)}</span>
-      <span class="sp-sp-common">${_esc(spCommon(s.common_names && s.common_names[0] || ''))}</span>
+      <span class="sp-sp-common">${_esc(spPickCommon(s.preferred_common_name, s.common_names))}</span>
       <span class="sp-sp-src ${srcCls}">${s.source}</span>
       <button class="sp-sp-rm" onclick="removeSessionSpecies(${s.species_id})" title="Remove">×</button>
     </div>`;
@@ -2440,7 +2428,8 @@ function _spLookup(q) {
   if (!results.length) { box.style.display = 'none'; return; }
   box.innerHTML = results.map(x => {
     const safe = _esc((x.scientific_name || '').replace(/'/g, "\\'"));
-    const common = x.common_names && x.common_names[0] ? ` — ${_esc(spCommon(x.common_names[0]))}` : '';
+    const xc = spPickCommon(x.preferred_common_name, x.common_names);
+    const common = xc ? ` — ${_esc(xc)}` : '';
     return `<div class="sp-lookup-item" onclick="addSessionSpecies('${safe}')">
       <span class="sp-lookup-sci">${_esc(x.scientific_name)}</span>
       <span class="sp-lookup-common">${common}</span>

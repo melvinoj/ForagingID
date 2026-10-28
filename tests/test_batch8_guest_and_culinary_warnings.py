@@ -124,7 +124,7 @@ DEC_MIXED = {"level": "none", "culinary_allowed": True, "handout_culinary_allowe
              "handout_warnings": {"preparation": PREP, "look_alike": None}}
 DEC_NONE = {"level": "none", "culinary_allowed": True, "handout_culinary_allowed": True,
             "warnings": {"preparation": None, "look_alike": None}, "handout_warnings": {"preparation": None, "look_alike": None}}
-SG = _src("frontend/static/js/safety-gate.js")
+SG = _src("frontend/static/js/esc.js") + "\n" + _src("frontend/static/js/safety-gate.js")
 
 
 def test_fix_b_helper_carries_both_warnings_js_and_python():
@@ -482,7 +482,7 @@ def test_guest_note_saves_text_refuses_audio_and_never_touches_species():
         box = _extract(gn, "el.innerHTML = '<div class=\"guest-note-box\">'", "const ta = ")
         for bad in ("inputmode", "readonly", "disabled", "contenteditable"):
             assert bad not in box, bad                                                             # nothing blocks dictation
-        d = _jsc("var window = this;\n" + gn + """
+        d = _jsc("var window = this;\n" + _src("frontend/static/js/esc.js") + "\n" + gn + """
 print(JSON.stringify({ h: GuestNotes.listHtml([{ text_note: '<img src=x onerror=alert(1)>', encounter_date: null }]),
                        own: GuestNotes.isOwnNote({ user_id: 2, text_note: 'a' }), cur: GuestNotes.isOwnNote({ user_id: 1, text_note: 'a' }) }));""")
         assert "<img" not in d["h"] and "&lt;img src=x onerror=alert(1)&gt;" in d["h"] and d["own"] and not d["cur"]

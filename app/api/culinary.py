@@ -1414,6 +1414,7 @@ async def list_enriched_species(
 async def get_culinary_profile(
     species_name: str,
     db: AsyncSession = Depends(get_db),
+    identity: Identity = Depends(get_identity),
 ):
     """Full enriched profile: species taxonomy + culinary info + raw sources."""
     sp = await _get_species_or_404(db, species_name)
@@ -1464,6 +1465,11 @@ async def get_culinary_profile(
         for r in _recipe_rows
     ]
 
+    # Source links (28 Oct 2026): one species-name check; flagged links are
+    # marked for the curator and never reach a guest (app/services/source_links.py).
+    from app.services.source_links import apply_link_check
+    culinary_dict = _culinary_to_dict(ci, sp.scientific_name) if ci else None
+    await apply_link_check(db, sp, culinary_dict, identity.is_guest)
     return {
         "species": {
             "id": sp.id,
@@ -1480,7 +1486,7 @@ async def get_culinary_profile(
         # Safety gate (batch 5): the decision every page shows — map pop-up, walk
         # panel, proximity alerts, Export summary. Read via static/js/safety-gate.js.
         "safety": await safety_for_species(db, sp, ci),
-        "culinary": _culinary_to_dict(ci, sp.scientific_name) if ci else None,
+        "culinary": culinary_dict,
         "ai_generated_fields": ai_fields,
         "enrichment_sources": sources,
         "recipes": recipes_out,
@@ -1832,6 +1838,8 @@ async def species_profile(
     phenology = active_months_display(sp.flower_months, sp.fruit_months, sp.leaf_months)
 
     culinary_out = _culinary_to_dict(ci, sp.scientific_name) if ci else None
+    from app.services.source_links import apply_link_check
+    await apply_link_check(db, sp, culinary_out, identity.is_guest)   # 28 Oct: flagged links curator-only
     ai_fields_out = ai_fields
     field_source_tags: dict = {}
     if identity.is_guest:

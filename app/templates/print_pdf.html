@@ -272,6 +272,7 @@ body {
     {% if it.common_name %}<div class="sr-common">{{ it.common_name }}</div>{% endif %}
     <div class="sr-sci">{{ it.scientific_name }}</div>
     <div class="sr-row">
+      {% if it.gate and it.gate.label %}<span class="pill {{ 'pill-toxic' if it.gate.level in ('deadly', 'toxic') else 'pill-cond' }}">{{ it.gate.label }}</span>{% endif %}
       {% if it.timing == 'now' %}<span class="sr-badge sr-badge-now">in season</span>
       {% else %}<span class="sr-badge sr-badge-soon">coming soon</span>{% endif %}
       {% if it.last_seen_fmt or it.last_seen_place %}
@@ -279,6 +280,9 @@ body {
       {% endif %}
     </div>
     {% if it.reason %}<div class="sr-reason">{{ it.reason }}</div>{% endif %}
+    {# Same SafetyGate as curator-picked species: handout warnings, uncut. #}
+    {% if it.gate and it.gate.look_alike %}<div class="safety-warn">⚠ Look-alikes: {{ it.gate.look_alike }}</div>{% endif %}
+    {% if it.gate and it.gate.preparation %}<div class="safety-warn">⚠ {{ 'Caution' if it.gate.caution else 'Preparation' }}: {{ it.gate.preparation }}</div>{% endif %}
   </div>
   {% endfor %}
   </div>
@@ -386,8 +390,7 @@ body {
   {% endif %}
   {% if ct.foraging and (sp.edible_parts or sp.harvest_stage) and sp.culinary_allowed %}
   <div class="entry-section-h">Foraging notes</div>
-  {# Fix B: cautionary text travels with culinary content (curator text, uncut). #}
-  {% for w in sp.culinary_warnings %}<div class="safety-warn culinary-warning">⚠ {{ w.heading }}: {{ w.text }}</div>{% endfor %}
+  {# Workshop page (28 Oct 2026): the Safety & edibility box above is the one full copy of the warnings. #}
   <div class="entry-body">
     {% if sp.edible_parts %}<p><strong>Edible parts —</strong> {{ sp.edible_parts }}</p>{% endif %}
     {% if sp.harvest_stage %}<p><strong>Harvest —</strong> {{ sp.harvest_stage }}</p>{% endif %}
@@ -413,7 +416,6 @@ body {
   {% endif %}
   {% if ct.recipes and sp.recipe_title and sp.culinary_allowed %}
   <div class="entry-section-h">Recipe</div>
-  {% for w in sp.culinary_warnings %}<div class="safety-warn culinary-warning">⚠ {{ w.heading }}: {{ w.text }}</div>{% endfor %}
   {# |safe: _mdlite (app/services/markdown.render_md) escapes &, <, >, ", ' in every line before adding its own <h3>/<p>/<ul>/<ol>/<li>/<strong>/<em>/<code>/<br> (D1-01, batch 15). #}
   <div class="entry-body">{{ sp.recipe_body | mdlite | safe }}</div>
   {% endif %}

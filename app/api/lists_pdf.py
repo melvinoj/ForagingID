@@ -257,6 +257,14 @@ async def generate_pdf(body: PdfRequest, db: AsyncSession = Depends(get_db),
     names = [s.scientific_name for s in body.species]
     safety = await safety_by_names(db, names)
     my_notes = await participant_notes_by_name(db, identity, names)
+    # Seasonal Returns: the same SafetyGate, decided here by name — the
+    # payload's own safety (if any) is ignored (Melvin, 28 Oct 2026).
+    if body.seasonal_returns:
+        from app.services.seasonal_returns import gate_seasonal_returns
+        sr_safety = await safety_by_names(db, [it.get('scientific_name') for it in body.seasonal_returns])
+        body.seasonal_returns = gate_seasonal_returns(
+            [{k: v for k, v in it.items() if k not in ('safety', 'gate')} for it in body.seasonal_returns],
+            sr_safety)
     return await run_in_threadpool(render_pdf, body, safety, my_notes)
 
 

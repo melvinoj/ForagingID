@@ -36,19 +36,90 @@ Pre-split fixes (182f5e6), batch 16 index.html split (prep 0cf780e, split 2b49db
 - Static files are served from disk: a sw.js bump is live as soon as it is written.
 - End Session from Settings rewrites Current State with its one-line summary: it drops every section here. Use the chat End Session block.
 
-### Browser checks
-- Part A held items (28 Oct, 3403705) — implemented, unverified: Lists × remove on shepherd's purse / St John's wort / lady's smock (apostrophe names) removes the right row; sw v20 activates and the offline map page keeps header styling; window resize during map load → no "loadFeatures is not defined".
-- Batch 16 split (28 Oct) — implemented, unverified. One reload first, then: (1) map loads with no console errors (any "X is not defined" = a load-order miss); (2) tap a pin → detail card with enrichment; (3) build a walk → route, panel, edibility badges; (4) a saved walk loads; Edit walk: tap a stop marks it, ⬚ Lasso toggles pins; Start here on a stop; Loop label shows; stop 58 stays hidden; Tidy route order; (5) Export summary; (6) no recording UI; (7) Find tab, note panel, search; (8) offline reload after one online load (index.css + index/*.js precached); (9) zoom in/out → note pins resize (moved zoomend line); zoom + drag a walk; (10) phone/guest view over the share link; reload banner appears after the sw bump.
-- Device list (28 Oct): Settings → Curator devices shows only "Melvino's" (rows 2–4, all revoked, pruned live). ✕ opens the in-app dialog (no browser popup), Cancel / click outside / Esc close it; on the live device it says "Revoke and remove". Don't confirm on your only signed-in phone unless you mean it — ✕ there cuts that phone off at once.
-- Lists dropdown (28 Oct): ▾ on a selected-species row opens fill status + Include in PDF toggles (Warnings "Always printed", Conditions "Not printed"); unticking a section removes it from the preview; ▾ rotates when open.
-- Batch 17, 15, 15b and the sw.js bump: pre-filter note, Lists rows, device list, Large/List thumbnails, reload banner, PDF/print recipes 125/206, apostrophe names on every converted button, preferred names, Loop label, Start here, stop 58 hidden, Edit walk stop tap + lasso, no recording UI, upload button.
-- Walk 5 republish (28 Oct, site 28f9e80): open the live walk 5 page and the collection page.
-- rename a card to a genus shows the refusal message.
+### Unverified live
+Rule (CLAUDE.md, 28 Oct): one list, grouped by batch, each line = the symptom to look for. Melvin reports bugs from normal use; this maps them to a batch. Entries leave only when Melvin reports them checked or they are superseded.
+- **Part A held items (3403705, 28 Oct):** Lists × on shepherd's purse / St John's wort / lady's smock removes the wrong row or nothing → lmJsArg miss. Offline map page loses header styling → sw v20 not caching tokens.css / site-header.css. Console "loadFeatures is not defined" after a resize during map load → timer guard miss.
+- **Batch 16 index.html split (2b49db7, 28 Oct):** after one reload — any console "X is not defined" on the map page = a load-order miss; pin tap gives no detail card / no enrichment; build a walk → no route, panel or edibility badges; saved walk won't load; Edit walk stop tap / ⬚ Lasso / Start here / Loop label / stop 58 hidden / Tidy route order misbehave; Export summary broken; recording UI visible; Find tab, note panel or search broken; offline reload after one online load fails (index.css + index/*.js precache); note pins don't resize on zoom (moved zoomend line); zoom + drag a walk breaks; phone/guest view over the share link broken; no reload banner after the sw bump.
+- **Device list (182f5e6, 28 Oct):** Settings → Curator devices shows more than "Melvino's"; ✕ opens a browser popup instead of the in-app dialog, or Cancel / click outside / Esc don't close it; the live device's dialog doesn't say "Revoke and remove". (Don't confirm on your only signed-in phone — ✕ there cuts it off at once.)
+- **Lists dropdown (182f5e6, 28 Oct):** ▾ on a selected-species row doesn't open fill status + Include in PDF (Warnings "Always printed", Conditions "Not printed"); unticking a section doesn't remove it from the preview; ▾ doesn't rotate when open.
+- **Batches 17, 15, 15b + sw v18 (5830833, 94afbbe, 0f47e98, 536b7e7, 28 Oct):** pre-filter note wrong on scan.html; Lists fixed rows; device list self-refresh; Large/List thumbnails; reload banner; PDF/print recipes 125/206 missing text; apostrophe names break any converted button; preferred common names not shown; Loop label; Start here; stop 58 visible; Edit walk stop tap + lasso; any recording UI visible; upload button missing.
+- **Walk 5 republish (site 28f9e80, 28 Oct):** live walk 5 page or the collection page broken / wrong front page.
+- **Rename to genus (28 Oct):** renaming a card to a genus doesn't show the refusal message.
+- Tool note: scripts/dev/walkthrough_check.py drives a browser on a scratch :8765 — Melvin runs it; Code's own pass is scripts/dev/smoke_pass.py (evidence only).
 
 ### Melvin's review queue
 - 11b_review (28). genus_reid (6). bryony_check (8229). hazard_review cards (18) + 17052, 17737. 22 recipes needing a title. Five rejected photos restored in July (15958, 15970, 21333, 21673, 21799). Warning review cards. Text tidy-up (352 edible_parts / 689 id_notes). 347 Takeout person_animal rejects (mount DIGIERA). Draft #3252 Amaranthus hybridus. data/ old DBs (293 MB) + thumbnails_quarantine/ → copy to DIGIERA, delete in Finder.
 
 ## History
+
+### 2026-10-28 16:29
+**Safety batch item 4: traditional/other uses in their own Other uses section (CLOSEOUT section 4 #5)**
+
+**Built:**
+- Lists + browser print workshop page: Other uses section for traditional_uses (same toggles as before), omitted when empty; Medicinal preparations = medicinal notes + folklore only
+**Fixed:**
+- Elder's PFAF 'Compost Cosmetic Dye…' no longer printed under Medicinal preparations
+**Files:** `frontend/lists.html`, `frontend/print.html`, `tests/test_safety_batch_28oct.py`, `tests/test_batch7_escaping.py`
+**Pending:**
+- PDF never printed traditional_uses — unchanged (no Other uses section in PDF)
+- Unverified live: elder workshop page shows Other uses below Medicinal preparations
+
+### 2026-10-28 16:29
+**Safety batch item 3: workshop page prints one full safety box per species, repeats dropped (CLOSEOUT section 4 #4)**
+
+**Built:**
+- Lists, browser print and PDF workshop layout: warnings only in the Safety & edibility box (always rendered, full text); no repeat before Foraging / Recipe
+**Fixed:**
+- Workshop page printed the look-alike + preparation warnings up to 3 times
+- _printCulinaryWarnings removed from lists.html and print.html (no callers left)
+**Files:** `frontend/lists.html`, `frontend/print.html`, `app/templates/print_pdf.html`, `tests/test_safety_batch_28oct.py`, `tests/test_batch8_guest_and_culinary_warnings.py (Fix B workshop asserts updated to one copy)`, `tests/test_batch5_safety_gate.py`, `tests/test_batch6_warnings.py (pass identity to get_culinary_profile)`
+**Pending:**
+- Unverified live: a workshop page for Sambucus nigra in Lists / print / PDF shows each warning once, in the safety box
+
+### 2026-10-28 16:23
+**Safety batch item 2: source-link species check (CLOSEOUT section 4 #2)**
+
+**Built:**
+- app/services/source_links.py: one rule — a culinary link is flagged when neither title nor URL names the species (scientific, display common name, synonyms)
+- /api/species/{name}/profile and /api/culinary/{name}: links carry flagged; guests never receive a flagged link
+- species.html: flagged links shown to curator with a flag, hidden in print
+- docs/audit/2026-10-20/flagged_links_28oct.md: 345 of 455 links flagged on 132 species (129 Brill generic)
+**Fixed:**
+- Elder no longer shows the ground-elder page or Brill curriculum/day-camp/scout pages to guests or in print
+**Files:** `app/services/source_links.py`, `app/api/culinary.py`, `frontend/species.html`, `tests/test_safety_batch_28oct.py`, `docs/audit/2026-10-20/flagged_links_28oct.md`
+**Pending:**
+- Known false positives (Ground elder on Goutweed, Garlic Mustard on Hedge Garlic, Cow parsley on Keck): fix by setting preferred common name; rule not widened (all common names would let wrong-species pages through)
+- No deletion — cleanup of flagged links is a curator decision
+
+### 2026-10-28 16:20
+**Safety batch item 1: Seasonal Returns through the SafetyGate, default Off (CLOSEOUT section 4 #1)**
+
+**Built:**
+- GET /api/notifications/seasonal-returns: every entry carries its server safety decision
+- seasonal_return_gate / gate_seasonal_returns (Python) + SafetyGate.seasonalReturn (JS twin): handout badge + handout warnings; toxic/deadly without both dropped; missing decision = toxicity unknown
+- PDF re-decides Seasonal Returns safety by name (payload safety ignored); template prints badge + warnings
+- Lists + print render SR through the gate; Returns select default Off; localStorage keys _v2 (old '10' and ungated cache not read)
+- scripts/dev/smoke_pass.py (scratch APFS clone, port 8001, evidence only)
+**Fixed:**
+- Digitalis purpurea (#3 live) and Dryopteris filix-mas (#8) no longer print 'in season' without the skull badge and warnings
+**Files:** `app/services/seasonal_returns.py`, `app/api/notifications.py`, `app/api/lists_pdf.py`, `app/templates/print_pdf.html`, `frontend/static/js/safety-gate.js`, `frontend/lists.html`, `frontend/print.html`, `tests/test_safety_batch_28oct.py`, `scripts/dev/smoke_pass.py`
+**Pending:**
+- Unverified live: Lists Returns select shows Off; choosing 10 shows Digitalis with skull badge + look-alike/preparation lines in Lists, print and PDF
+- Notification bell (seasonal-returns.js, owner-only in-app) not gated — not in item scope
+
+### 2026-10-28 16:07
+**Step 0 workflow change (Melvin 28 Oct): CLAUDE.md smoke-pass exception (scratch APFS clone, port 8001, DATABASE_URL), batch handoff rule, CONTEXT HANDOFF RULE; Current State Browser checks replaced by one Unverified live list grouped by batch**
+
+**Built:**
+- CLAUDE.md: Headless smoke pass exception
+- CLAUDE.md: Batch handoff rule
+- CLAUDE.md: CONTEXT HANDOFF RULE
+- CHANGELOG Current State: Unverified live list (all prior check content kept)
+**Files:** `CLAUDE.md`, `CHANGELOG.md`
+**Pending:**
+- Melvin: confirm the CLAUDE.md diff before Step 1
+- scripts/dev/smoke_pass.py not written yet (first thing in Step 1)
+- Resume at: Step 1 item 1 Seasonal Returns, after Melvin confirms Step 0
 
 ### 2026-10-28 16:05
 **Snapshot** — End of session — Closing 28 Oct session: Part A held items done (3403705, unverified live); batches 9 and 10 shipped in snapshot commit b1138f0 (22 Oct) without a Built entry; REPORT.md section 9 status corrections applied 28 Oct; docs/audit/2026-10-20/CLOSEOUT_28oct.md added; Current State restored after the Settings End Session collapsed it

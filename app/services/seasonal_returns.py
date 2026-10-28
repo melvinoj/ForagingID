@@ -217,3 +217,40 @@ def _neg_iso(iso: str) -> str:
     invert each digit so newer dates compare 'smaller'. Keeps the sort stable and
     purely string-based (no date parsing in the hot path)."""
     return "".join(str(9 - int(ch)) if ch.isdigit() else ch for ch in iso)
+
+
+# ── Safety gate for outgoing Seasonal Returns (Melvin, 28 Oct 2026) ──────────
+# Seasonal Returns entries go through the same SafetyGate as curator-picked
+# species: the server decision (safety_gate.safety_for_species) rides on each
+# entry as `safety`, its handout badge and handout warnings print with it, and
+# a toxic / deadly entry with no badge or no warning text is dropped — never
+# "in season" without both. One rule for Lists, browser print and PDF.
+# JS twin: SafetyGate.seasonalReturn (static/js/safety-gate.js).
+
+def seasonal_return_gate(decision: Optional[dict]) -> Optional[dict]:
+    """{label, level, look_alike, preparation} for one entry, or None (drop it).
+    A missing decision fails closed: '⚠ toxicity unknown'."""
+    from app.models.species import TOXIC_SEVERITIES, safety_decision
+    d = decision or safety_decision(None, None)
+    hw = d.get("handout_warnings") or {}
+    label = d.get("handout_label", d.get("label")) or ""
+    look = (hw.get("look_alike") or "").strip()
+    prep = (hw.get("preparation") or "").strip()
+    level = d.get("level") or "unknown"
+    if level in TOXIC_SEVERITIES and not (label and (look or prep)):
+        return None
+    return {"label": label, "level": level, "look_alike": look, "preparation": prep,
+            "caution": level == "caution"}
+
+
+def gate_seasonal_returns(items: list, safety_by_name: dict) -> list:
+    """The entries that may print, each with its `safety` (server decision)
+    and `gate` (seasonal_return_gate). Client-sent safety is never trusted."""
+    out = []
+    for it in items or []:
+        d = safety_by_name.get(it.get("scientific_name"))
+        g = seasonal_return_gate(d)
+        if g is None:
+            continue
+        out.append(dict(it, safety=d, gate=g))
+    return out

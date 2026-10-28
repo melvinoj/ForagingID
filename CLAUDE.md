@@ -19,6 +19,13 @@ pwd check → Read CHANGELOG.md → report Current State → confirm next step
 
 If a CONTEXT WARNING or CONTEXT LIMIT note appears, follow it before anything else.
 
+### CONTEXT HANDOFF RULE
+
+- At ~40% context used, finish the current item to a clean point (tests run, DB writes read back, log entry written, nothing half-done), then offer Melvin: "Continue in a new thread?" Never hand off mid-write or mid-item.
+- Past ~60%: start no new item; reach the clean point and hand off.
+- Before any handoff, `POST /api/dev/log` with a "Resume at:" line naming the exact next step, so the new thread starts from CHANGELOG alone. If the app's continue-in-new-thread option doesn't appear, say so; Melvin starts a fresh thread with "Continue on ForagingID".
+- This replaces nothing in the CONTEXT WARNING / LIMIT handling above; it triggers earlier.
+
 ---
 
 ## Git Protocol (Code has full git access as of 25 June 2026)
@@ -269,9 +276,25 @@ Never apply a CSS change to a shared class without checking every element that u
 Never confirm a fix is working based on code presence alone — only on observed behaviour
 Never verify in an in-browser preview, headless browser, or preview sandbox. Code's verification ends at reading back the edited code. All live/visual/behavioural verification is done by the user in their own browser. If a change must be confirmed working before the next step can proceed, STOP and ask the user to test and report back — do not spin up a browser to check it yourself.
 
+### Headless smoke pass — the one exception (Melvin, 28 Oct 2026)
+
+Code MAY run a headless smoke pass: load each page it touched, collect console errors and failed requests. It is **evidence only** — never reported as "verified", "fixed" or "working". Report it as "smoke: N pages, 0 console errors, 0 failed requests" next to "implemented, unverified".
+
+- Scratch only. Never the live server (:8000), never `data/foragingid.db`. Some pages write on load (Settings device-list auto-prune), so a live run would change data.
+- The scratch server runs from an APFS clone of the project **outside the repo** (`~/ForagingID_scratch/`, `cp -c`: copy-on-write, near-zero disk) — not the live tree with `DATABASE_URL` alone, because `dev.py` hardcodes `PROJECT_ROOT/data/foragingid.db`, `photos/pipeline2/` / `uploads/` / `logs/` are PROJECT_ROOT-relative, and the live uvicorn reload watches the repo root.
+- Its DB is a fresh copy made through the SQLite backup API (`app/services/db_snapshot.py`) into the clone's `data/foragingid.db`, and `DATABASE_URL` points at that file explicitly. In the scratch copy only, `photo_library_path` is set to a missing folder so the syncthing loop ingests nothing.
+- Port 8001, bound to 127.0.0.1. `FORAGINGID_ENV_FILE=` (no .env) with every API key exported empty, the clone's `.env` deleted, `HOME` pointed at a throwaway folder (no publish repo, no `~/Local(unsynced)`).
+- Tool: `scripts/dev/smoke_pass.py` (Playwright, already installed in the venv). It builds the scratch, starts and stops the 8001 server itself, and deletes nothing outside `~/ForagingID_scratch/`. `walkthrough_check.py` (Melvin-run, :8765) is unchanged.
+
+### Batch handoff rule (Melvin, 28 Oct 2026)
+
+- A batch is clean to build on when its tests + the smoke pass pass.
+- Melvin is asked to check something ONLY when all three hold: a test can't cover it, it compounds if wrong, and it blocks the next batch or reaches other people (publish, booklet export, guest link). Max 3 checks per batch, one line each with the exact symptom.
+- Everything else goes to the single **Unverified live** list in CHANGELOG Current State, grouped by batch, each with the symptom to look for. Melvin reports bugs from normal use; the list maps them to batches. Remove an entry only when Melvin reports it checked or it is superseded.
+
 ## Frontend / D3 Rendering Discipline
 
-The existing rule stands: Code does not verify in a browser, headless browser, or preview sandbox — Melvin verifies all live/visual/behavioural changes.
+The existing rule stands: Code does not verify in a browser, headless browser, or preview sandbox — Melvin verifies all live/visual/behavioural changes. (The scratch smoke pass above is evidence of no load errors, not verification; D3 timing/transition bugs need Melvin or the Unverified live list.)
 
 This means Code cannot self-catch runtime-only failures (exceptions, transition timing, race conditions) — only static code review. Historically this has caused real cost: this file's D3 code has hit the same bug class (unnamed transitions on shared elements silently cancelling each other) three separate times, and at least once a fix was declared "clean" from code read-back alone when the actual behavior was still broken.
 

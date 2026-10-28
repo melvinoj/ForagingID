@@ -181,7 +181,22 @@
     return allowed(safety) ? (list || []) : [];
   }
 
-  window.SafetyGate = { decision: decision, allowed: allowed, badge: badge, warning: warning,
+  // Seasonal Returns entry (Melvin, 28 Oct 2026): the same gate as a curator-
+  // picked species — handout badge + handout warnings, uncut. A toxic / deadly
+  // entry without a badge or without warning text returns null (drop it):
+  // never "in season" without both. A missing decision fails closed (unknown).
+  // Python twin: app/services/seasonal_returns.py seasonal_return_gate().
+  // Returns null, or { badge, warnings } HTML strings.
+  function seasonalReturn(safety) {
+    const d = decision(safety);
+    const hw = handoutWarnings(d);
+    const label = typeof d.handout_label === 'string' ? d.handout_label : d.label;
+    const red = d.level === 'deadly' || d.level === 'toxic';
+    if (red && !(label && (hw.look_alike || hw.preparation))) return null;
+    return { badge: handoutBadge(d), warnings: handoutWarningsHtml(d, 'div', 'sr-warn') };
+  }
+
+  window.SafetyGate = { decision: decision, seasonalReturn: seasonalReturn, allowed: allowed, badge: badge, warning: warning,
                         culinary: culinary, recipes: recipes, CULINARY_FIELDS: CULINARY_FIELDS, UNKNOWN: UNKNOWN,
                         warnings: warnings, handoutWarnings: handoutWarnings, handoutWarningsHtml: handoutWarningsHtml,
                         handoutAllowed: handoutAllowed,

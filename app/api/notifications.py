@@ -51,6 +51,15 @@ async def seasonal_returns(
     ranked = await compute_seasonal_returns(db, user_id=1, lead_days=lead_days)
     total = len(ranked)
     items = ranked if show_all else ranked[:limit]
+    # Every entry carries its SafetyGate decision (Melvin, 28 Oct 2026): Lists,
+    # print and PDF render the badge + warnings from it (seasonal_return_gate).
+    from app.services.safety_gate import safety_for_species_bulk
+    rows = (await db.execute(
+        select(Species).where(Species.id.in_([it["species_id"] for it in items]))
+    )).scalars().all() if items else []
+    decisions = await safety_for_species_bulk(db, rows)
+    for it in items:
+        it["safety"] = decisions.get(it["species_id"])
     return {"shown": len(items), "total": total, "lead_days": lead_days, "items": items}
 
 

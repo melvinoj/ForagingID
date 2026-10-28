@@ -142,6 +142,7 @@
     .sr-badge-soon { background: #fef3c7; color: #7a4f00; }
     .sr-meta   { font-size: 0.72rem; color: #555; }
     .sr-reason { font-size: 0.72rem; color: #666; font-style: italic; margin-top: 2px; }
+    .sr-warn   { font-size: 0.72rem; color: #7a2000; border-left: 3px solid #ea580c; padding: 1px 6px; margin-top: 3px; white-space: pre-wrap; }
 
     /* ── Border images (screen — visible so user can preview) ──────────────── */
     .print-border { position: fixed; pointer-events: none; z-index: 50; }
@@ -452,12 +453,6 @@ function _printWarnings(prof, tag, cls) {
   return SafetyGate.handoutWarningsHtml(prof && prof.safety, tag, cls);
 }
 
-// Look-alike + preparation warnings printed with culinary content where no
-// warning block sits directly beside it (Fix B, 22 Oct 2026): curator text, uncut.
-function _printCulinaryWarnings(prof) {
-  return SafetyGate.culinaryWarnings(prof && prof.safety, { handout: true });
-}
-
 // Batch 8: a participant's own notes print under their species (loaded once
 // from /api/encounters by GuestNotes; {} for the curator — handouts unchanged).
 // Guest text: always escaped.
@@ -538,14 +533,18 @@ function _workshopPage(name, prof, baseByName, photos, showPhotos, withFieldBloc
       ${safetyBody}
     </div>`;
 
+  // Workshop page (28 Oct 2026): the safety box above is the ONE full copy of the
+  // warnings on this page — no repeat before Recipe / Foraging (doctrine: one stays).
   const recipeHtml = (ct.recipes && key)
-    ? `<div class="ws-section-h">Recipe</div>${_printCulinaryWarnings(prof)}<div class="ws-recipe">${LmMd.render(key.body)}</div>` : '';
+    ? `<div class="ws-section-h">Recipe</div><div class="ws-recipe">${LmMd.render(key.body)}</div>` : '';
 
-  const medBits = [_esc(cul.medicinal_notes), _esc(cul.medicinal_folklore),
-    cul.traditional_uses ? '<span class="ws-fl">Traditional uses —</span> ' + _esc(cul.traditional_uses) : '']
-    .filter(Boolean);
+  const medBits = [_esc(cul.medicinal_notes), _esc(cul.medicinal_folklore)].filter(Boolean);
   const medicinalHtml = (ct.herbal && medBits.length)
     ? `<div class="ws-section-h">Medicinal preparations</div><div class="ws-forage">${medBits.map(b=>`<p>${b}</p>`).join('')}</div>` : '';
+  // Traditional / other uses are not medicinal (28 Oct 2026): own section, omitted when empty.
+  const otherUses = (cul.traditional_uses || '').trim();
+  const otherUsesHtml = (ct.herbal && otherUses)
+    ? `<div class="ws-section-h">Other uses</div><div class="ws-forage"><p>${_esc(otherUses)}</p></div>` : '';
 
   const forageBits = [];
   const idn = LmMd.stripCitations(cul.id_notes);
@@ -579,7 +578,7 @@ function _workshopPage(name, prof, baseByName, photos, showPhotos, withFieldBloc
       <div class="ws-edib"><span class="fg-pill ${edClass(edib)}">${_esc(edLabel(edib))}</span>${_printSafety(prof)}</div>
     </div>
     ${safetyHtml}
-    ${fieldBlockHtml}${recipeHtml}${medicinalHtml}${forageHtml ? _printCulinaryWarnings(prof) + forageHtml : ''}${myNotes}
+    ${fieldBlockHtml}${recipeHtml}${medicinalHtml}${otherUsesHtml}${forageHtml}${myNotes}
     <div class="ws-credit">Melvin Jarman</div>
   </div>`;
 }
@@ -618,16 +617,20 @@ function _seasonalReturnsHtml(items) {
       : '';
     const loc  = it.last_seen_place || '';
     const meta = [date, loc].filter(Boolean).join(' · ');
+    const gate = SafetyGate.seasonalReturn(it.safety);   // same gate as picked species
+    if (!gate) return '';                                 // toxic/deadly without badge + warnings
     const badge = it.timing === 'now'
       ? `<span class="sr-badge sr-badge-now">in season</span>`
       : `<span class="sr-badge sr-badge-soon">coming soon</span>`;
     return `<div class="sr-entry">
       ${it.common_name ? `<div class="sr-common">${_esc(spCommon(it.common_name))}</div>` : ''}
       <div class="sr-sci">${_esc(it.scientific_name)}</div>
-      <div class="sr-row">${badge}${meta ? `<span class="sr-meta">${_esc(meta)}</span>` : ''}</div>
+      <div class="sr-row">${gate.badge}${badge}${meta ? `<span class="sr-meta">${_esc(meta)}</span>` : ''}</div>
       ${it.reason ? `<div class="sr-reason">${_esc(it.reason)}</div>` : ''}
+      ${gate.warnings}
     </div>`;
   }).join('');
+  if (!rows) return '';
   return `<div class="sr-section"><div class="sr-title">Seasonal Returns</div><div class="sr-grid">${rows}</div></div>`;
 }
 
@@ -642,7 +645,7 @@ function _seasonalReturnsHtml(items) {
   const names = list.species;
   const cover = _loadCover();
   const photos = list.photos || {};
-  const seasonalReturns = (() => { try { return JSON.parse(localStorage.getItem('foragingid_sr_data') || '[]'); } catch(_){ return []; } })();
+  const seasonalReturns = (() => { try { return JSON.parse(localStorage.getItem('foragingid_sr_data_v2') || '[]'); } catch(_){ return []; } })();
 
   document.querySelectorAll('#style-toggle button').forEach(b =>
     b.classList.toggle('active', b.dataset.pstyle === style));

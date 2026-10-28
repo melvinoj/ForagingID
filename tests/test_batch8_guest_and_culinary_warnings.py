@@ -192,11 +192,11 @@ def test_fix_b_no_duplicate_where_the_species_block_sits_beside():
 def test_fix_b_lists_print_workshop_and_panels_carry_the_warnings():
     lists, prn = _src("frontend/lists.html"), _src("frontend/print.html")
     assert "${SafetyGate.culinaryWarnings(prof && prof.safety)}${_esc(snippet)}" in lists           # Lists panel, in-app
-    assert "${(forageHtml || culinaryHtml) ? _printCulinaryWarnings(prof) : ''}" in lists
-    assert "${forageHtml ? _printCulinaryWarnings(prof) + forageHtml : ''}" in prn
+    # Workshop page (Melvin, 28 Oct 2026): the safety box is the one full copy —
+    # no repeat before Foraging / Recipe (tests/test_safety_batch_28oct.py item 3).
     for s in (lists, prn):
-        assert "SafetyGate.culinaryWarnings(prof && prof.safety, { handout: true })" in s
-        assert '<div class="ws-section-h">Recipe</div>${_printCulinaryWarnings(prof)}<div class="ws-recipe">' in s
+        assert "_printCulinaryWarnings" not in s
+        assert '<div class="ws-section-h">Recipe</div><div class="ws-recipe">' in s
     # Find → Make? is the Recipes page now (25 Oct 2026): its tiles carry the warnings.
     rec = _extract(_src("frontend/recipes.html"), "function tileHtml(r) {", "function _visible() {")
     assert "SafetyGate.culinaryWarnings(safety)" in rec
@@ -250,10 +250,9 @@ def test_fix_b_pdf_workshop_and_booklet():
     prof = {"species": {"edibility_status": "caution"}, "culinary": {"edible_parts": "EDIBLE-PARTS flowers"},
             "recipes": [{"title": "Soup", "body": RECIPE_BODY, "is_preferred": True}]}
     ws = _pdf(prof, d, "workshop")
-    forage = _extract(ws, "Foraging notes", "</div>\n  </div>") if "Foraging notes" in ws else ""
-    assert "culinary-warning" in forage and "LOOK-END" in forage
-    rec = ws[ws.index(">Recipe<"):]
-    assert rec.index("culinary-warning") < rec.index("RECIPE-SENTINEL") and "PREP-END" in rec
+    # 28 Oct 2026: the workshop page's Safety & edibility box is the one full copy.
+    assert ws.count("LOOK-END") == 1 and ws.count("PREP-END") == 1 and "culinary-warning" not in ws
+    assert ws.index("LOOK-END") < ws.index("Foraging notes") < ws.index("RECIPE-SENTINEL")
     bk = _pdf(prof, d, "recipe_booklet")
     assert bk.count("LOOK-END") == 1 and bk.count("PREP-END") == 1 and "culinary-warning" not in bk
     none = dict(DEC_NONE, label="", handout_label="", warning=None, verdict="edible")

@@ -198,7 +198,7 @@ def test_print_workshop_medicinal_and_id_notes_escaped():
     """print.html workshop page: medicinal notes/folklore and ID notes (source /
     PFAF text) go into <p> elements — run the page's own statements."""
     src = _src("frontend/print.html")
-    start = src.index("  const medBits = [_esc(cul.medicinal_notes), _esc(cul.medicinal_folklore),")
+    start = src.index("  const medBits = [_esc(cul.medicinal_notes), _esc(cul.medicinal_folklore)]")
     end = src.index("  let fieldBlockHtml = '';", start)
     block = src[start:end]
     script = (_helpers("frontend/print.html") + _src("frontend/static/js/md.js") + "\nvar LmMd = window.LmMd;\n"
@@ -206,7 +206,7 @@ def test_print_workshop_medicinal_and_id_notes_escaped():
               + "var cul = { medicinal_notes: H, medicinal_folklore: H, traditional_uses: H, id_notes: H,"
                 " edible_parts: H, harvest_stage: H };\n"
               + "var ct = { herbal: true, id_notes: true, culinary: true, foraging: true }; var withFieldBlock = false;\n"
-              + block + "\nprint(JSON.stringify(medicinalHtml + forageHtml));")
+              + block + "\nprint(JSON.stringify(medicinalHtml + otherUsesHtml + forageHtml));")   # Other uses: own section, 28 Oct
     out = _jsc(script)
     assert "<script" not in out.lower(), out
     paras = re.findall(r"<p>(.*?)</p>", out, re.S)

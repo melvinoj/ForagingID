@@ -430,6 +430,13 @@
       font-size: 0.68rem; color: #888; text-transform: uppercase;
       font-weight: 700; margin-right: 5px;
     }
+    /* Source links that don't name the species (28 Oct 2026, app/services/source_links.py):
+       curator-only, flagged, never printed. Guests never receive them. */
+    .culinary-link-flagged a { color: #b0a080; border-bottom-style: dashed; }
+    .culinary-link-flag {
+      font-size: 0.66rem; color: #f59e0b; font-weight: 700; margin-left: 6px;
+    }
+    @media print { .culinary-link-flagged { display: none !important; } }
 
     /* Taste notes / recipe / medicinal notes (AI-approved sections) */
     .ai-field-block {
@@ -2320,9 +2327,12 @@ function renderProfile(data, observations) {
 
     // Culinary links
     if (ci && ci.culinary_links && ci.culinary_links.length) {
+      // lk.flagged: neither title nor URL names this species (server check) — curator-only, flagged.
       const linksHtml = ci.culinary_links.map(lk =>
-        `<li><span class="culinary-link-source">${_esc(lk.source_label)}</span>` +
-        `<a href="${_esc(lk.url)}" target="_blank" rel="noopener noreferrer">${_esc(lk.title)}</a></li>`
+        `<li${lk.flagged ? ' class="culinary-link-flagged"' : ''}><span class="culinary-link-source">${_esc(lk.source_label)}</span>` +
+        `<a href="${_esc(lk.url)}" target="_blank" rel="noopener noreferrer">${_esc(lk.title)}</a>` +
+        (lk.flagged ? `<span class="culinary-link-flag" title="Neither the title nor the address names this species — may be a different plant. Hidden from guests and print.">⚑ may not be this species</span>` : '') +
+        `</li>`
       ).join('');
       document.getElementById('culinary-links-list').innerHTML = linksHtml;
       document.getElementById('sec-culinary-links').style.display = '';

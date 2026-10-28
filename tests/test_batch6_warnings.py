@@ -195,7 +195,7 @@ def test_both_endpoints_serve_the_warnings():
         out = {}
         async with S() as s:
             for _, name, _, _ in SPECIES:
-                c = await culinary.get_culinary_profile(name, db=s)
+                c = await culinary.get_culinary_profile(name, db=s, identity=CURATOR)
                 p = await culinary.species_profile(name, db=s, identity=CURATOR)
                 out[name] = (c["safety"], p["safety"])
         await eng.dispose()

@@ -163,7 +163,7 @@ def test_payloads_serve_the_decision():
         got = {}
         async with S() as s:
             for _, name, _, _ in SPECIES:
-                c = await culinary.get_culinary_profile(name, db=s)
+                c = await culinary.get_culinary_profile(name, db=s, identity=CURATOR)
                 p = await culinary.species_profile(name, db=s, identity=CURATOR)
                 g = await culinary.species_profile(name, db=s, identity=GUEST)
                 got[name] = (c["safety"], p["safety"], g["safety"], c["recipes"], p["recipes"])

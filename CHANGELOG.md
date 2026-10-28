@@ -15,10 +15,6 @@ Recipes batch 28 Oct, steps 1–5, checkpoint commits e1820ef, e4dc34e, c5bdd9c,
 2. Live checks below before any further index work.
 3. CLOSEOUT_28oct.md section 4 items 11–29 (decisions marked there; 3 and 19 done this session), smallest first: 11 PFAF chip / Wikipedia label, 12 bare-domain links, 17 import summary duplicates, 18 Background Processes catch-all.
 
-### Open decisions (Melvin)
-- Obs 9536 (Prunus cerasifera, human-approved 19 Jul): leave approved (default) or send back to Review.
-- Recipe season provenance: no record of who set an ai_generated recipe's season, so a curator edit there can be overridden by a contradicting title season word (none today). Add a small season-source column (migration), or accept.
-
 ### Backlog
 - Walk route line distorts, then disappears after zooming in and dragging, until the walk is reloaded (REPORT.md batch 15b item 4). Melvin reproduces first; no fix from code reading alone.
 - Map deep-link marker shows only "Observation #id" (pins-filters.js:577).
@@ -34,6 +30,9 @@ Recipes batch 28 Oct, steps 1–5, checkpoint commits e1820ef, e4dc34e, c5bdd9c,
 - 28 Oct: device list — ✕ on every entry (live paired device = revoke + remove; revoked device / unused link = delete the entry), app confirm dialog. Auto-prune only revoked devices and links unused after 7 days, on every list load; never a paired device for being offline.
 - 28 Oct: section 4 decisions = Claude.ai defaults. B5-03 = curator-only (scenes included). Data Trust = relabel, not redefine.
 - 28 Oct recipes batch: no fabricated titles — untitled shows "Untitled recipe" and stays in the needs_title queue; season = curator-set, else title word, else keyword guess, read-time only.
+- 28 Oct: obs 9536 stays approved — human-approved 19 Jul, terminal.
+- 28 Oct: recipe season provenance accepted, no column; revisit only if Melvin edits an AI recipe's season.
+- 28 Oct: species-page recipe card "Untitled recipe" accepted.
 
 ### Rules learned
 - Any app/ save reloads uvicorn — check /api/processes/active right before each save.

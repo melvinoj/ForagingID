@@ -1477,9 +1477,12 @@ async def get_culinary_profile(
 
     # Source links (28 Oct 2026): one species-name check; flagged links are
     # marked for the curator and never reach a guest (app/services/source_links.py).
-    from app.services.source_links import apply_link_check
+    from app.services.source_links import apply_link_check, source_chips
     culinary_dict = _culinary_to_dict(ci, sp.scientific_name) if ci else None
     await apply_link_check(db, sp, culinary_dict, identity.is_guest)
+    # Source chips: one per known source, labelled by host (CLOSEOUT_28oct section 4 #11).
+    chips = source_chips(ci.primary_source_url if ci else None,
+                         (culinary_dict or {}).get("sources_json", []) + sources)
     return {
         "species": {
             "id": sp.id,
@@ -1499,6 +1502,7 @@ async def get_culinary_profile(
         "culinary": culinary_dict,
         "ai_generated_fields": ai_fields,
         "enrichment_sources": sources,
+        "source_chips": chips,
         "recipes": recipes_out,
     }
 

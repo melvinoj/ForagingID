@@ -16,10 +16,61 @@ separators (- _ + / %20 .) count as spaces.
 import re
 import unicodedata
 from typing import Iterable, List, Optional
-from urllib.parse import unquote
+from urllib.parse import unquote, urlparse
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+
+
+# ── Link URLs and labels (CLOSEOUT_28oct section 4 #11, #12) ─────────────────
+# A link's label comes from its actual host, never from the stored name: iNat
+# hands back a Wikipedia URL that was stored under "iNaturalist" (593 rows), and
+# primary_source_url is Wikipedia / Wikidata for ~200 species yet was always
+# shown as "PFAF". Hosts not listed here keep their stored name.
+_HOST_LABELS = {
+    "pfaf.org": "PFAF",
+    "wikipedia.org": "Wikipedia",
+    "wikidata.org": "Wikidata",
+    "inaturalist.org": "iNaturalist",
+}
+
+
+def normalise_url(url: Optional[str]) -> str:
+    """A bare domain ("gallowaywildfoods.com") gets https:// — otherwise the
+    browser resolves it as a path on this app. Render-time; the DB is untouched."""
+    url = (url or "").strip()
+    if url and not url.lower().startswith(("http://", "https://")):
+        url = "https://" + url.lstrip("/")
+    return url
+
+
+def host_label(url: Optional[str]) -> Optional[str]:
+    """The known source a URL's host belongs to (subdomains included), else None."""
+    host = (urlparse(normalise_url(url)).hostname or "").lower()
+    for domain, label in _HOST_LABELS.items():
+        if host == domain or host.endswith("." + domain):
+            return label
+    return None
+
+
+def source_chips(primary_url: Optional[str], sources: Optional[list]) -> List[dict]:
+    """The species page's source chips: primary_source_url first, then sources_json
+    ({name, url} or {source_name, source_url}). One chip per known source (PFAF
+    under both an accepted name and a synonym = one chip), else one per URL."""
+    out, seen = [], set()
+    entries = [{"url": primary_url}] + [s for s in (sources or []) if isinstance(s, dict)]
+    for s in entries:
+        url = normalise_url(s.get("url") or s.get("source_url"))
+        if not url:
+            continue
+        known = host_label(url)
+        key = known or url.lower().rstrip("/")
+        if key in seen:
+            continue
+        seen.add(key)
+        label = known or s.get("name") or s.get("source_name") or urlparse(url).hostname or url
+        out.append({"label": label, "url": url})
+    return out
 
 
 def _norm(s: Optional[str]) -> str:

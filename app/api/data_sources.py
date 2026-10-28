@@ -24,6 +24,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.models.data_source import DataSource
+from app.services.source_links import normalise_url as _normalise_url
 
 log = logging.getLogger(__name__)
 
@@ -85,18 +86,13 @@ def _clean_types(types: List[str]) -> List[str]:
     return out
 
 
-def _normalise_url(url: str) -> str:
-    url = (url or "").strip()
-    if url and not url.lower().startswith(("http://", "https://")):
-        url = "https://" + url
-    return url
-
-
 def _to_dict(ds: DataSource) -> dict:
     return {
         "id": ds.id,
         "label": ds.label,
-        "url": ds.url,
+        # 14 rows (ids 21-34) were stored as bare domains; served with https://
+        # (render-time, CLOSEOUT_28oct section 4 #12 — no DB write).
+        "url": _normalise_url(ds.url),
         "data_types": _parse_types(ds.data_types),
         "species_scope": ds.species_scope,
         "region": ds.region,

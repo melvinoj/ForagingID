@@ -2481,7 +2481,7 @@ function renderProfile(data, observations) {
   initPendingDrafts(data);
 
   // ── 10. Sources & confidence ───────────────────────────────────────────────
-  const sourcesHtml = _renderSources(ci, data.enrichment_sources || []);
+  const sourcesHtml = _renderSources(ci, data.source_chips || []);
   if (sourcesHtml) {
     document.getElementById('sources-content').innerHTML = sourcesHtml;
     document.getElementById('sec-sources').style.display = '';
@@ -2807,25 +2807,12 @@ async function sendSpeciesToReview(sciName) {
   }
 }
 
-function _renderSources(ci, enrichmentSources) {
-  const chips = [];
-  if (ci && ci.primary_source_url) {
-    chips.push(`<a class="source-chip" href="${_esc(ci.primary_source_url)}" target="_blank" rel="noopener">🔗 PFAF</a>`);
-  }
-  if (ci && ci.sources_json) {
-    (ci.sources_json || []).forEach(s => {
-      if (s.url || s.source_url) {
-        const url = s.url || s.source_url;
-        const name = s.name || s.source_name || url;
-        chips.push(`<a class="source-chip" href="${_esc(url)}" target="_blank" rel="noopener">🔗 ${_esc(name)}</a>`);
-      }
-    });
-  }
-  enrichmentSources.forEach(s => {
-    if (s.source_url && !chips.some(c => c.includes(s.source_url))) {
-      chips.push(`<a class="source-chip" href="${_esc(s.source_url)}" target="_blank" rel="noopener">🔗 ${_esc(s.source_name || s.source_url)}</a>`);
-    }
-  });
+// sourceChips = the profile's source_chips: primary_source_url + sources_json +
+// enrichment sources, deduped and labelled by host on the server
+// (app/services/source_links.source_chips — no rule of its own here).
+function _renderSources(ci, sourceChips) {
+  const chips = sourceChips.map(s =>
+    `<a class="source-chip" href="${_esc(s.url)}" target="_blank" rel="noopener">🔗 ${_esc(s.label)}</a>`);
   if (ci) {
     const parts = [];
     if (ci.pfaf_retrieved_at) parts.push(`PFAF: ${new Date(ci.pfaf_retrieved_at).toLocaleDateString('en-GB')}`);

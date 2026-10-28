@@ -120,19 +120,32 @@ def _jsc(script):
     return json.loads(out.stdout.strip().split("\n")[-1])
 
 
-def _bp_run(fetch_js):
+def _bp_run(fetch_js, boot_first=False):
     """Runs settings.html's real loadBgProcesses with a stub fetch; returns the
-    body HTML and what reached console.error."""
+    body HTML and what reached console.error. boot_first = call it BEFORE the
+    declarations are evaluated, as settings.html's Boot block does."""
     h = _read("frontend/settings.html")
     src = h[h.index("const _BP_TYPE_LABEL = {"):h.index("// Dismiss removes a dead row")]
+    call = ("var out = null; var p = loadBgProcesses(); p.then(function(){"
+            " out = {html: body.innerHTML, errs: errs}; }, function(e){ out = {rejected: String(e)}; });\n")
     script = (
         "var body = {innerHTML: ''}; var errs = [];\n"
         "var document = {getElementById: function(){ return body; }};\n"
         "var console = {error: function(){ errs.push([].slice.call(arguments).map(String).join(' ')); }};\n"
-        "var fetch = " + fetch_js + ";\n" + src +
-        "\nvar out = null; loadBgProcesses().then(function(){ out = {html: body.innerHTML, errs: errs}; });\n"
-        "drainMicrotasks(); print(JSON.stringify(out));")
+        "var fetch = " + fetch_js + ";\n" +
+        (call + src if boot_first else src + "\n" + call) +
+        "\ndrainMicrotasks(); print(JSON.stringify(out));")
     return _jsc(script)
+
+
+def test_bp_boot_call_before_declarations_does_not_throw():
+    # settings.html Boot (≈ line 1216) runs loadBgProcesses() ~1000 lines above
+    # its helpers; a top-level `let` cache threw there (TDZ) on every load.
+    h = _read("frontend/settings.html")
+    assert h.index("loadBgProcesses();") < h.index("async function _loadBpCancellable(")
+    assert "let _bpCancellable" not in h
+    o = _bp_run(_ok("Promise.resolve([])"), boot_first=True)
+    assert o.get("html") and "No processes running." in o["html"], o
 
 
 def _ok(active_json):

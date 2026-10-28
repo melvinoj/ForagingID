@@ -2226,17 +2226,20 @@ const _BP_TYPE_LABEL = {
 // this list and the endpoint's own guard cannot drift apart; /api/processes/
 // {id}/cancel returns 409 for anything else, so showing the button for a type
 // not in here would only produce a failing click.
-let _bpCancellable = null;
+// Cached on the (hoisted) function, not a top-level `let`: Boot calls
+// loadBgProcesses() far above this point, and a `let` here was still in its
+// temporal dead zone then — the throw showed as "Could not reach server." on
+// every Settings load (20 Jul - 28 Oct 2026).
 async function _loadBpCancellable() {
-  if (_bpCancellable) return _bpCancellable;
+  if (_loadBpCancellable.types) return _loadBpCancellable.types;
   try {
     const r = await fetch('/api/processes/cancellable-types');
     const d = r.ok ? await r.json() : null;
-    _bpCancellable = new Set((d && d.cancellable_types) || []);
+    _loadBpCancellable.types = new Set((d && d.cancellable_types) || []);
   } catch (_) {
-    _bpCancellable = new Set();
+    _loadBpCancellable.types = new Set();
   }
-  return _bpCancellable;
+  return _loadBpCancellable.types;
 }
 
 async function loadBgProcesses() {

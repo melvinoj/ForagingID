@@ -70,6 +70,38 @@ class TasteNotesEdit(BaseModel):
 
 
 # ---------------------------------------------------------------------------
+# One thumbnail per species — the ONLY rule (17-B3; Recipes page 28 Oct 2026):
+# its best confirmed photo — the highest score where candidates[0] is the
+# photo's own species (the map pin's confidence rule, B1-08), else any
+# confirmed photo. Same two-field filter as the species counts, so guests may
+# load it. {species_primary: thumbnail file name}. Used by GET /api/species/
+# (Large / List views) and GET /api/recipes.
+# ---------------------------------------------------------------------------
+async def best_confirmed_thumbnails(db: AsyncSession) -> dict:
+    from sqlalchemy import func as sqlfunc
+    from app.services.taxonomy import normalize_taxon_key as _ntk
+    thumb_rows = (await db.execute(
+        select(
+            Observation.species_primary,
+            Observation.thumbnail_path,
+            sqlfunc.json_extract(Observation.species_candidates_json, "$[0].scientific_name"),
+            sqlfunc.json_extract(Observation.species_candidates_json, "$[0].score"),
+        )
+        .where(Observation.species_primary.is_not(None))
+        .where(Observation.thumbnail_path.is_not(None))
+        .where(Observation.review_status.in_(["approved", "manually_verified"]))
+        .where(Observation.identification_status == "identified")
+    )).all()
+    best: dict = {}
+    for sp_name, thumb, cand_name, cand_score in thumb_rows:
+        score = cand_score if (cand_name and _ntk(cand_name) == _ntk(sp_name)
+                               and isinstance(cand_score, (int, float))) else -1.0
+        if sp_name not in best or score > best[sp_name][0]:
+            best[sp_name] = (score, Path(thumb).name)
+    return {name: f for name, (_, f) in best.items()}
+
+
+# ---------------------------------------------------------------------------
 # GET /api/species/   — all distinct species from confirmed observations
 # ---------------------------------------------------------------------------
 
@@ -125,29 +157,7 @@ async def list_species(
     ).group_by(SpeciesLookalike.species_id)
     look_counts = {r.species_id: r.n for r in (await db.execute(look_counts_stmt)).all()}
 
-    # One thumbnail per species for the Large / List views (17-B3): its best
-    # confirmed photo — the highest score where candidates[0] is the photo's own
-    # species (the map pin's confidence rule, B1-08), else any confirmed photo.
-    # Same two-field filter as the counts above, so guests may load it.
-    from app.services.taxonomy import normalize_taxon_key as _ntk
-    thumb_rows = (await db.execute(
-        select(
-            Observation.species_primary,
-            Observation.thumbnail_path,
-            sqlfunc.json_extract(Observation.species_candidates_json, "$[0].scientific_name"),
-            sqlfunc.json_extract(Observation.species_candidates_json, "$[0].score"),
-        )
-        .where(Observation.species_primary.is_not(None))
-        .where(Observation.thumbnail_path.is_not(None))
-        .where(Observation.review_status.in_(["approved", "manually_verified"]))
-        .where(Observation.identification_status == "identified")
-    )).all()
-    best_thumb: dict = {}
-    for sp_name, thumb, cand_name, cand_score in thumb_rows:
-        score = cand_score if (cand_name and _ntk(cand_name) == _ntk(sp_name)
-                               and isinstance(cand_score, (int, float))) else -1.0
-        if sp_name not in best_thumb or score > best_thumb[sp_name][0]:
-            best_thumb[sp_name] = (score, Path(thumb).name)
+    best_thumb = await best_confirmed_thumbnails(db)
 
     from app.services.phenology import in_season_now
     _this_month = datetime.utcnow().month
@@ -196,7 +206,7 @@ async def list_species(
             "lookalike_count": look_counts.get(sp_id, 0) if sp_id else 0,
             "in_season": _in_season,
             "has_phenology": _has_pheno,
-            "thumbnail": best_thumb[name][1] if name in best_thumb else None,
+            "thumbnail": best_thumb.get(name),
         })
 
     return results

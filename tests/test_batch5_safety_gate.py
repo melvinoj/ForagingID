@@ -418,8 +418,12 @@ def test_gated_branches_are_where_the_grep_assumes():
     assert recipe.index("if (culinaryBlocked || edibBlocked)") < recipe.index("recipes.length") \
         if "recipes.length" in recipe else True
     assert "const culinaryBlocked = !SafetyGate.allowed(_safety);" in sp
-    grid = sp[sp.index("const _sg = SafetyGate.decision(sp.safety);"):]
-    assert grid.index("!SafetyGate.allowed(_sg)") < grid.index("'✓ edible'")
+    # 28 Oct 2026: the list badge moved unchanged to view-switch.js (LmViewSwitch.badge),
+    # shared by the species and recipes pages
+    assert "function _spEdibBadge(sp) { return LmViewSwitch.badge(sp); }" in sp
+    vs = _src("frontend/static/js/view-switch.js")
+    grid = vs[vs.index("const _sg = SafetyGate.decision(sp.safety);"):]
+    assert grid.index("!SafetyGate.allowed(_sg)") < grid.index(">✓ edible<")
     for p in ("frontend/lists.html", "frontend/print.html"):
         s = _src(p)
         acc = s[s.index("function _printCulinary("):s.index("function _printSafety(")]

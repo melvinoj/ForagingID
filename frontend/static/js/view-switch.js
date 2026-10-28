@@ -67,5 +67,33 @@
     return d.verdict === 'edible' ? 4 : 5;
   }
 
-  window.LmViewSwitch = { VIEWS, stored, remember, toggleHtml, sync, firstVisible, scrollTo, safetyRank };
+  // An item's safety badge — the species list's reading of the served
+  // decision (SafetyGate), moved here unchanged (28 Oct 2026) so species and
+  // recipe cards / rows show the same badge. `sp`: { safety, edibility_status,
+  // condition_count }.
+  function badge(sp) {
+    const edib = sp.edibility_status;
+    const hasConditions = (sp.condition_count || 0) > 0;
+    // Safety gate (batch 5): blocked species (deadly / toxic / toxicity unknown)
+    // get the served ☠ / ⚠ label, never an edible badge; caution comes from the
+    // served level. If conditional detail exists: "conditional" chip instead of
+    // the flat edible / caution badge.
+    const _sg = SafetyGate.decision(sp.safety);
+    const edibBadge = (!SafetyGate.allowed(_sg) && _sg.label)
+      ? SafetyGate.badge(_sg)
+      : _sg.level === 'caution' && hasConditions
+        ? '<span class="obs-badge" style="background:#2a2010;color:#d4a840;border:1px solid #4a3a10">⚡ conditional</span>'
+      : _sg.level === 'caution'
+        ? '<span class="obs-badge" style="background:#2a2010;color:#d4a840;border:1px solid #4a3a10">⚠ caution</span>'
+      : edib === 'inedible'
+        ? '<span class="inedible-badge">✗ not edible</span>'
+      : edib === 'edible' && hasConditions
+        ? '<span class="obs-badge" style="background:#1e3028;color:#7ac8a0;border:1px solid #3a5e48">⚡ conditional</span>'
+      : edib === 'edible'
+        ? '<span class="obs-badge" style="background:#1e3828;color:#7ac8a0">✓ edible</span>'
+        : '';
+    return edibBadge;
+  }
+
+  window.LmViewSwitch = { VIEWS, stored, remember, toggleHtml, sync, firstVisible, scrollTo, safetyRank, badge };
 })();

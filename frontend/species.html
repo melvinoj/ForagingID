@@ -1766,31 +1766,9 @@ function _syncSpViewButtons() { LmViewSwitch.sync('.sp-view-btn', _spView); }
 function _spFirstVisibleName() { return LmViewSwitch.firstVisible('#species-grid [data-name]'); }
 function _spScrollToName(anchor) { LmViewSwitch.scrollTo(anchor, '#species-grid [data-name]'); }
 
-// The species' badge — the grid's existing reading of the served decision
-// (SafetyGate), moved here unchanged so all three views share it.
-function _spEdibBadge(sp) {
-    const edib = sp.edibility_status;
-    const hasConditions = (sp.condition_count || 0) > 0;
-    // Safety gate (batch 5): blocked species (deadly / toxic / toxicity unknown)
-    // get the served ☠ / ⚠ label, never an edible badge; caution comes from the
-    // served level. If conditional detail exists: "conditional" chip instead of
-    // the flat edible / caution badge.
-    const _sg = SafetyGate.decision(sp.safety);
-    const edibBadge = (!SafetyGate.allowed(_sg) && _sg.label)
-      ? SafetyGate.badge(_sg)
-      : _sg.level === 'caution' && hasConditions
-        ? '<span class="obs-badge" style="background:#2a2010;color:#d4a840;border:1px solid #4a3a10">⚡ conditional</span>'
-      : _sg.level === 'caution'
-        ? '<span class="obs-badge" style="background:#2a2010;color:#d4a840;border:1px solid #4a3a10">⚠ caution</span>'
-      : edib === 'inedible'
-        ? '<span class="inedible-badge">✗ not edible</span>'
-      : edib === 'edible' && hasConditions
-        ? '<span class="obs-badge" style="background:#1e3028;color:#7ac8a0;border:1px solid #3a5e48">⚡ conditional</span>'
-      : edib === 'edible'
-        ? '<span class="obs-badge" style="background:#1e3828;color:#7ac8a0">✓ edible</span>'
-        : '';
-    return edibBadge;
-}
+// The species' badge in all three views — LmViewSwitch.badge (view-switch.js),
+// the one reading of the served decision, shared with the Recipes page.
+function _spEdibBadge(sp) { return LmViewSwitch.badge(sp); }
 
 function _spWarnBadges(sp) {
   const hasStructuredLook = (sp.lookalike_count || 0) > 0;

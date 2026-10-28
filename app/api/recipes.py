@@ -120,7 +120,10 @@ async def all_recipes(
     its species is on. No recipe body (the species page holds it).
     created_at is the approval date: a recipe row is created when its draft is
     approved (culinary.approve_ai_draft) or when the curator adds it."""
+    from sqlalchemy import func as sqlfunc
+    from app.api.culinary import best_confirmed_thumbnails
     from app.api.walk import saved_walks_by_species
+    from app.models.species import SpeciesEdibilityCondition
     from app.services.safety_gate import safety_for_species_bulk
     stmt = (select(SpeciesRecipe, Species)
             .join(Species, Species.id == SpeciesRecipe.species_id)
@@ -135,6 +138,12 @@ async def all_recipes(
     rows = (await db.execute(stmt.order_by(SpeciesRecipe.id))).all()
     walks = await saved_walks_by_species(db)
     safety = await safety_for_species_bulk(db, [sp for _, sp in rows])
+    # The species list's own thumbnail rule and badge inputs (Large / Grid /
+    # List, 28 Oct 2026): the badge is the species page's (LmViewSwitch.badge).
+    thumbs = await best_confirmed_thumbnails(db)
+    cond_counts = dict((await db.execute(
+        select(SpeciesEdibilityCondition.species_id, sqlfunc.count(SpeciesEdibilityCondition.id))
+        .group_by(SpeciesEdibilityCondition.species_id))).all())
     out = []
     for r, sp in rows:
         d = safety[sp.id]
@@ -149,7 +158,10 @@ async def all_recipes(
             "website_url": r.website_url if recipe_website_url_ok(r.website_url) else None,
             "species": {"id": sp.id, "scientific_name": sp.scientific_name,
                         "common": display_common_name(sp.preferred_common_name, sp.common_names) or None,
-                        "level": d["level"], "label": d["label"]},
+                        "level": d["level"], "label": d["label"],
+                        "edibility_status": sp.edibility_status,
+                        "condition_count": cond_counts.get(sp.id, 0),
+                        "thumbnail": thumbs.get(sp.scientific_name)},
             "walks": walks.get(sp.scientific_name, []),
         }
         if not identity.is_guest:

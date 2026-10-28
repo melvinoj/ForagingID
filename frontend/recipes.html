@@ -50,12 +50,54 @@
     .recipe-tile .rt-meta { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 2px; }
     .rt-chip { display: inline-block; font-size: 0.7rem; padding: 1px 7px; border-radius: 10px;
                background: #2f4a3a; color: #8ab87a; }
-    .rt-chip.caution { background: #fef3c7; color: #92400e; font-weight: 700; }
     .rt-chip.curator { background: #3d3550; color: #c8b8e8; }
     .recipe-tile details { margin-top: 4px; font-size: 0.78rem; }
     .recipe-tile details summary { cursor: pointer; color: #e0b070; }
     .rc-state { color: #7a9a7a; padding: 30px 0; text-align: center; }
     @media (max-width: 480px) { .recipe-tile { padding: 10px 11px; } }
+
+    /* Large / Grid / List (28 Oct 2026) — the switch is static/js/view-switch.js,
+       shared with the species page; these rules are this page's own. */
+    .rc-view-toggle { display: inline-flex; flex-shrink: 0; border: 1px solid #4a5e5a; border-radius: 6px; overflow: hidden; }
+    .rc-view-btn {
+      background: #344440; color: #8a9a88; border: 0; padding: 0 10px; min-height: 38px; min-width: 38px;
+      cursor: pointer; display: inline-flex; align-items: center; justify-content: center;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .rc-view-btn + .rc-view-btn { border-left: 1px solid #4a5e5a; }
+    .rc-view-btn.active { background: #3a5c2a; color: #c8ddb0; }
+    .rc-view-btn svg { width: 16px; height: 16px; fill: currentColor; }
+    .recipe-grid.rc-large { grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 14px; }
+    .rc-thumb { position: relative; overflow: hidden; background: #2a3634; color: #6a8a6a; }
+    .rc-thumb img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: block; }
+    .rc-thumb .rc-ph { position: absolute; inset: 0; margin: auto; width: 56%; height: 56%; }
+    .rc-thumb-lg { margin: -14px -14px 8px; aspect-ratio: 4 / 3; border-radius: 8px 8px 0 0; }
+    .rc-thumb-sm { width: 44px; height: 44px; border-radius: 4px; }
+    .rc-table { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 0.84rem; }
+    .rc-table th { text-align: left; padding: 0; border-bottom: 1px solid #4a5e5a; }
+    .rc-sort-btn { background: none; border: 0; color: #a8c88a; font: inherit; font-weight: 700;
+                   padding: 6px 6px; cursor: pointer; width: 100%; text-align: left; }
+    .rc-table td { padding: 5px 6px; border-bottom: 1px solid #3a4c48; vertical-align: middle;
+                   overflow-wrap: anywhere; color: #c8d8c0; }
+    .rc-row { cursor: pointer; }
+    .rc-row:hover, .rc-row:focus { background: #3a4c48; outline: none; }
+    .rc-table .col-thumb { width: 56px; }
+    .rc-table .col-season { width: 112px; }
+    .rc-table .col-safety { width: 118px; }
+    .rc-table .rl-title { font-weight: 700; color: #e0b070; }
+    .rc-table details { margin-top: 3px; font-size: 0.78rem; }
+    .rc-table details summary { cursor: pointer; color: #e0b070; }
+    .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+    @media (max-width: 640px) {
+      .rc-table .col-season { width: 84px; }
+      .rc-table .col-safety { width: 96px; }
+    }
+    /* The species list's badge (LmViewSwitch.badge) — the species page's own
+       .sp-table badge styling, so a recipe shows exactly the species badge. */
+    #rc-results .obs-badge, #rc-results .inedible-badge {
+      display: inline-block; font-size: 0.72rem; padding: 2px 7px; border-radius: 10px; font-weight: 600;
+    }
+    #rc-results .inedible-badge { background: #fef3c7; color: #854d0e; font-weight: 400; }
   </style>
 </head>
 <body>
@@ -79,6 +121,8 @@
       <option value="recent">Recently added</option>
     </select>
     <select id="rc-walk" class="rc-select" aria-label="Walk" style="display:none"></select>
+    <!-- Large / Grid / List — buttons from LmViewSwitch.toggleHtml (view-switch.js), setRecipesView() -->
+    <div class="rc-view-toggle" id="rc-view-toggle" role="group" aria-label="Layout"></div>
   </div>
   <div id="rc-results"><div class="rc-state">Loading…</div></div>
 </div>
@@ -86,6 +130,7 @@
 <script src="/static/js/esc.js"></script>
 <script src="/static/js/safety-gate.js"></script>
 <script src="/static/js/species-names.js"></script>
+<script src="/static/js/view-switch.js"></script>
 <script>
 // ── Recipes page ──────────────────────────────────────────────────────────
 // GET /api/recipes (app/api/recipes.py all_recipes): approved, non-medicinal,
@@ -115,24 +160,115 @@ function recipeHref(r) {
   return `/species?s=${encodeURIComponent(r.species.scientific_name)}&recipe=${r.id}#recipe-card-${r.id}`;
 }
 
-function tileHtml(r) {
-  const safety = _data.safety[String(r.species.id)];
-  const caution = SafetyGate.decision(safety).level === 'caution';
-  const warn = SafetyGate.culinaryWarnings(safety);
-  const chips = [
+// Large / Grid / List (28 Oct 2026): the switch is LmViewSwitch
+// (static/js/view-switch.js), shared with the species page; this page keeps
+// its own remembered view.
+const _RC_VIEW_KEY = 'foragingid_recipes_view';
+let _rcView = LmViewSwitch.stored(_RC_VIEW_KEY, 'grid');
+let _rcListSort = { key: 'safety', dir: 1 };   // List view: safety first, as the species list offers
+
+// The species' badge — the species list's own (LmViewSwitch.badge → SafetyGate).
+function _rcSpecies(r) {
+  return { safety: _data.safety[String(r.species.id)], edibility_status: r.species.edibility_status,
+           condition_count: r.species.condition_count };
+}
+function _rcBadge(r) { return LmViewSwitch.badge(_rcSpecies(r)); }
+
+// Thumbnail: the species' best confirmed photo (the species list's rule,
+// served as species.thumbnail), lazy-loaded over a drawn placeholder that
+// shows when there is no photo or it fails to load.
+const _RC_PLACEHOLDER = '<svg class="rc-ph" viewBox="0 0 64 48" aria-hidden="true">' +
+  '<path d="M9 25h46a23 15 0 0 1-46 0z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>' +
+  '<path d="M6 25h52" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>' +
+  '<path d="M33 21c-1-8 5-14 13-15-1 8-6 13-13 15z" fill="currentColor" opacity=".45"/>' +
+  '<path d="M33 21c1-4 4-8 9-11" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>' +
+  '<path d="M27 21c-5-3-11-2-14 1 4 3 10 3 14-1z" fill="currentColor" opacity=".3"/></svg>';
+function _rcThumb(r, cls) {
+  const f = r.species.thumbnail;
+  return `<div class="rc-thumb ${cls} rc-season-${_esc(r.season)}">${_RC_PLACEHOLDER}` +
+    (f ? `<img src="/thumbnails/${_esc(f)}" loading="lazy" alt="" onerror="this.remove()">` : '') + '</div>';
+}
+
+function _rcChips(r) {
+  return [
     `<span class="rt-chip">${_esc(SEASON_LABEL[r.season] || r.season)}</span>`,
     `<span class="rt-chip">${_esc(TYPE_LABEL[r.recipe_type || 'other'])}</span>`,
-    caution ? `<span class="rt-chip caution" title="Caution species — read the warnings">⚠ caution</span>` : '',
     r.needs_title ? `<span class="rt-chip curator" data-guest-hide title="The title shown is only the recipe's first sentence">needs a title</span>` : '',
     r.hide_from_public ? `<span class="rt-chip curator" data-guest-hide>hidden from public</span>` : '',
   ].join('');
-  return `<div class="recipe-tile" role="link" tabindex="0" data-href="${_esc(recipeHref(r))}" data-recipe-id="${r.id}">
+}
+
+// Grid / Large card (Large adds the photo).
+function tileHtml(r) {
+  const safety = _data.safety[String(r.species.id)];
+  const warn = SafetyGate.culinaryWarnings(safety);
+  return `<div class="recipe-tile" role="link" tabindex="0" data-href="${_esc(recipeHref(r))}" data-recipe-id="${r.id}" data-name="${r.id}">
+    ${_rcView === 'large' ? _rcThumb(r, 'rc-thumb-lg') : ''}
     <div class="rt-title">${_esc(r.title || 'Recipe')}</div>
     <div class="rt-species">${spNameHtml(r.species.scientific_name, r.species.common)}</div>
     ${r.summary ? `<div class="rt-summary">${_esc(r.summary)}</div>` : ''}
-    <div class="rt-meta">${chips}</div>
+    <div class="rt-meta">${_rcChips(r)}${_rcBadge(r)}</div>
     ${warn ? `<details><summary>⚠ Warnings</summary>${warn}</details>` : ''}
   </div>`;
+}
+
+// List view: title, species (display common name), season, badge; sortable,
+// safety first by default (deadly, toxic, unknown, caution, edible, not edible).
+const _RC_SORTS = {
+  title:   r => (r.title || '').toLowerCase(),
+  species: r => (r.species.common || r.species.scientific_name).toLowerCase(),
+  season:  r => SEASONS.indexOf(r.season),
+  safety:  r => LmViewSwitch.safetyRank(_data.safety[String(r.species.id)]),
+};
+function _rcSorted(items) {
+  const f = _RC_SORTS[_rcListSort.key] || _RC_SORTS.safety;
+  const dir = _rcListSort.dir;
+  return [...items].sort((a, b) => {
+    const x = f(a), y = f(b);
+    const c = typeof x === 'number' ? x - y : String(x).localeCompare(String(y));
+    return c ? c * dir : _byTitle(a, b);
+  });
+}
+function sortRecipesList(key) {
+  if (!_RC_SORTS[key]) return;
+  _rcListSort = _rcListSort.key === key ? { key, dir: -_rcListSort.dir } : { key, dir: 1 };
+  render();
+}
+function rowHtml(r) {
+  const safety = _data.safety[String(r.species.id)];
+  const warn = SafetyGate.culinaryWarnings(safety);
+  const sp = r.species.common ? _esc(r.species.common) : `<em>${_esc(r.species.scientific_name)}</em>`;
+  return `<tr class="rc-row" role="link" tabindex="0" data-href="${_esc(recipeHref(r))}" data-recipe-id="${r.id}" data-name="${r.id}">
+    <td class="col-thumb">${_rcThumb(r, 'rc-thumb-sm')}</td>
+    <td class="col-title"><div class="rl-title">${_esc(r.title || 'Recipe')}</div>
+      ${warn ? `<details><summary>⚠ Warnings</summary>${warn}</details>` : ''}</td>
+    <td class="col-species" title="${_esc(r.species.scientific_name)}">${sp}</td>
+    <td class="col-season">${_esc(SEASON_LABEL[r.season] || r.season)}</td>
+    <td class="col-safety">${_rcBadge(r)}</td>
+  </tr>`;
+}
+function listHtml(items) {
+  const th = (key, label, cls) => {
+    const on = _rcListSort.key === key;
+    const arrow = on ? (_rcListSort.dir > 0 ? ' ▲' : ' ▼') : '';
+    return `<th class="${cls}" aria-sort="${on ? (_rcListSort.dir > 0 ? 'ascending' : 'descending') : 'none'}">
+      <button type="button" class="rc-sort-btn" onclick="sortRecipesList('${key}')">${label}${arrow}</button></th>`;
+  };
+  return `<table class="rc-table"><thead><tr>
+      <th class="col-thumb"><span class="sr-only">Photo</span></th>
+      ${th('title', 'Recipe', 'col-title')}${th('species', 'Species', 'col-species')}
+      ${th('season', 'Season', 'col-season')}${th('safety', 'Safety', 'col-safety')}
+    </tr></thead><tbody>${_rcSorted(items).map(rowHtml).join('')}</tbody></table>`;
+}
+
+function setRecipesView(view) {
+  if (!LmViewSwitch.VIEWS.includes(view) || view === _rcView) return;
+  const anchor = LmViewSwitch.firstVisible('#rc-results [data-name]');
+  _rcView = view;
+  LmViewSwitch.remember(_RC_VIEW_KEY, view);
+  LmViewSwitch.sync('.rc-view-btn', _rcView);
+  render();
+  LmViewSwitch.scrollTo(anchor, '#rc-results [data-name]');
 }
 
 function _visible() {
@@ -197,9 +333,11 @@ function render() {
     return;
   }
   const groups = groupsFor(view, list);
+  const body = items => _rcView === 'list' ? listHtml(items)
+    : `<div class="recipe-grid${_rcView === 'large' ? ' rc-large' : ''}">${items.map(tileHtml).join('')}</div>`;
   el.innerHTML = groups.length ? groups.map(g => `
     <div class="rc-group-h">${_esc(g.label)} <span class="n">· ${g.items.length}</span></div>
-    <div class="recipe-grid">${g.items.map(tileHtml).join('')}</div>`).join('')
+    ${body(g.items)}`).join('')
     : '<div class="rc-state">Nothing in this view.</div>';
   document.getElementById('rc-subtitle').textContent =
     `${list.length} approved recipe${list.length === 1 ? '' : 's'}${_q ? ` matching “${_q}”` : ''}. Tap one to open it on its species page.`;
@@ -223,14 +361,15 @@ async function load() {
   render();
 }
 
-// Tile → species page at that recipe card (species.html opens and highlights it).
+// Tile / row → species page at that recipe card (species.html opens and highlights it).
 document.getElementById('rc-results').addEventListener('click', e => {
   if (e.target.closest('details')) return;          // the warnings toggle, not a navigation
-  const t = e.target.closest('.recipe-tile');
+  const t = e.target.closest('[data-href]');
   if (t) location.href = t.dataset.href;
 });
 document.getElementById('rc-results').addEventListener('keydown', e => {
-  const t = e.target.closest('.recipe-tile');
+  if (e.target.closest('details')) return;
+  const t = e.target.closest('[data-href]');
   if (t && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); location.href = t.dataset.href; }
 });
 document.getElementById('rc-view').addEventListener('change', render);
@@ -242,6 +381,8 @@ document.getElementById('recipe-search').addEventListener('input', e => {
 });
 
 (function init() {
+  document.getElementById('rc-view-toggle').innerHTML = LmViewSwitch.toggleHtml('rc-view-btn', 'setRecipesView');
+  LmViewSwitch.sync('.rc-view-btn', _rcView);
   const v = _params.get('view') || (_params.get('walk') ? 'walk' : 'now');
   const sel = document.getElementById('rc-view');
   if ([...sel.options].some(o => o.value === v)) sel.value = v;

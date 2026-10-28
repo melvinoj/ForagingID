@@ -99,7 +99,7 @@ function showDetail(p) {
     speciesBlock = `<div style="font-size:0.78rem;color:#1e3a5f;font-weight:600;text-transform:uppercase;letter-spacing:0.04em;margin-bottom:4px">🏞 Scene / Landscape</div>
       ${descText
         ? `<div style="font-size:0.85rem;color:#333;line-height:1.5;padding:6px 10px;background:#f0f7ff;border-left:3px solid #3b82f6;border-radius:0 5px 5px 0">${descText}</div>`
-        : `<div style="font-size:0.82rem;color:#888;font-style:italic">No description added yet — edit in review queue</div>`}`;
+        : `<div data-guest-hide style="font-size:0.82rem;color:#888;font-style:italic">No description added yet — edit in review queue</div>`}`;  // curator prompt; guests see the heading only
   } else if (p.species_primary) {
     const commonLine = _allCommon.length
       ? `<div class="det-common-name">${_esc(spCommon(_allCommon[0]))}</div>` : '';

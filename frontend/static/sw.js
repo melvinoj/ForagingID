@@ -13,7 +13,7 @@
 //
 // Writes (POST / PATCH / DELETE) are never intercepted — they always go to the network.
 
-const CACHE_VERSION  = 'foragingid-v20';   // bump → old STATIC/RUNTIME caches evicted on activate
+const CACHE_VERSION  = 'foragingid-v21';   // bump → old STATIC/RUNTIME caches evicted on activate
 const STATIC_CACHE   = CACHE_VERSION + '-static';
 const RUNTIME_CACHE  = CACHE_VERSION + '-runtime';
 // TILE_CACHE and SPECIES_CACHE are deliberately version-independent. Both
@@ -29,7 +29,7 @@ const TILE_CACHE     = 'foragingid-tiles';
 // deletes the old 'foragingid-species' instead of serving it for 7 days.
 // '-3' since batch 17 (28 Oct 2026): /api/species/ carries a thumbnail per
 // species (Large / List views) — a list cached before it has none.
-const SPECIES_CACHE  = 'foragingid-species-3';
+const SPECIES_CACHE  = 'foragingid-species-4';   // -4 (28 Oct 2026): evicts profiles cached before flagged source links
 
 const TILE_TTL_MS    = 30 * 24 * 60 * 60 * 1000;   // 30 days — bulk cache expiry
 const SPECIES_TTL_MS =  7 * 24 * 60 * 60 * 1000;   // 7 days  — per-entry TTL

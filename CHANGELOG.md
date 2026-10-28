@@ -11,8 +11,7 @@ Pre-split fixes (182f5e6), batch 16 index.html split (prep 0cf780e, split 2b49db
 - Batch 16: static/css/index.css + 9 static/js/index files, verbatim; tests/index_source.py re-inlines the page (byte-equal to the prep commit).
 
 ### Next (order)
-1. CLAUDE.md workflow change (Melvin, 28 Oct): headless smoke pass on a scratch DB copy, handoff rule, Unverified live list, context handoff rule.
-2. Safety batch from docs/audit/2026-10-20/CLOSEOUT_28oct.md section 4 (Seasonal Returns gate first; 10 items).
+1. Safety batch (CLOSEOUT_28oct.md section 4): items 1–4 done (4498f88). **Resume at item 5** (B5-03 reviewer notes curator-only on every guest-reachable path, test as guest), then 6–10, report with ≤3 Melvin checks, End Session. CLAUDE.md workflow change done (Step 0).
 3. Melvin, phone: tap "Upload pending walks (N)" if shown; one reload per device.
 4. Live checks below before any further index work.
 
@@ -38,6 +37,7 @@ Pre-split fixes (182f5e6), batch 16 index.html split (prep 0cf780e, split 2b49db
 
 ### Unverified live
 Rule (CLAUDE.md, 28 Oct): one list, grouped by batch, each line = the symptom to look for. Melvin reports bugs from normal use; this maps them to a batch. Entries leave only when Melvin reports them checked or they are superseded.
+- **Safety batch 28 Oct, items 1–4 (4498f88 + sw v21):** Lists 🌿 Returns shows Off by default; at 10, Digitalis purpurea shows ☠ deadly + look-alike/preparation lines in Lists, print and PDF (missing = gate miss). Species page for Sambucus nigra: the ground-elder and 3 Brill links carry "⚑ may not be this species"; a guest phone never shows them; printing the species page drops them. Workshop page (Lists / print / PDF) prints each warning once, in the Safety & edibility box. Elder's "Compost Cosmetic Dye…" sits under "Other uses", not "Medicinal preparations". After sw v21: any console "SafetyGate.seasonalReturn is not a function" = stale safety-gate.js.
 - **Part A held items (3403705, 28 Oct):** Lists × on shepherd's purse / St John's wort / lady's smock removes the wrong row or nothing → lmJsArg miss. Offline map page loses header styling → sw v20 not caching tokens.css / site-header.css. Console "loadFeatures is not defined" after a resize during map load → timer guard miss.
 - **Batch 16 index.html split (2b49db7, 28 Oct):** after one reload — any console "X is not defined" on the map page = a load-order miss; pin tap gives no detail card / no enrichment; build a walk → no route, panel or edibility badges; saved walk won't load; Edit walk stop tap / ⬚ Lasso / Start here / Loop label / stop 58 hidden / Tidy route order misbehave; Export summary broken; recording UI visible; Find tab, note panel or search broken; offline reload after one online load fails (index.css + index/*.js precache); note pins don't resize on zoom (moved zoomend line); zoom + drag a walk breaks; phone/guest view over the share link broken; no reload banner after the sw bump.
 - **Device list (182f5e6, 28 Oct):** Settings → Curator devices shows more than "Melvino's"; ✕ opens a browser popup instead of the in-app dialog, or Cancel / click outside / Esc don't close it; the live device's dialog doesn't say "Revoke and remove". (Don't confirm on your only signed-in phone — ✕ there cuts it off at once.)

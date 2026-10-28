@@ -70,7 +70,7 @@ def test_remove_button_round_trips_hostile_and_apostrophe_names():
 
 def test_app_shell_has_tokens_and_site_header_css_and_v20():
     sw = _src("frontend/static/sw.js")
-    assert "const CACHE_VERSION  = 'foragingid-v20';" in sw
+    assert "const CACHE_VERSION  = 'foragingid-v21';" in sw
     shell = re.search(r"const APP_SHELL = \[(.*?)\n\];", sw, re.S).group(1)
     for f in ("/static/css/tokens.css", "/static/css/site-header.css"):
         assert f"'{f}'" in shell, f

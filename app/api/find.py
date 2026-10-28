@@ -245,6 +245,7 @@ async def find_medicinal(
             SpeciesRecipe.title,
             SpeciesRecipe.body,
             SpeciesRecipe.season,
+            SpeciesRecipe.source,
             SpeciesRecipe.species_id,
             Species.scientific_name,
             Species.preferred_common_name,
@@ -281,6 +282,7 @@ async def find_medicinal(
             "id": r.id,
             "title": r.title,
             "body": r.body,
+            "season": recipe_season(r.season, r.source, r.title, r.body),  # same rule as every surface
             "snippet": _snippet(r.body, q, 120),
         })
 

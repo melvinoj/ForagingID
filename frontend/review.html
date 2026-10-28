@@ -1950,7 +1950,7 @@ function _makeCardHtml(obs) {
       && (obs.identification_status === 'pending_identification' || !obs.species_suggested)
       && obs.identification_status !== 'not_plant';
     const catSugHtml = (obs.category_suggested && obs.category_suggested !== obsCat)
-      ? `<span class="cat-suggested" title="Auto-suggested by AI pipeline">⚡ ${obs.category_suggested} detected</span>` : '';
+      ? `<span class="cat-suggested" title="iNaturalist's top match is in this group — a suggestion, not a check">⚡ ${_esc(obs.category_suggested)} suggested?</span>` : '';
     const catToggleHtml = `
       <div class="cat-toggle">
         <button class="cat-btn${obsCat==='plant'?' active-plant':''}" onclick="setCategory(${obs.id},'plant',this)" title="Plants — uses PlantNet + iNaturalist">🌿 Plant</button>

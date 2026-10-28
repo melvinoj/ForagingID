@@ -33,6 +33,7 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.identity import Identity, get_identity
 from app.database import get_db
 from app.models.culinary import CulinaryInfo
 from app.models.observation import Observation
@@ -109,6 +110,7 @@ async def map_geojson(
     min_lat: Optional[float] = Query(None),
     max_lng: Optional[float] = Query(None),
     max_lat: Optional[float] = Query(None),
+    identity: Identity = Depends(get_identity),
 ):
     """
     GeoJSON of confirmed observations ONLY — the heavy pin payload.
@@ -125,6 +127,10 @@ async def map_geojson(
     the current map viewport (the frontend refetches pins on pan/zoom). When
     any bound is omitted the whole archive is returned (backward compatible).
     The lightweight whole-archive heatmap is served separately by /api/map/heat.
+
+    B5-03 (28 Oct 2026): `description` is reviewer_notes — curator text — so a
+    guest gets None on every pin, scenes included (same rule as
+    GET /api/observations/{id}).
     """
     _bbox = _bbox_clause(min_lng, min_lat, max_lng, max_lat)
     _cols = [
@@ -261,7 +267,7 @@ async def map_geojson(
                 "upload_source": row.upload_source,
                 "workshop_suitable": row.workshop_suitable,
                 "obs_category": row.obs_category or "plant",
-                "description": row.reviewer_notes or None,  # landscape description
+                "description": None if identity.is_guest else (row.reviewer_notes or None),  # landscape description; curator-only (B5-03)
                 "in_season": row.species_primary in in_season_names,
             },
         })

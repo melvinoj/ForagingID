@@ -1052,7 +1052,9 @@ def _apply_id_notes(
         elif inat.description:
             # Trim to a reasonable ID-notes excerpt
             text = inat.description[:800]
-        if text:
+        # A source text of nothing but dots / ellipses is no content (it became
+        # "[iNaturalist] ..." on 9 cards, cleared 28 Oct 2026) — never store it.
+        if text and text.strip(" \t\n.…"):
             parts.append(f"[iNaturalist] {text}")
             sources.append({"source": "iNaturalist", "url": inat.wikipedia_url or "https://www.inaturalist.org"})
 

@@ -353,7 +353,9 @@ function resetAndReload() {
 function openPhoto(id) {
   const images = _images.map(o => ({
     src: `/api/observations/${o.id}/photo`,
-    caption: [displayName(o), fmtDate(o.photo_taken_at)].filter(Boolean).join(' · '),
+    // Same state as the grid tile: an unconfirmed photo says so in the viewer too.
+    caption: [displayName(o), stateLabel(o).cls === 'pending' ? 'pending review' : '',
+              fmtDate(o.photo_taken_at)].filter(Boolean).join(' · '),
     hasGPS: o.latitude != null && o.longitude != null,
     id: o.id, lat: o.latitude, lng: o.longitude,
   }));

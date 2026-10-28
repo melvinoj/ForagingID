@@ -99,8 +99,11 @@
   }
 
   // Drop PFAF-style [n] / [source] citation brackets (the id_notes clean-up).
+  // Placeholder guard (28 Oct 2026): text that is nothing but dots / ellipses once
+  // the brackets go ("[iNaturalist] ...") is no content — return '' so it never prints.
   function stripCitations(text) {
-    return String(text || '').replace(CITATION, '').trim();
+    var out = String(text || '').replace(CITATION, '').trim();
+    return /^[.…\s]*$/.test(out) ? '' : out;
   }
 
   window.LmMd = { render: render, stripCitations: stripCitations };

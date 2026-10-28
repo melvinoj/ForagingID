@@ -33,7 +33,7 @@ Pre-split fixes (182f5e6), batch 16 index.html split (prep 0cf780e, split 2b49db
 - Escaping is 5-char now: inline-handler string args must use lmJsArg, never escape-then-replace(/'/).
 - Python str.splitlines() splits on U+2028 — use split("\n") when reading jsc JSON output.
 - Static files are served from disk: a sw.js bump is live as soon as it is written.
-- End Session from Settings rewrites Current State with its one-line summary: it drops every section here. Use the chat End Session block.
+- Settings → End session replaces Current State with exactly what is pasted in its box: paste the full block from chat, never a one-line summary (15:09 on 28 Oct a one-liner wiped every section).
 
 ### Unverified live
 Rule (CLAUDE.md, 28 Oct): one list, grouped by batch, each line = the symptom to look for. Melvin reports bugs from normal use; this maps them to a batch. Entries leave only when Melvin reports them checked or they are superseded.
@@ -51,6 +51,55 @@ Rule (CLAUDE.md, 28 Oct): one list, grouped by batch, each line = the symptom to
 - 11b_review (28). genus_reid (6). bryony_check (8229). hazard_review cards (18) + 17052, 17737. 22 recipes needing a title. Five rejected photos restored in July (15958, 15970, 21333, 21673, 21799). Warning review cards. Text tidy-up (352 edible_parts / 689 id_notes). 347 Takeout person_animal rejects (mount DIGIERA). Draft #3252 Amaranthus hybridus. data/ old DBs (293 MB) + thumbnails_quarantine/ → copy to DIGIERA, delete in Finder.
 
 ## History
+
+### 2026-10-28 16:54
+**Snapshot** — before item 9: clear 9 id_notes placeholders
+DB: `snapshots/db_20261028_165411.sqlite`
+
+### 2026-10-28 16:44
+**Handoff point (CONTEXT HANDOFF RULE): safety items 5 + 6 done, tests 49/49, smoke / and /sightings 0 errors; item 7 scoped, not started**
+
+**Files:** `CHANGELOG.md`
+**Pending:**
+- Resume at: safety batch item 7 (CLOSEOUT section 4 #8). Label-only fix (definition unchanged so the Send-to-review / Accept bulk sets stay identical): trust.py stats auto_approved/below_60 = review_status approved AND human_corrected=0, score = top_score (not gating). Relabel Data Trust strings in frontend/scan.html: chip Auto-approved (5021) + Below 60% conf (5024), dist tab (1254) + _DIST_CAT_LABELS.auto_approved (4982) + dist title (1259), Top 10 title (1263), bc-source All auto-approved (1333), messages at 5086/5121/5140/5152/5170. Leave u-stat-auto-approved (1085/1836, pipeline stat) alone. Then obs 9536 Prunus brigantina approved -> needs_review via observation_service.update_observation_status: snapshot first, read back every field by id. Then items 8-10, report + max 3 Melvin checks + End Session
+
+### 2026-10-28 16:43
+**Safety batch item 6: sightings photo viewer shows pending review (CLOSEOUT section 4 #7)**
+
+**Built:**
+- sightings.html openPhoto caption: name · pending review · date when stateLabel is pending (same rule as the grid tile); confirmed/scene unchanged
+- tests/test_safety_sightings_viewer_pending.py (jsc, runs the real openPhoto)
+**Fixed:**
+- Viewer no longer drops the pending status
+**Files:** `frontend/sightings.html`, `tests/test_safety_sightings_viewer_pending.py`
+**Pending:**
+- Resume at: safety batch item 7 (CLOSEOUT section 4 #8) Data Trust auto-approved label + obs 9536 to needs_review; then 8-10, report + max 3 Melvin checks + End Session
+- Map deep-link marker still shows only Observation #id (pins-filters.js:577) — not in item scope
+
+### 2026-10-28 16:42
+**Safety batch item 5 (B5-03): reviewer_notes curator-only on every guest-reachable path**
+
+**Built:**
+- /api/map/geojson: description (reviewer_notes) is None for guests on every pin, scenes included; curator unchanged
+- tests/test_safety_b5_03_reviewer_notes.py: guest device through the real middleware gets no notes (geojson + /api/observations/{id}); curator keeps them; source scan that no other app/api file serialises reviewer_notes unguarded
+**Fixed:**
+- B5-03 closed: 444 confirmed pins no longer ship reviewer notes to guests
+- test_b1_08 direct map_geojson call passes a curator Identity
+**Files:** `app/api/map.py`, `tests/test_safety_b5_03_reviewer_notes.py`, `tests/test_b1_08_confirmed_candidate.py`
+**Pending:**
+- Resume at: safety batch item 6 (CLOSEOUT section 4 #7) sightings.html:356 viewer hides pending status; then 7-10 (Data Trust label + obs 9536; fungi suggested; 9 id_notes placeholders; addSessionSpecies lmJsArg), report + max 3 Melvin checks + End Session
+- Tests 48/48 pass; smoke: 1 page (/), 0 errors (evidence only, implemented unverified live)
+- Guest landscape pins now show 'No description added yet — edit in review queue' (detail-card.js:101): curator wording on a guest screen
+
+### 2026-10-28 16:32
+**Handoff point (CONTEXT HANDOFF RULE): safety batch items 1-4 done and committed (4498f88, sw v21 commit after it); smoke 4 curator pages 0 errors**
+
+**Built:**
+- sw.js foragingid-v21, species cache -4
+**Files:** `frontend/static/sw.js`, `tests (pinned cache versions)`, `CHANGELOG.md`
+**Pending:**
+- Resume at: safety batch item 5 (CLOSEOUT_28oct.md section 4 #6, B5-03) — reviewer_notes curator-only on every guest-reachable path; test as guest. Then items 6-10 (sightings.html:356 pending status; Data Trust label + obs 9536 to needs_review via the shared status helper with snapshot + read-back; 'fungi suggested'; 9 id_notes placeholders to NULL with system:clear_placeholder history + render guard; lists.html addSessionSpecies lmJsArg + hostile-name test), then report + max 3 Melvin checks + End Session
+- smoke_pass.py guest mode needs a join token (guest without one gets 401 by design) — add token creation in the scratch DB for item 5
 
 ### 2026-10-28 16:29
 **Safety batch item 4: traditional/other uses in their own Other uses section (CLOSEOUT section 4 #5)**

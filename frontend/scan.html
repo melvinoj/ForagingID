@@ -1251,16 +1251,16 @@
       <div id="trust-mv-row"></div>
       <div class="trust-dist-wrap">
         <div class="trust-dist-tabs">
-          <button class="trust-dist-tab active" id="tdtab-auto_approved"     onclick="selectDistCat('auto_approved')">Auto-approved</button>
+          <button class="trust-dist-tab active" id="tdtab-auto_approved"     onclick="selectDistCat('auto_approved')">Approved, uncorrected</button>
           <button class="trust-dist-tab"        id="tdtab-manually_verified" onclick="selectDistCat('manually_verified')">Manually confirmed</button>
           <button class="trust-dist-tab"        id="tdtab-needs_review"      onclick="selectDistCat('needs_review')">Needs review</button>
           <button class="trust-dist-tab"        id="tdtab-rejected"          onclick="selectDistCat('rejected')">Rejected</button>
         </div>
-        <div class="trust-dist-title" id="trust-dist-title">Confidence distribution — auto-approved</div>
+        <div class="trust-dist-title" id="trust-dist-title">Confidence distribution — approved, uncorrected</div>
         <div id="trust-dist-chart">Loading…</div>
       </div>
       <div>
-        <div class="trust-dist-title">Top 10 low-confidence species (&lt;75%, auto-approved)</div>
+        <div class="trust-dist-title">Top 10 low-confidence species (&lt;75% top score, approved, uncorrected)</div>
         <div id="trust-top10">Loading…</div>
       </div>
     </div>
@@ -1330,7 +1330,7 @@
           </span>
           <label>Source type
             <select id="bc-source">
-              <option value="all">All auto-approved</option>
+              <option value="all">All approved, uncorrected</option>
               <option value="single">Single source only</option>
               <option value="dual">Dual source only</option>
             </select>
@@ -4979,7 +4979,7 @@ let _trustDists   = {};   // all per-category distributions, keyed by category n
 let _trustSelCat  = 'auto_approved';   // currently displayed category
 
 const _DIST_CAT_LABELS = {
-  auto_approved:     'Confidence distribution — auto-approved',
+  auto_approved:     'Confidence distribution — approved, uncorrected',
   manually_verified: 'Confidence distribution — manually confirmed',
   needs_review:      'Confidence distribution — needs review',
   rejected:          'Confidence distribution — rejected',
@@ -5017,10 +5017,10 @@ function _renderTrustChips(c) {
   if (!el) return;
   const defs = [
     { label: 'Total approved',     val: c.total_approved,   cls: '' },
-    { label: 'Auto-approved',      val: c.auto_approved,    cls: '' },
+    { label: 'Approved, uncorrected', val: c.auto_approved,    cls: '' },
     { label: 'Manual override',    val: c.manual_override,  cls: '' },
     { label: 'Dual-source agreed', val: c.dual_source,      cls: 'chip-ok' },
-    { label: 'Below 60% conf',     val: c.below_60,         cls: c.below_60 > 0 ? 'chip-err' : 'chip-ok' },
+    { label: 'Below 60% top score', val: c.below_60,         cls: c.below_60 > 0 ? 'chip-err' : 'chip-ok' },
     { label: 'Pending re-review',  val: c.pending_rereview, cls: c.pending_rereview > 0 ? 'chip-warn' : '' },
   ];
   el.innerHTML = defs.map(function(d) {
@@ -5083,7 +5083,7 @@ function _renderTrustTop10(rows) {
   const el = document.getElementById('trust-top10');
   if (!el) return;
   if (!rows || !rows.length) {
-    el.innerHTML = '<p style="color:#888;font-size:0.82rem;padding:8px 0">No low-confidence auto-approved species.</p>';
+    el.innerHTML = '<p style="color:#888;font-size:0.82rem;padding:8px 0">No low-confidence approved, uncorrected species.</p>';
     return;
   }
   let html = '<table class="trust-top10"><thead><tr>'
@@ -5118,7 +5118,7 @@ function _renderTrustTop10(rows) {
 // B2 fix: was reading d.updated (undefined) — corrected to d.queued.
 // Removes the row from the table on success instead of reloading everything.
 async function trSendSpeciesToReview(species) {
-  if (!window.confirm('Send all low-confidence auto-approved observations of\n"' + species
+  if (!window.confirm('Send all low-confidence approved, uncorrected observations of\n"' + species
       + '"\nto the review queue?\n\nThis is reversible via the review queue.')) return;
   try {
     const r = await fetch('/api/audit/send-to-review', {
@@ -5137,7 +5137,7 @@ async function trSendSpeciesToReview(species) {
     const tbody = document.querySelector('#trust-top10 tbody');
     if (tbody && !tbody.querySelector('tr')) {
       document.getElementById('trust-top10').innerHTML =
-        '<p style="color:#888;font-size:0.82rem;padding:8px 0">No low-confidence auto-approved species.</p>';
+        '<p style="color:#888;font-size:0.82rem;padding:8px 0">No low-confidence approved, uncorrected species.</p>';
     }
     const msg = n > 0 ? 'Sent ' + _n(n) + ' observation(s) to the review queue.'
                       : 'Done (observations may already be in the review queue).';
@@ -5149,7 +5149,7 @@ async function trSendSpeciesToReview(species) {
 // B2: Accept — marks all auto-approved obs for this species as manually_verified
 // (human_corrected=true), removing them from the low-confidence concern list.
 async function trAcceptSpecies(species) {
-  if (!window.confirm('Accept all auto-approved observations of\n"' + species
+  if (!window.confirm('Accept all approved, uncorrected observations of\n"' + species
       + '" as manually verified?\n\nThis marks them human-corrected so they won\'t reappear in bulk-send operations.')) return;
   try {
     const r = await fetch('/api/trust/accept-species', {
@@ -5167,7 +5167,7 @@ async function trAcceptSpecies(species) {
     const tbody = document.querySelector('#trust-top10 tbody');
     if (tbody && !tbody.querySelector('tr')) {
       document.getElementById('trust-top10').innerHTML =
-        '<p style="color:#888;font-size:0.82rem;padding:8px 0">No low-confidence auto-approved species.</p>';
+        '<p style="color:#888;font-size:0.82rem;padding:8px 0">No low-confidence approved, uncorrected species.</p>';
     }
     const hz = d.hazard_skipped || [];
     alert('Accepted ' + _n(n) + ' observation(s) as manually verified.'

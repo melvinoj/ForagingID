@@ -212,6 +212,7 @@ def test_gbif_name_match_pick_never_gets_a_score_or_approval():
 
 
 def test_map_pin_confidence_follows_the_species():
+    from app.api.identity import Identity
     from app.api.map import map_geojson
     nemorum_first = json.dumps([{"scientific_name": "Lysimachia nemorum", "score": 0.4613},
                                 {"scientific_name": "Veronica sublobata", "score": 0.0367}])
@@ -229,7 +230,9 @@ def test_map_pin_confidence_follows_the_species():
                                                           "score": None, "source": "curator"}])),
         ])
         async with S() as s:
-            gj = await map_geojson(db=s, min_lng=None, min_lat=None, max_lng=None, max_lat=None)
+            gj = await map_geojson(db=s, min_lng=None, min_lat=None, max_lng=None, max_lat=None,
+                                   identity=Identity(user_id=1, is_guest=False, is_anonymous_guest=False,
+                                                     workshop_session_id=None))
         await eng.dispose()
         return {f["properties"]["id"]: f["properties"]["confidence"] for f in gj["features"]}
 

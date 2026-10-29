@@ -191,7 +191,14 @@ async def publish_website_card(public_clone, overrides=None, website_clone=None,
         try:
             target = wt/'assets/walk'
             target.mkdir(parents=True, exist_ok=True)
-            # Retain older hashed photos for clients with a cached manifest.
+            # Keep exactly the photos referenced by this manifest, in this commit.
+            referenced = {bundle['cover']['photo']} | {
+                stop['photo'] for stop in bundle['featured_stops']}
+            photos = target/'photos'
+            if photos.exists():
+                for old in photos.rglob('*'):
+                    if (old.is_file() or old.is_symlink()) and old.relative_to(photos).as_posix() not in referenced:
+                        old.unlink()
             shutil.copytree(bundle_dir/'photos', target/'photos', dirs_exist_ok=True)
             shutil.copy2(bundle_dir/'featured.json', target/'featured.json')
             await xp._git_ok(wt, 'add', '--', 'assets/walk/featured.json', 'assets/walk/photos',

@@ -40,13 +40,23 @@ async def exercise():
    assert paths and all(p=='assets/walk/featured.json' or p.startswith('assets/walk/photos/') for p in paths)
    bundle=json.loads(git(remote,'show','main:assets/walk/featured.json'))
    assert bundle['cover']['alt']=='Plant 3' and len(bundle['featured_stops'])==6
+   first_photos={bundle['cover']['photo']} | {s['photo'] for s in bundle['featured_stops']}
    second=await card.publish_website_card(public,{card.stop_key(stops[0]['lat'],stops[0]['lng']):False},website_clone=website,cover_species=2)
    bundle=json.loads(git(remote,'show','main:assets/walk/featured.json'))
    assert second['commit']!=first['commit']
    assert '1' not in [s['stop'] for s in bundle['featured_stops']]
    assert bundle['cover']['alt']=='Plant 2'
+   expected={bundle['cover']['photo']} | {s['photo'] for s in bundle['featured_stops']}
+   actual=set(git(remote,'ls-tree','--name-only','main:assets/walk/photos').splitlines())
+   assert actual==expected, (actual,expected)
+   deleted=set(git(remote,'diff-tree','--no-commit-id','--name-only','--diff-filter=D','-r','main').splitlines())
+   assert deleted=={'assets/walk/photos/'+name for name in first_photos-expected}
+   paths=git(remote,'diff-tree','--no-commit-id','--name-only','-r','main').splitlines()
+   assert all(p=='assets/walk/featured.json' or p.startswith('assets/walk/photos/') for p in paths)
+   third=await card.publish_website_card(public,{card.stop_key(stops[0]['lat'],stops[0]['lng']):False},website_clone=website,cover_species=2)
+   assert third['commit']==second['commit'], 'Identical republish must be a no-op'
    assert git(remote,'show','main:unrelated.txt')=='preserve me'
-   print('PASS scoped website commits; stop and cover override republish; unrelated file preserved')
+   print('PASS scoped website commits; stop and cover override republish; orphan photos deleted atomically; identical republish unchanged; unrelated file preserved')
   finally:xp.git=real_git;xp._db_file=real_db
 
 if __name__=='__main__':asyncio.run(exercise())

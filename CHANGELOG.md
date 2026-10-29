@@ -3,6 +3,7 @@
 29 October 2026 — business-card landing page and walk-card publishing completed.
 
 ### Website / Land Memory card
+- Follow-up 29 October: publisher now deletes all unreferenced assets/walk/photos files in the same card-only commit. Five Ewden brook orphan files removed via actual publisher (website 7602317); Gresgen manifest unchanged. Repository regression confirms exact retained photo set, atomic deletions, unrelated-file preservation and no-op identical republish; bundle tests pass.
 - Live: https://melvinjarman.co.uk/b/ . User reviewed and approved the local design before deployment. Exact introduction restored; welcome headline/buttons removed; guestbook preserved; green band, cover photo with overlaid title, route below, 6 desktop / 4 phone stops, serif dishes and exact revised recipe line.
 - Hostinger is connected to melvinoj/melvin-jarman-website main; real automatic deployments verified. Website repo now contains the existing served HTML and referenced responsive assets so deploying main preserves all other pages. Source + generated outputs must both be committed for subsequent page edits. Card-only publishes do not rebuild pages.
 - New app helper experience_card.py builds same-origin assets/walk/featured.json and only small selected photos plus a 1200px cover. Overrides use coordinates, are stored in publication overrides_json, and can be selected in the publish plan. Existing exporter receives only its existing override keys. Website bundle uses a separate asset-only commit; a card update failure is reported without failing an already successful walk publication. Unpublish also refreshes the card when another published walk remains.
@@ -81,6 +82,22 @@ Rule (CLAUDE.md, 28 Oct): one list, grouped by batch, each line = the symptom to
 - 11b_review (28). genus_reid (6). bryony_check (8229). hazard_review cards (18) + 17052, 17737. 22 recipes needing a title (incl. 258 Chicken of the woods). Five rejected photos restored in July (15958, 15970, 21333, 21673, 21799). Warning review cards. Text tidy-up (352 edible_parts / 689 id_notes). 347 Takeout person_animal rejects (mount DIGIERA). Draft #3252 Amaranthus hybridus. data/ old DBs (293 MB) + thumbnails_quarantine/ → copy to DIGIERA, delete in Finder.
 
 ## History
+
+### 2026-10-29 11:13
+**Snapshot** — End of session — Added manifest-based card photo cleanup; removed the five Sheffield test orphans in card-only website commit 7602317; regression tests passed.
+DB: `snapshots/db_20261029_111349.sqlite`
+
+### 2026-10-29 11:13
+**Session ended** — Added manifest-based card photo cleanup; removed the five Sheffield test orphans in card-only website commit 7602317; regression tests passed.
+
+### 2026-10-29 11:13
+**Remove obsolete website card photos during publishing**
+
+**Built:**
+- New manifest references determine retained cover and stop photos; unused files deleted in the same card-only commit
+**Fixed:**
+- Removed five Ewden brook orphan photos in website commit 7602317
+**Files:** `app/services/experience_card.py`, `tests/test_card_repository.py`
 
 ### 2026-10-29 06:34
 **Snapshot** — End of session — Completed approved /b redesign and self-hosted automatic walk cards; verified with Sheffield publish and override republish; restored Gresgen; preserved saved walk and existing website pages.

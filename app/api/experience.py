@@ -185,6 +185,14 @@ async def patch_publication(pub_id: int, body: PublicationPatch, db: AsyncSessio
     if body.overrides_json is not None:
         if "slug" in body.overrides_json:
             raise HTTPException(400, "slug is not an override — set it with the slug field")
+        cover = body.overrides_json.get('card_cover_species')
+        if cover is not None and (type(cover) is not int or cover < 1):
+            raise HTTPException(400, 'Choose a public plant photo for the cover')
+        choices = body.overrides_json.get("card_stops", {})
+        if (not isinstance(choices, dict) or len(choices) > 500 or
+                any(not re.fullmatch(r"-?\d{1,3}\.\d{6},-?\d{1,3}\.\d{6}", k) or type(v) is not bool
+                    for k, v in choices.items()) or sum(v is True for v in choices.values()) > 6):
+            raise HTTPException(400, "Choose at most six card stops; each choice must be feature or don't feature")
         p.overrides_json = json.dumps(body.overrides_json, ensure_ascii=False)
     if body.is_default is not None:
         if body.is_default and not p.is_default:
@@ -239,6 +247,14 @@ async def plan_publication(pub_id: int, db: AsyncSession = Depends(get_db)):
             a["hazard_candidates"] = (hazards_other_than(gating_hazards(o, hidx), o.species_primary,
                                                          o.species_id, hidx) if o else [])
             a["bulk_ok"] = bool(o) and not (a["hazard"] or own or a["hazard_candidates"])
+    from app.services.experience_card import stop_key
+    plants = {s['id']: s for s in plan.get('public_species', [])}
+    plan['card_cover_options'] = [{'id':p['id'], 'name':p.get('en') or p['scientific_name']} for p in plants.values()]
+    plan['card_stops'] = [
+        {'key': stop_key(st['lat'], st['lng']), 'stop': st['label'],
+         'names': ', '.join(plants[sid].get('en') or plants[sid]['scientific_name']
+                            for sid in st['species_ids'] if sid in plants)}
+        for st in plan.get('stops', []) if st.get('lat') is not None and st.get('lng') is not None]
     return plan
 
 

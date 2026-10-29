@@ -147,6 +147,46 @@
 
   }
 
+  function renderCardStops(p, pl) {
+    var choices = (p.overrides || {}).card_stops || {};
+    return '<label class="wpub-field">Website card cover photo<select onchange="WalkPublish.cardCover(this)">' +
+      '<option value="">Current walk cover</option>' + (pl.card_cover_options || []).map(function(c) {
+        return '<option value="'+esc(c.id)+'"'+(((p.overrides||{}).card_cover_species === c.id)?' selected':'')+'>'+esc(c.name)+'</option>';
+      }).join('') + '</select></label><details><summary>Website card — choose featured stops</summary>' +
+      '<p class="wpub-muted">Automatic uses recipe stops spread along the route, then photos. Feature up to six stops; choices apply on republish.</p>' +
+      (pl.card_stops || []).map(function(st) {
+        var value = choices[st.key] === true ? 'yes' : choices[st.key] === false ? 'no' : 'auto';
+        return '<label class="wpub-field">Stop ' + esc(st.stop) + ' · ' + esc(st.names) +
+          '<select data-card-stop="' + esc(st.key) + '" onchange="WalkPublish.cardStop(this)">' +
+          [['auto','Automatic'],['yes','Feature on card'],['no',"Don't feature"]].map(function(o) {
+            return '<option value="' + o[0] + '"' + (value === o[0] ? ' selected' : '') + '>' + esc(o[1]) + '</option>';
+          }).join('') + '</select></label>';
+      }).join('') + '</details>';
+  }
+
+  async function cardCover(select) {
+    var p=state.panel.publication, ov=Object.assign({},p.overrides||{});
+    if (select.value) ov.card_cover_species=Number(select.value); else delete ov.card_cover_species;
+    select.disabled=true;
+    try { var saved=await api('PATCH','/api/experience/publications/'+p.id,{overrides_json:ov}); p.overrides=saved.overrides; }
+    catch(e) {state.error=e.message;}
+    render();
+  }
+
+  async function cardStop(select) {
+    var p = state.panel.publication, ov = Object.assign({}, p.overrides || {});
+    ov.card_stops = Object.assign({}, ov.card_stops || {});
+    var key = select.dataset.cardStop;
+    if (select.value === 'auto') delete ov.card_stops[key];
+    else ov.card_stops[key] = select.value === 'yes';
+    select.disabled = true;
+    try {
+      var saved = await api('PATCH', '/api/experience/publications/' + p.id, {overrides_json: ov});
+      p.overrides = saved.overrides;
+    } catch(e) {state.error=e.message;}
+    render();
+  }
+
   function renderPlan(p) {
     var again = p.status === 'published' ? 'Republish' : 'Publish';
     if (state.planning) return '<div class="wpub-muted">Planning… (reads the walk, nothing is written)</div>';
@@ -161,6 +201,7 @@
       h += '<div class="wpub-sub">Plan</div><div class="wpub-muted">' +
         esc(sm.species) + ' species · ' + esc(sm.stops) + ' stops · ' +
         esc(sm.photo_files) + ' photo files · ' + esc(sm.recipe_count) + ' recipes</div>';
+      h += renderCardStops(p, pl);
       h += renderChanges(pl.changes || {});
     }
     var probs = pl.problems || [];
@@ -522,6 +563,6 @@
                          askConfirm: askConfirm, confirmSpecies: confirmSpecies, openConfirm: openConfirm,
                          setSelectMode: setSelectMode, toggleSelect: toggleSelect, selectAll: selectAll,
                          confirmSelected: confirmSelected,
-                         openUnpublish: openUnpublish, publish: publish, unpublish: unpublish, closeJob: closeJob,
+                         cardCover: cardCover, cardStop: cardStop, openUnpublish: openUnpublish, publish: publish, unpublish: unpublish, closeJob: closeJob,
                          _tick: _tick, _untick: _untick, _ovPicked: _ovPicked };
 })();

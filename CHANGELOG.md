@@ -1,5 +1,18 @@
 ## Current State
 
+29 October 2026 — business-card landing page and walk-card publishing completed.
+
+### Website / Land Memory card
+- Live: https://melvinjarman.co.uk/b/ . User reviewed and approved the local design before deployment. Exact introduction restored; welcome headline/buttons removed; guestbook preserved; green band, cover photo with overlaid title, route below, 6 desktop / 4 phone stops, serif dishes and exact revised recipe line.
+- Hostinger is connected to melvinoj/melvin-jarman-website main; real automatic deployments verified. Website repo now contains the existing served HTML and referenced responsive assets so deploying main preserves all other pages. Source + generated outputs must both be committed for subsequent page edits. Card-only publishes do not rebuild pages.
+- New app helper experience_card.py builds same-origin assets/walk/featured.json and only small selected photos plus a 1200px cover. Overrides use coordinates, are stored in publication overrides_json, and can be selected in the publish plan. Existing exporter receives only its existing override keys. Website bundle uses a separate asset-only commit; a card update failure is reported without failing an already successful walk publication. Unpublish also refreshes the card when another published walk remains.
+- Live test used saved walk #1 Ewden brook circular / publication #3. Initial app publish cb54ae7 generated website bundle 22dc03b; override republish 68763fa excluded stop 1, forced stop 3 and changed cover to Common bonnet; live manifest, photos and browser card all matched. Test-only override settings cleared afterward. Temporary test publication was unpublished (d118478), saved walk #1 retained. Gresgen original card restored (website ad31efb); original publication #1 default and overrides unchanged.
+- Verification: 36 live files byte-compared (all preserved pages, approved b/privacy, versioned CSS, restored manifest); browser Network showed 0 third-party / 14 total requests; full-card click navigates correctly; no nested links/iframe; 380px has no horizontal overflow or overlapping four stop labels; desktop checked; no-JS static fallback and reduced-motion emulation exercised; one-time animation starts when scrolled into view. Website stylesheet cache URL updated for returning visitors.
+- Tests: 22 publishing regressions including card failure isolation; bundle tests for selection/exclusion/forced stops, cover, photo size/metadata, title handling; real temporary-repository card-only commit and override republish test; export hand-off test prevents card options reaching export.py. JS/Python syntax and diff checks passed.
+- No remaining work on this request. Prior unrelated app checks/backlog below remain as recorded; Melvin's approval here concerns the website preview.
+
+### Earlier app state retained for continuity
+
 28 Oct 2026, late evening
 
 ### Session summary
@@ -68,6 +81,49 @@ Rule (CLAUDE.md, 28 Oct): one list, grouped by batch, each line = the symptom to
 - 11b_review (28). genus_reid (6). bryony_check (8229). hazard_review cards (18) + 17052, 17737. 22 recipes needing a title (incl. 258 Chicken of the woods). Five rejected photos restored in July (15958, 15970, 21333, 21673, 21799). Warning review cards. Text tidy-up (352 edible_parts / 689 id_notes). 347 Takeout person_animal rejects (mount DIGIERA). Draft #3252 Amaranthus hybridus. data/ old DBs (293 MB) + thumbnails_quarantine/ → copy to DIGIERA, delete in Finder.
 
 ## History
+
+### 2026-10-29 06:34
+**Snapshot** — End of session — Completed approved /b redesign and self-hosted automatic walk cards; verified with Sheffield publish and override republish; restored Gresgen; preserved saved walk and existing website pages.
+DB: `snapshots/db_20261029_063418.sqlite`
+
+### 2026-10-29 06:34
+**Session ended** — Completed approved /b redesign and self-hosted automatic walk cards; verified with Sheffield publish and override republish; restored Gresgen; preserved saved walk and existing website pages.
+
+### 2026-10-29 05:35
+**Business-card landing page and self-hosted walk card prepared for Melvin review; not deployed**
+
+**Built:**
+- Website /b local preview: exact app intro, dark green band, single linked card, nettle cover with overlaid title, route below, 6 desktop/4 phone stops, revised recipe line, guestbook preserved
+- Card bundle publisher with route normalization, 300px stop photos, 1200px cover, stable coordinate stop overrides, selectable cover, isolated website asset commit; successful walk publish survives card push failure
+- DE/EN foraging privacy sections prepared; page references only same-origin assets
+**Fixed:**
+- Untitled recipe prose is withheld using existing recipe_list_title; no titles invented
+- macOS symlinked temp-folder handling corrected
+**Files:** `app/services/experience_card.py`, `app/services/experience_publish.py`, `app/api/experience.py`, `frontend/static/js/walk-publish.js`, `tests/test_stage_c_publish.py`, `tests/test_experience_card.py`, `tests/test_card_repository.py`
+**Pending:**
+- Resume at: Melvin reviews http://127.0.0.1:8765/b/ before page deployment. Website files build.py/content.json/style.css remain local and uncommitted; initial assets/walk bundle local. No live website changes made.
+- Hostinger hPanel Advanced GIT has no connected provider; GitHub app connection currently awaiting email verification in Opera. Need explicit review of Hostinger requested repository access before granting. Do not assume git push deploys.
+- After connection/deployment setup: real app publish and stop/cover override republish; verify bundle commits and live card updates; browser Network tab no third-party page-load requests; reduced motion and JS-disabled checks.
+- Automated tests passed: 22 existing/extended publish tests incl card failure isolation, card bundle test, temporary bare-repo scoped commit/override republish test. Desktop and 380px preview inspected, no horizontal overflow or overlapping stop labels; no iframe or nested card links. Card click opens correct public walk.
+- App source uncommitted under End Session protocol; pre-existing CHANGELOG changes preserved.
+
+### 2026-10-28 19:22
+**Small fixes batch 28 Oct (CLOSEOUT section 4 #11, #12, #17, #18 + 3 backlog items); Current State tidy (9536, season provenance, Untitled recipe -> Settled). No DB write.**
+
+**Built:**
+- #11 source_links.source_chips: one chip per known source (one PFAF), label from URL host; served as source_chips by /api/species/{name}/profile after the guest mask
+- #12 source_links.normalise_url shared by data_sources write path + served url (14 bare domains get https://)
+- #17 P1 import summary: Pre-filter + Duplicates chips; Processed adds up for every complete P1 session (0 mismatches)
+- #18 Background Processes: network / unreadable body / render error each own message + console.error
+- Backlog: guest scene pin no-description line hidden (data-guest-hide); review badge fetch owner-only; /api/find/medicinal serves recipe_season
+- sw foragingid-v24, species cache -6
+**Fixed:**
+- Root cause of #18: Settings Boot called loadBgProcesses() while 'let _bpCancellable' was in TDZ -> 'Could not reach server.' on every Settings load since 20 Jul; cache moved onto the hoisted function
+- Wikipedia/Wikidata primary_source_url (~200 species) no longer labelled PFAF
+**Files:** `app/services/source_links.py`, `app/api/data_sources.py`, `app/api/culinary.py`, `app/api/find.py`, `frontend/species.html`, `frontend/scan.html`, `frontend/settings.html`, `frontend/static/js/index/detail-card.js`, `frontend/static/js/site-header.js`, `frontend/static/sw.js`, `tests/test_small_fixes_28oct.py`, `tests (version pins)`
+**Pending:**
+- CLOSEOUT section 4 items 20-29 (smallest first)
+- Unverified live entries for this batch
 
 ### 2026-10-28 18:59
 **Snapshot** — End of session — Session ended from Settings page

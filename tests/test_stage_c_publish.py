@@ -51,7 +51,8 @@ import app.main as main  # noqa: E402
 import gates  # noqa: E402
 from app.models.experience import ExperiencePublication  # noqa: E402
 from app.models.walk import SavedWalk  # noqa: E402
-from app.services import experience_publish as xp  # noqa: E402
+from app.services import experience_publish as xp
+from app.services import experience_card as ec  # noqa: E402
 from app.services import guest_access as ga  # noqa: E402
 
 SITE = "https://example.test/site/"
@@ -178,8 +179,11 @@ class Fakes:
         body = self.site.remote_file(rel)
         return (404, b"") if body is None else (200, body)
 
+    async def website_card(self, *args, **kwargs):
+        return {'ok': True, 'message': 'Isolated website card test'}
+
     def patch(self):
-        return _Patch((xp, "run_plan", self.run_plan), (xp, "run_build", self.run_build),
+        return _Patch((ec, "publish_website_card", self.website_card), (xp, "run_plan", self.run_plan), (xp, "run_build", self.run_build),
                       (xp, "fetch_url", self.fetch_url), (xp, "site_url", lambda: SITE),
                       (xp, "CLONE", self.site.clone), (xp, "LIVE_POLL_S", 0), (xp, "LIVE_TIMEOUT_S", 2))
 
@@ -290,7 +294,7 @@ def test_publish_makes_one_site_commit_and_none_in_foragingid():
         fid_before = _foragingid_git(); n = site.remote_count()
         _, job = _publish(env, Fakes(site))
         assert job['status'] == 'done', job
-        assert [s['state'] for s in job['steps']] == ['ok'] * 8
+        assert [s['state'] for s in job['steps']] == ['ok'] * len(xp.PUBLISH_STEPS)
         assert site.remote_count() == n+1 and site.head() == site.remote_head() and site.clean()
         catalogue = json.loads(site.remote_file('walks.json'))
         assert catalogue['featured'] == 'sunny-walk'
@@ -683,6 +687,24 @@ def test_jobs_popup_labels_and_no_token_storage():
                 "credential approve", "credential.helper=store", "set_setting"):
         assert bad not in src, bad
     assert 'GIT_TERMINAL_PROMPT="0"' in src
+
+
+def test_card_failure_keeps_successful_walk_publication():
+    site, env = Site(), _env()
+    try:
+        fakes = Fakes(site)
+        async def failed(*args, **kwargs):
+            raise RuntimeError('Website push rejected')
+        fakes.website_card = failed
+        _, job = _publish(env, fakes)
+        assert job['status'] == 'done', job
+        assert _pub(env)[0] == 'published'
+        assert job['result']['live']['ok']
+        assert not job['result']['website_card']['ok']
+        assert 'card was not updated' in job['message']
+        assert next(s for s in job['steps'] if s['key']=='card')['state']=='failed'
+    finally:
+        _done(env, site)
 
 
 if __name__ == "__main__":

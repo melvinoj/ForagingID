@@ -75,9 +75,10 @@ LIVE_POLL_S = 10
 
 PUBLISH_STEPS = (("site", "Check the site copy and GitHub login"), ("plan", "Plan"),
                  ("build", "Build"), ("checks", "Photo and page checks"), ("commit", "Commit"),
-                 ("push", "Push"), ("record", "Record"), ("live", "Check the live page"))
+                 ("push", "Push"), ("record", "Record"), ("live", "Check the live page"), ("card", "Update website card"))
 UNPUBLISH_STEPS = (("site", "Check the site copy and GitHub login"), ("commit", "Commit"),
-                   ("push", "Push"), ("record", "Record"), ("live", "Check the page is gone"))
+                   ("push", "Push"), ("record", "Record"), ("live", "Check the page is gone"),
+                   ("card", "Refresh website card"))
 
 _OFFLINE = ("could not resolve host", "failed to connect", "couldn't connect", "network is unreachable",
             "connection timed out", "operation timed out", "connection refused", "no route to host",
@@ -258,7 +259,11 @@ def _overrides_for(pub) -> dict:
 async def _export(pub, extra: list, timeout: int) -> tuple[int, str, str]:
     with tempfile.TemporaryDirectory(prefix="exp_ov_") as tmp:
         ov_path = Path(tmp) / "overrides.json"
-        ov_path.write_text(json.dumps(_overrides_for(pub), ensure_ascii=False), encoding="utf-8")
+        export_overrides = _overrides_for(pub)
+        # Website card controls belong to the card publisher, not the existing walk exporter.
+        export_overrides.pop('card_stops', None)
+        export_overrides.pop('card_cover_species', None)
+        ov_path.write_text(json.dumps(export_overrides, ensure_ascii=False), encoding="utf-8")
         cmd = [sys.executable, str(EXPORT_SCRIPT), "--walk-id", str(pub.saved_walk_id),
                "--overrides", str(ov_path), "--db", _db_file(), *extra]
         if pub.is_default:
@@ -827,9 +832,21 @@ async def run_publish(job: dict, clone: Optional[Path] = None) -> None:
                        f"not live yet after {LIVE_TIMEOUT_S}s: {live['pending'][:3]} — pushed and recorded; check again")
         if not live["ok"]:
             raise PublishStop("live", "Files were pushed and recorded, but the live walk/catalogue/preview did not match within five minutes. GitHub Pages may still be caching; check the live URLs before treating this publish as verified.")
+        # GitHub Pages is already published and recorded. A website failure
+        # must never undo or misreport that successful publication.
+        await progress("card", "running")
+        try:
+            from app.services.experience_card import publish_website_card
+            card_result = await publish_website_card(clone, _overrides_for(pub).get('card_stops', {}), override_slug=pub.slug,
+                cover_species=_overrides_for(pub).get('card_cover_species'))
+            await progress("card", "ok", card_result['message'])
+        except Exception as error:
+            card_result = {"ok": False, "message": "Walk published, but the website card was not updated: " + str(error)}
+            log.warning("website card update failed after successful walk publication: %s", error)
+            await progress("card", "failed", card_result['message'])
         url = _page_urls(pub.slug, bool(pub.is_default))[0][0]
-        return {"message": f"Published {url} at {sha[:7]}." + ("" if live["ok"] else " The live page isn't showing it yet."),
-                "commit": sha, "url": url, "live": live, "publication": row}
+        return {"message": f"Published {url} at {sha[:7]}. " + card_result["message"] + ("" if live["ok"] else " The live page isn't showing it yet."),
+                "commit": sha, "url": url, "live": live, "publication": row, "website_card": card_result}
 
     await _run_job(job, body, label, len(PUBLISH_STEPS))
 
@@ -884,9 +901,18 @@ async def run_unpublish(job: dict, clone: Optional[Path] = None) -> None:
         live = await wait_live({**{u: None for u in gone}, **{site_url() + ("" if n == "index.html" else n): b for n, b in catalogue_expected.items()}}, sha)
         await progress("live", "ok" if live["ok"] else "failed",
                        "the page returns 404" if live["ok"] else f"still served after {LIVE_TIMEOUT_S}s: {live['pending'][:3]}")
+        await progress("card", "running")
+        try:
+            from app.services.experience_card import publish_website_card
+            card_result = await publish_website_card(clone, override_slug=pub.slug)
+            await progress("card", "ok", card_result['message'])
+        except Exception as error:
+            card_result = {"ok": False, "message": "Walk unpublished, but the website card was not updated: " + str(error)}
+            log.warning("website card refresh failed after unpublish: %s", error)
+            await progress("card", "failed", card_result['message'])
         return {"message": f"Unpublished {pub.slug} ({', '.join(removed) or 'nothing was on the site'}). "
-                           "The saved walk is kept. The page stays in git history and in other people's caches.",
-                "commit": sha, "removed": removed, "live": live, "publication": row}
+                           "The saved walk is kept. The page stays in git history and in other people's caches. " + card_result["message"],
+                "commit": sha, "removed": removed, "live": live, "publication": row, "website_card": card_result}
 
     await _run_job(job, body, label, len(UNPUBLISH_STEPS))
 

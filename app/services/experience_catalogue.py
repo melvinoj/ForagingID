@@ -85,9 +85,10 @@ def rebuild_catalogue(root, *, published_slug=None, published_at=None, seed_date
             p = index.parent / name
             text = fix_privacy_links(p.read_text())
             if name == 'index.html':
-                if 'id="walk-collection-link"' not in text:
-                    nav = '<nav id="walk-collection-link" aria-label="Walk collection" style="padding:12px 16px;background:#1e2b28;color:#d8e4d8"><a href="../../" style="color:inherit">← All walks</a></nav>'
-                    text = re.sub(r'(<body[^>]*>)', lambda m: m.group(1)+nav, text, count=1)
+                # Plain label, no arrow: an arrow read as "back" (3 Nov 2026). Replace any older nav.
+                nav = '<nav id="walk-collection-link" aria-label="Walk collection" style="padding:12px 16px;background:#1e2b28;color:#d8e4d8"><a href="../../" style="color:inherit">All walks</a></nav>'
+                text = re.sub(r'<nav id="walk-collection-link".*?</nav>', '', text, count=1, flags=re.S)
+                text = re.sub(r'(<body[^>]*>)', lambda m: m.group(1)+nav, text, count=1)
                 text = re.sub(r'<link rel="canonical" href="[^"]+">',
                               f'<link rel="canonical" href="https://melvinoj.github.io/foraging-experience/w/{slug}/">', text)
             p.write_text(text)

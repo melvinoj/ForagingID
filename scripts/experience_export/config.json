@@ -3,6 +3,10 @@
 
   "language": "en",
 
+  "_back_note": "Header button shown before the CTA, back to the guestbook on the QR page (3 Nov 2026). Delete back_url to hide it.",
+  "back_label": "Return to guestbook",
+  "back_url": "https://melvinjarman.co.uk/b/#guestbook",
+
   "cta_label": "Book or ask a question",
   "contact_url": "https://melvinjarman.co.uk/contact",
 

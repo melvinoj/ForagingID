@@ -33,6 +33,8 @@
     background: var(--app-forest); color: var(--paper); border-radius: 7px; font-weight: 600;
     text-decoration: none; border: 1.5px solid var(--leaf); }
   .cta:hover { background: var(--moss); }
+  .cta[hidden] { display: none; }
+  .ctas { display: flex; flex-wrap: wrap; gap: 10px; }
 
   nav.tabs { position: sticky; top: 0; z-index: 1000; background: var(--app-shell-deep);
     border-bottom: 1px solid rgba(255,255,255,.08); }
@@ -173,7 +175,10 @@
     <p class="where" id="where" hidden></p>
     <p class="where" id="where-de" lang="de" hidden></p>
     <div class="meta" id="meta"></div>
-    <a class="cta" id="cta" href="#" target="_top" rel="noopener"></a>
+    <div class="ctas">
+      <a class="cta" id="back" href="#" target="_top" rel="noopener" hidden></a>
+      <a class="cta" id="cta" href="#" target="_top" rel="noopener"></a>
+    </div>
   </div>
 </header>
 
@@ -323,6 +328,8 @@ window.DATA = {{DATA}};
     [km, hrs, D.walk.stops.length + " stops", D.species.length + " species"].filter(Boolean).join(" · ");
   var cta = document.getElementById("cta");
   cta.textContent = D.cta_label; cta.href = D.contact_url;
+  var back = document.getElementById("back");
+  if (D.back_url) { back.textContent = D.back_label || "Return to guestbook"; back.href = D.back_url; back.hidden = false; }
 
   // ── tabs ──
   var tabs = ["walk", "plants", "recipes", "taxonomy"];

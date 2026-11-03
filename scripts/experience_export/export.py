@@ -935,6 +935,8 @@ def main(argv=None):
         "title": ov["title_en"], "title_de": ov["title_de"],
         "intro": ov["intro_en"], "intro_de": ov["intro_de"],
         "where": ov["where_en"], "where_de": ov["where_de"],
+        "back_label": cfg.get("back_label", "Return to guestbook"),
+        "back_url": cfg.get("back_url"),
         "cta_label": cfg.get("cta_label", "Get in touch"),
         "contact_url": cfg["contact_url"],
         "impressum_url": None if impressum_placeholder else impressum,
